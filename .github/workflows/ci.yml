@@ -1,0 +1,119 @@
+# Runs the test suites of CLAUDE.md ("Layout and commands"), in throwaway containers as on a development
+# machine. No secret is used anywhere. Images are tagged :ci so that running these commands locally never
+# replaces an image in use.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+# A newer run for the same pull request cancels the one it supersedes; runs on main always complete.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  server:
+    name: Server
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build the test image
+        working-directory: server
+        run: docker build --target test -t scanmylib-api:ci .
+      - name: Run the tests without network, on a read-only root filesystem
+        run: docker run --rm --network none --read-only --tmpfs /tmp scanmylib-api:ci
+
+  web:
+    name: Web UI
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Run the unit tests
+        run: >-
+          docker run --rm --network none --read-only --user 1000:1000
+          -v "$PWD/server/scanmylib/web:/web:ro"
+          node:22-bookworm-slim node --test '/web/tests/*.test.js'
+
+  ocr:
+    name: OCR sandbox
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build the sandbox image
+        run: docker build -t scanmylib-ocr:ci ocr
+      # The image's python3 has the standard library only. The engine environments and the models are never
+      # installed in CI, so the tests that need Pillow (the worker's venv) are skipped. The isolation of the
+      # running service (scripts/verify-sandbox.sh) needs the deployed stack and is not checked here.
+      - name: Run the unit tests with the image's Python
+        run: >-
+          docker run --rm --init --network none --read-only --tmpfs /tmp
+          --cap-drop ALL --security-opt no-new-privileges:true --user 1000:1000
+          -v "$PWD/ocr:/app:ro" scanmylib-ocr:ci
+          python3 -m unittest discover -s /app/tests -v
+
+  scripts:
+    name: Scripts
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The checks rely on what docker compose resolves, which changes with its version.
+      - name: Show the docker compose version
+        run: docker compose version
+      # The .env parser, the isolation check from production and the scripts that use them, with a docker stand-in
+      # (scripts/tests/docker_shim.py): docker compose only resolves configurations, nothing is built or started.
+      - name: Run the tests of the scripts
+        run: python3 -m unittest discover -s scripts/tests -v
+
+  android:
+    name: Android
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # build-apk.sh keeps the Android SDK and the Gradle home under DATA_DIR/android.
+      - name: Put DATA_DIR in the runner's temporary directory
+        run: echo "DATA_DIR=$RUNNER_TEMP/scanmylib-data" >> "$GITHUB_ENV"
+      # The SDK packages are pinned in build-apk.sh, which checks every download.
+      - name: Cache the Android SDK
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.DATA_DIR }}/android/sdk
+          key: android-sdk-${{ runner.os }}-${{ hashFiles('scripts/build-apk.sh') }}
+      # Gradle checks every dependency, restored or downloaded, against android/gradle/verification-metadata.xml.
+      - name: Cache the Gradle distribution and dependencies
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ${{ env.DATA_DIR }}/android/gradle/caches
+            ${{ env.DATA_DIR }}/android/gradle/wrapper
+          key: android-gradle-${{ runner.os }}-${{ hashFiles('android/gradle/**', 'android/**/*.gradle.kts') }}
+          restore-keys: android-gradle-${{ runner.os }}-
+      # Tests and lint only. Without a .env, build-apk.sh only runs in CI (GITHUB_ACTIONS=true), takes DATA_DIR from
+      # the environment (inside RUNNER_TEMP: the home directory is refused) and never signs nor publishes anything;
+      # CI has no signing key. With an empty cache, every dependency, metadata files included,
+      # is downloaded and checked against android/gradle/verification-metadata.xml.
+      - name: Run the unit tests and lint
+        run: scripts/build-apk.sh test lint

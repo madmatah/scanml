@@ -148,12 +148,26 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
             self._send_not_found()
 
     def _parse(self, raw_query: str) -> Reply:
+        try:
+            length = self._content_length()
+        except BadRequest as exc:
+            self.close_connection = True
+            return error_reply(400, BAD_REQUEST, str(exc))
+        if length > MAX_BODY_BYTES:
+            self.close_connection = True
+            return error_reply(413, TOO_LARGE, f"image larger than {MAX_BODY_BYTES // (1024 * 1024)} MiB")
+
+        # The body is read before any other refusal: a client still sending it would
+        # otherwise get a broken pipe instead of the answer.
+        image = self.rfile.read(length)
+        if len(image) != length:
+            self.close_connection = True
+            return error_reply(400, BAD_REQUEST, "request body shorter than its Content-Length")
         content_type = (self.headers.get("Content-Type") or "").split(";")[0].strip().lower()
         if content_type not in CONTENT_TYPES:
             self.close_connection = True
             return error_reply(415, UNSUPPORTED_TYPE, f"Content-Type must be one of {', '.join(CONTENT_TYPES)}")
         try:
-            length = self._content_length()
             query = parse_qs(raw_query)
             options = PageOptions(
                 orientation=parse_flag(query, "orientation", True),
@@ -163,14 +177,6 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
         except BadRequest as exc:
             self.close_connection = True
             return error_reply(400, BAD_REQUEST, str(exc))
-        if length > MAX_BODY_BYTES:
-            self.close_connection = True
-            return error_reply(413, TOO_LARGE, f"image larger than {MAX_BODY_BYTES // (1024 * 1024)} MiB")
-
-        image = self.rfile.read(length)
-        if len(image) != length:
-            self.close_connection = True
-            return error_reply(400, BAD_REQUEST, "request body shorter than its Content-Length")
         extension = sniff_image_format(image)
         if extension is None:
             return error_reply(400, BAD_IMAGE, "body is not a JPEG, PNG or WebP image")

@@ -1,4 +1,14 @@
-name: scanmylib
+# Which stack this is comes from .env: COMPOSE_PROJECT_NAME names the containers
+# (<project>-api-1...) and IMAGE_PREFIX the images (<prefix>-api, <prefix>-ocr).
+# Production's .env (scanmylib for both) is written by scripts/setup.sh in
+# production's checkout; a worktree's, for the development stack, by
+# scripts/dev-env.sh.
+# A copy of .env.example has neither, and every path variable is required (":?"):
+# such a .env makes docker compose stop instead of guessing. In a worktree, run
+# docker compose through scripts/dev.sh, which first checks that the stack shares
+# nothing with production; in production's checkout, through scripts/prod.sh,
+# which reads production's .env only (see CLAUDE.md).
+name: ${COMPOSE_PROJECT_NAME:?no COMPOSE_PROJECT_NAME in .env. In a worktree run scripts/dev-env.sh, then scripts/dev.sh}
 
 x-ocr-build: &ocr-build
   context: ./ocr
@@ -37,10 +47,13 @@ services:
     build:
       context: ./server
       target: runtime
+      # The repository root, for its VERSION file only (the version the api reports).
+      additional_contexts:
+        project: .
       args:
         UID: ${SCANMYLIB_UID:-1000}
         GID: ${SCANMYLIB_GID:-1000}
-    image: scanmylib-api:latest
+    image: ${IMAGE_PREFIX:-${COMPOSE_PROJECT_NAME}}-api:latest
     read_only: true
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
@@ -55,17 +68,35 @@ services:
         max-size: "10m"
         max-file: "3"
     ports:
-      - "${API_PORT:-8765}:8765"
+      - target: 8765
+        published: "${API_PORT:-8765}"
     tmpfs:
       - /tmp:size=512m,mode=1777
     volumes:
-      - ${LIBRARY_DIR}:/library
-      - ${DATA_DIR}/state:/state
-      - ${DATA_DIR}/run:/run/scanmylib
-      - ${DATA_DIR}/app:/app-dist:ro
+      - type: bind
+        source: ${LIBRARY_DIR:?no LIBRARY_DIR in .env}
+        target: /library
+        bind:
+          create_host_path: true
+      - type: bind
+        source: ${DATA_DIR:?no DATA_DIR in .env}/state
+        target: /state
+        bind:
+          create_host_path: true
+      - type: bind
+        source: ${DATA_DIR:?no DATA_DIR in .env}/run
+        target: /run/scanmylib
+        bind:
+          create_host_path: true
+      - type: bind
+        source: ${DATA_DIR:?no DATA_DIR in .env}/app
+        target: /app-dist
+        read_only: true
+        bind:
+          create_host_path: true
     environment:
       SCANMYLIB_LIBRARY_DIR: /library
-      SCANMYLIB_LIBRARY_HOST_PATH: ${LIBRARY_DIR}
+      SCANMYLIB_LIBRARY_HOST_PATH: ${LIBRARY_DIR:?no LIBRARY_DIR in .env}
       SCANMYLIB_STATE_DIR: /state
       SCANMYLIB_OCR_SOCKET: /run/scanmylib/ocr.sock
       SCANMYLIB_PUBLIC_URL: ${PUBLIC_URL}
@@ -84,7 +115,7 @@ services:
   # shares with `api`, a cache dir and a tmpfs. Nothing from $HOME.
   ocr:
     build: *ocr-build
-    image: scanmylib-ocr:latest
+    image: ${IMAGE_PREFIX:-${COMPOSE_PROJECT_NAME}}-ocr:latest
     network_mode: none
     read_only: true
     cap_drop: [ALL]
@@ -107,9 +138,22 @@ services:
     tmpfs:
       - /tmp:size=8g,mode=1777
     volumes:
-      - ${SANDBOX_DIR}:/opt/sandbox:ro
-      - ${DATA_DIR}/run:/run/scanmylib
-      - ${DATA_DIR}/ocr-cache:/var/cache/ocr
+      - type: bind
+        source: ${SANDBOX_DIR:?no SANDBOX_DIR in .env}
+        target: /opt/sandbox
+        read_only: true
+        bind:
+          create_host_path: true
+      - type: bind
+        source: ${DATA_DIR:?no DATA_DIR in .env}/run
+        target: /run/scanmylib
+        bind:
+          create_host_path: true
+      - type: bind
+        source: ${DATA_DIR:?no DATA_DIR in .env}/ocr-cache
+        target: /var/cache/ocr
+        bind:
+          create_host_path: true
     environment:
       <<: *ocr-env
     healthcheck:
@@ -121,18 +165,68 @@ services:
     stop_grace_period: 30s
     restart: unless-stopped
 
+  # Development stand-in for `ocr` (profile "fake-ocr", started by scripts/dev.sh
+  # instead of `ocr`, never next to it: they serve the same socket). The api
+  # image answers the sandbox protocol with canned pages
+  # (server/scanmylib/devtools/fake_ocr.py): no model, no GPU, and the same
+  # isolation as the sandbox. It only sees the socket dir. It refuses to run in
+  # the production project and to replace a socket that a sandbox serves.
+  ocr-fake:
+    profiles: ["fake-ocr"]
+    image: ${IMAGE_PREFIX:-${COMPOSE_PROJECT_NAME}}-api:latest
+    # Built by the `api` service: never pulled from a registry.
+    pull_policy: never
+    command: ["python", "-m", "scanmylib.devtools.fake_ocr", "--delay", "0.5"]
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    user: "${SCANMYLIB_UID:-1000}:${SCANMYLIB_GID:-1000}"
+    init: true
+    pids_limit: 128
+    mem_limit: 512m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    volumes:
+      - type: bind
+        source: ${DATA_DIR:?no DATA_DIR in .env}/run
+        target: /run/scanmylib
+        bind:
+          create_host_path: true
+    environment:
+      SCANMYLIB_PROJECT: ${COMPOSE_PROJECT_NAME}
+    healthcheck:
+      test: ["CMD", "python", "-m", "scanmylib.devtools.fake_ocr", "--check"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+    restart: unless-stopped
+
   # One-shot installer (profile "setup"): the only OCR container with network.
-  # It sees nothing but SANDBOX_DIR, where it installs packages and models.
+  # It sees nothing but the sandbox dir, where it installs packages and models,
+  # read-write: SANDBOX_SETUP_DIR, which only production's .env sets (written by
+  # scripts/setup.sh), never a worktree's, whose stack mounts production's
+  # SANDBOX_DIR read-only. Without it, the bind source below does not exist and
+  # the container cannot start.
   ocr-setup:
     profiles: ["setup"]
     build: *ocr-build
-    image: scanmylib-ocr:latest
+    image: ${IMAGE_PREFIX:-${COMPOSE_PROJECT_NAME}}-ocr:latest
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
     user: "${SCANMYLIB_UID:-1000}:${SCANMYLIB_GID:-1000}"
     init: true
     volumes:
-      - ${SANDBOX_DIR}:/opt/sandbox
+      - type: bind
+        source: ${SANDBOX_SETUP_DIR:-/nonexistent/SANDBOX_SETUP_DIR-is-set-by-scripts-setup.sh-in-production-only}
+        target: /opt/sandbox
+        bind:
+          create_host_path: false
     environment:
       HOME: /tmp/home
     tmpfs:

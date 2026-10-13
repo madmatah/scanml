@@ -22,7 +22,7 @@ Pairing URI (QR code shown by the web UI): `scanmylib://pair?url=<urlencoded PUB
 
 | Method | Path | Response |
 |---|---|---|
-| GET | `/api/health` | `{"name": "ScanMyLib", "version": "0.1.0", "api": 1}` |
+| GET | `/api/health` | `{"name": "ScanMyLib", "version": "0.2.3", "api": 1}`: `version` is the project version (`VERSION`), `api` the level of this contract |
 | GET | `/download/scanmylib.apk` | the Android APK (`application/vnd.android.package-archive`), 404 if not built |
 | GET | `/`, `/static/…` | web UI |
 
@@ -39,7 +39,7 @@ Pairing URI (QR code shown by the web UI): `scanmylib://pair?url=<urlencoded PUB
 
 ```json
 {
-  "version": "0.1.0",
+  "version": "0.2.3",
   "ocr": { "reachable": true, "state": "idle", "backend": "vllm", "last_error": null, "gpu": {…} },
   "queue": { "queued": 3, "processing": 1, "error": 0, "done": 120 },
   "library_dir": "/home/user/Documents/ScanMyLib"

@@ -6,6 +6,20 @@ plugins {
     alias(libs.plugins.androidx.room)
 }
 
+// The project has a single version, the repository's VERSION file (MAJOR.MINOR.PATCH), which the
+// api reports too. The versionCode is derived from it, major * 10000 + minor * 100 + patch
+// (0.2.3 -> 203), so that every release installs over the previous one; minor and patch stay
+// below 100. scripts/build-apk.sh mounts the file at /VERSION, next to the project (/workspace).
+val projectVersion: String = providers
+    .fileContents(rootProject.layout.projectDirectory.file("../VERSION"))
+    .asText.get().trim()
+val projectVersionCode: Int = run {
+    val parts = Regex("""(\d{1,3})\.(\d{1,2})\.(\d{1,2})""").matchEntire(projectVersion)?.destructured
+        ?: error("VERSION must be MAJOR.MINOR.PATCH with minor and patch below 100, not '$projectVersion'")
+    val (major, minor, patch) = parts
+    major.toInt() * 10000 + minor.toInt() * 100 + patch.toInt()
+}
+
 android {
     namespace = "fr.scanmylib"
     // The current AndroidX, OkHttp and Coil releases require compiling against API 37. Only the
@@ -16,8 +30,8 @@ android {
         applicationId = "fr.scanmylib"
         minSdk = 26
         targetSdk = 36
-        versionCode = 6
-        versionName = "0.2.3"
+        versionCode = projectVersionCode
+        versionName = projectVersion
     }
 
     buildTypes {

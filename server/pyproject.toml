@@ -1,6 +1,8 @@
 [project]
 name = "scanmylib"
-version = "0.1.0"
+# Not the release version: the project has one version, the repository's VERSION file, which
+# the api reports. This package is never built or published.
+version = "0"
 description = "ScanMyLib API: receives scans from the phone, drives the OCR sandbox and organizes the Markdown library."
 readme = "README.md"
 requires-python = ">=3.12,<3.13"

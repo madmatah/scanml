@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Resources of the development app (build type "dev", application id fr.scanmylib.dev): they
+  replace those of src/main so that the app can be told apart from the production one.
+-->
+<resources>
+    <!-- Not translated, like the production name: the same in English and in French. -->
+    <string name="app_name" translatable="false">ScanMyLib (dev)</string>
+</resources>

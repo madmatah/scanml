@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 from starlette.formparsers import MultiPartParser
 from support import AUTH, TOKEN, create_document, jpeg, new_id, upload
 
+from scanmylib import __version__
 from scanmylib.app import create_app
 from scanmylib.auth import load_or_create_token
 from scanmylib.images import MAX_UPLOAD_BYTES
@@ -38,7 +39,7 @@ PROTECTED = [
 def test_health_is_public(client):
     response = client.get("/api/health")
     assert response.status_code == 200
-    assert response.json() == {"name": "ScanMyLib", "version": "0.1.0", "api": 1}
+    assert response.json() == {"name": "ScanMyLib", "version": __version__, "api": 1}
 
 
 @pytest.mark.parametrize(("method", "path"), PROTECTED)

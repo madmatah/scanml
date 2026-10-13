@@ -9,6 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 from support import AUTH, create_document, page_image, upload, wait_for, wait_until_processed
 
+from scanmylib import __version__
 from scanmylib.app import create_app
 from scanmylib.devtools.fake_ocr import FakeOcrServer
 from scanmylib.library import MAX_OCR_RETRIES
@@ -106,7 +107,7 @@ def test_new_work_prewarms_the_engine(client, fake_ocr):
 def test_status_reports_the_sandbox_engine(client):
     status = client.get("/api/status", headers=AUTH).json()
     assert status["ocr"] == {"reachable": True, "state": "idle", "backend": "fake", "last_error": None, "gpu": None}
-    assert status["version"] == "0.1.0"
+    assert status["version"] == __version__
 
 
 def test_status_relays_only_typed_and_bounded_sandbox_fields(client, fake_ocr):

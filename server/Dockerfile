@@ -3,6 +3,7 @@
 # Stages:
 #   deps     virtualenv with the pinned runtime dependencies (hash-checked)
 #   test     deps + pytest + the test suite:  docker build --target test ...
+#   project  the repository's VERSION file (see below)
 #   runtime  the production image (default, last stage): non-root, no build
 #            tools, runs with a read-only root filesystem and a tmpfs /tmp.
 FROM python:3.12-slim-bookworm AS base
@@ -35,6 +36,14 @@ USER ${UID}:${GID}
 CMD ["python", "-m", "pytest"]
 
 
+# The version the api reports is the repository's VERSION file, outside this
+# build context: compose.yaml passes the repository root as the additional build
+# context "project", which replaces this stage. A plain `docker build` of this
+# directory falls back to this stage, and the api then reports "unknown".
+FROM base AS project
+RUN echo unknown > /VERSION
+
+
 FROM base AS runtime
 ARG UID=1000
 ARG GID=1000
@@ -46,6 +55,7 @@ RUN groupadd --gid "${GID}" scanmylib \
 COPY --from=deps /opt/venv /opt/venv
 COPY scanmylib /app/scanmylib
 RUN python -m compileall -q /app/scanmylib
+COPY --from=project /VERSION /app/VERSION
 WORKDIR /app
 USER ${UID}:${GID}
 EXPOSE 8765

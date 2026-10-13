@@ -1,7 +1,7 @@
 # ScanMyLib — architecture
 
 Scan multi-page documents and (parts of) books with an Android phone, in any
-order and over many sessions; OCR them on the PC's RTX 3090 inside a sandbox;
+order and over many sessions; OCR them on the PC's NVIDIA GPU inside a sandbox;
 organize the results on disk as Markdown + illustrations that AI agents can read.
 
 ```
@@ -17,21 +17,34 @@ organize the results on disk as Markdown + illustrations that AI agents can read
 | Component | Where | Trust | Network | Sees |
 |---|---|---|---|---|
 | `ocr` (sandbox) | `ocr/` → image `scanmylib-ocr` | **untrusted** (Paddle, vLLM, model code) | **none** (only `lo`) | `/opt/sandbox` (ro: venvs+models), `/run/scanmylib` (socket), `/var/cache/ocr` (rw cache), tmpfs `/tmp` |
-| `ocr-setup` | same image, profile `setup` | untrusted | yes (downloads only) | only `/opt/sandbox` |
+| `ocr-setup` | same image, profile `setup` | untrusted | yes (downloads only) | only `/opt/sandbox` (rw: `SANDBOX_SETUP_DIR`, set in production's `.env` only) |
 | `api` | `server/` → image `scanmylib-api` | ours | LAN (published port) | `/library`, `/state`, `/run/scanmylib`, `/app-dist` (ro) |
+| `ocr-fake` (development only) | api image, profile `fake-ocr`: canned results instead of `ocr`; refuses the production project and a socket that a sandbox serves | ours | **none** | `/run/scanmylib` (socket), tmpfs `/tmp` |
 | Android app | `android/` | ours | LAN | its own app storage |
-| APK builder | throwaway `eclipse-temurin` container | Google/Gradle toolchain (checksums verified) | yes (build only) | `android/`, SDK/Gradle caches under `DATA_DIR/android` |
-| APK signer | second throwaway container | ours | **none** | unsigned APK, `DATA_DIR/android/keystore` (the build never sees the key) |
+| APK builder | throwaway `eclipse-temurin` container | Google/Gradle toolchain (checksums verified) | yes (build only) | `android/`, `VERSION` (ro), SDK/Gradle caches under `ANDROID_DIR` (the development stack has its own) |
+| APK signer | second throwaway container | ours | **none** | unsigned APK, build-tools (ro; it runs copies of `zipalign` and `apksigner` checked against pinned SHA-256, and signs only the variant's application id and versionCode), the signing key `ANDROID_KEYSTORE_DIR` (ro; the build never sees it) |
 
-Nothing is installed on the host itself. Host paths are configured in `.env`:
+Nothing is installed on the host itself. Host paths are configured in `.env` (a strict `KEY=VALUE` format that every
+script checks, `scripts/lib/stack.py`), which also names the stack (`COMPOSE_PROJECT_NAME`, `IMAGE_PREFIX`: `scanmylib`
+in production, written by `scripts/setup.sh`; a worktree's development stack is `scanmylib-dev`, written by
+`scripts/dev-env.sh`, see `CLAUDE.md`):
 
-- `DATA_DIR=/data/user/scanmylib` → `sandbox/` (venvs+models), `run/` (Unix socket), `ocr-cache/`, `state/` (api DB, token, thumbnails), `app/` (built APK), `android/` (SDK, Gradle caches), `logs/`.
-- `LIBRARY_DIR=/home/user/Documents/ScanMyLib` → the organized library (pure content, see below).
+- `DATA_DIR` (e.g. `/data/USER/scanmylib`) → `run/` (Unix socket), `ocr-cache/`, `state/` (api DB, token, thumbnails), `app/` (built APK), `backups/` (state copies made by `scripts/deploy.sh`), `logs/`.
+- `SANDBOX_DIR` (e.g. `DATA_DIR/sandbox`) → the OCR venvs and models, mounted read-only; `SANDBOX_SETUP_DIR` (production only, the same directory) is where `ocr-setup` writes them.
+- `ANDROID_DIR` (e.g. `DATA_DIR/android`) → Android SDK, Gradle caches, signing key (`keystore/`, or `ANDROID_KEYSTORE_DIR`: the development stack uses production's key, read-only, with its own toolchain).
+- `LIBRARY_DIR` (e.g. `~/Documents/ScanMyLib`) → the organized library (pure content, see below).
+
+Every path variable is required by `compose.yaml` (`${VAR:?}`): a `.env` without one makes docker compose stop instead
+of mounting a host directory such as `/run`. In a worktree, `scripts/dev.sh` checks what docker compose resolves for
+the stack before running it, and refuses any project, image, port or host path that production owns, any host path
+outside the stack's own `DATA_DIR` (production's models and signing key excepted, read-only) and any service setting
+outside an allowlist (`scripts/lib/stack.py`). In production's checkout, `scripts/prod.sh compose ...` runs docker
+compose with production's `.env` only.
 
 ## Security model (summary — details in `docs/SECURITY.md`)
 
 - The sandbox has **no network interface** besides loopback, a **read-only root FS**, **no capabilities**, `no-new-privileges`, runs as the user's uid but **sees no host file** except the dirs listed above. It cannot read secrets, cannot exfiltrate, cannot persist outside its cache dir.
-- Packages and model weights are downloaded **once** by `ocr-setup` (network, but it only sees `SANDBOX_DIR`), pinned by version / Hugging Face commit; no Paddle code ever runs with network access.
+- Packages and model weights are downloaded **once** by `ocr-setup` (network, but it only sees the sandbox dir, `SANDBOX_SETUP_DIR`), pinned by version / Hugging Face commit; no Paddle code ever runs with network access.
 - Everything coming out of the sandbox is **untrusted data**: the api validates sizes, re-encodes images with Pillow, sanitizes image names and HTML in Markdown, renders previews through an allowlist sanitizer, and serves the web UI with a strict CSP.
 - The api requires a random bearer token (shown as a QR code for pairing). The web UI exchanges it for an HttpOnly SameSite=Strict cookie.
 

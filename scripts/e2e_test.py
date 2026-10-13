@@ -7,9 +7,19 @@ on disk (document.md, per-page files, illustrations, INDEX.md).
 
 Standard library only, so it runs with the system python3:
 
-    scripts/e2e_test.py IMAGE [IMAGE...] [--api http://127.0.0.1:8765]
-                        [--token-file /data/user/scanmylib/state/token]
-                        [--library /home/user/Documents/ScanMyLib] [--timeout 900]
+    scripts/e2e_test.py IMAGE [IMAGE...] [--api URL] [--token-file FILE] [--library DIR]
+                        [--timeout 900] [--production]
+
+It targets the stack of the checkout it runs from, read from its .env (strict
+format, scripts/lib/stack.py): the api on 127.0.0.1:API_PORT, the token in
+DATA_DIR/state/token and the library LIBRARY_DIR. In a worktree, that is the
+development stack (scripts/dev-env.sh). Options override the .env.
+
+It refuses to write into production (its project, its ports, its data or its
+library, from the .env of production's checkout and from its containers, or the
+library the api reports) unless --production is given: the test document would
+land in the user's library. An --api URL without an explicit port is refused
+too.
 """
 
 from __future__ import annotations
@@ -17,11 +27,14 @@ from __future__ import annotations
 import argparse
 import json
 import mimetypes
+import os
 import random
 import re
+import subprocess
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 import uuid
 from datetime import datetime, timezone
@@ -67,6 +80,72 @@ class Api:
         return status, (json.loads(data) if data else {})
 
 
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "scripts" / "lib"))
+sys.dont_write_bytecode = True  # no __pycache__ left in the checkout
+import stack  # noqa: E402  (scripts/lib/stack.py: the strict .env format)
+
+
+def read_env(path: Path) -> dict[str, str]:
+    """The KEY=VALUE pairs of a .env in the strict format (empty when there is no file)."""
+    return stack.read_env(path) if path.is_file() else {}
+
+
+def production_containers() -> list[dict]:
+    """`docker inspect` of production's containers (empty without Docker: production is then
+    described by the .env of ~/Dev/scanmylib and the defaults)."""
+    try:
+        ids = subprocess.run(["docker", "ps", "--all", "--quiet", "--filter",
+                              f"label=com.docker.compose.project={stack.PRODUCTION_PROJECT}"],
+                             capture_output=True, text=True, check=True).stdout.split()
+        if not ids:
+            return []
+        return json.loads(subprocess.run(["docker", "inspect", *ids], capture_output=True, text=True,
+                                         check=True).stdout)
+    except (OSError, subprocess.CalledProcessError, json.JSONDecodeError) as exc:
+        print(f"  note  cannot list production's containers ({exc}): production's defaults only", file=sys.stderr)
+        return []
+
+
+def port_of(url: str) -> int:
+    """The explicit port of an http(s) URL (ValueError when there is none or it is invalid)."""
+    parts = urllib.parse.urlsplit(url)
+    if parts.scheme not in ("http", "https") or not parts.hostname:
+        raise ValueError(f"{url}: expected http://HOST:PORT")
+    if parts.port is None:  # .port raises ValueError on an invalid port
+        raise ValueError(f"{url}: no explicit port")
+    return parts.port
+
+
+class Production:
+    """What production owns: the .env of its checkout, its containers, the defaults (stack.py)."""
+
+    def __init__(self) -> None:
+        containers = production_containers()
+        self.identity = stack.production_identity(stack.production_checkout(containers), containers)
+        libraries = {description: path for description, path in self.identity.paths.items()
+                     if "LIBRARY_DIR" in description or description.startswith("mount /library ")}
+        self.libraries = stack.Production(paths=libraries)
+
+    def owns_library(self, library: Path | str) -> bool:
+        return bool(self.libraries.relations(os.path.realpath(library)))
+
+    def reasons(self, env: dict[str, str], api: str, token_file: Path, library: Path) -> list[str]:
+        """Why these targets are production's (an empty list when they are not)."""
+        reasons = []
+        if env.get("COMPOSE_PROJECT_NAME") in self.identity.projects:
+            reasons.append(f"{ROOT / '.env'} is production's (COMPOSE_PROJECT_NAME={env['COMPOSE_PROJECT_NAME']})")
+        try:
+            if port_of(api) in self.identity.ports:
+                reasons.append(f"{api} is production's port")
+        except ValueError as exc:
+            reasons.append(f"cannot tell the port of --api: {exc}")
+        reasons += [f"{token_file} {relation}" for relation in self.identity.relations(os.path.realpath(token_file))]
+        if self.owns_library(library):
+            reasons.append(f"{library} is production's library")
+        return reasons
+
+
 def check(condition: bool, message: str, failures: list[str]) -> None:
     print(("  ok    " if condition else "  FAIL  ") + message)
     if not condition:
@@ -74,23 +153,61 @@ def check(condition: bool, message: str, failures: list[str]) -> None:
 
 
 def main() -> int:
+    try:
+        env = read_env(ROOT / ".env")
+    except stack.EnvError as exc:
+        sys.exit(f"error: {exc}")
+    data_dir = env.get("DATA_DIR")
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("images", nargs="+", type=Path)
-    parser.add_argument("--api", default="http://127.0.0.1:8765")
-    parser.add_argument("--token-file", type=Path, default=Path("/data/user/scanmylib/state/token"))
-    parser.add_argument("--library", type=Path, default=Path.home() / "Documents" / "ScanMyLib")
+    parser.add_argument("--api", default=f"http://127.0.0.1:{env.get('API_PORT') or 8765}" if env else None,
+                        help="default: http://127.0.0.1:API_PORT")
+    parser.add_argument("--token-file", type=Path, default=Path(data_dir, "state", "token") if data_dir else None,
+                        help="default: DATA_DIR/state/token")
+    parser.add_argument("--library", type=Path, default=Path(env["LIBRARY_DIR"]) if env.get("LIBRARY_DIR") else None,
+                        help="default: LIBRARY_DIR")
     parser.add_argument("--title", default=f"Test E2E {datetime.now():%Y-%m-%d %H:%M:%S}")
     parser.add_argument("--timeout", type=int, default=900, help="seconds to wait for OCR")
+    parser.add_argument("--production", action="store_true",
+                        help="allow a test document in production's library (refused otherwise)")
     args = parser.parse_args()
+    missing = [option for option, value in (("--api", args.api), ("--token-file", args.token_file),
+                                            ("--library", args.library)) if value is None]
+    if missing:
+        parser.error(f"no active environment in {ROOT / '.env'} (scripts/dev-env.sh in a worktree): "
+                     f"pass {', '.join(missing)}")
+    try:
+        production = Production()
+    except stack.EnvError as exc:
+        sys.exit(f"error: cannot tell what production owns ({exc}): nothing was sent")
+    reasons = production.reasons(env, args.api, args.token_file, args.library)
+    if reasons and not args.production:
+        sys.exit("error: refusing to write a test document into production:\n  - " + "\n  - ".join(reasons)
+                 + "\nRun it from a worktree's development stack (scripts/dev-env.sh), or pass --production.")
 
     api = Api(args.api, args.token_file.read_text().strip())
     failures: list[str] = []
 
+    print(f"== Environment {env.get('COMPOSE_PROJECT_NAME') or '(options only)'} ({ROOT / '.env'})")
+    print(f"  api {args.api}, token {args.token_file}, library {args.library}")
+    if reasons:
+        print("  PRODUCTION (--production): the test document goes into the user's library")
     print(f"== API {args.api}")
     status, health = api.json("GET", "/api/health")
     check(status == 200 and health.get("name") == "ScanMyLib", f"health: {status} {health}", failures)
+    version_file = ROOT / "VERSION"
+    if version_file.is_file() and health.get("version") != version_file.read_text().strip():
+        print(f"  note  the api runs version {health.get('version')}, this checkout is {version_file.read_text().strip()}")
     status, _ = Api(args.api, "wrong-token").json("GET", "/api/status")
     check(status == 401, f"wrong token rejected ({status})", failures)
+    # Where this api really writes: the library it reports, whatever the options said.
+    status, api_status = api.json("GET", "/api/status")
+    reported = api_status.get("library_dir") if status == 200 else None
+    if reported and production.owns_library(reported) and not args.production:
+        sys.exit(f"error: the api at {args.api} writes into production's library ({reported}): nothing was sent."
+                 "\nPass --production to test production anyway.")
+    if reported and Path(os.path.realpath(reported)) != Path(os.path.realpath(args.library)):
+        print(f"  note  the api reports the library {reported}, the checks read {args.library}")
 
     doc_id = str(uuid.uuid4())
     status, doc = api.json("PUT", f"/api/documents/{doc_id}", {"title": args.title, "kind": "book"})

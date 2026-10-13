@@ -9,24 +9,57 @@
 #
 # Prints one PASS/FAIL line per check and exits 1 if any check fails.
 #
-# usage: scripts/verify-sandbox.sh [container]   (default: the compose "ocr" service)
-# The expected mount sources come from DATA_DIR and SANDBOX_DIR (environment,
-# else .env).
+# usage: scripts/verify-sandbox.sh [container]
+# By default it checks the OCR service of the stack of this checkout's .env
+# (COMPOSE_PROJECT_NAME): the sandbox ("ocr"). A development stack may run the
+# fake OCR ("ocr-fake") instead, which gets the same checks except those of the
+# sandbox's own directories (it only sees the socket dir); production never: a
+# production stack without a running sandbox fails. The expected mount sources
+# come from DATA_DIR and SANDBOX_DIR in .env (never from the environment).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-container="${1:-$(docker compose --project-directory "$ROOT" ps -q ocr 2>/dev/null || true)}"
-if [[ -z "$container" || "$(docker inspect -f '{{.State.Running}}' "$container" 2>/dev/null)" != true ]]; then
-  echo "FAIL: the ocr container is not running (docker compose up -d ocr)"
+# shellcheck source=lib/common.sh
+source "$ROOT/scripts/lib/common.sh"
+if [[ ! -f "$ROOT/.env" ]]; then
+  echo "FAIL: no $ROOT/.env (scripts/dev-env.sh in a worktree, scripts/setup.sh in production)"
+  exit 1
+fi
+load_env "$ROOT/.env" STACK
+production=0
+[[ "${STACK[COMPOSE_PROJECT_NAME]:-}" == "$PRODUCTION_PROJECT" ]] && production=1
+
+running() { [[ -n "$1" && "$(docker inspect -f '{{.State.Running}}' "$1" 2>/dev/null)" == true ]]; }
+compose_ps() { compose ps -q "$1" 2>/dev/null || true; }
+container="${1:-}"
+if [[ -z "$container" ]]; then
+  container="$(compose_ps ocr)"
+  # Only a development stack may run the fake OCR instead of the sandbox.
+  if ! running "$container" && ((!production)); then container="$(compose_ps ocr-fake)"; fi
+fi
+if ! running "$container"; then
+  if ((production)); then
+    echo "FAIL: production's OCR sandbox (ocr) is not running"
+  else
+    echo "FAIL: no OCR container is running (scripts/dev.sh up)"
+  fi
+  exit 1
+fi
+# The fake OCR (api image, development) has no sandbox directory, no GPU and no "ocr" user.
+kind=sandbox
+[[ "$(docker inspect -f '{{index .Config.Labels "com.docker.compose.service"}}' "$container")" == ocr-fake ]] && kind=fake
+if [[ $kind == fake ]] && ((production)); then
+  echo "FAIL: $container is the fake OCR: production must run the OCR sandbox"
   exit 1
 fi
 
-env_value() { sed -n "s/^$1=//p" "$ROOT/.env" 2>/dev/null | tail -n 1; }
 # The LAN address the phone uses to reach this PC (PUBLIC_URL in .env).
-public_url="$(env_value PUBLIC_URL)"
-lan_target="$(sed -E 's#^[a-z]+://([^/]+).*#\1#' <<<"${public_url:-http://192.168.1.10:8765}")"
-data_dir="${DATA_DIR:-$(env_value DATA_DIR)}"
-sandbox_dir="${SANDBOX_DIR:-$(env_value SANDBOX_DIR)}"
+public_url="${STACK[PUBLIC_URL]:-}"
+api_port="${STACK[API_PORT]:-}"
+lan_ip="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for (i = 1; i < NF; i++) if ($i == "src") print $(i + 1)}')"
+lan_target="$(sed -E 's#^[a-z]+://([^/]+).*#\1#' <<<"${public_url:-http://${lan_ip:-192.168.1.10}:${api_port:-8765}}")"
+data_dir="${STACK[DATA_DIR]:-}"
+sandbox_dir="${STACK[SANDBOX_DIR]:-}"
 
 failures=0
 check() {  # check <description> <expected> <actual>
@@ -39,6 +72,7 @@ check() {  # check <description> <expected> <actual>
 }
 
 echo "== container configuration (docker inspect $(docker inspect -f '{{.Name}}' "$container" | tr -d /))"
+[[ $kind == fake ]] && echo "INFO: fake OCR of a development stack (not the sandbox)"
 inspect() { docker inspect -f "$1" "$container"; }
 check "network mode is none" "none" "$(inspect '{{.HostConfig.NetworkMode}}')"
 check "root filesystem is read-only" "true" "$(inspect '{{.HostConfig.ReadonlyRootfs}}')"
@@ -68,17 +102,20 @@ echo "INFO: device requests: $(inspect '{{range .HostConfig.DeviceRequests}}{{.D
 mounts="$(inspect '{{range .Mounts}}{{.Type}}|{{.Source}}|{{.Destination}}|{{if .RW}}rw{{else}}ro{{end}}{{"\n"}}{{end}}' | sed '/^$/d')"
 echo "INFO: mounts: $(tr '\n' ' ' <<<"$mounts")"
 check "no host bind mount from /home" "" "$(cut -d'|' -f2 <<<"$mounts" | grep '^/home' || true)"
-if [[ -n "$data_dir" && -n "$sandbox_dir" ]]; then
+actual="$(while IFS='|' read -r type source destination mode; do
+  if [[ -n "$type" ]]; then echo "$type|$(realpath -m "${source:-/}")|$destination|$mode"; fi
+done <<<"$mounts" | sort)"
+if [[ $kind == fake && -n "$data_dir" ]]; then
+  check "mounts are exactly DATA_DIR/run" "bind|$(realpath -m "$data_dir/run")|/run/scanmylib|rw " \
+    "$(tr '\n' ' ' <<<"$actual")"
+elif [[ $kind == sandbox && -n "$data_dir" && -n "$sandbox_dir" ]]; then
   expected="$(printf '%s\n' "bind|$(realpath -m "$sandbox_dir")|/opt/sandbox|ro" \
     "bind|$(realpath -m "$data_dir/run")|/run/scanmylib|rw" \
     "bind|$(realpath -m "$data_dir/ocr-cache")|/var/cache/ocr|rw" | sort)"
-  actual="$(while IFS='|' read -r type source destination mode; do
-    if [[ -n "$type" ]]; then echo "$type|$(realpath -m "${source:-/}")|$destination|$mode"; fi
-  done <<<"$mounts" | sort)"
   check "mounts are exactly SANDBOX_DIR (ro), DATA_DIR/run and DATA_DIR/ocr-cache" \
     "$(tr '\n' ' ' <<<"$expected")" "$(tr '\n' ' ' <<<"$actual")"
 else
-  check "DATA_DIR and SANDBOX_DIR known (environment or .env)" "yes" "no"
+  check "DATA_DIR and SANDBOX_DIR set in .env" "yes" "no"
 fi
 
 pids_limit="$(inspect '{{if .HostConfig.PidsLimit}}{{.HostConfig.PidsLimit}}{{end}}')"
@@ -92,7 +129,7 @@ check "container log size bounded (logging max-size)" "yes" \
 
 echo "== inside the sandbox (docker exec, as the sandbox user)"
 set +e
-docker exec -i -e LAN_TARGET="$lan_target" -e HOST_HOME="$HOME" "$container" python3 - <<'PY'
+docker exec -i -e LAN_TARGET="$lan_target" -e HOST_HOME="$(getent passwd "$(id -u)" | cut -d: -f6)" -e SANDBOX_KIND="$kind" "$container" python3 - <<'PY'
 import errno
 import os
 import re
@@ -139,7 +176,9 @@ with open("/proc/self/mountinfo") as table:
         mounts[point] = {"root": fields[3], "options": fields[5].split(","), "type": filesystem.split()[0]}
 
 PSEUDO = {"proc", "sysfs", "cgroup", "cgroup2", "devpts", "mqueue"}
-HOST_DIRS = {"/opt/sandbox", "/run/scanmylib", "/var/cache/ocr"}
+SANDBOX = os.environ["SANDBOX_KIND"] == "sandbox"  # else the fake OCR: the socket dir only
+HOST_DIRS = {"/opt/sandbox", "/run/scanmylib", "/var/cache/ocr"} if SANDBOX else {"/run/scanmylib"}
+WRITABLE_DIRS = sorted(HOST_DIRS - {"/opt/sandbox"})
 OWN_TMPFS = {"/tmp", "/dev", "/dev/shm"}  # fresh tmpfs mounts made by Docker for the container
 
 
@@ -175,7 +214,7 @@ unexpected_dirs = sorted(
     and not (point.startswith(("/proc/", "/sys/")) and read_only(mount))
 )
 check(
-    "no directory mount besides /opt/sandbox, /run/scanmylib, /var/cache/ocr (and the container's /tmp, /dev, /dev/shm)",
+    f"no directory mount besides {', '.join(sorted(HOST_DIRS))} (and the container's /tmp, /dev, /dev/shm)",
     not unexpected_dirs,
     ", ".join(unexpected_dirs),
 )
@@ -190,13 +229,14 @@ other_writable = sorted(
     point
     for point, mount in mounts.items()
     if not read_only(mount)
-    and point not in ("/run/scanmylib", "/var/cache/ocr", "/proc", "/dev/pts", "/dev/mqueue")
+    and point not in (*WRITABLE_DIRS, "/proc", "/dev/pts", "/dev/mqueue")
     and not own_tmpfs(point, mount)
     and not cdi_scratch(point)
     and not masked(mount)
 )
 check(
-    "only /run/scanmylib and /var/cache/ocr are writable host storage (besides the container's tmpfs)",
+    f"only {' and '.join(WRITABLE_DIRS)} {'are' if len(WRITABLE_DIRS) > 1 else 'is'} writable host storage"
+    " (besides the container's tmpfs)",
     not other_writable,
     ", ".join(other_writable),
 )
@@ -228,9 +268,11 @@ def write_fails_read_only(directory: str) -> None:
 
 
 check("root filesystem mounted read-only", read_only(mounts["/"]), ",".join(mounts["/"]["options"]))
-write_fails_read_only(os.path.expanduser("~ocr"))  # owned by the sandbox user: only the mount stops it
-check("/opt/sandbox mounted read-only", "/opt/sandbox" in mounts and read_only(mounts["/opt/sandbox"]))
-write_fails_read_only("/opt/sandbox")  # owned by the sandbox user on the host
+# Owned by the container's user: only the read-only mount stops it.
+write_fails_read_only(os.path.expanduser("~ocr") if SANDBOX else "/state")
+if SANDBOX:
+    check("/opt/sandbox mounted read-only", "/opt/sandbox" in mounts and read_only(mounts["/opt/sandbox"]))
+    write_fails_read_only("/opt/sandbox")  # owned by the sandbox user on the host
 
 for point in ("/proc/sys", "/proc/sysrq-trigger", "/sys", "/sys/fs/cgroup"):
     check(f"{point} mounted read-only", point in mounts and read_only(mounts[point]), "not a separate mount" if point not in mounts else "")

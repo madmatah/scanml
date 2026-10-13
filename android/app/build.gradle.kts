@@ -43,6 +43,14 @@ android {
             isMinifyEnabled = false
             isShrinkResources = false
         }
+        // The development app (APP_VARIANT=dev, scripts/dev-env.sh): the release build under its own
+        // application id and name ("ScanMyLib (dev)", src/dev/res), so that it installs next to the
+        // production app and talks to the development stack. Same signing key.
+        create("dev") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".dev"
+            versionNameSuffix = "-dev"
+        }
     }
 
     androidResources {

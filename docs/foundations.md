@@ -6,7 +6,7 @@ new state (the history of decisions is kept outside the repository).
 ## Purpose
 
 Scan documents and books with an Android phone, a few pages at a time, in any order and over many sessions; OCR them on
-the user's PC (NVIDIA RTX 3090); keep a library of Markdown files with their illustrations that AI agents can read as
+a Linux PC with an NVIDIA GPU; keep a library of Markdown files with their illustrations that AI agents can read as
 reference material.
 
 ## Principles
@@ -42,3 +42,4 @@ reference material.
 | Android build | Kotlin and Jetpack Compose; built and tested in throwaway containers; signed offline with a key kept outside the repository; no R8 shrinking |
 | Pairing and access | random bearer token, shared by QR code; plain HTTP on the local network; remote use through a VPN |
 | Deployment | Docker Compose (`api`, `ocr`), restarted automatically with Docker |
+| Releases | one version for the api and the app (`VERSION`, tagged `vX.Y.Z`); changes on branches and worktrees, tried on a separate development stack and app (`fr.scanmylib.dev`); production deployed only by `scripts/deploy.sh` from `main`, in production's checkout; the scripts' guards protect production from misconfiguration, mistakes in a branch and compromised build dependencies, not from a deliberately malicious branch (`docs/SECURITY.md`) |

@@ -28,13 +28,18 @@ Everything runs in Docker; nothing is installed on the host.
 
 ```sh
 cd server
-docker build --target test -t scanmylib-api:test .
-docker run --rm --name scanmylib-apitest-pytest --network none --read-only --tmpfs /tmp scanmylib-api:test
-docker build -t scanmylib-api:latest .      # production image (default target)
+docker build --target test -t scanmylib-dev-api:test .
+docker run --rm --name scanmylib-dev-pytest --network none --read-only --tmpfs /tmp scanmylib-dev-api:test
 ```
 
 The test suite runs the real app against the fake sandbox over a real Unix socket.
-Pass pytest options after the image name, e.g. `... scanmylib-api:test python -m pytest -k sanitize -x`.
+Pass pytest options after the image name, e.g. `... scanmylib-dev-api:test python -m pytest -k sanitize -x`.
+
+The runtime image (default target) is built by docker compose (`scripts/dev.sh build api`
+in a worktree, `scripts/deploy.sh` in production), which also
+passes the repository root as the build context `project`: the image gets the
+repository's `VERSION`, the version the api reports (`scanmylib/__init__.py`). A plain
+`docker build` of this directory reports `unknown`.
 
 Dependencies are pinned with hashes in `requirements.lock` / `requirements-test.lock`,
 generated from `pyproject.toml` in a throwaway container:
@@ -77,7 +82,13 @@ generated illustration per page. It is part of the api image.
 --delay S          seconds spent per page (default 0.5)
 --load-delay S     simulated engine start on first use (default 2)
 --evil             return hostile markup (to see the sanitizer at work)
+--check            health probe: exit 0 if a sandbox answers on --socket
 ```
+
+Like the real sandbox, it never replaces a socket that something answers on
+(only a stale one), and it refuses to start when `SCANMYLIB_PROJECT` is the
+production project (`scanmylib`; compose sets it from `COMPOSE_PROJECT_NAME`):
+production's library only ever gets the real OCR's results.
 
 The page number it "finds" is derived from the image size, so you can choose it:
 **N = image height mod 1000** (none when 0), and **image width mod 10** selects a
@@ -88,17 +99,21 @@ a 1202×1012 one is page xii.
 
 ### Running the api against it (e.g. for web UI work)
 
-Both containers share a socket directory; use your own name prefix, port and
-directories under `/data/user/scanmylib/dev/`.
+The development stack of a worktree runs the api with this fake sandbox, as the
+compose service `ocr-fake`: `scripts/dev-env.sh`, then `scripts/dev.sh up`
+(`http://localhost:8770`, see `CLAUDE.md`). For quick web UI iterations, two
+standalone containers can share a socket directory instead; use your own names,
+port and directories, never production's (`scanmylib-api:latest`, port 8765,
+production's `DATA_DIR`).
 
 ```sh
-DEV=/data/user/scanmylib/dev/webui; mkdir -p $DEV/run $DEV/library $DEV/state
-docker build -t scanmylib-api:latest server/
+DEV=/data/USER/scanmylib-dev/webui; mkdir -p $DEV/run $DEV/library $DEV/state
+docker build -t scanmylib-webui:latest server/
 
 docker run -d --name webui-fakeocr --network none --read-only --tmpfs /tmp \
   --cap-drop ALL --security-opt no-new-privileges:true --user 1000:1000 \
   -v $DEV/run:/run/scanmylib \
-  scanmylib-api:latest python -m scanmylib.devtools.fake_ocr --delay 1
+  scanmylib-webui:latest python -m scanmylib.devtools.fake_ocr --delay 1
 
 docker run -d --name webui-api --read-only --tmpfs /tmp \
   --cap-drop ALL --security-opt no-new-privileges:true --user 1000:1000 \
@@ -106,7 +121,7 @@ docker run -d --name webui-api --read-only --tmpfs /tmp \
   -v $DEV/library:/library -v $DEV/state:/state -v $DEV/run:/run/scanmylib \
   -v "$PWD/server/scanmylib/web:/web:ro" -e SCANMYLIB_WEB_DIR=/web \
   -e SCANMYLIB_TOKEN=dev-token -e SCANMYLIB_PUBLIC_URL=http://127.0.0.1:8780 \
-  scanmylib-api:latest
+  scanmylib-webui:latest
 ```
 
 Mounting the web directory makes UI edits visible without rebuilding. Some data:

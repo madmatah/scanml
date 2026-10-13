@@ -22,7 +22,10 @@ content into its results.
 | GPU through CDI only | the only device exposed |
 
 Downloads (packages, models) are made **only once** by `ocr-setup`, which has
-network access but only sees `SANDBOX_DIR`. Pinned versions:
+network access but only sees the sandbox directory, read-write:
+`SANDBOX_SETUP_DIR`, which only production's `.env` sets (`scripts/setup.sh`).
+A development stack mounts production's `SANDBOX_DIR` read-only and cannot run
+`ocr-setup` (its bind source does not exist). Pinned versions:
 `paddlepaddle-gpu==3.2.1`, `paddleocr==3.7.0`, `vllm==0.31.0`, and the models
 by Hugging Face commit (see `ocr/setup/install.sh`, `SANDBOX_DIR/MANIFEST.json`).
 No Paddle code runs during this network phase: the models are fetched with
@@ -30,7 +33,9 @@ No Paddle code runs during this network phase: the models are fetched with
 
 The script `scripts/verify-sandbox.sh` (53 checks) verifies these properties on
 the running container (network interfaces, DNS resolution, outbound
-connections, visible files, capabilities, read-only file system).
+connections, visible files, capabilities, read-only file system). On a
+development stack, the fake OCR (`ocr-fake`, our own code) runs with the same
+isolation, sees only the socket directory, and passes the same checks.
 
 ## OCR results are untrusted data (`api` side)
 
@@ -63,6 +68,89 @@ library as **reference material**, not as orders: ideally, they read it
 without having access to sensitive tools (sending data, secrets) at the same
 time.
 
+## Development stacks never touch production
+
+### Threat model of the development guards
+
+The checks of the scripts (`scripts/lib/stack.py`, used by `scripts/dev.sh`,
+`scripts/dev-env.sh`, `scripts/build-apk.sh`, `scripts/deploy.sh`,
+`scripts/prod.sh` and `scripts/e2e_test.py`) protect production — its
+containers, images, data, library, signing key and app — against:
+
+- **misconfiguration**: a wrong or copied `.env`, a variable of the shell
+  that would override it, a path pointing at production's data or library;
+- **mistakes in a branch**: a `compose.yaml` change that mounts a host path,
+  reuses production's image names or ports, adds privileges, a build that
+  drops the dev application id, a command typed in the wrong checkout;
+- **compromised build dependencies**: code that runs inside the containers a
+  branch builds (Gradle plugins, Python packages, models), which only sees
+  the development stack's own directories and never the signing key.
+
+They do **not** claim to stop a deliberately malicious branch: its scripts
+run as the user, with the user's rights (they could edit the checks
+themselves). Review what a branch changes in `scripts/`, `compose.yaml` and
+the Dockerfiles before running it.
+
+### What is checked
+
+Branches are tried on a development stack (`CLAUDE.md`), next to production.
+Its `.env`, like production's, keeps to a strict format that every script
+checks, so that docker compose and the scripts read the same values (no
+quotes, `$`, comments after a value, `export`...), and the scripts run docker
+compose with that `.env` only, never with the caller's environment (in
+production too: `scripts/prod.sh compose ...`). Before anything,
+`scripts/dev.sh` (and `scripts/build-apk.sh`, `scripts/deploy.sh`'s
+rehearsal) checks what docker compose resolves for the stack, every profile
+included:
+
+- the project, every image (compared as Docker reads image names, and
+  required to be the stack's own `<IMAGE_PREFIX>-api:latest` or
+  `-ocr:latest`) and every published port must differ from production's
+  (its `.env`, the defaults, and its running containers);
+- every host path must be inside the stack's own `DATA_DIR`, which itself is
+  outside the system directories, `/tmp` and your home directory (the one of
+  the password database, and `$HOME` too), except production's OCR models and
+  signing key, read-only; no path may be, contain or be inside one of
+  production's. A bind mount whose source does not exist and that docker
+  compose would not create (the placeholder of `ocr-setup`) is never mounted,
+  so it is not checked: a path created there between the check and the start
+  of the container would be mounted (a narrow window, accepted);
+- services may only use an allowlist of settings: no `privileged`,
+  `cap_add`, `volumes_from`, `use_api_socket`, host namespaces (`pid`, `ipc`,
+  `uts`, `userns_mode`, `cgroup`), labels, `env_file` or `label_file` (docker
+  compose merges them into the configuration it resolves: the scripts also
+  read it without interpolation, which keeps them), devices other than the
+  GPU (CDI), security options other than `no-new-privileges`, a
+  `network_mode` other than `none` (or another service of the stack), networks
+  other than the stack's own (`<project>_...`, never external), `include`
+  (its `env_file` would feed host files into what it includes), build
+  contexts outside the checkout or build settings such as `ssh` or `tags`;
+- `scripts/dev.sh compose` refuses the docker compose commands and options
+  that could leave the stack, wherever they are on the command line: `cp`,
+  `export`, `commit`, `push`, `pull`, `run -v`/`-p`/`--cap-add`/`--name`,
+  `exec --privileged`, `build --ssh`/`--push`, `config -o`, `up --watch`;
+  `up`, `create`, `start` and `restart` name their services, never both `ocr`
+  and `ocr-fake`, which serve the same socket.
+
+Production's checkout is the directory its containers were started from
+(else `~/Dev/scanmylib`): another clone with a copy of production's `.env` is
+not production, and neither deploys nor builds the release app. A deployment
+builds the images from the commit (`git archive HEAD`), reads the
+`compose.yaml` of that commit for every check and step, and refuses files
+marked assume-unchanged or skip-worktree, whose changes `git status` hides. A
+rehearsal checks the stack twice, as the build resolves it (from the export)
+and as `up` resolves it (relative `extends` files and bind sources are read
+from the checkout, uncommitted changes included).
+`scripts/prod.sh compose` runs `up` only on a clean `main` (the same checks),
+and `up` never builds; `start` and `restart` only restart the existing
+containers. Without a `.env`,
+`scripts/build-apk.sh` only runs in CI, outside production's paths and the
+home directory (on GitHub Actions, inside `RUNNER_TEMP` only).
+The fake OCR refuses to run in the production project, and
+`scripts/e2e_test.py` refuses to write into production (its project, ports,
+data or library; an `--api` URL without an explicit port is refused) without
+`--production`.
+
 ## On the local network
 
 - Uploads without a valid token are refused **before** the request body is read (no memory used up by a stranger).
@@ -77,12 +165,31 @@ time.
   Android tools (SHA-1 published by Google), Gradle distribution (SHA-256
   published by Gradle), and every library against a pinned hash
   (`android/gradle/verification-metadata.xml`).
-- **Signing**: the signing key is created once in
-  `DATA_DIR/android/keystore/`, never in the repository. Signing happens in a
-  second container **without network**: the build code and its plugins never
-  see the key. **Back up this folder.** Without it, a new APK cannot update the
-  installed app: it would have to be uninstalled, which deletes the pages not
-  sent yet.
+- **Signing**: the signing key is created once in `ANDROID_DIR/keystore/`
+  (`scripts/build-apk.sh --create-signing-key`, run by `scripts/setup.sh`;
+  never implicitly), never in the repository. Signing happens in a second
+  container **without network**, with the key directory mounted read-only:
+  the build code and its plugins never see the key. The builds write to the
+  Android SDK, so the signing container does not run its tools from there: it
+  copies `zipalign`, `apksigner.jar` and their `libc++.so` to its own memory
+  and checks them against SHA-256 sums pinned in `scripts/build-apk.sh` first.
+  Before signing, it reads the package name and versionCode of the APK with
+  the checked `apksigner.jar`'s manifest parser and refuses anything but the
+  variant's app (`fr.scanmylib.dev` for the development app, `fr.scanmylib`
+  for the release) with the versionCode of `VERSION`: a branch that drops the
+  `.dev` suffix never gets an app signed that would install over the
+  production one. The development app is built with the development stack's
+  own SDK and Gradle caches (a build of a branch never writes to production's
+  toolchain) and signed with the same key, read-only, by the same checked
+  tools. Sharing the key is safe only while the production app trusts nothing
+  on its signature: it must never gain signature-level permissions
+  (`protectionLevel="signature"`), exported components protected by one, or a
+  `sharedUserId`, which a development app signed with the same key could use;
+  revisit this before adding any. The release app is only built in
+  production's checkout, on `main` as on GitHub; without a `.env`, only CI
+  builds, never signed, never in production's directories nor in the home
+  directory. **Back up this folder.** Without it, a new APK cannot update the installed app: it
+  would have to be uninstalled, which deletes the pages not sent yet.
 - **Permissions**: the app uses the network, and WorkManager adds permissions
   granted without asking (wake lock, network state, restart at boot). The only
   permission asked of the user is the **camera**, and only when entering the

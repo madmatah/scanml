@@ -1,0 +1,316 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  French translation of values/strings.xml, under the same names (strings marked
+  translatable="false" there are not repeated here).
+  Typography: ’ for apostrophes, non-breaking spaces before : ? ; ! and inside « ».
+-->
+<resources>
+    <string name="back">Retour</string>
+    <string name="cancel">Annuler</string>
+    <string name="close">Fermer</string>
+    <string name="delete">Supprimer</string>
+    <string name="retry">Réessayer</string>
+    <string name="error_detail">Détail : %1$s</string>
+    <string name="kind_book">Livre</string>
+    <string name="kind_document">Document</string>
+    <string name="connection_ok">PC connecté (ScanMyLib %1$s). OCR %2$s.</string>
+    <string name="connection_unreachable">Impossible de joindre le PC. Vérifiez qu’il est allumé, que ScanMyLib y tourne et que le téléphone est sur le même réseau.</string>
+    <string name="connection_not_scanmylib">Cette adresse ne répond pas comme un serveur ScanMyLib.</string>
+    <string name="connection_incompatible">La version de ScanMyLib sur le PC n’est pas compatible avec cette appli : installez l’APK proposé par le PC.</string>
+    <string name="connection_token_refused">Le PC a refusé le jeton. Scannez à nouveau le QR code d’association.</string>
+    <string name="connection_failed">Erreur du PC : %1$s</string>
+    <string name="ocr_state_idle">en veille</string>
+    <string name="ocr_state_starting">en démarrage</string>
+    <string name="ocr_state_ready">prêt</string>
+    <string name="ocr_state_stopping">en arrêt</string>
+    <string name="ocr_state_error">en erreur</string>
+    <string name="ocr_state_unreachable">injoignable</string>
+    <string name="pairing_title">Associer au PC</string>
+    <string name="pairing_intro">Sur le PC, ouvrez l’interface web de ScanMyLib et affichez le QR code d’association, puis scannez-le.</string>
+    <string name="pairing_scan_qr_code">Scanner le QR code</string>
+    <string name="pairing_manual_intro">Ou saisissez l’adresse et le jeton affichés sous le QR code.</string>
+    <string name="pairing_url_label">Adresse du PC</string>
+    <string name="pairing_url_empty">Indiquez l’adresse du PC.</string>
+    <string name="pairing_url_malformed">Adresse invalide.</string>
+    <string name="pairing_url_unsupported_scheme">L’adresse doit commencer par http:// ou https://.</string>
+    <string name="pairing_url_not_root">Indiquez seulement l’adresse et le port, par exemple http://192.168.1.10:8765.</string>
+    <string name="pairing_token_label">Jeton</string>
+    <string name="pairing_token_invalid">Jeton invalide.</string>
+    <string name="pairing_show_token">Afficher le jeton</string>
+    <string name="pairing_hide_token">Masquer le jeton</string>
+    <string name="pairing_connect">Tester et associer</string>
+    <string name="pairing_checking">Connexion au PC…</string>
+    <string name="pairing_error_not_a_pairing_code">Ce QR code n’est pas un code d’association ScanMyLib.</string>
+    <string name="pairing_error_qr_invalid_url">Le QR code contient une adresse de PC invalide.</string>
+    <string name="pairing_error_qr_invalid_token">Le QR code contient un jeton invalide.</string>
+    <string name="pairing_error_scanner_unavailable">Le lecteur de QR code n’est pas disponible (il nécessite les services Google Play). Saisissez l’adresse et le jeton.</string>
+    <string name="library_new_document">Nouveau document</string>
+    <string name="library_empty">Aucun document pour l’instant. Créez-en un avec « Nouveau document », puis scannez ses pages.</string>
+    <string name="library_pc_online_idle">PC connecté · OCR %1$s</string>
+    <string name="library_pc_online_ocr_error">PC connecté, mais l’OCR est en erreur : %1$s</string>
+    <string name="library_pc_unreachable">PC injoignable : les scans partiront dès qu’il sera disponible.</string>
+    <string name="library_pc_token_refused">Le PC refuse le jeton : associez à nouveau l’appli dans les paramètres.</string>
+    <string name="library_pc_error">Erreur du PC : %1$s</string>
+    <string name="library_document_refused">Refusé par le PC</string>
+    <string name="new_document_title">Nouveau document</string>
+    <string name="new_document_name">Titre</string>
+    <string name="new_document_author">Auteur (facultatif)</string>
+    <string name="new_document_unwarp">Livre relié</string>
+    <string name="new_document_unwarp_help">Redresse lors de l’OCR les pages courbées par la reliure.</string>
+    <string name="new_document_create">Créer</string>
+    <string name="document_scan_pages">Scanner des pages</string>
+    <string name="document_not_on_pc_yet">Pas encore sur le PC</string>
+    <string name="document_not_on_pc_yet_long">Ce document n’est pas encore sur le PC : il y sera créé au prochain envoi.</string>
+    <string name="document_coverage">Pages couvertes : %1$s</string>
+    <string name="document_coverage_none">aucune page numérotée</string>
+    <string name="document_missing">Pages manquantes : %1$s</string>
+    <string name="document_folder">Dossier sur le PC : %1$s</string>
+    <string name="document_unwarp_on">Redressement des pages courbées activé.</string>
+    <string name="document_upload_refused">Le PC a refusé ce document : %1$s</string>
+    <string name="document_no_pages">Aucune page pour l’instant : touchez « Scanner des pages ».</string>
+    <string name="document_gone">Ce document n’existe plus : il a été supprimé sur le PC.</string>
+    <string name="page_label">p. %1$s</string>
+    <string name="page_without_number">Sans numéro</string>
+    <string name="page_duplicate">Doublon</string>
+    <string name="page_excluded">Exclue</string>
+    <string name="page_status_queued">En attente d’OCR</string>
+    <string name="page_status_processing">OCR en cours</string>
+    <string name="page_status_done">Traitée</string>
+    <string name="page_status_error">Erreur d’OCR</string>
+    <string name="page_status_unknown">État inconnu</string>
+    <string name="number_source_manual">Numéro saisi sur le PC</string>
+    <string name="number_source_detected">Numéro détecté sur la page</string>
+    <string name="number_source_hint">Numéro indiqué au scan</string>
+    <string name="number_source_inferred">Numéro déduit des pages voisines</string>
+    <string name="server_page_duplicate">Doublon : une page scannée plus tard porte le même numéro.</string>
+    <string name="server_page_excluded">Exclue du document.</string>
+    <string name="upload_state_queued">En attente d’envoi</string>
+    <string name="upload_state_uploading">Envoi…</string>
+    <string name="upload_state_failed">Envoi refusé</string>
+    <string name="upload_state_uploaded">Envoyée</string>
+    <string name="upload_failure_network">PC injoignable</string>
+    <string name="upload_failure_server_error">erreur du PC</string>
+    <string name="upload_failure_unauthorized">jeton refusé</string>
+    <string name="upload_failure_document_missing">document inconnu du PC</string>
+    <string name="upload_failure_too_large">image trop volumineuse</string>
+    <string name="upload_failure_unsupported_type">format d’image refusé</string>
+    <string name="upload_failure_rejected">requête refusée</string>
+    <string name="upload_failure_file_missing">image introuvable sur le téléphone</string>
+    <string name="local_page_title">Scan sur le téléphone</string>
+    <string name="local_page_hint">Numéro indiqué : %1$d</string>
+    <string name="local_page_failed">Refusée : %1$s.</string>
+    <string name="local_page_will_retry">Dernier essai : %1$s. Nouvel essai automatique.</string>
+    <string name="local_page_needs_pairing">Le PC a refusé le jeton : associez à nouveau l’appli pour reprendre l’envoi.</string>
+    <string name="scan_setup_title">Scanner des pages</string>
+    <string name="scan_setup_help">Indiquez le numéro de la première page si vous le connaissez : il aide à classer les pages dont le numéro n’est pas imprimé.</string>
+    <string name="scan_setup_start">Lancer le scanner</string>
+    <string name="scan_setup_start_camera">Prendre les photos</string>
+    <string name="scan_setup_start_picker">Choisir les photos</string>
+    <string name="scan_source_google">Scanner Google</string>
+    <string name="scan_source_google_help">Recadre et redresse chaque page (retouche réglable dans les paramètres).</string>
+    <string name="scan_source_camera">Appareil photo, page par page</string>
+    <string name="scan_source_camera_help">Photos d’origine, sans retouche, une page après l’autre.</string>
+    <string name="scan_source_picker">Importer des photos</string>
+    <string name="scan_source_picker_help">Photos déjà prises, classées par date de prise de vue.</string>
+    <string name="scan_preparing">Préparation des pages…</string>
+    <string name="scan_preparing_progress">%1$d sur %2$d</string>
+    <string name="scan_first_page">Numéro de la première page</string>
+    <string name="scan_first_page_help">Facultatif. Laissez vide pour les pages sans numéro (couverture, préface…).</string>
+    <string name="scan_first_page_invalid">Un nombre de 1 à %1$d</string>
+    <string name="scan_consecutive">Pages consécutives</string>
+    <string name="scan_consecutive_help">Les pages suivantes prennent les numéros suivants.</string>
+    <string name="scan_review_confirm">Envoyer</string>
+    <string name="scan_review_discard">Abandonner</string>
+    <string name="scan_review_add">Ajouter des pages</string>
+    <string name="scan_review_later">Plus tard</string>
+    <string name="scan_review_page">Page %1$d sur %2$d</string>
+    <string name="scan_review_remove_page">Retirer cette page</string>
+    <string name="scan_discard_message">Rien n’a encore été envoyé au PC : la suppression est définitive.</string>
+    <string name="scan_summary_invalid">Corrigez le numéro de la première page.</string>
+    <string name="scan_summary_none">Aucun numéro indiqué : le PC lira les numéros imprimés.</string>
+    <string name="scan_summary_first_only">Numéro indiqué pour la première page : %1$d.</string>
+    <string name="scan_summary_range">Numéros indiqués : %1$d à %2$d.</string>
+    <string name="message_pc_unreachable">PC injoignable : affichage des dernières données connues.</string>
+    <string name="message_token_refused">Le PC refuse le jeton : associez à nouveau l’appli.</string>
+    <string name="message_server_error">Erreur du PC : %1$s</string>
+    <string name="message_import_failed">Impossible d’enregistrer les pages. Réessayez.</string>
+    <string name="message_send_failed">Impossible d’ajouter les pages à l’envoi. Réessayez.</string>
+    <string name="message_storage_full">Plus assez de place sur le téléphone : libérez de l’espace, puis réessayez.</string>
+    <string name="message_nothing_scanned">Aucune page reçue du scanner Google.</string>
+    <string name="message_adding_interrupted">L’appli a été fermée pendant l’ajout de pages : vérifiez celles qui attendent l’envoi, et ajoutez de nouveau celles qui manquent.</string>
+    <string name="message_setting_not_saved">Réglage non enregistré : vérifiez la place libre sur le téléphone.</string>
+    <string name="message_photo_picker_unavailable">Impossible d’ouvrir le sélecteur de photos.</string>
+    <string name="message_scanner_unavailable">Le scanner de documents n’est pas disponible (il nécessite les services Google Play).</string>
+    <string name="message_page_busy">Cette page est en cours d’envoi : réessayez dans un instant.</string>
+    <string name="settings_title">Paramètres</string>
+    <string name="settings_section_pc">PC</string>
+    <string name="settings_not_paired">Aucun PC associé</string>
+    <string name="settings_test_connection">Tester la connexion</string>
+    <string name="settings_change_server">Changer de PC</string>
+    <string name="settings_unpair">Dissocier ce téléphone</string>
+    <string name="settings_unpair_title">Dissocier ce téléphone ?</string>
+    <string name="settings_unpair_message">L’appli oubliera l’adresse du PC et son jeton. Les scans pas encore envoyés restent sur le téléphone et partiront après une nouvelle association.</string>
+    <string name="settings_unpair_confirm">Dissocier</string>
+    <string name="settings_section_upload">Envoi des scans</string>
+    <string name="settings_wifi_only">Wi-Fi uniquement</string>
+    <string name="settings_wifi_only_help">N’envoyer les scans que sur un réseau Wi-Fi (non limité).</string>
+    <string name="settings_keep_copies">Conserver les scans sur le téléphone</string>
+    <string name="settings_keep_copies_help">Garde une copie de chaque image après son envoi au PC.</string>
+    <string name="settings_scanner_help">Le scanner de Google ne renvoie jamais la photo d’origine : il recadre et redresse toujours la page, même sans retouche. Pour garder les photos telles quelles (couleurs des illustrations comprises), choisissez « Appareil photo, page par page » ou « Importer des photos » au moment de scanner.</string>
+    <string name="settings_scanner_mode">Retouche par le scanner Google</string>
+    <string name="settings_scanner_mode_crop">Aucune — recadrage seul</string>
+    <string name="settings_scanner_mode_crop_help">Recadre et redresse la page, sans filtre.</string>
+    <string name="settings_scanner_mode_filters">Filtres</string>
+    <string name="settings_scanner_mode_filters_help">Recadrage, plus des filtres (noir et blanc, amélioration automatique…) qui modifient les couleurs et le contraste.</string>
+    <string name="settings_scanner_mode_full">Complète — filtres et effacement des doigts et taches</string>
+    <string name="settings_scanner_mode_full_help">Filtres, plus l’effacement automatique des doigts et des taches, qui peut aussi effacer des détails de la page.</string>
+    <string name="settings_section_about">À propos</string>
+    <string name="settings_version">ScanMyLib pour Android %1$s</string>
+    <string name="settings_about">Les pages scannées partent vers votre PC dès qu’il est joignable ; la reconnaissance du texte (OCR) se fait sur le PC.</string>
+
+    <plurals name="library_pc_online_busy">
+        <item quantity="one">PC connecté · OCR %1$s · %2$d page à traiter</item>
+        <item quantity="many">PC connecté · OCR %1$s · %2$d pages à traiter</item>
+        <item quantity="other">PC connecté · OCR %1$s · %2$d pages à traiter</item>
+    </plurals>
+    <plurals name="library_pages_to_upload">
+        <item quantity="one">%d page à envoyer</item>
+        <item quantity="many">%d pages à envoyer</item>
+        <item quantity="other">%d pages à envoyer</item>
+    </plurals>
+    <plurals name="library_pages_failed">
+        <item quantity="one">%d page refusée</item>
+        <item quantity="many">%d pages refusées</item>
+        <item quantity="other">%d pages refusées</item>
+    </plurals>
+    <plurals name="library_pages_to_confirm">
+        <item quantity="one">%d page à vérifier avant l’envoi</item>
+        <item quantity="many">%d pages à vérifier avant l’envoi</item>
+        <item quantity="other">%d pages à vérifier avant l’envoi</item>
+    </plurals>
+    <plurals name="stats_pages">
+        <item quantity="one">%d page</item>
+        <item quantity="many">%d pages</item>
+        <item quantity="other">%d pages</item>
+    </plurals>
+    <plurals name="stats_done">
+        <item quantity="one">%d traitée</item>
+        <item quantity="many">%d traitées</item>
+        <item quantity="other">%d traitées</item>
+    </plurals>
+    <plurals name="stats_in_progress">
+        <item quantity="one">%d en cours</item>
+        <item quantity="many">%d en cours</item>
+        <item quantity="other">%d en cours</item>
+    </plurals>
+    <plurals name="stats_errors">
+        <item quantity="one">%d en erreur</item>
+        <item quantity="many">%d en erreur</item>
+        <item quantity="other">%d en erreur</item>
+    </plurals>
+    <plurals name="document_unnumbered">
+        <item quantity="one">%d page sans numéro</item>
+        <item quantity="many">%d pages sans numéro</item>
+        <item quantity="other">%d pages sans numéro</item>
+    </plurals>
+    <plurals name="document_duplicates">
+        <item quantity="one">%d doublon écarté</item>
+        <item quantity="many">%d doublons écartés</item>
+        <item quantity="other">%d doublons écartés</item>
+    </plurals>
+    <plurals name="document_excluded">
+        <item quantity="one">%d page exclue</item>
+        <item quantity="many">%d pages exclues</item>
+        <item quantity="other">%d pages exclues</item>
+    </plurals>
+    <plurals name="local_page_attempts">
+        <item quantity="one">%d tentative d’envoi</item>
+        <item quantity="many">%d tentatives d’envoi</item>
+        <item quantity="other">%d tentatives d’envoi</item>
+    </plurals>
+    <plurals name="document_local_pages">
+        <item quantity="one">Sur le téléphone (%d)</item>
+        <item quantity="many">Sur le téléphone (%d)</item>
+        <item quantity="other">Sur le téléphone (%d)</item>
+    </plurals>
+    <plurals name="document_server_pages">
+        <item quantity="one">Sur le PC (%d)</item>
+        <item quantity="many">Sur le PC (%d)</item>
+        <item quantity="other">Sur le PC (%d)</item>
+    </plurals>
+    <plurals name="scan_review_title">
+        <item quantity="one">%d page scannée</item>
+        <item quantity="many">%d pages scannées</item>
+        <item quantity="other">%d pages scannées</item>
+    </plurals>
+    <plurals name="scan_setup_adding">
+        <item quantity="one">%d page attend déjà l’envoi : les nouvelles s’y ajouteront.</item>
+        <item quantity="many">%d pages attendent déjà l’envoi : les nouvelles s’y ajouteront.</item>
+        <item quantity="other">%d pages attendent déjà l’envoi : les nouvelles s’y ajouteront.</item>
+    </plurals>
+    <plurals name="scan_discard_title">
+        <item quantity="one">Supprimer %d page ?</item>
+        <item quantity="many">Supprimer %d pages ?</item>
+        <item quantity="other">Supprimer %d pages ?</item>
+    </plurals>
+    <plurals name="message_pages_queued">
+        <item quantity="one">%d page ajoutée à l’envoi</item>
+        <item quantity="many">%d pages ajoutées à l’envoi</item>
+        <item quantity="other">%d pages ajoutées à l’envoi</item>
+    </plurals>
+    <plurals name="settings_kept_copies">
+        <item quantity="one">%1$d copie locale (%2$s)</item>
+        <item quantity="many">%1$d copies locales (%2$s)</item>
+        <item quantity="other">%1$d copies locales (%2$s)</item>
+    </plurals>
+    <string name="capture_shutter">Prendre la photo</string>
+    <string name="capture_done">Terminer</string>
+    <string name="capture_flash_off">Flash désactivé</string>
+    <string name="capture_flash_auto">Flash automatique</string>
+    <string name="capture_flash_on">Flash activé</string>
+    <string name="capture_last_photo">Dernière photo</string>
+    <string name="capture_delete_photo">Supprimer cette photo</string>
+    <string name="capture_leave_title">Arrêter les photos ?</string>
+    <string name="capture_leave_keep">Garder</string>
+    <string name="capture_leave_discard">Supprimer</string>
+    <string name="capture_camera_unavailable">Impossible d’ouvrir l’appareil photo.</string>
+    <string name="capture_camera_busy">L’appareil photo est indisponible pour le moment : une autre appli l’utilise peut-être.</string>
+    <string name="capture_saving_photo">Enregistrement de la photo…</string>
+    <string name="capture_shot_failed">La photo n’a pas pu être prise. Réessayez.</string>
+    <string name="capture_shot_not_saved">La photo n’a pas pu être enregistrée : vérifiez la place libre sur le téléphone.</string>
+    <string name="capture_permission_title">Accès à l’appareil photo</string>
+    <string name="capture_permission_rationale">Pour photographier les pages, ScanMyLib a besoin de l’appareil photo. Les photos restent dans l’appli jusqu’à leur envoi à votre PC : elles ne vont ni dans la galerie, ni ailleurs.</string>
+    <string name="capture_permission_grant">Autoriser l’appareil photo</string>
+    <string name="capture_permission_denied">L’accès à l’appareil photo n’est pas autorisé. Pour photographier les pages, autorisez-le dans les paramètres de l’appli (Autorisations › Appareil photo), ou demandez-le à nouveau.</string>
+    <string name="capture_permission_settings">Ouvrir les paramètres</string>
+    <plurals name="capture_count">
+        <item quantity="one">%d page</item>
+        <item quantity="many">%d pages</item>
+        <item quantity="other">%d pages</item>
+    </plurals>
+    <plurals name="capture_leave_message">
+        <item quantity="one">%d page photographiée. La garder pour l’envoyer, ou la supprimer ?</item>
+        <item quantity="many">%d pages photographiées. Les garder pour les envoyer, ou les supprimer ?</item>
+        <item quantity="other">%d pages photographiées. Les garder pour les envoyer, ou les supprimer ?</item>
+    </plurals>
+    <plurals name="message_unsupported_photos">
+        <item quantity="one">%d photo ignorée : le PC n’accepte que les formats JPEG, PNG et WebP.</item>
+        <item quantity="many">%d photos ignorées : le PC n’accepte que les formats JPEG, PNG et WebP.</item>
+        <item quantity="other">%d photos ignorées : le PC n’accepte que les formats JPEG, PNG et WebP.</item>
+    </plurals>
+    <plurals name="message_too_large_photos">
+        <item quantity="one">%d photo ignorée : trop grande pour le PC (plus de 40 Mo ou de 120 mégapixels).</item>
+        <item quantity="many">%d photos ignorées : trop grandes pour le PC (plus de 40 Mo ou de 120 mégapixels).</item>
+        <item quantity="other">%d photos ignorées : trop grandes pour le PC (plus de 40 Mo ou de 120 mégapixels).</item>
+    </plurals>
+    <plurals name="message_unreadable_photos">
+        <item quantity="one">%d photo n’a pas pu être importée : elle est ignorée.</item>
+        <item quantity="many">%d photos n’ont pas pu être importées : elles sont ignorées.</item>
+        <item quantity="other">%d photos n’ont pas pu être importées : elles sont ignorées.</item>
+    </plurals>
+    <string name="crash_title">ScanMyLib s’est arrêtée</string>
+    <string name="crash_intro">La dernière fois, l’appli s’est arrêtée à cause d’une erreur. Copiez ce rapport et transmettez-le pour qu’elle soit corrigée. Il ne contient ni vos scans ni votre jeton.</string>
+    <string name="crash_copy">Copier le rapport</string>
+    <string name="crash_copied">Rapport copié</string>
+    <string name="crash_close">Fermer</string>
+</resources>

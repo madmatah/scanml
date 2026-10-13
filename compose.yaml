@@ -1,0 +1,140 @@
+name: scanmylib
+
+x-ocr-build: &ocr-build
+  context: ./ocr
+  args:
+    UID: ${SCANMYLIB_UID:-1000}
+    GID: ${SCANMYLIB_GID:-1000}
+
+x-ocr-env: &ocr-env
+  HOME: /tmp/home
+  XDG_CACHE_HOME: /var/cache/ocr
+  HF_HUB_OFFLINE: "1"
+  TRANSFORMERS_OFFLINE: "1"
+  HF_HUB_DISABLE_TELEMETRY: "1"
+  VLLM_NO_USAGE_STATS: "1"
+  DO_NOT_TRACK: "1"
+  # /opt/sandbox is read-only at runtime: caches go to /var/cache/ocr (kept
+  # across restarts, it holds compiled kernels) or to the /tmp tmpfs.
+  PADDLE_PDX_CACHE_HOME: /var/cache/ocr/paddlex
+  PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK: "True"
+  VLLM_CACHE_ROOT: /var/cache/ocr/vllm
+  TRITON_CACHE_DIR: /var/cache/ocr/triton
+  TORCHINDUCTOR_CACHE_DIR: /var/cache/ocr/torchinductor
+  CUDA_CACHE_PATH: /var/cache/ocr/nv
+  # Engine settings (docs/OCR_SANDBOX.md), overridable from .env.
+  OCR_ENGINE: ${OCR_ENGINE:-paddleocr-vl}
+  OCR_BACKEND: ${OCR_BACKEND:-vllm}
+  OCR_IDLE_UNLOAD_S: ${OCR_IDLE_UNLOAD_S:-300}
+  OCR_VLLM_GPU_MEM: ${OCR_VLLM_GPU_MEM:-0.15}
+  OCR_VLLM_PORT: ${OCR_VLLM_PORT:-8118}
+  OCR_MAX_CONCURRENCY: ${OCR_MAX_CONCURRENCY:-16}
+
+services:
+  # Our own code: receives scans from the phone, organizes the library, serves
+  # the web UI, and drives the sandbox through the Unix socket.
+  api:
+    build:
+      context: ./server
+      target: runtime
+      args:
+        UID: ${SCANMYLIB_UID:-1000}
+        GID: ${SCANMYLIB_GID:-1000}
+    image: scanmylib-api:latest
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    user: "${SCANMYLIB_UID:-1000}:${SCANMYLIB_GID:-1000}"
+    init: true
+    pids_limit: 512
+    # Bounds what a hostile sandbox answer (capped at 128 MiB) or a huge photo can cost.
+    mem_limit: 3g
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    ports:
+      - "${API_PORT:-8765}:8765"
+    tmpfs:
+      - /tmp:size=512m,mode=1777
+    volumes:
+      - ${LIBRARY_DIR}:/library
+      - ${DATA_DIR}/state:/state
+      - ${DATA_DIR}/run:/run/scanmylib
+      - ${DATA_DIR}/app:/app-dist:ro
+    environment:
+      SCANMYLIB_LIBRARY_DIR: /library
+      SCANMYLIB_LIBRARY_HOST_PATH: ${LIBRARY_DIR}
+      SCANMYLIB_STATE_DIR: /state
+      SCANMYLIB_OCR_SOCKET: /run/scanmylib/ocr.sock
+      SCANMYLIB_PUBLIC_URL: ${PUBLIC_URL}
+      SCANMYLIB_APK_PATH: /app-dist/scanmylib.apk
+      # Local time in document.md, INDEX.md and trash folder names.
+      TZ: ${SCANMYLIB_TZ:-UTC}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8765/api/health', timeout=4)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+    restart: unless-stopped
+
+  # The sandbox: runs PaddleOCR-VL (Paddle + vLLM) with no network at all.
+  # It only sees the read-only sandbox dir (venvs + models), the socket dir it
+  # shares with `api`, a cache dir and a tmpfs. Nothing from $HOME.
+  ocr:
+    build: *ocr-build
+    image: scanmylib-ocr:latest
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    user: "${SCANMYLIB_UID:-1000}:${SCANMYLIB_GID:-1000}"
+    init: true
+    devices: ["nvidia.com/gpu=all"]
+    shm_size: 2gb
+    pids_limit: 4096
+    # Host RAM the sandbox may take (its tmpfs and /dev/shm included); measured
+    # peak: 6.1 GB with vLLM (engine start + pages), 2.2 GB with OCR_BACKEND=native.
+    mem_limit: 16g
+    # Everything vLLM and Paddle print ends up in the container log, on the
+    # Docker root partition: rotated, so that it cannot fill that disk.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    tmpfs:
+      - /tmp:size=8g,mode=1777
+    volumes:
+      - ${SANDBOX_DIR}:/opt/sandbox:ro
+      - ${DATA_DIR}/run:/run/scanmylib
+      - ${DATA_DIR}/ocr-cache:/var/cache/ocr
+    environment:
+      <<: *ocr-env
+    healthcheck:
+      test: ["CMD", "python3", "-m", "scanmylib_ocr.client"]
+      interval: 30s
+      timeout: 10s
+      start_period: 10s
+    # Leaves time to stop vLLM cleanly when the container stops.
+    stop_grace_period: 30s
+    restart: unless-stopped
+
+  # One-shot installer (profile "setup"): the only OCR container with network.
+  # It sees nothing but SANDBOX_DIR, where it installs packages and models.
+  ocr-setup:
+    profiles: ["setup"]
+    build: *ocr-build
+    image: scanmylib-ocr:latest
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    user: "${SCANMYLIB_UID:-1000}:${SCANMYLIB_GID:-1000}"
+    init: true
+    volumes:
+      - ${SANDBOX_DIR}:/opt/sandbox
+    environment:
+      HOME: /tmp/home
+    tmpfs:
+      - /tmp:size=8g,mode=1777
+    command: ["bash", "/app/setup/install.sh"]

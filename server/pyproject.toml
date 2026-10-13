@@ -1,0 +1,25 @@
+[project]
+name = "scanmylib"
+version = "0.1.0"
+description = "ScanMyLib API: receives scans from the phone, drives the OCR sandbox and organizes the Markdown library."
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+# Direct dependencies, pinned. The full transitive set, with hashes, is in
+# requirements.lock / requirements-test.lock (regenerate: see README.md).
+dependencies = [
+    "fastapi==0.143.0",
+    "uvicorn==0.54.0",
+    "python-multipart==0.0.32",
+    "pillow==12.3.0",
+    "httpx==0.28.1",
+    "qrcode==8.2",
+    "markdown-it-py==4.2.0",
+    "nh3==0.3.7",
+]
+
+[project.optional-dependencies]
+test = ["pytest==9.1.1", "httpx2==2.13.1"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra -p no:cacheprovider"

@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#f5f6f8" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#111417" media="(prefers-color-scheme: dark)">
+  <meta name="description" data-i18n-attr="content"
+        content="ScanMyLib: scan your books and documents with your phone; OCR runs on your PC.">
+  <title>ScanMyLib</title>
+  <link rel="manifest" href="/static/manifest.webmanifest">
+  <link rel="icon" href="/static/icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="/static/vendor/katex/katex.min.css">
+  <link rel="stylesheet" href="/static/css/app.css">
+  <script defer src="/static/vendor/katex/katex.min.js"></script>
+  <script type="module" src="/static/js/main.js"></script>
+</head>
+<body>
+  <!-- Text marked data-i18n is translated by static/js/lib/i18n.js (localizeDocument). -->
+  <button type="button" class="skip-link" id="skip-link" data-i18n>Skip to content</button>
+
+  <header class="app-header" id="app-header" hidden>
+    <a class="brand" href="#/">
+      <img src="/static/icons/icon.svg" alt="" width="28" height="28">
+      <span>ScanMyLib</span>
+    </a>
+    <nav class="app-nav" aria-label="Main navigation" data-i18n-attr="aria-label">
+      <a href="#/" data-section="library" data-i18n>Library</a>
+      <a href="#/pairing" data-section="pairing" data-i18n>Pairing</a>
+    </nav>
+    <div class="header-tools">
+      <div class="engine-status" id="engine-status"></div>
+      <button type="button" class="btn btn-ghost btn-compact" id="logout-button">
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 20H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h3M16 17l5-5-5-5M21 12H9"/></svg>
+        <span class="btn-label" data-i18n data-i18n-context="header">Sign out</span>
+      </button>
+    </div>
+  </header>
+
+  <div class="banners" id="banners"></div>
+
+  <main class="app-main" id="main" tabindex="-1">
+    <div class="state state-loading" role="status">
+      <span class="spinner" aria-hidden="true"></span>
+      <span data-i18n>Loading…</span>
+    </div>
+    <noscript>
+      <p class="state">ScanMyLib needs JavaScript to work.</p>
+    </noscript>
+  </main>
+
+  <div class="toasts" id="toasts"></div>
+</body>
+</html>

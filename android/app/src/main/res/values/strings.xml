@@ -1,0 +1,294 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  English (American) reference strings. Every translatable string and plural also has a French
+  translation, under the same name, in values-fr/strings.xml.
+  Typography: ’ for apostrophes, “ ” for quotes, … for ellipses.
+-->
+<resources xmlns:tools="http://schemas.android.com/tools" tools:locale="en">
+    <string name="app_name" translatable="false">ScanMyLib</string>
+    <string name="back">Back</string>
+    <string name="cancel">Cancel</string>
+    <string name="close">Close</string>
+    <string name="delete">Delete</string>
+    <string name="retry">Retry</string>
+    <string name="error_detail">Details: %1$s</string>
+    <string name="kind_book">Book</string>
+    <string name="kind_document">Document</string>
+    <string name="connection_ok">PC connected (ScanMyLib %1$s). OCR %2$s.</string>
+    <string name="connection_unreachable">Can’t reach the PC. Check that it’s on, that ScanMyLib is running on it, and that the phone is on the same network.</string>
+    <string name="connection_not_scanmylib">This address doesn’t respond like a ScanMyLib server.</string>
+    <string name="connection_incompatible">The ScanMyLib version on the PC isn’t compatible with this app: install the APK offered by the PC.</string>
+    <string name="connection_token_refused">The PC rejected the token. Scan the pairing QR code again.</string>
+    <string name="connection_failed">PC error: %1$s</string>
+    <string name="ocr_state_idle">idle</string>
+    <string name="ocr_state_starting">starting</string>
+    <string name="ocr_state_ready">ready</string>
+    <string name="ocr_state_stopping">stopping</string>
+    <string name="ocr_state_error">error</string>
+    <string name="ocr_state_unreachable">unreachable</string>
+    <string name="pairing_title">Pair with PC</string>
+    <string name="pairing_intro">On the PC, open the ScanMyLib web interface and show the pairing QR code, then scan it.</string>
+    <string name="pairing_scan_qr_code">Scan the QR code</string>
+    <string name="pairing_manual_intro">Or enter the address and token shown below the QR code.</string>
+    <string name="pairing_url_label">PC address</string>
+    <string name="pairing_url_placeholder" translatable="false">http://192.168.1.10:8765</string>
+    <string name="pairing_url_empty">Enter the PC address.</string>
+    <string name="pairing_url_malformed">Invalid address.</string>
+    <string name="pairing_url_unsupported_scheme">The address must start with http:// or https://.</string>
+    <string name="pairing_url_not_root">Enter only the address and port, for example http://192.168.1.10:8765.</string>
+    <string name="pairing_token_label">Token</string>
+    <string name="pairing_token_invalid">Invalid token.</string>
+    <string name="pairing_show_token">Show token</string>
+    <string name="pairing_hide_token">Hide token</string>
+    <string name="pairing_connect">Test and pair</string>
+    <string name="pairing_checking">Connecting to the PC…</string>
+    <string name="pairing_error_not_a_pairing_code">This QR code isn’t a ScanMyLib pairing code.</string>
+    <string name="pairing_error_qr_invalid_url">The QR code contains an invalid PC address.</string>
+    <string name="pairing_error_qr_invalid_token">The QR code contains an invalid token.</string>
+    <string name="pairing_error_scanner_unavailable">The QR code scanner isn’t available (it requires Google Play services). Enter the address and token.</string>
+    <string name="library_new_document">New document</string>
+    <string name="library_empty">No documents yet. Tap “New document” to create one, then scan its pages.</string>
+    <string name="library_pc_online_idle">PC connected · OCR %1$s</string>
+    <string name="library_pc_online_ocr_error">PC connected, but OCR failed: %1$s</string>
+    <string name="library_pc_unreachable">PC unreachable: scans will be sent as soon as it’s available.</string>
+    <string name="library_pc_token_refused">Token rejected by the PC: pair the app again in Settings.</string>
+    <string name="library_pc_error">PC error: %1$s</string>
+    <string name="library_document_refused">Rejected by the PC</string>
+    <string name="new_document_title">New document</string>
+    <string name="new_document_name">Title</string>
+    <string name="new_document_author">Author (optional)</string>
+    <string name="new_document_unwarp">Bound book</string>
+    <string name="new_document_unwarp_help">Flattens pages curved by the binding during OCR.</string>
+    <string name="new_document_create">Create</string>
+    <string name="document_scan_pages">Scan pages</string>
+    <string name="document_not_on_pc_yet">Not on the PC yet</string>
+    <string name="document_not_on_pc_yet_long">This document isn’t on the PC yet: it will be created there with the next upload.</string>
+    <string name="document_coverage">Pages covered: %1$s</string>
+    <string name="document_coverage_none">no numbered pages</string>
+    <string name="document_missing">Missing pages: %1$s</string>
+    <string name="document_folder">Folder on the PC: %1$s</string>
+    <string name="document_unwarp_on">Flattening of curved pages is on.</string>
+    <string name="document_upload_refused">The PC rejected this document: %1$s</string>
+    <string name="document_no_pages">No pages yet. Tap “Scan pages” to add some.</string>
+    <string name="document_gone">This document no longer exists: it was deleted on the PC.</string>
+    <string name="page_label">p. %1$s</string>
+    <string name="page_without_number">Unnumbered</string>
+    <string name="page_duplicate">Duplicate</string>
+    <string name="page_excluded">Excluded</string>
+    <string name="page_status_queued">Waiting for OCR</string>
+    <string name="page_status_processing">OCR in progress</string>
+    <string name="page_status_done">Processed</string>
+    <string name="page_status_error">OCR error</string>
+    <string name="page_status_unknown">Unknown status</string>
+    <string name="number_source_manual">Number entered on the PC</string>
+    <string name="number_source_detected">Number detected on the page</string>
+    <string name="number_source_hint">Number given when scanning</string>
+    <string name="number_source_inferred">Number inferred from neighboring pages</string>
+    <string name="server_page_duplicate">Duplicate: a page scanned later has the same number.</string>
+    <string name="server_page_excluded">Excluded from the document.</string>
+    <string name="upload_state_queued">Waiting to upload</string>
+    <string name="upload_state_uploading">Uploading…</string>
+    <string name="upload_state_failed">Upload rejected</string>
+    <string name="upload_state_uploaded">Uploaded</string>
+    <string name="upload_failure_network">PC unreachable</string>
+    <string name="upload_failure_server_error">PC error</string>
+    <string name="upload_failure_unauthorized">token rejected</string>
+    <string name="upload_failure_document_missing">document unknown to the PC</string>
+    <string name="upload_failure_too_large">image too large</string>
+    <string name="upload_failure_unsupported_type">image format not accepted</string>
+    <string name="upload_failure_rejected">request rejected</string>
+    <string name="upload_failure_file_missing">image not found on the phone</string>
+    <string name="local_page_title">Scan on the phone</string>
+    <string name="local_page_hint">Number given: %1$d</string>
+    <string name="local_page_failed">Rejected: %1$s.</string>
+    <string name="local_page_will_retry">Last attempt: %1$s. Will retry automatically.</string>
+    <string name="local_page_needs_pairing">The PC rejected the token: pair the app again to resume uploading.</string>
+    <string name="scan_setup_title">Scan pages</string>
+    <string name="scan_setup_help">Enter the first page number if you know it: it helps order pages whose number isn’t printed.</string>
+    <string name="scan_setup_start">Start scanner</string>
+    <string name="scan_setup_start_camera">Take photos</string>
+    <string name="scan_setup_start_picker">Choose photos</string>
+    <string name="scan_source_google">Google scanner</string>
+    <string name="scan_source_google_help">Crops and straightens each page (retouching adjustable in Settings).</string>
+    <string name="scan_source_camera">Camera, page by page</string>
+    <string name="scan_source_camera_help">Original photos, unretouched, one page after another.</string>
+    <string name="scan_source_picker">Import photos</string>
+    <string name="scan_source_picker_help">Existing photos, in the order they were taken.</string>
+    <string name="scan_preparing">Preparing pages…</string>
+    <string name="scan_preparing_progress">%1$d of %2$d</string>
+    <string name="scan_first_page">First page number</string>
+    <string name="scan_first_page_help">Optional. Leave blank for unnumbered pages (cover, preface…).</string>
+    <string name="scan_first_page_invalid">A number from 1 to %1$d</string>
+    <string name="scan_consecutive">Consecutive pages</string>
+    <string name="scan_consecutive_help">Each following page gets the next number.</string>
+    <string name="scan_review_confirm">Send</string>
+    <string name="scan_review_discard">Discard</string>
+    <string name="scan_review_add">Add pages</string>
+    <string name="scan_review_later">Later</string>
+    <string name="scan_review_page">Page %1$d of %2$d</string>
+    <string name="scan_review_remove_page">Remove this page</string>
+    <string name="scan_discard_message">Nothing has been sent to the PC yet: deleting is permanent.</string>
+    <string name="scan_summary_invalid">Fix the first page number.</string>
+    <string name="scan_summary_none">No number given: the PC will read the printed numbers.</string>
+    <string name="scan_summary_first_only">Number given for the first page: %1$d.</string>
+    <string name="scan_summary_range">Numbers given: %1$d to %2$d.</string>
+    <string name="message_pc_unreachable">PC unreachable: showing the last known data.</string>
+    <string name="message_token_refused">Token rejected by the PC: pair the app again.</string>
+    <string name="message_server_error">PC error: %1$s</string>
+    <string name="message_import_failed">Couldn’t save the pages. Try again.</string>
+    <string name="message_send_failed">Couldn’t add the pages to the upload queue. Try again.</string>
+    <string name="message_storage_full">Not enough space on the phone: free up some space, then try again.</string>
+    <string name="message_nothing_scanned">No pages received from the Google scanner.</string>
+    <string name="message_adding_interrupted">The app was closed while pages were being added: check the pages waiting to be sent, and add any missing ones again.</string>
+    <string name="message_setting_not_saved">Setting not saved: check the free space on the phone.</string>
+    <string name="message_photo_picker_unavailable">Couldn’t open the photo picker.</string>
+    <string name="message_scanner_unavailable">The document scanner isn’t available (it requires Google Play services).</string>
+    <string name="message_page_busy">This page is being uploaded: try again in a moment.</string>
+    <string name="settings_title">Settings</string>
+    <string name="settings_section_pc">PC</string>
+    <string name="settings_not_paired">No PC paired</string>
+    <string name="settings_test_connection">Test connection</string>
+    <string name="settings_change_server">Change PC</string>
+    <string name="settings_unpair">Unpair this phone</string>
+    <string name="settings_unpair_title">Unpair this phone?</string>
+    <string name="settings_unpair_message">The app will forget the PC’s address and token. Scans not sent yet stay on the phone and will be sent after you pair again.</string>
+    <string name="settings_unpair_confirm">Unpair</string>
+    <string name="settings_section_upload">Uploads</string>
+    <string name="settings_wifi_only">Wi-Fi only</string>
+    <string name="settings_wifi_only_help">Upload scans only on an unmetered Wi-Fi network.</string>
+    <string name="settings_keep_copies">Keep scans on the phone</string>
+    <string name="settings_keep_copies_help">Keeps a copy of each image after it’s sent to the PC.</string>
+    <string name="settings_scanner_help">Google’s scanner never returns the original photo: it always crops and straightens the page, even without retouching. To keep photos as they are (including the colors of illustrations), choose “Camera, page by page” or “Import photos” when you scan.</string>
+    <string name="settings_scanner_mode">Google scanner retouching</string>
+    <string name="settings_scanner_mode_crop">None — crop only</string>
+    <string name="settings_scanner_mode_crop_help">Crops and straightens the page, without filters.</string>
+    <string name="settings_scanner_mode_filters">Filters</string>
+    <string name="settings_scanner_mode_filters_help">Cropping, plus filters (black and white, automatic enhancement…) that change colors and contrast.</string>
+    <string name="settings_scanner_mode_full">Full — filters plus finger and stain removal</string>
+    <string name="settings_scanner_mode_full_help">Filters, plus automatic removal of fingers and stains, which can also erase page details.</string>
+    <string name="settings_section_about">About</string>
+    <string name="settings_version">ScanMyLib for Android %1$s</string>
+    <string name="settings_about">Scanned pages are sent to your PC as soon as it’s reachable; text recognition (OCR) happens on the PC.</string>
+
+    <plurals name="library_pc_online_busy">
+        <item quantity="one">PC connected · OCR %1$s · %2$d page to process</item>
+        <item quantity="other">PC connected · OCR %1$s · %2$d pages to process</item>
+    </plurals>
+    <plurals name="library_pages_to_upload">
+        <item quantity="one">%d page to upload</item>
+        <item quantity="other">%d pages to upload</item>
+    </plurals>
+    <plurals name="library_pages_failed">
+        <item quantity="one">%d page rejected</item>
+        <item quantity="other">%d pages rejected</item>
+    </plurals>
+    <plurals name="library_pages_to_confirm">
+        <item quantity="one">%d page to check before sending</item>
+        <item quantity="other">%d pages to check before sending</item>
+    </plurals>
+    <plurals name="stats_pages">
+        <item quantity="one">%d page</item>
+        <item quantity="other">%d pages</item>
+    </plurals>
+    <plurals name="stats_done">
+        <item quantity="one">%d processed</item>
+        <item quantity="other">%d processed</item>
+    </plurals>
+    <plurals name="stats_in_progress">
+        <item quantity="one">%d in progress</item>
+        <item quantity="other">%d in progress</item>
+    </plurals>
+    <plurals name="stats_errors">
+        <item quantity="one">%d error</item>
+        <item quantity="other">%d errors</item>
+    </plurals>
+    <plurals name="document_unnumbered">
+        <item quantity="one">%d unnumbered page</item>
+        <item quantity="other">%d unnumbered pages</item>
+    </plurals>
+    <plurals name="document_duplicates">
+        <item quantity="one">%d duplicate set aside</item>
+        <item quantity="other">%d duplicates set aside</item>
+    </plurals>
+    <plurals name="document_excluded">
+        <item quantity="one">%d excluded page</item>
+        <item quantity="other">%d excluded pages</item>
+    </plurals>
+    <plurals name="local_page_attempts">
+        <item quantity="one">%d upload attempt</item>
+        <item quantity="other">%d upload attempts</item>
+    </plurals>
+    <plurals name="document_local_pages">
+        <item quantity="one">On the phone (%d)</item>
+        <item quantity="other">On the phone (%d)</item>
+    </plurals>
+    <plurals name="document_server_pages">
+        <item quantity="one">On the PC (%d)</item>
+        <item quantity="other">On the PC (%d)</item>
+    </plurals>
+    <plurals name="scan_review_title">
+        <item quantity="one">%d scanned page</item>
+        <item quantity="other">%d scanned pages</item>
+    </plurals>
+    <plurals name="scan_setup_adding">
+        <item quantity="one">%d page is already waiting to be sent: new pages will be added after it.</item>
+        <item quantity="other">%d pages are already waiting to be sent: new pages will be added after them.</item>
+    </plurals>
+    <plurals name="scan_discard_title">
+        <item quantity="one">Delete %d page?</item>
+        <item quantity="other">Delete %d pages?</item>
+    </plurals>
+    <plurals name="message_pages_queued">
+        <item quantity="one">%d page queued for upload</item>
+        <item quantity="other">%d pages queued for upload</item>
+    </plurals>
+    <plurals name="settings_kept_copies">
+        <item quantity="one">%1$d local copy (%2$s)</item>
+        <item quantity="other">%1$d local copies (%2$s)</item>
+    </plurals>
+    <string name="capture_shutter">Take photo</string>
+    <string name="capture_done">Done</string>
+    <string name="capture_flash_off">Flash off</string>
+    <string name="capture_flash_auto">Flash auto</string>
+    <string name="capture_flash_on">Flash on</string>
+    <string name="capture_last_photo">Last photo</string>
+    <string name="capture_delete_photo">Delete this photo</string>
+    <string name="capture_leave_title">Stop taking photos?</string>
+    <string name="capture_leave_keep">Keep</string>
+    <string name="capture_leave_discard">Delete</string>
+    <string name="capture_camera_unavailable">Couldn’t open the camera.</string>
+    <string name="capture_camera_busy">The camera is unavailable right now: another app may be using it.</string>
+    <string name="capture_saving_photo">Saving photo…</string>
+    <string name="capture_shot_failed">The photo couldn’t be taken. Try again.</string>
+    <string name="capture_shot_not_saved">The photo couldn’t be saved: check the free space on the phone.</string>
+    <string name="capture_permission_title">Camera access</string>
+    <string name="capture_permission_rationale">To photograph pages, ScanMyLib needs the camera. Photos stay in the app until they’re sent to your PC: they don’t go to the gallery or anywhere else.</string>
+    <string name="capture_permission_grant">Allow camera</string>
+    <string name="capture_permission_denied">Camera access isn’t allowed. To photograph pages, allow it in the app’s settings (Permissions › Camera), or ask again.</string>
+    <string name="capture_permission_settings">Open settings</string>
+    <plurals name="capture_count">
+        <item quantity="one">%d page</item>
+        <item quantity="other">%d pages</item>
+    </plurals>
+    <plurals name="capture_leave_message">
+        <item quantity="one">%d page photographed. Keep it for sending, or delete it?</item>
+        <item quantity="other">%d pages photographed. Keep them for sending, or delete them?</item>
+    </plurals>
+    <plurals name="message_unsupported_photos">
+        <item quantity="one">%d photo skipped: the PC only accepts JPEG, PNG, and WebP.</item>
+        <item quantity="other">%d photos skipped: the PC only accepts JPEG, PNG, and WebP.</item>
+    </plurals>
+    <plurals name="message_too_large_photos">
+        <item quantity="one">%d photo skipped: too large for the PC (over 40 MB or 120 megapixels).</item>
+        <item quantity="other">%d photos skipped: too large for the PC (over 40 MB or 120 megapixels).</item>
+    </plurals>
+    <plurals name="message_unreadable_photos">
+        <item quantity="one">%d photo couldn’t be imported and was skipped.</item>
+        <item quantity="other">%d photos couldn’t be imported and were skipped.</item>
+    </plurals>
+    <string name="crash_title">ScanMyLib stopped</string>
+    <string name="crash_intro">The app stopped because of an error last time. Copy this report and pass it on so it can be fixed. It doesn’t contain your scans or your token.</string>
+    <string name="crash_copy">Copy report</string>
+    <string name="crash_copied">Report copied</string>
+    <string name="crash_close">Close</string>
+</resources>

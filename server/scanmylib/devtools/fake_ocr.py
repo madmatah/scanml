@@ -16,6 +16,12 @@ Example: a 1200×1042 JPEG is page 42; a 1201×1042 one is the spread 42–43.
 Command line (see server/README.md)::
 
     python -m scanmylib.devtools.fake_ocr --socket /run/scanmylib/ocr.sock --delay 1.5
+    python -m scanmylib.devtools.fake_ocr --check   # health probe (compose healthcheck)
+
+Like the real sandbox, it never replaces a socket that something answers on (a
+stale socket of a previous run is replaced), and it refuses to run in the
+production stack (SCANMYLIB_PROJECT=scanmylib, set by compose.yaml): production's
+library must only ever get the real OCR's results.
 
 Tests use `FakeOcrServer` in-process and adjust its attributes (`delay`,
 `unavailable`, `evil`, `status_body`, `fail_next`) and read `requests` /
@@ -26,12 +32,16 @@ from __future__ import annotations
 
 import argparse
 import base64
+import errno
 import json
 import logging
 import os
 import signal
+import socket
 import socketserver
+import stat
 import struct
+import sys
 import threading
 import time
 import zlib
@@ -43,6 +53,8 @@ from urllib.parse import parse_qs, urlsplit
 log = logging.getLogger("fake_ocr")
 
 MAX_BODY_BYTES = 40 * 1024 * 1024
+#: The production stack's compose project (scripts/lib/common.sh), where the fake never runs.
+PRODUCTION_PROJECT = "scanmylib"
 _ACCEPTED_TYPES = {"image/jpeg", "image/png", "image/webp"}
 _FIGURE_NAME = "img_in_image_box_120_340_980_900.png"
 _ROMAN = ((100, "c"), (90, "xc"), (50, "l"), (40, "xl"), (10, "x"), (9, "ix"), (5, "v"), (4, "iv"), (1, "i"))
@@ -208,6 +220,7 @@ class FakeOcrServer:
         self._work_lock = threading.Lock()
         self._server: socketserver.ThreadingUnixStreamServer | None = None
         self._thread: threading.Thread | None = None
+        self._bound = False  # whether socket_path is ours to remove
 
     # -- knobs ---------------------------------------------------------------
 
@@ -296,8 +309,18 @@ class FakeOcrServer:
 
     def _bind(self) -> socketserver.ThreadingUnixStreamServer:
         self.socket_path.parent.mkdir(parents=True, exist_ok=True)
-        self.socket_path.unlink(missing_ok=True)  # stale socket of a previous run
+        try:
+            mode = os.lstat(self.socket_path).st_mode
+        except FileNotFoundError:
+            pass
+        else:
+            if not stat.S_ISSOCK(mode):
+                raise RuntimeError(f"{self.socket_path} exists and is not a socket: refusing to replace it")
+            if socket_in_use(self.socket_path):
+                raise RuntimeError(f"{self.socket_path} is served by another process (the OCR sandbox?)")
+            self.socket_path.unlink()  # stale socket of a previous run
         server = _UnixHTTPServer(str(self.socket_path), _Handler)
+        self._bound = True
         server.fake = self  # type: ignore[attr-defined]
         os.chmod(self.socket_path, 0o660)
         return server
@@ -313,7 +336,9 @@ class FakeOcrServer:
             self._server.shutdown()
             self._server.server_close()
             self._server = None
-        self.socket_path.unlink(missing_ok=True)
+        if self._bound:
+            self._bound = False
+            self.socket_path.unlink(missing_ok=True)
 
     def serve_forever(self) -> None:
         """Serve in the current thread until SIGTERM/SIGINT (command line)."""
@@ -391,17 +416,52 @@ class _Handler(BaseHTTPRequestHandler):
             self._reply(404, {"error": "not_found", "detail": self.path})
 
 
+def socket_in_use(socket_path: Path) -> bool:
+    """Whether a process accepts connections on the Unix socket `socket_path`."""
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as probe:
+        try:
+            probe.connect(str(socket_path))
+        except OSError as exc:
+            if exc.errno in (errno.ECONNREFUSED, errno.ENOENT):
+                return False
+            raise
+    return True
+
+
+def check_health(socket_path: Path, timeout: float = 4.0) -> bool:
+    """Whether a sandbox answers ``GET /health`` with 200 on `socket_path`."""
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
+            client.settimeout(timeout)
+            client.connect(str(socket_path))
+            client.sendall(b"GET /health HTTP/1.0\r\n\r\n")
+            status_line = client.recv(64).split(b"\r\n", 1)[0].split()
+    except OSError:
+        return False
+    return len(status_line) >= 2 and status_line[0].startswith(b"HTTP/1.") and status_line[1] == b"200"
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Fake ScanMyLib OCR sandbox (no model, canned results).")
     parser.add_argument("--socket", type=Path, default=Path("/run/scanmylib/ocr.sock"), help="Unix socket path")
     parser.add_argument("--delay", type=float, default=0.5, help="seconds spent per page")
     parser.add_argument("--load-delay", type=float, default=2.0, help="seconds to 'start the engine'")
     parser.add_argument("--evil", action="store_true", help="return hostile markup (sanitizer demo)")
+    parser.add_argument("--check", action="store_true", help="exit 0 if a sandbox answers on --socket, else 1")
     args = parser.parse_args()
+    if args.check:
+        sys.exit(0 if check_health(args.socket) else 1)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    if os.environ.get("SCANMYLIB_PROJECT") == PRODUCTION_PROJECT:
+        log.error("refusing to run in the production stack (%s): it runs the real OCR sandbox", PRODUCTION_PROJECT)
+        sys.exit(1)
     server = FakeOcrServer(args.socket, delay=args.delay, load_delay=args.load_delay)
     server.evil = args.evil
-    server.serve_forever()
+    try:
+        server.serve_forever()
+    except (OSError, RuntimeError) as exc:
+        log.error("cannot listen on %s: %s", args.socket, exc)
+        sys.exit(1)
 
 
 if __name__ == "__main__":

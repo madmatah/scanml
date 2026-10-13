@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import io
+import socket
+import sys
 
 import httpx
 import pytest
 from PIL import Image
 from support import jpeg
 
-from scanmylib.devtools.fake_ocr import canned_page, image_size
+from scanmylib.devtools.fake_ocr import FakeOcrServer, canned_page, check_health, image_size
+from scanmylib.devtools.fake_ocr import main as fake_ocr_main
 
 
 def encoded(fmt: str, size=(321, 123), **options) -> bytes:
@@ -61,3 +64,57 @@ def test_protocol_over_the_unix_socket(fake_ocr):
         assert sandbox.post("/v1/parse", content=b"x", headers={"Content-Type": "image/gif"}).status_code == 415
         assert sandbox.post("/v1/parse", content=b"x", headers={"Content-Type": "image/jpeg"}).json()["error"] == "bad_image"
         assert sandbox.post("/v1/unload").json() == {"state": "idle"}
+
+
+def test_health_probe(fake_ocr, socket_dir):
+    assert check_health(fake_ocr.socket_path)
+    assert not check_health(socket_dir / "missing.sock")
+    fake_ocr.stop()
+    assert not check_health(fake_ocr.socket_path)
+
+
+def test_never_replaces_a_socket_that_answers(fake_ocr):
+    intruder = FakeOcrServer(fake_ocr.socket_path)
+    with pytest.raises(RuntimeError, match="served by another process"):
+        intruder.start()
+    intruder.stop()  # leaves the socket it did not create
+    assert check_health(fake_ocr.socket_path)
+
+
+def test_replaces_a_stale_socket(socket_dir):
+    path = socket_dir / "ocr.sock"
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as stale:
+        stale.bind(str(path))  # the file stays after close, with nobody listening
+    server = FakeOcrServer(path)
+    server.start()
+    try:
+        assert check_health(path)
+    finally:
+        server.stop()
+    assert not path.exists()
+
+
+def test_never_replaces_a_file_that_is_not_a_socket(socket_dir):
+    path = socket_dir / "ocr.sock"
+    path.write_text("not a socket")
+    with pytest.raises(RuntimeError, match="not a socket"):
+        FakeOcrServer(path).start()
+    assert path.read_text() == "not a socket"
+
+
+def run_command_line(monkeypatch, socket_path, project):
+    monkeypatch.setenv("SCANMYLIB_PROJECT", project)
+    monkeypatch.setattr(sys, "argv", ["fake_ocr", "--socket", str(socket_path)])
+    with pytest.raises(SystemExit) as exit_info:
+        fake_ocr_main()
+    return exit_info.value.code
+
+
+def test_never_runs_in_the_production_stack(monkeypatch, socket_dir):
+    assert run_command_line(monkeypatch, socket_dir / "ocr.sock", "scanmylib") == 1
+    assert not (socket_dir / "ocr.sock").exists()
+
+
+def test_command_line_leaves_a_sandbox_that_answers(monkeypatch, fake_ocr):
+    assert run_command_line(monkeypatch, fake_ocr.socket_path, "scanmylib-dev") == 1
+    assert check_health(fake_ocr.socket_path)

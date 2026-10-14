@@ -82,7 +82,13 @@ The user's account holds many secrets, and the OCR stack (PaddlePaddle, PaddleOC
 ## Development workflow
 
 - **Branches and pull requests.** `main` is what production runs. Every change is made on its own branch and reaches
-  `main` through a pull request on GitHub (`origin`); nothing is committed to `main` directly.
+  `main` through a pull request on GitHub (`origin`); nothing is committed to `main` directly. Pull requests are
+  merged with "Rebase and merge" only, so `main` keeps their commits as they are.
+- **Commits.** Each commit is atomic: one logical change, with its tests and documentation, and the project builds and
+  passes its tests at every commit. Messages follow Conventional Commits: `type(scope): summary`, in the imperative
+  and lowercase, with `feat`, `fix`, `refactor`, `test`, `docs`, `build`, `ci` or `chore`, and a scope when the
+  change is confined to one part (`ocr`, `server`, `web`, `android`, `scripts`). The body says why. Before a pull
+  request is merged, its history is cleaned up (fixups folded into the commits they fix).
 - **One worktree per branch**, under `~/Dev/scanmylib-worktrees/<branch>`, created from the primary checkout
   with `git worktree add -b <branch> ../scanmylib-worktrees/<branch> main` and removed after the merge
   (`git worktree remove`). The primary checkout, `~/Dev/scanmylib`, stays on `main`: it is production's

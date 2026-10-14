@@ -48,12 +48,15 @@ deploy new versions with scripts/deploy.sh"
 if [[ ! -f .env ]]; then
     say "Creating .env"
     lan_ip=$(ip -4 route get 1.1.1.1 2> /dev/null | awk '{for (i = 1; i < NF; i++) if ($i == "src") print $(i + 1)}')
+    time_zone=$(timedatectl show --property=Timezone --value 2> /dev/null || cat /etc/timezone 2> /dev/null || true)
+    [[ $time_zone =~ ^[A-Za-z0-9_+/-]+$ ]] || time_zone=UTC
     user=$(id -un)
     [[ $user =~ ^[A-Za-z0-9_.-]+$ && $HOME =~ ^/[A-Za-z0-9_./-]+$ ]] \
         || die "your user name or home path has characters a .env cannot hold: write .env from .env.example by hand"
     example=$(sed -e "s#/data/USER#/data/$user#; s#/home/USER#$HOME#" \
         -e "s#^SCANMYLIB_UID=.*#SCANMYLIB_UID=$(id -u)#; s#^SCANMYLIB_GID=.*#SCANMYLIB_GID=$(id -g)#" \
         -e "s#^PUBLIC_URL=.*#PUBLIC_URL=http://${lan_ip:-127.0.0.1}:8765#" \
+        -e "s#^SCANMYLIB_TZ=.*#SCANMYLIB_TZ=$time_zone#" \
         .env.example)
     tmp=$(mktemp --suffix=.tmp "$ROOT/.env.XXXXXX")
     trap 'rm -f "$tmp"' EXIT

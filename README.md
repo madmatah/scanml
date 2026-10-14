@@ -62,6 +62,7 @@ without spaces, quotes or comments after a value.
 | `SANDBOX_SETUP_DIR` | where `ocr-setup` installs the sandbox (`SANDBOX_DIR`, production only) | `/data/USER/scanmylib/sandbox` |
 | `ANDROID_DIR` | Android SDK, Gradle caches, the app's signing key | `/data/USER/scanmylib/android` |
 | `PUBLIC_URL` | address of the PC as seen by the phone | `http://192.168.1.XX:8765` |
+| `SCANMYLIB_TZ` | time zone of the dates written in the library (the PC's own, set by `scripts/setup.sh`) | `UTC` |
 
 The services restart automatically with Docker (`restart: unless-stopped`); there is no system service to install.
 

@@ -44,14 +44,14 @@ from leaking the user's private data.
 
 ## No personal information
 
-The repository is public. Nothing personal about the maintainer, a contributor or a user may be committed or written
-in a pull request, apart from the author name and email of the commits. This covers usernames, the paths of an
-installation (`/home/<name>`, `/data/<name>`), IP and MAC addresses, hostnames, other projects found on a machine,
-devices tied to someone (naming the GPU a measurement was made on is fine), and anything that locates a person,
-such as a time zone or a city. Write
-placeholders instead: `/home/user`, `/data/USER/scanmylib`, `~/Dev/scanmylib`, `192.168.1.10`, `example.invalid`, a
-fixed offset (`+02:00`) or `UTC` for a time zone. Values read on the machine (a path, an address, a time zone) never
-become defaults or examples. Address any reader, never the maintainer's own setup.
+The repository is public. Nothing personal about the maintainer, a contributor or a user may be committed or written in
+a pull request, apart from the author name and email of the commits and the copyright holder in `LICENSE` (the
+maintainer's GitHub handle). This covers usernames, the paths of an installation (`/home/<name>`, `/data/<name>`), IP
+and MAC addresses, hostnames, other projects found on a machine, devices tied to someone (naming the GPU a measurement
+was made on is fine), and anything that locates a person, such as a time zone or a city. Write placeholders instead:
+`/home/user`, `/data/USER/scanmylib`, `~/Dev/scanmylib`, `192.168.1.10`, `example.invalid`, a fixed offset (`+02:00`) or
+`UTC` for a time zone. Values read on the machine (a path, an address, a time zone) never become defaults or examples.
+Address any reader, never the maintainer's own setup.
 
 ## Security rules
 

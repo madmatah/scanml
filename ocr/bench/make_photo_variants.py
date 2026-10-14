@@ -22,7 +22,7 @@ The inputs are untrusted downloads: run with numpy/OpenCV/Pillow in a
 throw-away container without network, e.g.::
 
     docker run --rm --network none --read-only --cap-drop ALL --user 1000:1000 \
-      -v "$SANDBOX_DIR":/opt/sandbox:ro -v /data/user/scanmylib/testdata:/testdata \
+      -v "$SANDBOX_DIR":/opt/sandbox:ro -v "$DATA_DIR/testdata":/testdata \
       -v "$PWD/ocr/bench":/bench:ro scanmylib-ocr:latest \
       /opt/sandbox/venv-paddle/bin/python -I /bench/make_photo_variants.py /testdata
 """

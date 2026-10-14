@@ -9,7 +9,9 @@ it instead waits for the automatic unload after one more page.
 VRAM figures come from nvidia-smi on the host: whole-device usage, and the
 per-process usage of the sandbox processes.
 
-    python3 -I ocr/bench/measure.py --label gpu030 --socket /data/user/scanmylib/run/ocr.sock
+With DATA_DIR the stack's data directory (see .env):
+
+    python3 -I ocr/bench/measure.py --label gpu030 --testdata "$DATA_DIR/testdata" --socket "$DATA_DIR/run/ocr.sock"
 """
 
 from __future__ import annotations
@@ -23,7 +25,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from run_bench import DEFAULT_SOCKET, DEFAULT_TESTDATA, GpuSampler, request_json  # noqa: E402
+from run_bench import GpuSampler, request_json  # noqa: E402
 
 
 def compute_processes() -> list[dict]:
@@ -70,8 +72,8 @@ def parse(socket_path: str, path: Path) -> dict:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--label", required=True, help="name of the measurement (results/measure-<label>.json)")
-    parser.add_argument("--socket", default=DEFAULT_SOCKET)
-    parser.add_argument("--testdata", type=Path, default=DEFAULT_TESTDATA)
+    parser.add_argument("--testdata", type=Path, required=True, help="the test pages (DATA_DIR/testdata)")
+    parser.add_argument("--socket", required=True, help="the sandbox's socket (DATA_DIR/run/ocr.sock)")
     parser.add_argument("--idle-unload", type=float, help="wait for the automatic unload (OCR_IDLE_UNLOAD_S)")
     args = parser.parse_args()
     pages = sorted((args.testdata / "pages").glob("*.jpg"))

@@ -52,7 +52,7 @@ Writes, under the test-data directory:
 
 Run on the host with the system interpreter (stdlib only, network needed):
 
-    python3 -I ocr/bench/fetch_testdata.py /data/user/scanmylib/testdata
+    python3 -I ocr/bench/fetch_testdata.py "$DATA_DIR/testdata"   # DATA_DIR: the stack's data directory (.env)
 """
 
 from __future__ import annotations

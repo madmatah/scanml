@@ -14,9 +14,12 @@ For each selected image of ``<testdata>/variants.json`` it calls
 It also samples the GPU memory (nvidia-smi, whole device) while it runs.
 Engine-agnostic: the same command compares OCR engines or settings.
 
-    python3 -I ocr/bench/run_bench.py --run baseline --socket /data/user/scanmylib/run/ocr.sock
-    python3 -I ocr/bench/run_bench.py --run unwarp --unwarp 1 --variant curved --variant combined
-    python3 -I ocr/bench/run_bench.py --run baseline --rescore   # after a ground-truth change
+With DATA_DIR the stack's data directory (see .env):
+
+    python3 -I ocr/bench/run_bench.py --run baseline --testdata "$DATA_DIR/testdata" --socket "$DATA_DIR/run/ocr.sock"
+    python3 -I ocr/bench/run_bench.py --run unwarp --unwarp 1 --variant curved --variant combined \
+        --testdata "$DATA_DIR/testdata" --socket "$DATA_DIR/run/ocr.sock"
+    python3 -I ocr/bench/run_bench.py --run baseline --rescore --testdata "$DATA_DIR/testdata"  # after a ground-truth change
 """
 
 from __future__ import annotations
@@ -36,10 +39,6 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from scanmylib_ocr.client import request_json  # noqa: E402
-
-DEFAULT_TESTDATA = Path("/data/user/scanmylib/testdata")
-DEFAULT_SOCKET = "/data/user/scanmylib/run/ocr.sock"
-
 
 # -- text comparison -------------------------------------------------------------
 
@@ -229,14 +228,16 @@ def rescore(run_dir: Path, entries: list[dict], testdata: Path, pages: dict) -> 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--run", required=True, help="name of this run (results/<run>/)")
-    parser.add_argument("--socket", default=DEFAULT_SOCKET)
-    parser.add_argument("--testdata", type=Path, default=DEFAULT_TESTDATA)
+    parser.add_argument("--testdata", type=Path, required=True, help="the test pages (DATA_DIR/testdata)")
+    parser.add_argument("--socket", help="the sandbox's socket (DATA_DIR/run/ocr.sock); not needed with --rescore")
     parser.add_argument("--variant", action="append", help="only these variants (scan, curved, ...)")
     parser.add_argument("--page", action="append", help="only these pages (page ids of sources.json)")
     parser.add_argument("--orientation", default="1")
     parser.add_argument("--unwarp", default="0")
     parser.add_argument("--rescore", action="store_true", help="score the saved responses of --run again")
     args = parser.parse_args()
+    if not args.socket and not args.rescore:
+        parser.error("--socket is required, except with --rescore")
 
     entries = json.loads((args.testdata / "variants.json").read_text())
     entries = [e for e in entries if (not args.variant or e["variant"] in args.variant)]

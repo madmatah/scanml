@@ -1,151 +1,162 @@
 # ScanMyLib
 
-Scan documents and books with your Android phone, a few pages at a time, in
-any order and over many sessions. Your PC (RTX 3090) runs them through
-**PaddleOCR-VL-1.6**, locked in a Docker sandbox without network access. The
-result is filed on your disk as Markdown, with the extracted illustrations,
-ready for your AI agents to read. The phone app and the web UI are in English,
-or in French on a phone or browser set to French.
+ScanMyLib turns an Android phone and a Linux PC with an NVIDIA GPU into a book and document scanner whose output AI
+agents can read. Pages are photographed on the phone, a few at a time, in any order and over as many sessions as
+needed. The PC runs them through **PaddleOCR-VL-1.6**, locked in a Docker sandbox without network access, and files
+each document on disk as Markdown, with its illustrations, in reading order. The phone app and the web UI are in
+English, and in French on a phone or browser set to French.
 
 ```
 Phone (ScanMyLib app)  ──Wi-Fi──▶  PC: api ──socket──▶ OCR sandbox (GPU, no network)
                                         │
                                         ▼
-                         ~/Documents/ScanMyLib/<document>/document.md + images/
+                             LIBRARY_DIR/<document>/document.md + images/
 ```
+
+## Features
+
+- **Partial, out-of-order scanning.** Pages arrive in any order, in several batches; they are put back in order from
+  their printed page numbers, and the coverage ("1–12, 45–60") shows what is missing.
+- **Structured output.** One Markdown file per document and per page, tables in HTML, formulas in LaTeX, illustrations
+  cropped into image files, plus a machine-readable index of the library.
+- **Untrusted OCR stack kept apart.** PaddlePaddle, vLLM and the model run in a container with no network, no access to
+  the host's files and no privileges. Their output is treated as untrusted data.
+- **Nothing installed on the host.** Every service, build and test runs in Docker containers.
+- **Offline-tolerant phone app.** Pages wait on the phone until the PC is reachable.
+
+## Requirements
+
+- **PC**: Linux on x86-64 with Docker Engine and Docker Compose v2, and the NVIDIA Container Toolkit configured for CDI
+  (`nvidia.com/gpu=all`). Also `git`, `bash`, `curl` and `python3` (standard library only).
+- **GPU**: an NVIDIA GPU of the Turing generation (RTX 20 series) or newer, with an NVIDIA driver 580 or newer (the
+  sandbox uses CUDA 13 builds of vLLM), and about 5 GB of free VRAM while pages are processed. The model is unloaded
+  when idle. See "OCR engine" for cards with less than 24 GB.
+- **Disk**: about 17 GB for the OCR sandbox (environments and models), 3 GB for the Android toolchain, plus the library.
+- **Phone**: Android 8.0 or newer. The Google document scanner and the QR code reader of the app need Google Play
+  services; without them, the app's own camera, photo import and manual pairing still work.
 
 ## Installation
 
-Requirements: Docker with access to the NVIDIA GPU (CDI `nvidia.com/gpu`),
-already set up on your PC. **Nothing else is installed on the system**:
-everything runs in containers.
+The app is not published on a store: it is built and signed on the PC, with a signing key created there, and offered
+for download by the web UI.
 
 ```bash
+git clone https://github.com/madmatah/scanml.git ~/Dev/scanmylib
 cd ~/Dev/scanmylib
-scripts/setup.sh          # everything: images, OCR sandbox (~16 GB), APK, start, checks
+scripts/setup.sh          # images, OCR sandbox (~17 GB download), app, start, isolation checks
 ```
 
-Paths are set in `.env`:
+The scripts treat `~/Dev/scanmylib` as the checkout production runs from (`DEFAULT_CHECKOUT` in
+`scripts/lib/stack.py`). `scripts/setup.sh` only performs a first installation; later versions are installed with
+`scripts/deploy.sh` (see "Updating").
 
-| Variable | Role | Current value |
+`scripts/setup.sh` writes `.env` from `.env.example`. The scripts accept only a strict format: one `KEY=VALUE` per line,
+without spaces, quotes or comments after a value.
+
+| Variable | Role | Example |
 |---|---|---|
-| `LIBRARY_DIR` | the organized library | `/home/user/Documents/ScanMyLib` |
-| `DATA_DIR` | sandbox (environments + models), state, socket, caches, Android SDK | `/data/user/scanmylib` |
-| `PUBLIC_URL` | address of the PC as seen by the phone | `http://192.168.1.10:8765` |
+| `COMPOSE_PROJECT_NAME`, `IMAGE_PREFIX` | names of the containers and images | `scanmylib` |
+| `LIBRARY_DIR` | the organized library | `/home/USER/Documents/ScanMyLib` |
+| `DATA_DIR` | state, socket, caches, published app, backups, logs | `/data/USER/scanmylib` |
+| `SANDBOX_DIR` | OCR sandbox (environments and models), read-only for the services | `/data/USER/scanmylib/sandbox` |
+| `SANDBOX_SETUP_DIR` | where `ocr-setup` installs the sandbox (`SANDBOX_DIR`, production only) | `/data/USER/scanmylib/sandbox` |
+| `ANDROID_DIR` | Android SDK, Gradle caches, the app's signing key | `/data/USER/scanmylib/android` |
+| `PUBLIC_URL` | address of the PC as seen by the phone | `http://192.168.1.XX:8765` |
 
-The services restart automatically with Docker (`restart: unless-stopped`):
-there is no systemd service to install.
+The services restart automatically with Docker (`restart: unless-stopped`); there is no system service to install.
 
 ## Pairing the phone
 
-1. On the PC, open the web UI at the address printed by `scripts/setup.sh`
-   (`http://localhost:8765/#token=…`), then the **Pairing** tab.
-2. With the phone's camera, scan the QR code of step 1 to download the APK,
-   then install it. Android asks once to allow installs from the browser.
-3. Open the ScanMyLib app: on the **Pair with PC** screen, tap **Scan the QR
-   code** and aim at the QR code of step 2. The app then knows the PC's
-   address and its token. Without a QR code reader, type the **PC address**
-   and the **Token** shown under the QR code, then tap **Test and pair**.
+1. On the PC, open the web UI at the address printed by `scripts/setup.sh` (`http://localhost:8765/#token=…`), then
+   the **Pairing** tab.
+2. Scan the QR code of step 1 with the phone's camera to download the app, then install it. Android asks once to allow
+   installs from the browser.
+3. Open the ScanMyLib app. On the **Pair with PC** screen, tap **Scan the QR code** and aim at the QR code of step 2:
+   the app then knows the PC's address and its access token. Without a QR code reader, type the **PC address** and the
+   **Token** shown under the QR code, then tap **Test and pair**.
 
-The phone and the PC must be on the same network. Away from home, the app
-keeps the pages and sends them as soon as the PC is reachable again. To send
-from elsewhere, use a VPN (WireGuard, Tailscale…) rather than opening a port.
+The phone and the PC must be on the same network. Away from it, the app keeps the pages and sends them once the PC is
+reachable again. To send pages from elsewhere, use a VPN (WireGuard, Tailscale…) rather than exposing the port to the
+Internet.
 
 ## Scanning
 
-- **New document**: title, author, kind (book or document). For a book,
-  flattening of pages curved by the binding (**Bound book**) is on by default.
+- **New document**: title, author, kind (book or document). For a book, flattening of pages curved by the binding
+  (**Bound book**) is on by default.
 - **Scan pages** offers three capture sources:
-  - **Google scanner**: detects the edges and crops the page. The **Google
-    scanner retouching** setting (in the app's Settings) chooses between
-    **None — crop only** (the default), **Filters** and **Full** (filters plus
-    finger and stain removal). This scanner never returns the original photo.
-    To chain pages, tap "+" on its preview screen.
-  - **Camera, page by page**: the app's own camera stays open. One tap = one
-    photo = one page, at full resolution and without any retouching. Turn the
-    page and tap again, then **Done**. Only this mode asks for the camera
-    permission.
-  - **Import photos**: photos taken with any app, put back in shooting order
-    (EXIF date) and sent as they are. Accepted formats: JPEG, PNG and WebP (no
-    HEIC). A photo that cannot be read (a cloud photo while offline…) or that
-    is too large for the PC (over 40 MB or 120 megapixels) is skipped with a
-    message; the others are imported.
-- **First page number** (optional): only for pages without a printed number
-  that you want numbered; with **Consecutive pages** (on by default), the
-  following pages get the next numbers. Leave it blank for front matter
-  (cover, title page, preface).
-- **Before sending**, the pages wait on the phone: tap a thumbnail to see it
-  full size or remove it, **Add pages** to complete the series (with any
-  source), **Send** to queue them for upload. **Later** (or Back) keeps them on
-  the phone: the library then shows "N pages to check before sending".
-  **Discard** asks for confirmation: these pages exist nowhere else.
+  - **Google scanner**: detects the edges and crops the page. The **Google scanner retouching** setting chooses between
+    **None — crop only** (the default), **Filters** and **Full** (filters plus finger and stain removal). This scanner
+    never returns the original photo. To chain pages, tap "+" on its preview screen.
+  - **Camera, page by page**: the app's own camera stays open. One tap is one photo and one page, at full resolution and
+    without retouching. Turn the page and tap again, then **Done**. Only this mode asks for the camera permission.
+  - **Import photos**: photos taken with any app, put back in shooting order (EXIF date) and sent as they are. JPEG, PNG
+    and WebP are accepted (no HEIC). A photo that cannot be read (a cloud photo while offline…) or that is too large
+    (over 40 MB or 120 megapixels) is skipped with a message; the others are imported.
+- **First page number** (optional): for pages without a printed number that should be numbered. With **Consecutive
+  pages** (on by default), the following pages get the next numbers. Leave it blank for front matter (cover, title
+  page, preface).
+- **Before sending**, the pages wait on the phone: tap a thumbnail to see it full size or remove it, **Add pages** to
+  complete the series from any source, **Send** to queue them for upload. **Later** (or Back) keeps them on the phone,
+  and the library then shows "N pages to check before sending". **Discard** asks for confirmation, since these pages
+  exist nowhere else.
 
-The web UI can also add pages to a document from the PC or the phone's
-browser: import photos, or take a photo.
+The web UI can also add pages to a document, from the PC or from the phone's browser: import photos, or take a photo.
 
 ## Page order
 
 Pages can arrive in any order, in several batches.
 
-- **Number of each page**, by priority: the one typed by hand, else the
-  printed one (read by the OCR), else the "first page number" hint, else a
-  number inferred from the neighboring pages of the same session. Roman
-  numerals come before page 1.
-- **Pages without a number**: they are placed next to their neighbors from
-  the same session. Front matter scanned just before page 1 therefore comes
-  before page 1, and a plate scanned between pages 12 and 13 stays between
-  them. An unnumbered page scanned on its own, in a session without any
-  numbered page, goes to the end ("Unnumbered pages"), where you can place it
-  by hand.
-- **Organize by hand**: in the web UI, on a document, the **Organize** button.
-  Drag and drop a page or a selection (Shift+click for a range), or use **Move
-  selection…**. The displayed numbers do not change, only the order does.
+- **Number of each page**, by priority: the one typed by hand, else the printed one (read by the OCR), else the "first
+  page number" hint, else a number inferred from the neighboring pages of the same session. Roman numerals come before
+  page 1.
+- **Pages without a number** are placed next to their neighbors from the same session. Front matter scanned just before
+  page 1 therefore comes before page 1, and a plate scanned between pages 12 and 13 stays between them. An unnumbered
+  page scanned on its own, in a session without any numbered page, goes to the end ("Unnumbered pages"), where it can
+  be placed by hand.
+- **Manual order**: in the web UI, on a document, the **Organize** button. Drag and drop a page or a selection
+  (Shift+click for a range), or use **Move selection…**. The displayed numbers do not change, only the order does.
   **Restore automatic order** undoes everything.
-- **Coverage**: "1–12, 45–60" and the missing pages are shown in the app and
-  the web UI.
-- **Rescanned page**: the most recent one replaces the old one, which stays
-  visible as a duplicate.
+- **Coverage**: "1–12, 45–60" and the missing pages are shown in the app and the web UI.
+- **Rescanned page**: the most recent one replaces the old one, which stays visible as a duplicate.
 
-OCR runs in the background. The model loads onto the GPU at the first page,
-then unloads after 5 minutes of inactivity to free the VRAM for your other
-models. Measured on your RTX 3090:
+## OCR engine
+
+OCR runs in the background. The model loads onto the GPU with the first page, then unloads after 5 minutes of
+inactivity to free the VRAM for other workloads. Measured on an RTX 3090 (24 GB):
 
 | | |
 |---|---|
-| model start | ~40 s (70 s the very first time) |
+| model start | ~40 s (~70 s the very first time) |
 | speed | ~1.8 s per page, ~30 pages per minute |
-| VRAM while processing | ~4.4 GB (0 when idle) |
+| VRAM while processing | ~4.4 GB (none when idle) |
 | character error rate (19th-century French printed pages) | ~2 % on scans, 2 to 4 % on photos |
 
-Settings in `.env`, followed by `docker compose up -d ocr`:
+Settings in `.env`, applied with `scripts/prod.sh compose up -d ocr` in the production checkout:
 
 - `OCR_IDLE_UNLOAD_S`: delay before the VRAM is freed (300 s by default).
-- `OCR_VLLM_GPU_MEM`: share of the VRAM reserved, 0.15 by default. Do not go below 0.15, or vLLM does not start.
+- `OCR_VLLM_GPU_MEM`: share of the GPU's memory that vLLM reserves, 0.15 by default. That default is sized for a 24 GB
+  card (about 3.6 GB); below that amount, vLLM does not start. On a smaller card, raise it to keep about 3.6 GB, for
+  example 0.30 on 12 GB or 0.45 on 8 GB. Only the 24 GB setting has been measured.
 
-Flattening of curved pages (UVDoc) is on by default for books: on curved
-pages, it halves the errors. For a document photographed flat, turn it off in
-the document's details.
+Flattening of curved pages (UVDoc) is on by default for books; on curved pages, it halves the errors. For a document
+photographed flat, turn it off in the document's details.
 
 ## Web UI
 
-Open it on the PC (`http://localhost:8765`) or from the phone's browser. Its
-header shows the state of the OCR engine.
+The web UI is served by the PC on port 8765 (`http://localhost:8765`), and can be opened from the phone's browser too.
+Its header shows the state of the OCR engine.
 
 - **Library**: every document with its cover, its pages and its coverage.
-- **Document**: the pages grid (in the document, unnumbered, waiting for OCR
-  or failed, excluded, duplicates), the coverage, the downloads of
-  `document.md` and of a `.zip` archive, and:
-  - **Read document**: the reading view, with the whole document in reading
-    order, as in `document.md`, and its formulas typeset; a marker at the
-    start of each page opens that page, and a list of the pages jumps to any
-    of them.
+- **Document**: the grid of pages (in the document, unnumbered, waiting for OCR or failed, excluded, duplicates), the
+  coverage, the downloads of `document.md` and of a `.zip` archive, and:
+  - **Read document**: the whole document in reading order, as in `document.md`, with its formulas typeset. A marker at
+    the start of each page opens that page, and a list of the pages jumps to any of them.
   - **Organize**: reorder the pages by hand (see "Page order").
-- **Page**: the scan next to the recognized text, the page number (type one
-  by hand to correct it), rotation, exclusion from the document, new OCR
-  run, deletion.
-- **Pairing**: installing the app and pairing the phone.
+- **Page**: the scan next to the recognized text, the page number (a number typed by hand corrects it), rotation,
+  exclusion from the document, new OCR run, deletion.
+- **Pairing**: installing the app and pairing a phone.
 
-## What is produced (for your agents)
+## Output
 
 ```
 ScanMyLib/
@@ -160,39 +171,101 @@ ScanMyLib/
     scans/<scan>.jpg        # original photos
 ```
 
-`document.md` holds markers such as `<!-- page 42 · scan … -->` that make it
-possible to cite a page. Tables are HTML and formulas are LaTeX.
+`document.md` holds markers such as `<!-- page 42 · scan … -->`, so that an agent can cite a page. Tables are HTML and
+formulas are LaTeX, as the model produces them.
 
-Nothing is ever erased: deleted documents and pages go to
-`ScanMyLib/.trash/`.
+Nothing is ever erased: deleted documents and pages go to `LIBRARY_DIR/.trash/`.
 
 ## Backup
 
-- `LIBRARY_DIR` (the library): this is your content.
-- `DATA_DIR/state`: database (page order, manual settings) and token.
-- `DATA_DIR/android/keystore`: the app's signing key. Without it, a new
-  version of the APK cannot update the installed app.
+- `LIBRARY_DIR`: the library itself.
+- `DATA_DIR/state`: the database (page order, manual settings) and the access token. Each deployment also copies it into
+  `DATA_DIR/backups/`.
+- `ANDROID_DIR/keystore`: the app's signing key. Without it, a new version of the app cannot update the installed one.
 
-The rest (`DATA_DIR/sandbox`, caches, Android SDK) is reinstalled by
-`scripts/setup.sh`.
+Everything else can be downloaded again: the OCR sandbox by `ocr-setup` (`scripts/setup.sh` on a new installation), the
+Android toolchain by the next app build.
 
 ## Security
 
-The OCR sandbox has **no network access**. It sees **none of your files** and
-runs read-only, without privileges. Details and checks:
-[`docs/SECURITY.md`](docs/SECURITY.md) and `scripts/verify-sandbox.sh`.
+The OCR sandbox has **no network access**, sees **none of the host's files** besides its models, its socket and its
+cache, and runs read-only and without privileges. Details and checks: [`docs/SECURITY.md`](docs/SECURITY.md) and
+`scripts/verify-sandbox.sh`, which tests the isolation of the running service.
 
 ## Operations
 
+In the production checkout:
+
 ```bash
-docker compose ps                          # state of the services
-docker compose logs -f api ocr             # logs
-docker compose restart api                 # restart the api
-docker compose down                        # stop everything
+scripts/prod.sh compose ps                 # state of the services
+scripts/prod.sh compose logs -f api ocr    # logs
+scripts/prod.sh compose restart api        # restart the api
+scripts/prod.sh compose down               # stop everything
 scripts/verify-sandbox.sh                  # prove the sandbox is isolated
-scripts/e2e_test.py photo1.jpg photo2.jpg  # end-to-end test (like the phone)
-scripts/build-apk.sh                       # rebuild the APK
 ```
+
+`scripts/prod.sh compose` runs docker compose with production's `.env` and nothing else: plain `docker compose` would
+also read the shell's environment (`COMPOSE_*`, `DATA_DIR`…), which overrides `.env`. It only runs in the production
+checkout, and refuses builds and one-off containers, since production changes only through `scripts/deploy.sh`. `up`
+applies what the checkout describes, so it needs a clean `main`, and never builds; `restart` works in any state.
+
+## Updating
+
+A new version is installed from the production checkout, on `main`:
+
+```bash
+git pull
+scripts/deploy.sh --dry-run    # checks and plan; changes nothing
+scripts/deploy.sh --apk        # deploys, and publishes the new app
+```
+
+`scripts/deploy.sh` refuses to run outside the production checkout, off `main`, with local or untracked changes, when
+`main` differs from `origin`, or when `.env` is not production's. It then:
+
+1. builds the images from the commit (`git archive HEAD`) and runs the unit tests on them; if they fail, production is
+   unchanged;
+2. copies the state into `DATA_DIR/backups/state-<date>-v<version>/` (a consistent copy of the database; the last 10
+   are kept);
+3. restarts `api` and `ocr`, checks their health and the sandbox's isolation (the sandbox is stopped if that check
+   fails), and tags the images that now run `:deployed`, the rollback target;
+4. with `--apk`, builds and publishes the new app (without it, phones keep their app);
+5. tags the version (`vX.Y.Z`) and pushes the tag.
+
+If a step fails, it says what state production is in and prints the commands to roll back to the `:deployed` images and
+the backup of the state. A closed terminal does not interrupt it, and each run is logged in
+`DATA_DIR/logs/deploy-<date>.log`.
+
+`VERSION` is the version of both the PC side and the app (shown in the web UI and in the app's connection check). The
+app's version code is derived from it, so a new app always installs over the previous one.
+
+## Development
+
+Changes are made on branches, each in its own worktree, next to a running installation and without touching it:
+
+```bash
+cd ~/Dev/scanmylib
+git worktree add -b my-change ../scanmylib-worktrees/my-change main
+cd ../scanmylib-worktrees/my-change
+scripts/dev-env.sh        # .env of the development stack
+scripts/dev.sh up         # api + fake OCR; scripts/dev.sh up --real-ocr for the real one
+scripts/e2e_test.py page1.jpg page2.jpg   # end-to-end test, acting like the phone
+scripts/build-apk.sh      # the "ScanMyLib (dev)" app
+scripts/dev.sh down
+```
+
+The development stack has its own web UI (`http://localhost:8770`), its own data and test library (production's
+`DATA_DIR` followed by `-dev`), and its own app, "ScanMyLib (dev)" with an orange icon, which installs next to the
+production app from the Pairing tab of the development web UI. Its first app build downloads its own Android toolchain.
+The fake OCR answers instantly with sample pages; the real one (`--real-ocr`) runs a second engine next to production's
+(~4.4 GB of VRAM while it works). One development stack runs at a time.
+
+In a worktree, `scripts/dev.sh` replaces `docker compose` (`scripts/dev.sh build ocr`, `scripts/dev.sh compose exec api
+sh`…): it refuses any setting that would reach production or leave the stack's own `DATA_DIR`, and the docker compose
+commands and options that could (`cp`, `run -v`, `exec --privileged`…). The guards and their limits are described in
+[`docs/SECURITY.md`](docs/SECURITY.md); the repository's conventions are in [`CLAUDE.md`](CLAUDE.md).
+
+Every pull request runs the continuous integration (`.github/workflows/ci.yml`): server, web UI, OCR sandbox, scripts
+and Android tests. Pull requests are merged when it is green.
 
 ## Technical documentation
 

@@ -275,3 +275,7 @@ and Android tests. Pull requests are merged when it is green.
 - [`docs/API.md`](docs/API.md): HTTP API used by the app and the web UI
 - [`docs/OCR_SANDBOX.md`](docs/OCR_SANDBOX.md): protocol between the api and the sandbox
 - [`docs/SECURITY.md`](docs/SECURITY.md): threat model and guarantees
+
+## License
+
+ScanMyLib is released under the MIT License: see [`LICENSE`](LICENSE).

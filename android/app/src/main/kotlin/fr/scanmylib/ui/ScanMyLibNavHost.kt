@@ -2,8 +2,10 @@ package fr.scanmylib.ui
 
 import android.net.Uri
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.APPLICATION_KEY
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.dropUnlessResumed
 import androidx.lifecycle.viewmodel.CreationExtras
 import androidx.navigation.NavHostController
@@ -12,6 +14,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.toRoute
 import fr.scanmylib.AppContainer
 import fr.scanmylib.ScanMyLibApplication
+import fr.scanmylib.model.ScanSource
+import fr.scanmylib.settings.storedEnum
 import fr.scanmylib.ui.capture.CaptureScreen
 import fr.scanmylib.ui.document.DocumentScreen
 import fr.scanmylib.ui.library.AfterCreate
@@ -127,6 +131,9 @@ fun ScanMyLibNavHost(navController: NavHostController, paired: Boolean, share: L
         }
         composable<DocumentRoute> { entry ->
             val route = entry.toRoute<DocumentRoute>()
+            // The source the camera screen asked for when the camera could not open.
+            val switchTo by entry.savedStateHandle.getStateFlow<String?>(KEY_SWITCH_SOURCE, null)
+                .collectAsStateWithLifecycle()
             DocumentScreen(
                 // Alone on the back stack (shared photos), navigateUp would open the app's start screen
                 // in a new task: Back returns to the app that shared them instead.
@@ -135,11 +142,21 @@ fun ScanMyLibNavHost(navController: NavHostController, paired: Boolean, share: L
                 sharedPhotos = if (route.importShared) share.orEmpty() else emptyList(),
                 scanOnOpen = route.scanOnOpen,
                 importOnOpen = route.importOnOpen,
+                switchToSource = switchTo?.let { storedEnum(it, ScanSource.DEFAULT) },
+                onSwitchHandled = { entry.savedStateHandle[KEY_SWITCH_SOURCE] = null },
             )
         }
-        composable<CaptureRoute> {
-            // Once only, even if "Done" is tapped twice: the document screen must stay.
-            CaptureScreen(onClose = dropUnlessResumed { navController.navigateUp() })
+        composable<CaptureRoute> { entry ->
+            CaptureScreen(
+                // Once only, even if "Done" is tapped twice: the document screen must stay.
+                onClose = dropUnlessResumed { navController.navigateUp() },
+                onSwitchSource = { source ->
+                    if (entry.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+                        navController.previousBackStackEntry?.savedStateHandle?.set(KEY_SWITCH_SOURCE, source.name)
+                        navController.navigateUp()
+                    }
+                },
+            )
         }
         composable<SettingsRoute> {
             SettingsScreen(
@@ -150,6 +167,9 @@ fun ScanMyLibNavHost(navController: NavHostController, paired: Boolean, share: L
         }
     }
 }
+
+/** The navigation result of the camera screen: the source to open instead, by name. */
+private const val KEY_SWITCH_SOURCE = "capture_switch_source"
 
 /** The app container, for the `viewModelFactory` initializers of the screens. */
 val CreationExtras.container: AppContainer

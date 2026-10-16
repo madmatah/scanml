@@ -120,14 +120,11 @@ sealed interface DocumentMessage {
     /** Like [ImportFailed] or [SendFailed], because the phone's storage is full. */
     data object StorageFull : DocumentMessage
 
-    /** Photos left out of an import: the server refuses their format. */
-    data class UnsupportedPhotos(val count: Int) : DocumentMessage
-
-    /** Photos left out of an import: over the server's size limits. */
-    data class TooLargePhotos(val count: Int) : DocumentMessage
-
-    /** Photos left out of an import: they could not be read. */
-    data class UnreadablePhotos(val count: Int) : DocumentMessage
+    /**
+     * Photos left out of an import, by reason: a format the server refuses, over its size limits,
+     * or unreadable. One message for them all.
+     */
+    data class PhotosSkipped(val unsupported: Int, val tooLarge: Int, val unreadable: Int) : DocumentMessage
 
     /** Images on their way to the run were cut short when the app was last closed. */
     data object AddingInterrupted : DocumentMessage
@@ -312,9 +309,9 @@ class DocumentViewModel(
         if (photos.isEmpty()) return
         prepare(photos.size, cancellable = true) { onProgress ->
             val result = scanImporter.addPhotos(documentId, photos, onProgress)
-            if (result.unsupported > 0) messageChannel.send(DocumentMessage.UnsupportedPhotos(result.unsupported))
-            if (result.tooLarge > 0) messageChannel.send(DocumentMessage.TooLargePhotos(result.tooLarge))
-            if (result.unreadable > 0) messageChannel.send(DocumentMessage.UnreadablePhotos(result.unreadable))
+            if (result.unsupported + result.tooLarge + result.unreadable > 0) {
+                messageChannel.send(DocumentMessage.PhotosSkipped(result.unsupported, result.tooLarge, result.unreadable))
+            }
         }
     }
 
@@ -495,6 +492,29 @@ class DocumentViewModel(
 internal fun isStorageLow(freeBytes: Long): Boolean = freeBytes < LOW_STORAGE_BYTES
 
 private const val LOW_STORAGE_BYTES = 100L * 1024 * 1024
+
+/**
+ * Whether the message says that pages were left out or could be lost, or that the user must act:
+ * it then shows longer (about ten seconds rather than four), with a close button.
+ */
+internal val DocumentMessage.important: Boolean get() = when (this) {
+    is DocumentMessage.PhotosSkipped,
+    DocumentMessage.AddingInterrupted,
+    DocumentMessage.StorageFull,
+    DocumentMessage.ImportFailed,
+    DocumentMessage.SendFailed,
+    DocumentMessage.ScannerUnavailable,
+    DocumentMessage.ScannerFailed,
+    DocumentMessage.PhotoPickerUnavailable,
+    DocumentMessage.TokenRefused,
+    -> true
+    DocumentMessage.Unreachable,
+    is DocumentMessage.ServerError,
+    is DocumentMessage.PagesQueued,
+    DocumentMessage.SettingNotSaved,
+    DocumentMessage.PageBusy,
+    -> false
+}
 
 /** Whether [this] failed because the phone's storage is full (files or database). */
 internal fun Throwable.isStorageFull(): Boolean = generateSequence(this) { it.cause }.take(MAX_CAUSES).any {

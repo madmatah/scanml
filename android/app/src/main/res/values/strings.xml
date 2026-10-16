@@ -276,6 +276,7 @@
     <string name="capture_delete_photo">Delete this photo</string>
     <string name="capture_camera_unavailable">Couldn’t open the camera.</string>
     <string name="capture_camera_busy">The camera is unavailable right now: another app may be using it.</string>
+    <string name="capture_problem_help">Try again, or continue with another source: the photos taken here stay.</string>
     <string name="capture_saving_photo">Saving photo…</string>
     <string name="capture_shot_failed">The photo couldn’t be taken. Try again.</string>
     <string name="capture_shot_not_saved">The photo couldn’t be saved: check the free space on the phone.</string>

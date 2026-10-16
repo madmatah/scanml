@@ -88,6 +88,9 @@ fun DocumentScreen(
     scanOnOpen: Boolean = false,
     /** Opens the photo picker when the screen first opens. */
     importOnOpen: Boolean = false,
+    /** A source to open now: the camera screen could not open the camera ([onSwitchHandled] once done). */
+    switchToSource: ScanSource? = null,
+    onSwitchHandled: () -> Unit = {},
     viewModel: DocumentViewModel = viewModel(factory = DocumentViewModel.Factory),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -145,7 +148,11 @@ fun DocumentScreen(
                 )
                 if (result == SnackbarResult.ActionPerformed) currentOpenCamera(ScanSource.CAMERA, false)
             } else {
-                snackbarHostState.showSnackbar(message.text(resources))
+                snackbarHostState.showSnackbar(
+                    message.text(resources),
+                    withDismissAction = message.important,
+                    duration = if (message.important) SnackbarDuration.Long else SnackbarDuration.Short,
+                )
             }
         }
     }
@@ -159,6 +166,12 @@ fun DocumentScreen(
     }
     LaunchedEffect(viewModel, importOnOpen) {
         if (importOnOpen && viewModel.takeActionOnOpen()) importPhotos()
+    }
+    LaunchedEffect(switchToSource, scan.loaded) {
+        val source = switchToSource ?: return@LaunchedEffect
+        if (!scan.loaded) return@LaunchedEffect
+        onSwitchHandled()
+        if (source == ScanSource.PHOTO_PICKER) importPhotos() else currentOpenCamera(source, false)
     }
     // Ids rather than entities: the dialogs follow the live state of the page.
     var selectedLocalPage by rememberSaveable { mutableStateOf<String?>(null) }
@@ -456,11 +469,11 @@ private fun DocumentMessage.text(resources: Resources): String = when (this) {
     DocumentMessage.ImportFailed -> resources.getString(R.string.message_import_failed)
     DocumentMessage.SendFailed -> resources.getString(R.string.message_send_failed)
     DocumentMessage.StorageFull -> resources.getString(R.string.message_storage_full)
-    is DocumentMessage.UnsupportedPhotos ->
-        resources.getQuantityString(R.plurals.message_unsupported_photos, count, count)
-    is DocumentMessage.TooLargePhotos -> resources.getQuantityString(R.plurals.message_too_large_photos, count, count)
-    is DocumentMessage.UnreadablePhotos ->
-        resources.getQuantityString(R.plurals.message_unreadable_photos, count, count)
+    is DocumentMessage.PhotosSkipped -> listOfNotNull(
+        unsupported.takeIf { it > 0 }?.let { resources.getQuantityString(R.plurals.message_unsupported_photos, it, it) },
+        tooLarge.takeIf { it > 0 }?.let { resources.getQuantityString(R.plurals.message_too_large_photos, it, it) },
+        unreadable.takeIf { it > 0 }?.let { resources.getQuantityString(R.plurals.message_unreadable_photos, it, it) },
+    ).joinToString(" ")
     DocumentMessage.AddingInterrupted -> resources.getString(R.string.message_adding_interrupted)
     DocumentMessage.SettingNotSaved -> resources.getString(R.string.message_setting_not_saved)
     DocumentMessage.ScannerUnavailable -> resources.getString(R.string.message_scanner_unavailable)

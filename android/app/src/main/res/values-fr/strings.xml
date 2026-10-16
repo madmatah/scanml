@@ -295,6 +295,7 @@
     <string name="capture_delete_photo">Supprimer cette photo</string>
     <string name="capture_camera_unavailable">Impossible d’ouvrir l’appareil photo.</string>
     <string name="capture_camera_busy">L’appareil photo est indisponible pour le moment : une autre appli l’utilise peut-être.</string>
+    <string name="capture_problem_help">Réessayez, ou continuez avec une autre source : les photos prises ici restent.</string>
     <string name="capture_saving_photo">Enregistrement de la photo…</string>
     <string name="capture_shot_failed">La photo n’a pas pu être prise. Réessayez.</string>
     <string name="capture_shot_not_saved">La photo n’a pas pu être enregistrée : vérifiez la place libre sur le téléphone.</string>

@@ -16,6 +16,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.StringRes
 import androidx.camera.core.CameraInfo
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.CameraState
@@ -49,6 +50,7 @@ import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -70,6 +72,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -109,6 +112,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.compose.AsyncImage
 import fr.scanmylib.R
 import fr.scanmylib.library.StagedPage
+import fr.scanmylib.model.ScanSource
 import fr.scanmylib.ui.components.LocalImage
 import fr.scanmylib.ui.theme.ScanMyLibTheme
 import kotlinx.coroutines.awaitCancellation
@@ -121,7 +125,12 @@ import kotlinx.coroutines.launch
  * until the user sends them from the document screen.
  */
 @Composable
-fun CaptureScreen(onClose: () -> Unit, viewModel: CaptureViewModel = viewModel(factory = CaptureViewModel.Factory)) {
+fun CaptureScreen(
+    onClose: () -> Unit,
+    /** Closes the camera, keeping this visit's photos, for another source on the same run. */
+    onSwitchSource: (ScanSource) -> Unit,
+    viewModel: CaptureViewModel = viewModel(factory = CaptureViewModel.Factory),
+) {
     // Dark whatever the system theme: the controls sit on the camera preview.
     ScanMyLibTheme(dark = true) {
         Surface(color = Color.Black, contentColor = Color.White, modifier = Modifier.fillMaxSize()) {
@@ -142,7 +151,7 @@ fun CaptureScreen(onClose: () -> Unit, viewModel: CaptureViewModel = viewModel(f
             LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { granted = context.hasCameraPermission() }
 
             if (granted) {
-                CameraCapture(viewModel, onClose)
+                CameraCapture(viewModel, onClose, onSwitchSource)
             } else {
                 CameraPermissionRequest(
                     deniedForGood = deniedForGood,
@@ -156,16 +165,19 @@ fun CaptureScreen(onClose: () -> Unit, viewModel: CaptureViewModel = viewModel(f
 }
 
 @Composable
-private fun CameraCapture(viewModel: CaptureViewModel, onClose: () -> Unit) {
+private fun CameraCapture(viewModel: CaptureViewModel, onClose: () -> Unit, onSwitchSource: (ScanSource) -> Unit) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val resources = LocalResources.current
     val snackbarHostState = remember { SnackbarHostState() }
     val currentOnClose by rememberUpdatedState(onClose)
+    val haptics = LocalHapticFeedback.current
+    val animationsOff = remember(context) { context.animationsOff() }
     LaunchedEffect(viewModel) {
         launch { viewModel.closed.collect { currentOnClose() } }
         viewModel.messages.collect {
+            if (it != CaptureMessage.PhotosNotDeleted) haptics.performHapticFeedback(HapticFeedbackType.Reject)
             // A photo not taken is a page missing: the message stays long enough to be noticed.
             snackbarHostState.showSnackbar(
                 it.text(resources),
@@ -178,7 +190,9 @@ private fun CameraCapture(viewModel: CaptureViewModel, onClose: () -> Unit) {
     // A rotation recreates the screen, which closes the camera: the photo being saved would be lost.
     LockOrientation(locked = state.shooting)
 
-    val camera = remember(context) { newCameraController(context) }
+    // A new controller for each attempt to open the camera ("Retry").
+    var attempt by rememberSaveable { mutableIntStateOf(0) }
+    val camera = remember(context, attempt) { newCameraController(context) }
     val previewView = remember(context) {
         PreviewView(context).apply {
             // A TextureView: composes with the controls and the screen transitions.
@@ -186,13 +200,13 @@ private fun CameraCapture(viewModel: CaptureViewModel, onClose: () -> Unit) {
             // The whole picture, as it will be saved.
             scaleType = PreviewView.ScaleType.FIT_CENTER
             setBackgroundColor(android.graphics.Color.BLACK)
-            controller = camera
         }
     }
     var streaming by remember { mutableStateOf(false) }
     var hasFlash by remember { mutableStateOf(false) }
-    var cameraFailed by remember { mutableStateOf(false) }
+    var cameraFailed by remember(camera) { mutableStateOf(false) }
     DisposableEffect(camera, lifecycleOwner) {
+        previewView.controller = camera
         camera.bindToLifecycle(lifecycleOwner)
         val mainExecutor = ContextCompat.getMainExecutor(context)
         val initialization = camera.initializationFuture
@@ -222,7 +236,7 @@ private fun CameraCapture(viewModel: CaptureViewModel, onClose: () -> Unit) {
     }
     // Errors once the camera is bound (in use by another app, disabled by a policy...): without
     // them, the preview would just stay black.
-    var cameraUnavailable by remember { mutableStateOf(false) }
+    var cameraUnavailable by remember(camera) { mutableStateOf(false) }
     LaunchedEffect(camera, lifecycleOwner) {
         // The camera's state can be observed once it is bound, shortly after its initialization.
         var info = camera.cameraInfo
@@ -252,9 +266,24 @@ private fun CameraCapture(viewModel: CaptureViewModel, onClose: () -> Unit) {
         }
     }
     DisposableEffect(shutterSound) { onDispose { shutterSound?.release() } }
-    val haptics = LocalHapticFeedback.current
-    val shutterFlash = remember { Animatable(0f) }
+    // A short dip of the preview to dark on each shot: a white flash is harsh in a dim room.
+    val shutterDip = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
+    // Each photo that joins the visit: a "saved" haptic, and its thumbnail pops.
+    val thumbnailScale = remember { Animatable(1f) }
+    var photosSeen by remember { mutableIntStateOf(-1) }
+    LaunchedEffect(state.ready, state.pages.size) {
+        if (!state.ready) return@LaunchedEffect
+        val photos = state.pages.size
+        if (photosSeen >= 0 && photos > photosSeen) {
+            haptics.performHapticFeedback(HapticFeedbackType.Confirm)
+            if (!animationsOff) {
+                thumbnailScale.animateTo(THUMBNAIL_POP_SCALE, tween(THUMBNAIL_POP_MS / 2))
+                thumbnailScale.animateTo(1f, tween(THUMBNAIL_POP_MS / 2))
+            }
+        }
+        photosSeen = photos
+    }
     val takePhoto = {
         val started = viewModel.shoot { shot ->
             camera.takePicture(
@@ -274,9 +303,11 @@ private fun CameraCapture(viewModel: CaptureViewModel, onClose: () -> Unit) {
         if (started) {
             haptics.performHapticFeedback(HapticFeedbackType.VirtualKey)
             shutterSound?.play(MediaActionSound.SHUTTER_CLICK)
-            scope.launch {
-                shutterFlash.snapTo(SHUTTER_FLASH_ALPHA)
-                shutterFlash.animateTo(0f, tween(SHUTTER_FLASH_MS))
+            if (!animationsOff) {
+                scope.launch {
+                    shutterDip.snapTo(SHUTTER_DIP_ALPHA)
+                    shutterDip.animateTo(0f, tween(SHUTTER_DIP_MS))
+                }
             }
         }
     }
@@ -297,8 +328,8 @@ private fun CameraCapture(viewModel: CaptureViewModel, onClose: () -> Unit) {
         Box(
             Modifier
                 .fillMaxSize()
-                .graphicsLayer { alpha = shutterFlash.value }
-                .background(Color.White),
+                .graphicsLayer { alpha = shutterDip.value }
+                .background(Color.Black),
         )
         val problem = when {
             cameraFailed -> R.string.capture_camera_unavailable
@@ -306,12 +337,16 @@ private fun CameraCapture(viewModel: CaptureViewModel, onClose: () -> Unit) {
             else -> null
         }
         if (problem != null) {
-            Text(
-                stringResource(problem),
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .padding(32.dp),
+            CameraProblem(
+                problem,
+                onRetry = {
+                    // Lets go of the failed camera first: this screen is the only one using it.
+                    camera.unbind()
+                    attempt++
+                },
+                // This visit's photos are in the run already: the other source adds to them.
+                onSwitchSource = onSwitchSource,
+                modifier = Modifier.align(Alignment.Center),
             )
         } else if (state.finishing) {
             SavingLastPhoto(Modifier.align(Alignment.Center))
@@ -334,7 +369,10 @@ private fun CameraCapture(viewModel: CaptureViewModel, onClose: () -> Unit) {
                 state.pages.lastOrNull(),
                 enabled = !state.shooting,
                 onClick = { shownPhoto = it.file.path },
-                modifier = modifier,
+                modifier = modifier.graphicsLayer {
+                    scaleX = thumbnailScale.value
+                    scaleY = thumbnailScale.value
+                },
             )
         }
         val shutter = @Composable { modifier: Modifier ->
@@ -487,6 +525,41 @@ private fun ShutterButton(enabled: Boolean, saving: Boolean, onClick: () -> Unit
                     .clip(CircleShape)
                     .background(color),
             )
+        }
+    }
+}
+
+/**
+ * The camera could not be opened, or another app holds it: try again, or continue with another
+ * source on the same run.
+ */
+@Composable
+private fun CameraProblem(
+    @StringRes problem: Int,
+    onRetry: () -> Unit,
+    onSwitchSource: (ScanSource) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = modifier
+            .widthIn(max = 320.dp)
+            .padding(32.dp),
+    ) {
+        Icon(painterResource(R.drawable.ic_photo_camera), contentDescription = null, modifier = Modifier.size(48.dp))
+        Text(stringResource(problem), style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
+        Text(
+            stringResource(R.string.capture_problem_help),
+            style = MaterialTheme.typography.bodyMedium,
+            textAlign = TextAlign.Center,
+        )
+        Button(onClick = onRetry) { Text(stringResource(R.string.retry)) }
+        OutlinedButton(onClick = { onSwitchSource(ScanSource.GOOGLE_SCANNER) }) {
+            Text(stringResource(R.string.scan_source_google))
+        }
+        TextButton(onClick = { onSwitchSource(ScanSource.PHOTO_PICKER) }) {
+            Text(stringResource(R.string.scan_source_picker))
         }
     }
 }
@@ -711,6 +784,10 @@ private fun LightSystemBarIcons() {
     }
 }
 
+/** The user turned animations off (developer options, or the accessibility setting). */
+private fun Context.animationsOff(): Boolean =
+    Settings.Global.getFloat(contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
+
 private fun Context.hasCameraPermission() =
     ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
 
@@ -730,8 +807,10 @@ private fun CaptureMessage.text(resources: Resources): String = when (this) {
 
 private const val TAG = "Capture"
 private const val CAMERA_INFO_POLL_MS = 200L
-private const val SHUTTER_FLASH_ALPHA = 0.7f
-private const val SHUTTER_FLASH_MS = 250
+private const val SHUTTER_DIP_ALPHA = 0.4f
+private const val SHUTTER_DIP_MS = 120
+private const val THUMBNAIL_POP_SCALE = 1.08f
+private const val THUMBNAIL_POP_MS = 150
 private const val DISABLED_ALPHA = 0.4f
 
 /** Photos are 4:3; upright ones are 3:4. */

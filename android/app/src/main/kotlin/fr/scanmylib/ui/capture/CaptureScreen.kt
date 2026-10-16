@@ -284,7 +284,9 @@ private fun CameraCapture(viewModel: CaptureViewModel, onClose: () -> Unit) {
     var leaving by rememberSaveable { mutableStateOf(false) }
     // The photo shown large, by file: a photo landing meanwhile does not take its place.
     var shownPhoto by rememberSaveable { mutableStateOf<String?>(null) }
-    // Photos taken, or on their way: leaving asks first, and waits for the one being saved.
+    // Photos taken in this visit, or on their way: leaving asks first, and waits for the one being
+    // saved. The pages from before the visit are not this screen's: with no photo of its own, it
+    // closes at once.
     fun close() {
         if (state.photoCount == 0) onClose() else leaving = true
     }
@@ -320,13 +322,14 @@ private fun CameraCapture(viewModel: CaptureViewModel, onClose: () -> Unit) {
                 Icon(painterResource(R.drawable.ic_close), contentDescription = stringResource(R.string.close))
             }
         }
-        val counter = @Composable { modifier: Modifier -> PageCounter(state.pages.size, modifier) }
+        val counter = @Composable { modifier: Modifier -> PageCounter(state.pages.size, state.waiting, modifier) }
         val flashButton = @Composable { modifier: Modifier ->
             if (hasFlash) FlashButton(state.flash, onClick = viewModel::cycleFlash, modifier = modifier)
         }
         val lastPhoto = @Composable { modifier: Modifier ->
             // Not while a photo is being saved: it would land behind the dialog, and only the last
-            // photo can be deleted, so that the one taken again keeps its place.
+            // photo can be deleted, so that the one taken again keeps its place. Only this visit's
+            // photos are shown: the pages from before it are not this screen's to delete.
             LastPhoto(
                 state.pages.lastOrNull(),
                 enabled = !state.shooting,
@@ -336,7 +339,7 @@ private fun CameraCapture(viewModel: CaptureViewModel, onClose: () -> Unit) {
         }
         val shutter = @Composable { modifier: Modifier ->
             ShutterButton(
-                enabled = streaming && !state.shooting && !state.finishing,
+                enabled = streaming && state.ready && !state.shooting && !state.finishing,
                 saving = state.shooting,
                 onClick = takePhoto,
                 modifier = modifier,
@@ -413,12 +416,14 @@ private fun CameraCapture(viewModel: CaptureViewModel, onClose: () -> Unit) {
         )
     }
 
-    // Nothing left to keep (the only photo failed): nothing to ask.
-    val nothingToKeep = state.photoCount == 0
+    // Nothing left to keep (the only photo failed): nothing to ask. Not before the visit is known:
+    // a dialog restored with the screen would close before its photos are read.
+    val nothingToKeep = state.ready && state.photoCount == 0
     LaunchedEffect(nothingToKeep) { if (nothingToKeep) leaving = false }
-    if (leaving && !nothingToKeep) {
+    if (leaving && state.photoCount > 0) {
         LeaveDialog(
             count = state.photoCount,
+            waiting = state.waiting,
             onKeep = {
                 leaving = false
                 viewModel.finish()
@@ -502,16 +507,40 @@ private fun SavingLastPhoto(modifier: Modifier = Modifier) {
     }
 }
 
+/**
+ * The photos of this visit, "3 photos", followed by the pages that were already waiting in the
+ * run, "· +5 en attente"; only the waiting pages before the first photo; nothing when there is
+ * neither.
+ */
 @Composable
-private fun PageCounter(count: Int, modifier: Modifier = Modifier) {
-    Text(
-        pluralStringResource(R.plurals.capture_count, count, count),
-        style = MaterialTheme.typography.titleMedium,
+private fun PageCounter(photos: Int, waiting: Int, modifier: Modifier = Modifier) {
+    if (photos == 0 && waiting == 0) return
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
             .clip(RoundedCornerShape(50))
             .background(Color.Black.copy(alpha = 0.6f))
             .padding(horizontal = 16.dp, vertical = 6.dp),
-    )
+    ) {
+        if (photos == 0) {
+            Text(
+                pluralStringResource(R.plurals.capture_waiting_only, waiting, waiting),
+                style = MaterialTheme.typography.titleMedium,
+            )
+        } else {
+            Text(
+                pluralStringResource(R.plurals.capture_count, photos, photos),
+                style = MaterialTheme.typography.titleMedium,
+            )
+            if (waiting > 0) {
+                Text(
+                    pluralStringResource(R.plurals.capture_count_waiting, waiting, waiting),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+        }
+    }
 }
 
 @Composable
@@ -567,18 +596,29 @@ private fun LastPhotoDialog(page: StagedPage, onDelete: () -> Unit, onDismiss: (
     )
 }
 
+/**
+ * Asks whether to keep the [count] photos of this visit. Its buttons name their scope, and the
+ * [waiting] pages from before the visit are said to be safe: deleting never reaches them.
+ */
 @Composable
-private fun LeaveDialog(count: Int, onKeep: () -> Unit, onDiscard: () -> Unit, onDismiss: () -> Unit) {
+private fun LeaveDialog(count: Int, waiting: Int, onKeep: () -> Unit, onDiscard: () -> Unit, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.capture_leave_title)) },
-        text = { Text(pluralStringResource(R.plurals.capture_leave_message, count, count)) },
+        title = { Text(pluralStringResource(R.plurals.capture_leave_title, count, count)) },
+        text = if (waiting > 0) {
+            { Text(pluralStringResource(R.plurals.capture_leave_waiting, waiting, waiting)) }
+        } else {
+            null
+        },
         confirmButton = {
-            TextButton(onClick = onKeep) { Text(stringResource(R.string.capture_leave_keep)) }
+            TextButton(onClick = onKeep) { Text(pluralStringResource(R.plurals.capture_leave_keep, count, count)) }
         },
         dismissButton = {
             TextButton(onClick = onDiscard) {
-                Text(stringResource(R.string.capture_leave_discard), color = MaterialTheme.colorScheme.error)
+                Text(
+                    pluralStringResource(R.plurals.capture_leave_discard, count, count),
+                    color = MaterialTheme.colorScheme.error,
+                )
             }
         },
     )
@@ -685,6 +725,7 @@ private fun Context.openAppSettings() {
 private fun CaptureMessage.text(resources: Resources): String = when (this) {
     CaptureMessage.ShotFailed -> resources.getString(R.string.capture_shot_failed)
     CaptureMessage.ShotNotSaved -> resources.getString(R.string.capture_shot_not_saved)
+    CaptureMessage.PhotosNotDeleted -> resources.getString(R.string.capture_photos_not_deleted)
 }
 
 private const val TAG = "Capture"

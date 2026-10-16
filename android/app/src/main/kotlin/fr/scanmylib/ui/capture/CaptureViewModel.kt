@@ -48,16 +48,26 @@ enum class FlashSetting(val imageCaptureMode: Int) {
 data class Shot(val file: File, val takenAt: Instant)
 
 data class CaptureUiState(
-    /** The photos of the run so far, those of an interrupted visit included. */
+    /**
+     * The photos of this visit to the camera, those of a visit interrupted by the end of the
+     * process included: the only pages this screen shows or deletes.
+     */
     val pages: List<StagedPage> = emptyList(),
+    /**
+     * Pages of the run from before this visit (scanned, imported, or photographed in an earlier
+     * visit): they wait to be sent, and this screen never touches them.
+     */
+    val waiting: Int = 0,
     /** Off by default: on paper, the flash mostly adds glare. */
     val flash: FlashSetting = FlashSetting.OFF,
     /** A photo is being taken and saved: the shutter waits for it. */
     val shooting: Boolean = false,
     /** The user is done: the screen closes once the photo being saved has joined the run. */
     val finishing: Boolean = false,
+    /** Where this visit starts in the run is known: until then, no photo is taken. */
+    val ready: Boolean = false,
 ) {
-    /** Photos of the run, saved or on their way: leaving the screen must not lose them. */
+    /** Photos of this visit, saved or on their way: leaving the screen must not lose them. */
     val photoCount: Int get() = pages.size + if (shooting) 1 else 0
 }
 
@@ -67,6 +77,9 @@ sealed interface CaptureMessage {
 
     /** The photo could not be written: the phone may be out of storage. */
     data object ShotNotSaved : CaptureMessage
+
+    /** Some photos of the visit could not be deleted: they stay, and the screen with them. */
+    data object PhotosNotDeleted : CaptureMessage
 }
 
 /**
@@ -91,19 +104,43 @@ class CaptureViewModel(
     /** Photos still on their way when the run was discarded: they go nowhere. */
     private val abandonedShots = mutableSetOf<Shot>()
 
+    /**
+     * The run's highest position when the camera opened: the pages after it are this visit's
+     * photos. Saved with the screen, so that it survives the end of the process, and so that the
+     * run's directory alone still describes the run.
+     */
+    private val visitStart: StateFlow<Int?> = savedState.getStateFlow(KEY_VISIT_START, null)
+
     val messages: Flow<CaptureMessage> = messageChannel.receiveAsFlow()
 
-    /** Emits when the screen must close: the run is kept ([finish]) or discarded ([discard]). */
+    /** Emits when the screen must close: this visit's photos are kept ([finish]) or deleted ([discard]). */
     val closed: Flow<Unit> = closedChannel.receiveAsFlow()
 
     val uiState: StateFlow<CaptureUiState> = combine(
         staging.observe(documentId),
+        visitStart,
         savedState.getStateFlow(KEY_FLASH, FlashSetting.OFF.name),
         shooting,
         finishing,
-    ) { pages, flash, shooting, finishing ->
-        CaptureUiState(pages, storedEnum(flash, FlashSetting.OFF), shooting, finishing)
+    ) { run, start, flash, shooting, finishing ->
+        val visit = if (start == null) emptyList() else run.filter { it.seq > start }
+        CaptureUiState(
+            pages = visit,
+            waiting = if (start == null) 0 else run.size - visit.size,
+            flash = storedEnum(flash, FlashSetting.OFF),
+            shooting = shooting,
+            finishing = finishing,
+            ready = start != null,
+        )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), CaptureUiState())
+
+    init {
+        if (visitStart.value == null) {
+            viewModelScope.launch {
+                savedState[KEY_VISIT_START] = staging.pages(documentId).maxOfOrNull { it.seq } ?: 0
+            }
+        }
+    }
 
     fun cycleFlash() {
         savedState[KEY_FLASH] = uiState.value.flash.next.name
@@ -112,11 +149,11 @@ class CaptureViewModel(
     /**
      * Takes a photo: [capture] must start writing it to the shot's file, then report the outcome
      * with [onShotSaved] or [onShotFailed]. Does nothing and returns false while the previous
-     * photo is still being taken, so that a double tap does not take the same page twice, and once
-     * the user is done.
+     * photo is still being taken, so that a double tap does not take the same page twice, once the
+     * user is done, and until this visit's start in the run is known.
      */
     fun shoot(capture: (Shot) -> Unit): Boolean {
-        if (shooting.value || finishing.value) return false
+        if (shooting.value || finishing.value || visitStart.value == null) return false
         shooting.value = true
         val takenAt = clock.instant()
         viewModelScope.launch {
@@ -208,7 +245,7 @@ class CaptureViewModel(
         closedChannel.trySend(Unit)
     }
 
-    /** Deletes a photo of the run, e.g. a blurred one, to take it again. */
+    /** Deletes a photo of this visit, e.g. a blurred one, to take it again. */
     fun deletePage(page: StagedPage) {
         viewModelScope.launch {
             try {
@@ -219,12 +256,25 @@ class CaptureViewModel(
         }
     }
 
-    /** Deletes all the photos of the run, the one on its way included, then emits [closed]. */
+    /**
+     * Deletes the photos of this visit, the one on its way included, then emits [closed]. The pages
+     * from before the visit stay in the run. If a photo cannot be deleted, the screen stays to say
+     * so, with the photos left.
+     */
     fun discard() {
         currentShot?.let(abandonedShots::add)
         finishing.value = false
+        val start = visitStart.value
         viewModelScope.launch {
-            withContext(NonCancellable) { staging.discard(documentId) }
+            if (start != null) {
+                try {
+                    withContext(NonCancellable) { staging.removeAfter(documentId, start) }
+                } catch (e: IOException) {
+                    Log.w(TAG, "photos not deleted", e)
+                    messageChannel.send(CaptureMessage.PhotosNotDeleted)
+                    return@launch
+                }
+            }
             closedChannel.send(Unit)
         }
     }
@@ -246,6 +296,7 @@ class CaptureViewModel(
     companion object {
         private const val TAG = "Capture"
         private const val KEY_FLASH = "capture_flash"
+        private const val KEY_VISIT_START = "capture_visit_start"
 
         /** How long a photo whose camera closed may take to appear: its JPEG and EXIF writing. */
         private const val LATE_PHOTO_WAIT_MS = 5_000

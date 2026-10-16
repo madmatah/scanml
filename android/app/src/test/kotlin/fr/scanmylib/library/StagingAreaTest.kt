@@ -128,6 +128,23 @@ class StagingAreaTest {
     }
 
     @Test
+    fun `removing the pages after a position keeps the earlier ones`() = runTest {
+        val staging = staging()
+        staging.shoot("scanned 1", shotTime)
+        staging.shoot("scanned 2", shotTime.plusSeconds(1))
+        staging.shoot("photo 1", shotTime.plusSeconds(2))
+        staging.shoot("photo 2", shotTime.plusSeconds(3))
+
+        staging.removeAfter(document, 2)
+        assertEquals(listOf("scanned 1", "scanned 2"), staging.pages(document).map { it.file.readText() })
+        assertEquals(listOf("scanned 1", "scanned 2"), staging().pages(document).map { it.file.readText() })
+        // Nothing after the last page: nothing to remove.
+        staging.removeAfter(document, 2)
+        assertEquals(2, staging.pages(document).size)
+        assertEquals(3, staging.shoot("next", shotTime.plusSeconds(4)).seq)
+    }
+
+    @Test
     fun `discarding a run deletes its photos`() = runTest {
         val staging = staging()
         val pages = listOf(staging.shoot("a", shotTime), staging.shoot("b", shotTime))

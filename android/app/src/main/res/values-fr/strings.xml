@@ -270,28 +270,51 @@
     <string name="capture_flash_on">Flash activé</string>
     <string name="capture_last_photo">Dernière photo</string>
     <string name="capture_delete_photo">Supprimer cette photo</string>
-    <string name="capture_leave_title">Arrêter les photos ?</string>
-    <string name="capture_leave_keep">Garder</string>
-    <string name="capture_leave_discard">Supprimer</string>
     <string name="capture_camera_unavailable">Impossible d’ouvrir l’appareil photo.</string>
     <string name="capture_camera_busy">L’appareil photo est indisponible pour le moment : une autre appli l’utilise peut-être.</string>
     <string name="capture_saving_photo">Enregistrement de la photo…</string>
     <string name="capture_shot_failed">La photo n’a pas pu être prise. Réessayez.</string>
     <string name="capture_shot_not_saved">La photo n’a pas pu être enregistrée : vérifiez la place libre sur le téléphone.</string>
+    <string name="capture_photos_not_deleted">Des photos n’ont pas pu être supprimées : elles sont toujours là.</string>
     <string name="capture_permission_title">Accès à l’appareil photo</string>
     <string name="capture_permission_rationale">Pour photographier les pages, ScanMyLib a besoin de l’appareil photo. Les photos restent dans l’appli jusqu’à leur envoi à votre PC : elles ne vont ni dans la galerie, ni ailleurs.</string>
     <string name="capture_permission_grant">Autoriser l’appareil photo</string>
     <string name="capture_permission_denied">L’accès à l’appareil photo n’est pas autorisé. Pour photographier les pages, autorisez-le dans les paramètres de l’appli (Autorisations › Appareil photo), ou demandez-le à nouveau.</string>
     <string name="capture_permission_settings">Ouvrir les paramètres</string>
     <plurals name="capture_count">
-        <item quantity="one">%d page</item>
-        <item quantity="many">%d pages</item>
-        <item quantity="other">%d pages</item>
+        <item quantity="one">%d photo</item>
+        <item quantity="many">%d photos</item>
+        <item quantity="other">%d photos</item>
     </plurals>
-    <plurals name="capture_leave_message">
-        <item quantity="one">%d page photographiée. La garder pour l’envoyer, ou la supprimer ?</item>
-        <item quantity="many">%d pages photographiées. Les garder pour les envoyer, ou les supprimer ?</item>
-        <item quantity="other">%d pages photographiées. Les garder pour les envoyer, ou les supprimer ?</item>
+    <plurals name="capture_count_waiting">
+        <item quantity="one">· +%d en attente</item>
+        <item quantity="many">· +%d en attente</item>
+        <item quantity="other">· +%d en attente</item>
+    </plurals>
+    <plurals name="capture_waiting_only">
+        <item quantity="one">%d page en attente</item>
+        <item quantity="many">%d pages en attente</item>
+        <item quantity="other">%d pages en attente</item>
+    </plurals>
+    <plurals name="capture_leave_title">
+        <item quantity="one">Garder %d photo ?</item>
+        <item quantity="many">Garder les %d photos ?</item>
+        <item quantity="other">Garder les %d photos ?</item>
+    </plurals>
+    <plurals name="capture_leave_waiting">
+        <item quantity="one">%d page déjà en attente n’est pas concernée.</item>
+        <item quantity="many">Les %d pages déjà en attente ne sont pas concernées.</item>
+        <item quantity="other">Les %d pages déjà en attente ne sont pas concernées.</item>
+    </plurals>
+    <plurals name="capture_leave_keep">
+        <item quantity="one">Garder %d photo</item>
+        <item quantity="many">Garder les %d photos</item>
+        <item quantity="other">Garder les %d photos</item>
+    </plurals>
+    <plurals name="capture_leave_discard">
+        <item quantity="one">Supprimer %d photo</item>
+        <item quantity="many">Supprimer ces %d photos</item>
+        <item quantity="other">Supprimer ces %d photos</item>
     </plurals>
     <plurals name="message_unsupported_photos">
         <item quantity="one">%d photo ignorée : le PC n’accepte que les formats JPEG, PNG et WebP.</item>

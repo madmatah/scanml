@@ -22,14 +22,14 @@ organize the results on disk as Markdown + illustrations that AI agents can read
 | `ocr-fake` (development only) | api image, profile `fake-ocr`: canned results instead of `ocr`; refuses the production project and a socket that a sandbox serves | ours | **none** | `/run/scanmylib` (socket), tmpfs `/tmp` |
 | Android app | `android/` | ours | LAN | its own app storage |
 | APK builder | throwaway `eclipse-temurin` container | Google/Gradle toolchain (checksums verified) | yes (build only) | `android/`, `VERSION` (ro), SDK/Gradle caches under `ANDROID_DIR` (the development stack has its own) |
-| APK signer | second throwaway container | ours | **none** | unsigned APK, build-tools (ro; it runs copies of `zipalign` and `apksigner` checked against pinned SHA-256, and signs only the variant's application id and versionCode), the signing key `ANDROID_KEYSTORE_DIR` (ro; the build never sees it) |
+| APK signer | second throwaway container | ours | **none** | unsigned APK, build-tools (ro; it runs copies of `zipalign` and `apksigner` checked against pinned SHA-256, and signs only the variant's application id and versionCode), the signing key `ANDROID_KEYSTORE_DIR` (ro; the build never sees it); it writes the published APK and its metadata, `scanmylib.json` |
 
 Nothing is installed on the host itself. Host paths are configured in `.env` (a strict `KEY=VALUE` format that every
 script checks, `scripts/lib/stack.py`), which also names the stack (`COMPOSE_PROJECT_NAME`, `IMAGE_PREFIX`: `scanmylib`
 in production, written by `scripts/setup.sh`; a worktree's development stack is `scanmylib-dev`, written by
 `scripts/dev-env.sh`, see `CLAUDE.md`):
 
-- `DATA_DIR` (e.g. `/data/USER/scanmylib`) → `run/` (Unix socket), `ocr-cache/`, `state/` (api DB, token, thumbnails), `app/` (built APK), `backups/` (state copies made by `scripts/deploy.sh`), `logs/`.
+- `DATA_DIR` (e.g. `/data/USER/scanmylib`) → `run/` (Unix socket), `ocr-cache/`, `state/` (api DB, token, thumbnails), `app/` (built APK and its metadata `scanmylib.json`, relayed by `/api/health`), `backups/` (state copies made by `scripts/deploy.sh`), `logs/`.
 - `SANDBOX_DIR` (e.g. `DATA_DIR/sandbox`) → the OCR venvs and models, mounted read-only; `SANDBOX_SETUP_DIR` (production only, the same directory) is where `ocr-setup` writes them.
 - `ANDROID_DIR` (e.g. `DATA_DIR/android`) → Android SDK, Gradle caches, signing key (`keystore/`, or `ANDROID_KEYSTORE_DIR`: the development stack uses production's key, read-only, with its own toolchain).
 - `LIBRARY_DIR` (e.g. `~/Documents/ScanMyLib`) → the organized library (pure content, see below).

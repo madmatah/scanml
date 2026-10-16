@@ -39,7 +39,8 @@
 #      VERSION
 #   5. scripts/verify-sandbox.sh; if it fails, the OCR service is stopped. Once it passes, the new
 #      images become :deployed: production runs them
-#   6. with --apk: scripts/build-apk.sh (tests, release build, lint, signing, publication)
+#   6. with --apk: scripts/build-apk.sh (tests, release build, lint, signing, publication), then a check
+#      that /api/health offers the published APK
 #   7. the annotated tag vVERSION on this commit (unless it exists), pushed to origin
 # A real run ignores SIGHUP (a lost terminal does not stop it halfway) and is also logged to
 # DATA_DIR/logs/deploy-<time>.log. On failure, it says what state production is in after the
@@ -380,8 +381,9 @@ on_exit() {
                 ;;
             apk)
                 echo "$WHO runs $VERSION (healthy, sandbox isolated, its images tagged :deployed); the APK was"
-                echo "not published, the phone keeps the previous app. Fix the problem, then run"
-                echo "scripts/build-apk.sh here (or roll back)."
+                echo "not published, or the api does not offer it to the phones (its metadata, scanmylib.json):"
+                echo "the phones keep the previous app. Fix the problem, then run scripts/build-apk.sh here"
+                echo "(or roll back)."
                 [[ -n $BACKUP ]] && echo "Backup of the state before the restart: $BACKUP"
                 ;;
             tag)
@@ -562,6 +564,16 @@ STEP=apk
 say "6. Android app"
 if ((BUILD_APK)); then
     run scripts/build-apk.sh
+    # The app offers the update from what /api/health reports of the published APK.
+    if ((DRY_RUN)); then
+        echo "  would check that http://127.0.0.1:$API_PORT/api/health offers the APK $VERSION"
+    else
+        offered=$(curl -fsS --max-time 5 "http://127.0.0.1:$API_PORT/api/health" \
+            | python3 -c 'import json, sys; print((json.load(sys.stdin).get("apk") or {}).get("version"))') \
+            || die "the api does not answer on http://127.0.0.1:$API_PORT/api/health"
+        [[ $offered == "$VERSION" ]] || die "the api offers the APK '$offered', not $VERSION (see $DATA_DIR/app/scanmylib.json)"
+        echo "  the api offers the APK $offered to the phones"
+    fi
 else
     echo "  skipped (no --apk)"
 fi

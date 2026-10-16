@@ -176,7 +176,8 @@ data or library; an `--api` URL without an explicit port is refused) without
   Before signing, it reads the package name and versionCode of the APK with
   the checked `apksigner.jar`'s manifest parser and refuses anything but the
   variant's app (`fr.scanmylib.dev` for the development app, `fr.scanmylib`
-  for the release) with the versionCode of `VERSION`: a branch that drops the
+  for the release) with the versionCode the script gave the build (`VERSION`'s
+  for the release): a branch that drops the
   `.dev` suffix never gets an app signed that would install over the
   production one. The development app is built with the development stack's
   own SDK and Gradle caches (a build of a branch never writes to production's

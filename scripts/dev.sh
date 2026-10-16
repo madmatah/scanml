@@ -12,7 +12,9 @@
 #        scripts/dev.sh down                stop and remove the containers (data and images stay)
 #        scripts/dev.sh status              containers, api health and the worktree they run from
 #        scripts/dev.sh logs [service...]   follow the logs (api, ocr-fake, ocr)
-#        scripts/dev.sh build [service...]  build the images (default: api; ocr for the sandbox)
+#        scripts/dev.sh build [service...]  build the images (default: api; ocr for the sandbox); the
+#                                           api reports the version of a development build, from
+#                                           git (scripts/lib/version.py)
 #        scripts/dev.sh compose COMMAND...  any other docker compose command on this stack, e.g.
 #                                           "compose exec api sh", among those that stay within it
 #                                           (scripts/lib/stack.py, check-compose-command): no
@@ -67,7 +69,15 @@ build() {
         [[ $service == api || $service == ocr ]] || die "only api and ocr are built, not '$service'"
     done
     [[ " $* " == *" ocr "* ]] && echo "The ocr image: the sandbox of scripts/dev.sh up --real-ocr."
-    compose build "$@"
+    if [[ " $* " == *" api "* ]]; then
+        local versions
+        versions=$(python3 "$SCRIPTS_LIB/version.py" dev "$ROOT") || die "cannot tell the version of this build (see above)"
+        echo "The api reports version ${versions%% *}."
+        compose build --build-arg "DEV_VERSION=${versions%% *}" api
+    fi
+    if [[ " $* " == *" ocr "* ]]; then
+        compose build ocr
+    fi
 }
 
 up() {

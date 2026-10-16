@@ -84,6 +84,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts" / "lib"))
 sys.dont_write_bytecode = True  # no __pycache__ left in the checkout
 import stack  # noqa: E402  (scripts/lib/stack.py: the strict .env format)
+import version  # noqa: E402  (scripts/lib/version.py: the version of a build)
 
 
 def read_env(path: Path) -> dict[str, str]:
@@ -195,9 +196,18 @@ def main() -> int:
     print(f"== API {args.api}")
     status, health = api.json("GET", "/api/health")
     check(status == 200 and health.get("name") == "ScanMyLib", f"health: {status} {health}", failures)
-    version_file = ROOT / "VERSION"
-    if version_file.is_file() and health.get("version") != version_file.read_text().strip():
-        print(f"  note  the api runs version {health.get('version')}, this checkout is {version_file.read_text().strip()}")
+    # The api of a development stack reports the version of its build (scripts/lib/version.py): another
+    # one means a stack built from another commit or worktree.
+    running = health.get("version")
+    try:
+        release = version.read_release(ROOT)
+        expected = version.format_release(release)
+        if isinstance(running, str) and "-dev" in running:
+            expected = version.dev_version(ROOT, release)
+    except (OSError, ValueError):
+        expected = None
+    if expected and running != expected:
+        print(f"  note  the api runs version {running}, this checkout is {expected}")
     status, _ = Api(args.api, "wrong-token").json("GET", "/api/status")
     check(status == 401, f"wrong token rejected ({status})", failures)
     # Where this api really writes: the library it reports, whatever the options said.

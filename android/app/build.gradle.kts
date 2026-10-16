@@ -6,10 +6,12 @@ plugins {
     alias(libs.plugins.androidx.room)
 }
 
-// The project has a single version, the repository's VERSION file (MAJOR.MINOR.PATCH), which the
+// A release has a single version, the repository's VERSION file (MAJOR.MINOR.PATCH), which the
 // api reports too. The versionCode is derived from it, major * 10000 + minor * 100 + patch
 // (0.2.3 -> 203), so that every release installs over the previous one; minor and patch stay
 // below 100. scripts/build-apk.sh mounts the file at /VERSION, next to the project (/workspace).
+// The dev app is a development build: its version and versionCode come from the environment (see
+// the dev build type below).
 val projectVersion: String = providers
     .fileContents(rootProject.layout.projectDirectory.file("../VERSION"))
     .asText.get().trim()
@@ -45,11 +47,11 @@ android {
         }
         // The development app (APP_VARIANT=dev, scripts/dev-env.sh): the release build under its own
         // application id and name ("ScanMyLib (dev)", src/dev/res), so that it installs next to the
-        // production app and talks to the development stack. Same signing key.
+        // production app and talks to the development stack. Same signing key. Its version is set
+        // below (androidComponents).
         create("dev") {
             initWith(getByName("release"))
             applicationIdSuffix = ".dev"
-            versionNameSuffix = "-dev"
         }
     }
 
@@ -80,6 +82,23 @@ android {
         checkReleaseBuilds = true
         // targetSdk 36 is a project requirement: raising it is a deliberate step, after testing.
         disable += "OldTargetApi"
+    }
+}
+
+// The dev app's version and versionCode, from scripts/build-apk.sh (scripts/lib/version.py): the
+// development build's version, derived from git, and the time of the build, so that each build
+// installs over the previous one. Without them (a build outside the script), VERSION's with "-dev".
+androidComponents {
+    onVariants(selector().withBuildType("dev")) { variant ->
+        val versionName = providers.environmentVariable("SCANMYLIB_DEV_VERSION_NAME")
+            .orElse("$projectVersion-dev")
+        val versionCode = providers.environmentVariable("SCANMYLIB_DEV_VERSION_CODE")
+            .map { it.toInt() }
+            .orElse(projectVersionCode)
+        variant.outputs.forEach { output ->
+            output.versionName.set(versionName)
+            output.versionCode.set(versionCode)
+        }
     }
 }
 

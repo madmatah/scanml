@@ -22,7 +22,7 @@ Pairing URI (QR code shown by the web UI): `scanmylib://pair?url=<urlencoded PUB
 
 | Method | Path | Response |
 |---|---|---|
-| GET | `/api/health` | `{"name": "ScanMyLib", "version": "0.2.3", "api": 1, "apk": {…} or null}`: `version` is the project version (`VERSION`), `api` the level of this contract, `apk` the published APK (below) |
+| GET | `/api/health` | `{"name": "ScanMyLib", "version": "0.2.3", "api": 1, "apk": {…} or null}`: `version` is the project version (`VERSION`), or a development build's (`0.2.4-dev.27+g1a2b3c4d5e6f`, `scripts/lib/version.py`), `api` the level of this contract, `apk` the published APK (below) |
 | GET | `/download/scanmylib.apk` | the Android APK (`application/vnd.android.package-archive`), 404 if not built |
 | GET | `/`, `/static/…` | web UI |
 

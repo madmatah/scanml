@@ -27,7 +27,8 @@
 # is allowed: the runner keeps it in its home directory), and the app is built and checked but
 # never signed nor published:
 #   CI=true DATA_DIR=... scripts/build-apk.sh test lint
-# The version is the repository's VERSION file (see android/app/build.gradle.kts).
+# The release app's version is VERSION; the dev app's comes from git, its versionCode from the time
+# of the build (scripts/lib/version.py), so that each build installs over the previous one.
 #
 # --create-signing-key creates the release key in ANDROID_KEYSTORE_DIR if there is none yet
 # (scripts/setup.sh, first installation of production); otherwise a missing key is an error.
@@ -49,7 +50,7 @@
 # 1. Build: the official eclipse-temurin:21-jdk image runs Gradle as your uid, with network
 #    access (SDK, Gradle and Maven downloads) and only these bind mounts:
 #      android/                      -> /workspace          sources; the Gradle wrapper is generated here once
-#      VERSION                       -> /VERSION            read-only: the version of the app
+#      VERSION                       -> /VERSION            read-only: the version of the release app
 #      $ANDROID_DIR/sdk              -> /opt/android-sdk    Android SDK (command-line tools, platform, build-tools)
 #      $ANDROID_DIR/gradle           -> /gradle             GRADLE_USER_HOME (distribution, dependency caches)
 #      $ANDROID_DIR/user-home        -> /android-user-home  ANDROID_USER_HOME, i.e. what would be ~/.android
@@ -60,15 +61,16 @@
 #    only runs these: whatever a build (which writes to the SDK) left there never runs next to the
 #    key. Before signing, it reads the package name and versionCode of the unsigned APK (with the
 #    checked apksigner.jar's own manifest parser) and refuses anything but the variant's app,
-#    fr.scanmylib.dev (dev) or fr.scanmylib (release), with the versionCode of VERSION: a change
-#    that drops the ".dev" suffix never gets the production app signed in a worktree. It signs
-#    the APK and publishes it as $DATA_DIR/app/scanmylib.apk, with its application id, version
-#    (VERSION), versionCode, SHA-256 and size as $DATA_DIR/app/scanmylib.json, which the api
-#    serves in /api/health so that the app can offer the update: both are written in full first,
-#    the previous metadata removed, then the APK and its metadata renamed into place, so that a
-#    publish cut short leaves no metadata (no offer), never the previous APK's. Both variants are
-#    signed with the same key. With --create-signing-key and no key yet, a first container
-#    without network creates it (read-write mount, the only one).
+#    fr.scanmylib.dev (dev) or fr.scanmylib (release), with the versionCode this script gave the
+#    build (VERSION's for the release): a change that drops the ".dev" suffix never gets the
+#    production app signed in a worktree. It signs the APK and publishes it as
+#    $DATA_DIR/app/scanmylib.apk, with its application id, version, versionCode, SHA-256 and size
+#    as $DATA_DIR/app/scanmylib.json, which the api serves in /api/health so that the app can
+#    offer the update: both are written in full first, the previous metadata removed, then the
+#    APK and its metadata renamed into place, so that a publish cut short leaves no metadata (no
+#    offer), never the previous APK's. Both variants are signed with the same key. With
+#    --create-signing-key and no key yet, a first container without network creates it
+#    (read-write mount, the only one).
 #
 # Downloads are verified: the Android command-line tools against the SHA-1 and size published in
 # Google's SDK repository XML, the Gradle distribution and wrapper jar against the SHA-256 sums
@@ -280,8 +282,13 @@ checked against their pinned SHA-256)"
 # checked first: the file is written without a JSON tool.
 write_apk_metadata() {  # write_apk_metadata FILE PACKAGE VERSION_NAME VERSION_CODE SHA256 SIZE
     local file=$1 package=$2 name=$3 code=$4 sha256=$5 size=$6
-    [[ $package =~ ^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$ && $name =~ ^[0-9]{1,3}\.[0-9]{1,2}\.[0-9]{1,2}$ \
-        && $code =~ ^[1-9][0-9]{0,8}$ && $sha256 =~ ^[0-9a-f]{64}$ && $size =~ ^[1-9][0-9]{0,11}$ ]] \
+    # ASCII classes whatever the locale (en_US.UTF-8 in the signing container): there, [0-9A-Za-z]
+    # also matches digits and letters of other scripts, which the api and the app refuse.
+    local LC_ALL=C
+    # The version: a release (MAJOR.MINOR.PATCH) or a development build (scripts/lib/version.py).
+    [[ $package =~ ^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$ && ${#name} -le 64 \
+        && $name =~ ^[0-9]{1,3}\.[0-9]{1,2}\.[0-9]{1,3}(-[0-9A-Za-z.]+)?(\+[0-9A-Za-z.]+)?$ \
+        && $code =~ ^[1-9][0-9]{0,9}$ && $sha256 =~ ^[0-9a-f]{64}$ && $size =~ ^[1-9][0-9]{0,11}$ ]] \
         || die "unexpected APK metadata: '$package' '$name' '$code' '$sha256' '$size'"
     printf '{"application_id": "%s", "version_name": "%s", "version_code": %s, "sha256": "%s", "size": %s}\n' \
         "$package" "$name" "$code" "$sha256" "$size" > "$file"
@@ -361,16 +368,6 @@ $(tr '\n' ' ' <<< "$hidden")(git update-index --no-assume-unchanged --no-skip-wo
     [[ $remote == "$head" ]] || die "HEAD ${head:0:12} differs from main on origin (${remote:0:12}): pull or push first"
 }
 
-# The versionCode of VERSION (MAJOR.MINOR.PATCH): major * 10000 + minor * 100 + patch, as
-# android/app/build.gradle.kts computes it.
-version_code() {  # version_code VERSION_FILE
-    local version
-    version=$(tr -d '[:space:]' < "$1")
-    [[ $version =~ ^([0-9]{1,3})\.([0-9]{1,2})\.([0-9]{1,2})$ ]] \
-        || die "VERSION must be MAJOR.MINOR.PATCH (minor and patch below 100), not '$version'"
-    echo $((10#${BASH_REMATCH[1]} * 10000 + 10#${BASH_REMATCH[2]} * 100 + 10#${BASH_REMATCH[3]}))
-}
-
 main() {
     local create_key=0
     if [[ ${1:-} == --create-signing-key ]]; then
@@ -421,11 +418,8 @@ main() {
     fi
     [[ $android_dir == /* ]] || die "ANDROID_DIR must be an absolute path"
     [[ -f $ROOT/VERSION ]] || die "missing $ROOT/VERSION"
-    local expected_package=$APPLICATION_ID expected_version_code expected_version_name
+    local expected_package=$APPLICATION_ID
     [[ $variant == dev ]] && expected_package=$APPLICATION_ID.dev
-    expected_version_code=$(version_code "$ROOT/VERSION")
-    # The app's versionName is VERSION (android/app/build.gradle.kts), checked by version_code.
-    expected_version_name=$(tr -d '[:space:]' < "$ROOT/VERSION")
 
     local gradle_args=("$@")
     ((${#gradle_args[@]})) || gradle_args=(test "assemble${variant^}" lint)
@@ -457,6 +451,20 @@ with scripts/build-apk.sh --create-signing-key in production's checkout (scripts
         flock 8
     fi
 
+    # The release app's version is VERSION, which android/app/build.gradle.kts reads. The dev app's is
+    # a development build's (scripts/lib/version.py), given to the build below; its versionCode is
+    # taken once the lock is held, above the one of the APK already published.
+    local expected_version_code expected_version_name versions version_env=() published=()
+    [[ $variant == dev ]] && published=("$data_dir/app/scanmylib.json")
+    versions=$(python3 "$SCRIPTS_LIB/version.py" "$variant" "$ROOT" "${published[@]}") \
+        || die "cannot tell the version of the app (see above)"
+    read -r expected_version_name expected_version_code <<< "$versions"
+    if [[ $variant == dev ]]; then
+        version_env=(--env "SCANMYLIB_DEV_VERSION_NAME=$expected_version_name"
+            --env "SCANMYLIB_DEV_VERSION_CODE=$expected_version_code")
+    fi
+    echo "Version $expected_version_name (versionCode $expected_version_code)"
+
     local prefix=${SCANMYLIB_CONTAINER_PREFIX:-scanmylib-android}
     [[ $prefix =~ ^[a-zA-Z0-9][a-zA-Z0-9_.-]*$ ]] || die "invalid SCANMYLIB_CONTAINER_PREFIX: '$prefix'"
     local build_container=$prefix-build-$$ key_container=$prefix-key-$$ sign_container=$prefix-sign-$$
@@ -482,6 +490,7 @@ with scripts/build-apk.sh --create-signing-key in production's checkout (scripts
         --env GRADLE_VERSION="$GRADLE_VERSION" \
         --env SDK_PACKAGES="$SDK_PACKAGES" \
         --env SDK_REPOSITORY_URL="$SDK_REPOSITORY_URL" \
+        "${version_env[@]}" \
         --volume "$ROOT/android:/workspace" \
         --mount "type=bind,source=$ROOT/VERSION,target=/VERSION,readonly" \
         --volume "$android_dir/sdk:/opt/android-sdk" \

@@ -16,7 +16,9 @@ from pathlib import Path
 APK_DOWNLOAD_PATH = "/download/scanmylib.apk"
 
 _APPLICATION_ID = re.compile(r"[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+")
-_VERSION_NAME = re.compile(r"[0-9]{1,3}\.[0-9]{1,2}\.[0-9]{1,2}")
+#: A release (MAJOR.MINOR.PATCH) or a development build, e.g. 0.2.4-dev.27+g1a2b3c4d5e6f
+#: (scripts/lib/version.py).
+_VERSION_NAME = re.compile(r"(?=.{5,64}$)[0-9]{1,3}\.[0-9]{1,2}\.[0-9]{1,3}(-[0-9A-Za-z.]+)?(\+[0-9A-Za-z.]+)?")
 _SHA256 = re.compile(r"[0-9a-f]{64}")
 _MAX_METADATA_BYTES = 4096
 _MAX_VERSION_CODE = 2**31 - 1

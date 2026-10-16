@@ -45,8 +45,11 @@ data class ApkFacts(val packageName: String, val versionCode: Long, val signers:
 
 private val DOWNLOAD_PATH = Regex("""/download/[A-Za-z0-9._-]{1,64}\.apk""")
 
-/** The versions the PC may announce, shown as is; mirrors `_VERSION_NAME` in server/scanmylib/published_apk.py. */
-private val VERSION_NAME = Regex("""[0-9]{1,3}\.[0-9]{1,2}\.[0-9]{1,2}""")
+/**
+ * The versions the PC may announce, shown as is: a release or a development build
+ * (scripts/lib/version.py); mirrors `_VERSION_NAME` in server/scanmylib/published_apk.py.
+ */
+private val VERSION_NAME = Regex("""(?=.{5,64}$)[0-9]{1,3}\.[0-9]{1,2}\.[0-9]{1,3}(-[0-9A-Za-z.]+)?(\+[0-9A-Za-z.]+)?""")
 
 /** The largest APK the app downloads: far above its own size, well below a full phone. */
 internal const val MAX_APK_SIZE = 512L * 1024 * 1024

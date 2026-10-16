@@ -564,14 +564,21 @@ STEP=apk
 say "6. Android app"
 if ((BUILD_APK)); then
     run scripts/build-apk.sh
-    # The app offers the update from what /api/health reports of the published APK.
+    # The app offers the update from what /api/health reports of the published APK: the release,
+    # or in a rehearsal the dev app, a development build, whose version build-apk.sh published.
+    apk_version=$VERSION
     if ((DRY_RUN)); then
-        echo "  would check that http://127.0.0.1:$API_PORT/api/health offers the APK $VERSION"
+        echo "  would check that http://127.0.0.1:$API_PORT/api/health offers the APK ${REHEARSAL:+(the dev app) }$apk_version"
     else
+        if [[ -n $REHEARSAL ]]; then
+            apk_version=$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["version_name"])' \
+                "$DATA_DIR/app/scanmylib.json") || die "cannot read the version of the dev app in $DATA_DIR/app/scanmylib.json"
+        fi
         offered=$(curl -fsS --max-time 5 "http://127.0.0.1:$API_PORT/api/health" \
             | python3 -c 'import json, sys; print((json.load(sys.stdin).get("apk") or {}).get("version"))') \
             || die "the api does not answer on http://127.0.0.1:$API_PORT/api/health"
-        [[ $offered == "$VERSION" ]] || die "the api offers the APK '$offered', not $VERSION (see $DATA_DIR/app/scanmylib.json)"
+        [[ $offered == "$apk_version" ]] \
+            || die "the api offers the APK '$offered', not $apk_version (see $DATA_DIR/app/scanmylib.json)"
         echo "  the api offers the APK $offered to the phones"
     fi
 else

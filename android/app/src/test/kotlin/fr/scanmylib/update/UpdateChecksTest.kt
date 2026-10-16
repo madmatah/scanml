@@ -59,8 +59,15 @@ class UpdateChecksTest {
 
     @Test
     fun `nothing is offered with a version or a size the server would not announce`() {
-        assertNotNull(offeredUpdate(pc, apk.copy(version = "123.45.67"), app, 700))
-        for (version in listOf("0.8", "0.8.0.1", "0.8.0-beta", "1234.0.0", "0.100.0", "0.8.0\n", "ScanMyLib 0.8.0", "")) {
+        // A release, or a development build (scripts/lib/version.py), up to 64 characters.
+        val longest = "0.2.4-dev+g" + "a".repeat(53)
+        val accepted = listOf("123.45.67", "0.2.4-dev.27+g1a2b3c4d5e6f", "0.2.4-dev+g1a2b3c4d5e6f.dirty", "0.2.4-dev")
+        for (version in accepted + longest) {
+            assertNotNull(version, offeredUpdate(pc, apk.copy(version = version), app, 700))
+        }
+        val tooLong = longest + "a"
+        val odd = listOf("0.8", "0.8.0.1", "0.8.0-", "0.8.0+", "0.8.0-dév", tooLong, "1234.0.0", "0.100.0", "0.8.0\n")
+        for (version in odd + listOf("ScanMyLib 0.8.0", "")) {
             assertNull(version, offeredUpdate(pc, apk.copy(version = version), app, 700))
         }
         assertNotNull(offeredUpdate(pc, apk.copy(size = MAX_APK_SIZE), app, 700))

@@ -130,15 +130,19 @@ The user's account holds many secrets, and the OCR stack (PaddlePaddle, PaddleOC
   the development slot's own Android SDK and Gradle caches (`<DATA_DIR>-dev/android`, downloaded and verified
   by the first build) and signed with production's key, which only the signing container mounts, read-only, after
   checking its tools against pinned checksums; that container signs nothing but the variant's application id
-  (`fr.scanmylib.dev`, or `fr.scanmylib` for the release) with the versionCode of `VERSION`, read from the APK itself,
+  (`fr.scanmylib.dev`, or `fr.scanmylib` for the release) with the versionCode the script gave the build, read from
+  the APK itself,
   so a change that drops the `.dev` suffix never gets a production app signed. It installs next to the production
   app (`fr.scanmylib`, "ScanMyLib")
   and is published as `<DATA_DIR>-dev/app/scanmylib.apk`, offered by the development stack's Pairing tab
   (`http://<LAN IP>:8770`). The production APK is only built by `scripts/deploy.sh --apk`.
-- **One version.** `VERSION` (MAJOR.MINOR.PATCH) is the version of the api (`/api/health`) and of the app: its
-  `versionName` is `VERSION` and its `versionCode` is major × 10000 + minor × 100 + patch (minor and patch stay below
-  100), so that every release installs over the previous one. Bump it in the pull request of any change to deploy;
-  each deployed version is tagged `vX.Y.Z`.
+- **One version.** `VERSION` (MAJOR.MINOR.PATCH) is the version of a release: of production's api (`/api/health`) and
+  of the release app, whose `versionCode` is major × 10000 + minor × 100 + patch (minor and patch stay below 100), so
+  that every release installs over the previous one. Bump it in the pull request of any change to deploy; each
+  deployed version is tagged `vX.Y.Z`. Development builds (the development stack's api, the dev app, CI) are versioned
+  from git, as a pre-release of the next patch: `0.2.4-dev.27+g1a2b3c4d5e6f` is 27 commits after `v0.2.3`
+  (`scripts/lib/version.py`); the dev app's versionCode is the time of its build, so that each build installs over the
+  previous one.
 - **Continuous integration.** `.github/workflows/ci.yml` runs the server, web UI, OCR sandbox (stdlib, no models),
   scripts (`scripts/tests/`) and Android (`scripts/build-apk.sh test lint`, never signed; without a `.env` it only
   runs with `CI=true`, never in production's directories nor in the home directory, except GitHub Actions'

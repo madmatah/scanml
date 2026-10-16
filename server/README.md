@@ -38,8 +38,10 @@ Pass pytest options after the image name, e.g. `... scanmylib-dev-api:test pytho
 The runtime image (default target) is built by docker compose (`scripts/dev.sh build api`
 in a worktree, `scripts/deploy.sh` in production), which also
 passes the repository root as the build context `project`: the image gets the
-repository's `VERSION`, the version the api reports (`scanmylib/__init__.py`). A plain
-`docker build` of this directory reports `unknown`.
+repository's `VERSION`, the version the api reports (`scanmylib/__init__.py`). `scripts/dev.sh`
+passes the version of a development build instead, derived from git (build argument
+`DEV_VERSION`, `scripts/lib/version.py`). A plain `docker build` of this directory reports
+`unknown`.
 
 Dependencies are pinned with hashes in `requirements.lock` / `requirements-test.lock`,
 generated from `pyproject.toml` in a throwaway container:

@@ -39,6 +39,17 @@ def test_health_offers_the_published_apk(client, settings):
     }
 
 
+@pytest.mark.parametrize(
+    "version",
+    # The last one, 64 characters, the longest accepted.
+    ["0.3.0", "0.2.4-dev.27+g1a2b3c4d5e6f", "0.2.4-dev+g1a2b3c4d5e6f.dirty", "0.2.4-dev", "0.2.4-dev+g" + "a" * 53],
+)
+def test_releases_and_development_builds_are_offered(tmp_path, version):
+    apk = tmp_path / "app" / "scanmylib.apk"
+    publish(apk, {**METADATA, "version_name": version})
+    assert published_apk(apk)["version"] == version
+
+
 def test_no_apk_or_no_metadata_offers_nothing(tmp_path):
     apk = tmp_path / "app" / "scanmylib.apk"
     assert published_apk(apk) is None
@@ -71,6 +82,11 @@ def test_metadata_of_another_apk_offers_nothing(tmp_path):
         {**METADATA, "version_code": "10203"},
         {**METADATA, "version_name": "1.2"},
         {**METADATA, "version_name": "1.2.3<script>"},
+        {**METADATA, "version_name": "1.2.3-dev\n"},
+        {**METADATA, "version_name": "0.2.4-dev+g" + "a" * 54},  # 65 characters
+        {**METADATA, "version_name": "1.2.3-dév"},
+        {**METADATA, "version_name": "1.2.3-dev\"x"},
+        {**METADATA, "version_name": "1.2.3+"},
         {**METADATA, "application_id": "Fr.Scanmylib"},
         {**METADATA, "application_id": "scanmylib"},
         {**METADATA, "sha256": SHA256.upper()},

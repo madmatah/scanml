@@ -19,6 +19,7 @@ import http.server
 import json
 import os
 import pwd
+import re
 import shutil
 import socket
 import sqlite3
@@ -34,11 +35,16 @@ SHIM = Path(__file__).resolve().parent / "docker_shim.py"
 #: What the scripts need from the repository (the docker builds are only logged).
 COPIED = [
     "compose.yaml", ".env.example", ".gitignore", "VERSION", "scripts/lib/common.sh", "scripts/lib/stack.py",
+    "scripts/lib/version.py",
     "scripts/dev-env.sh", "scripts/dev.sh", "scripts/prod.sh", "scripts/deploy.sh", "scripts/build-apk.sh",
     "scripts/setup.sh", "scripts/verify-sandbox.sh", "scripts/e2e_test.py",
 ]
 VERSION = (REPO / "VERSION").read_text().strip()
 VERSION_CODE = sum(int(part) * factor for part, factor in zip(VERSION.split("."), (10000, 100, 1)))
+#: The version of a development build of the test repositories, which have no tag
+#: (scripts/lib/version.py): the next patch, then the commit.
+_MAJOR, _MINOR, _PATCH = (int(part) for part in VERSION.split("."))
+DEV_VERSION = re.escape(f"{_MAJOR}.{_MINOR}.{_PATCH + 1}-dev+g") + "[0-9a-f]{12}"
 REAL_DOCKER = shutil.which("docker")
 #: The home directory of the password database, which the scripts refuse whatever $HOME says.
 PASSWD_HOME = pwd.getpwuid(os.getuid()).pw_dir
@@ -315,6 +321,13 @@ class DevStackTest(ScriptsTestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue(any(" ps" in command and "config" not in command for command in self.commands()))
 
+    def test_the_development_api_reports_a_development_version(self):
+        self.write_dev_env(self.dev_env())
+        result = self.run_script(self.worktree, "dev.sh", "build")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        [build] = [command for command in self.commands() if re.search(r"^compose .* build ", command)]
+        self.assertRegex(build, rf" build --build-arg DEV_VERSION={DEV_VERSION} api$")
+
     def test_dev_sh_refuses_whatever_production_owns(self):
         prod, base = str(self.prod), str(self.base)
         cases = [
@@ -507,6 +520,7 @@ class DeployTest(ScriptsTestCase):
         self.assertEqual(sorted(str(path.relative_to(snapshot)) for path in snapshot.rglob("*") if path.is_file()),
                          sorted(COPIED), "the export is the commit, without .env")
         self.assertIn(f"--env-file {self.primary}/.env", build)
+        self.assertNotIn("DEV_VERSION", build, "production's api reports VERSION")
         tests = commands.index(next(c for c in commands if "scanmylib-deploy-pytest" in c))
         self.assertLess(commands.index(build), tests, "the tests run on the new images")
         up = next(command for command in commands if " up -d --no-build --wait" in command)
@@ -739,9 +753,22 @@ class DeployTest(ScriptsTestCase):
         snapshot = self.base / "built"
         self.rules([{"match": r"^compose .* build api ocr$", "snapshot": str(snapshot)}]
                    + sandbox_rules(f"{self.prod}/sandbox", str(data), kind="ocr-fake"))
-        result = self.run_script(self.worktree, "deploy.sh", "--first-install", timeout=120,
+        # The rehearsal publishes the dev app, a development build: the api must offer the version
+        # build-apk.sh published (the stand-in builds nothing: its metadata is written here).
+        (data / "app").mkdir(parents=True)
+        (data / "app" / "scanmylib.json").write_text(json.dumps({"version_name": "0.2.4-dev+g1a2b3c4d5e6f.dirty"}))
+        rehearsal.apk_version = VERSION
+        result = self.run_script(self.worktree, "deploy.sh", "--first-install", "--apk", timeout=120,
+                                 SCANMYLIB_DEPLOY_REHEARSAL="scanmylib-review-test")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(f"the api offers the APK '{VERSION}', not 0.2.4-dev+g1a2b3c4d5e6f.dirty ",
+                      result.stdout + result.stderr)
+        rehearsal.apk_version = "0.2.4-dev+g1a2b3c4d5e6f.dirty"
+        self.log.unlink()
+        result = self.run_script(self.worktree, "deploy.sh", "--first-install", "--apk", timeout=120,
                                  SCANMYLIB_DEPLOY_REHEARSAL="scanmylib-review-test")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn(f"the api offers the APK {rehearsal.apk_version} to the phones", result.stdout)
         self.assertIn("rehearsal: no tag, no push", result.stdout)
         self.assertIn("uncommitted or untracked changes", result.stdout)
         self.assertNotIn("# uncommitted", (snapshot / "compose.yaml").read_text())
@@ -853,24 +880,41 @@ class BuildApkTest(ScriptsTestCase):
         self.assertIn(f"{dev}/android/sdk/build-tools/36.0.0:/build-tools:ro", sign)
         self.assertIn(f"{dev}/app:/out", sign)
         self.assertIn("APP_VARIANT=dev", sign)
-        # The signer refuses any other app than fr.scanmylib.dev with the versionCode of VERSION.
+        # A development build: its version comes from git, its versionCode from the time of the build.
+        name = re.search(rf"--env SCANMYLIB_DEV_VERSION_NAME=({DEV_VERSION}) ", build)
+        code = re.search(r"--env SCANMYLIB_DEV_VERSION_CODE=([0-9]+) ", build)
+        self.assertIsNotNone(name, build)
+        self.assertIsNotNone(code, build)
+        self.assertGreater(int(code[1]), 400_000)
+        self.assertIn(f"Version {name[1]} (versionCode {code[1]})", result.stdout)
+        # The signer refuses any other app than fr.scanmylib.dev with that versionCode.
         self.assertIn("EXPECTED_PACKAGE=fr.scanmylib.dev ", sign)
-        self.assertIn(f"EXPECTED_VERSION_CODE={VERSION_CODE} ", sign)
+        self.assertIn(f"EXPECTED_VERSION_CODE={code[1]} ", sign)
         # The definitions, not only their calls in sign_main ("declare -f" prints "name () ").
         self.assertIn("apk_identity () ", sign)
         # Its version is published next to it, for /api/health.
-        self.assertIn(f"EXPECTED_VERSION_NAME={VERSION} ", sign)
+        self.assertIn(f"EXPECTED_VERSION_NAME={name[1]} ", sign)
         self.assertIn("write_apk_metadata () ", sign)
+        # A later build installs over the published one, even within the same minute; uncommitted
+        # changes say so.
+        (self.worktree / "VERSION").write_text(VERSION + "\n\n")
+        Path(f"{dev}/app/scanmylib.json").write_text(json.dumps({"version_code": int(code[1]) + 5}))
+        self.log.unlink()
+        result = self.run_script(self.worktree, "build-apk.sh")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        build, sign = self.runs()
+        self.assertRegex(build, rf"--env SCANMYLIB_DEV_VERSION_NAME={DEV_VERSION}\.dirty ")
+        self.assertIn(f"EXPECTED_VERSION_CODE={int(code[1]) + 6} ", sign)
 
     def write_apk_metadata(self, file: Path, *values: str) -> subprocess.CompletedProcess:
-        """Runs write_apk_metadata of build-apk.sh, as the signing container does."""
+        """Runs write_apk_metadata of build-apk.sh, as the signing container does, in its locale."""
         script = (REPO / "scripts" / "build-apk.sh").read_text()
         function = script[script.index("write_apk_metadata() {"):]
         function = function[:function.index("\n}\n") + 3]
         return subprocess.run(
             ["bash", "-c", 'die() { echo "error: $*" >&2; exit 1; }\n' + function + '\nwrite_apk_metadata "$@"',
              "bash", str(file), *values],
-            capture_output=True, text=True, check=False,
+            capture_output=True, text=True, check=False, env={**os.environ, "LC_ALL": "en_US.UTF-8"},
         )
 
     def test_the_published_apk_metadata_is_checked_json(self):
@@ -878,6 +922,12 @@ class BuildApkTest(ScriptsTestCase):
         out.mkdir()
         sha256 = "0123456789abcdef" * 4
         metadata = out / ".scanmylib.json.partial"
+        longest = "0.2.4-dev+g" + "a" * 53  # 64 characters
+        for name in ("0.2.4-dev.27+g1a2b3c4d5e6f", "0.2.4-dev+g1a2b3c4d5e6f.dirty", "0.2.4-dev", longest):
+            with self.subTest(name=name):
+                result = self.write_apk_metadata(metadata, "fr.scanmylib.dev", name, "416057", sha256, "4567")
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(json.loads(metadata.read_text())["version_name"], name)
         result = self.write_apk_metadata(metadata, "fr.scanmylib.dev", "1.2.3", "10203", sha256, "4567")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(metadata.read_text()), {
@@ -888,6 +938,10 @@ class BuildApkTest(ScriptsTestCase):
         # Anything that could break the JSON, or that the app could not trust, is refused.
         for values in [('fr.scanmylib", "x": "', "1.2.3", "10203", sha256, "4567"),
                        ("fr.scanmylib", "1.2.3\"", "10203", sha256, "4567"),
+                       ("fr.scanmylib", "1.2.3-dev\", \"x\": \"", "10203", sha256, "4567"),
+                       ("fr.scanmylib", longest + "a", "10203", sha256, "4567"),
+                       ("fr.scanmylib", "1.2.3-dév", "10203", sha256, "4567"),
+                       ("fr.scanmylib", "١.2.3", "10203", sha256, "4567"),
                        ("fr.scanmylib", "1.2.3", "10203, \"x\": 1", sha256, "4567"),
                        ("fr.scanmylib", "1.2.3", "10203", "not-a-digest", "4567"),
                        ("fr.scanmylib", "1.2.3", "10203", sha256, "")]:
@@ -920,6 +974,10 @@ class BuildApkTest(ScriptsTestCase):
         self.assertIn("assembleRelease", build)
         self.assertIn(f"{self.prod}/android/keystore:/keystore:ro", sign)
         self.assertIn("EXPECTED_PACKAGE=fr.scanmylib ", sign)
+        # The release is VERSION, which the build reads itself.
+        self.assertIn(f"EXPECTED_VERSION_CODE={VERSION_CODE} ", sign)
+        self.assertIn(f"EXPECTED_VERSION_NAME={VERSION} ", sign)
+        self.assertNotIn("SCANMYLIB_DEV_VERSION", build)
         self.log.unlink()
         for name, prepare, expected in [
             ("a stray file", lambda: ((self.primary / "android" / "app" / "src").mkdir(parents=True),

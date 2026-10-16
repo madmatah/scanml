@@ -38,7 +38,7 @@ reference material.
 | OCR options | page orientation detection always on; unwarping of curved pages on by default for books; footnotes and sidebars kept in the Markdown |
 | Formulas | kept as LaTeX in the Markdown; rendered with KaTeX (vendored, MIT) in the web UI |
 | Page order | a page is placed by its manual position, else its effective page number (roman front matter before arabic pages), else next to its neighbors in the same capture session, else at the end; manual reordering stores positions only for the pages moved |
-| Phone capture | Google's ML Kit document scanner (retouching off by default), the app's own camera (one original photo per tap) or photos imported from the gallery |
+| Phone capture | Google's ML Kit document scanner (retouching off by default), the app's own camera (one original photo per tap) or photos imported from the gallery, from the app or shared to it by another app (only content that app's provider grants) |
 | Android build | Kotlin and Jetpack Compose; built and tested in throwaway containers; signed offline with a key kept outside the repository; no R8 shrinking |
 | Pairing and access | random bearer token, shared by QR code; plain HTTP on the local network; remote use through a VPN |
 | Deployment | Docker Compose (`api`, `ocr`), restarted automatically with Docker |

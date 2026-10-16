@@ -114,6 +114,14 @@
     <string name="camera_use_as_default_help">« Scanner » l’ouvrira directement</string>
     <string name="camera_did_not_start">Ne s’est pas lancé la dernière fois : touchez pour réessayer</string>
     <string name="camera_none_on_phone">Pas d’appareil photo sur ce téléphone</string>
+    <string name="share_title">Ajouter à…</string>
+    <string name="share_add_here">Ajouter ici</string>
+    <string name="share_nothing">Rien à importer : partagez des photos (JPEG, PNG ou WebP) depuis la galerie.</string>
+    <plurals name="share_photos">
+        <item quantity="one">%d photo à ajouter : choisissez son document.</item>
+        <item quantity="many">%d photos à ajouter : choisissez leur document.</item>
+        <item quantity="other">%d photos à ajouter : choisissez leur document.</item>
+    </plurals>
     <string name="scan_preparing">Préparation des pages…</string>
     <string name="scan_preparing_progress">%1$d sur %2$d</string>
     <string name="scan_first_page">Numéro de la première page</string>

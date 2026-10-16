@@ -38,6 +38,14 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- "Share" in the gallery or another app: the photos join a document the user picks.
+                 Only content shared by another app's provider is read (ui/share/SharedPhotos.kt). -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
         </activity>
 
         <!-- Lets Google Play services download the QR code scanner when the app is installed. -->

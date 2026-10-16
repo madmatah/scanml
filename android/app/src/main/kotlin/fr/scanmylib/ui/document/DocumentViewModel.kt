@@ -318,6 +318,16 @@ class DocumentViewModel(
         }
     }
 
+    /**
+     * Photos shared from another app, for this document: they join the run like picked photos,
+     * once only, even when the screen is recreated with the same share.
+     */
+    fun importSharedPhotos(photos: List<Uri>) {
+        if (savedState.get<Boolean>(KEY_SHARED_IMPORTED) == true) return
+        savedState[KEY_SHARED_IMPORTED] = true
+        onPhotosPicked(photos)
+    }
+
     /** Runs [addPages], which reports how many of the [total] images it has copied so far. */
     private fun prepare(total: Int, cancellable: Boolean, addPages: suspend (onProgress: (Int) -> Unit) -> Unit) {
         val id = ++preparationId
@@ -443,6 +453,7 @@ class DocumentViewModel(
 
     companion object {
         private const val TAG = "Document"
+        private const val KEY_SHARED_IMPORTED = "scan_shared_imported"
         private const val KEY_FIRST_PAGE = "scan_first_page"
         private const val KEY_CONSECUTIVE = "scan_consecutive"
         private const val MAX_FIRST_PAGE_DIGITS = 4

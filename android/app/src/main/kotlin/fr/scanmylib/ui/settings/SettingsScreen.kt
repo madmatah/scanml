@@ -61,9 +61,11 @@ import fr.scanmylib.diagnostics.CrashReporter
 import fr.scanmylib.model.ScanSource
 import fr.scanmylib.model.ScannerMode
 import fr.scanmylib.ui.components.BackButton
+import fr.scanmylib.ui.components.UpdateBanner
 import fr.scanmylib.ui.components.connectionCheckMessage
 import fr.scanmylib.ui.components.descriptionRes
 import fr.scanmylib.ui.components.labelRes
+import fr.scanmylib.update.UpdateState
 
 @Composable
 fun SettingsScreen(
@@ -73,6 +75,7 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = viewModel(factory = SettingsViewModel.Factory),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val update by viewModel.updateState.collectAsStateWithLifecycle()
     val currentOnUnpaired by rememberUpdatedState(onUnpaired)
     LaunchedEffect(viewModel) {
         viewModel.unpaired.collect { currentOnUnpaired() }
@@ -199,6 +202,30 @@ fun SettingsScreen(
             ListItem(
                 headlineContent = { Text(stringResource(R.string.settings_version, BuildConfig.VERSION_NAME)) },
                 supportingContent = { Text(stringResource(R.string.settings_about)) },
+            )
+            // Tapping it asks the PC now.
+            ListItem(
+                headlineContent = { Text(stringResource(R.string.settings_update_check)) },
+                supportingContent = {
+                    Text(
+                        stringResource(
+                            when (update) {
+                                UpdateState.Checking -> R.string.settings_update_checking
+                                UpdateState.UpToDate -> R.string.settings_update_up_to_date
+                                UpdateState.CheckFailed -> R.string.settings_update_unreachable
+                                is UpdateState.WithUpdate -> R.string.settings_update_offered
+                                UpdateState.Unknown -> R.string.settings_update_not_checked
+                            },
+                        ),
+                    )
+                },
+                modifier = Modifier.clickable(enabled = server != null, role = Role.Button, onClick = viewModel::checkForUpdate),
+            )
+            UpdateBanner(
+                update,
+                onInstall = viewModel::installUpdate,
+                onCancel = viewModel::cancelUpdate,
+                modifier = Modifier.padding(horizontal = 16.dp),
             )
             val crashReports = remember(context) { CrashReporter.reports(context) }
             var crashReport by remember { mutableStateOf(crashReports.read()) }

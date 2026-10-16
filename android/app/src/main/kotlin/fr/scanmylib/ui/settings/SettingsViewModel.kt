@@ -18,6 +18,8 @@ import fr.scanmylib.settings.AppSettings
 import fr.scanmylib.settings.SettingsRepository
 import fr.scanmylib.sync.SyncScheduler
 import fr.scanmylib.ui.container
+import fr.scanmylib.update.AppUpdater
+import fr.scanmylib.update.UpdateState
 import java.io.IOException
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -42,7 +44,17 @@ class SettingsViewModel(
     private val pairing: PairingManager,
     private val syncScheduler: SyncScheduler,
     private val api: (ServerConfig) -> ScanMyLibApi,
+    private val updates: AppUpdater,
 ) : ViewModel() {
+
+    /** The update the PC offers, if any, and the last check. */
+    val updateState: StateFlow<UpdateState> = updates.state
+
+    fun checkForUpdate() = updates.check()
+
+    fun installUpdate() = updates.install()
+
+    fun cancelUpdate() = updates.cancel()
 
     private val testing = MutableStateFlow(false)
     private val lastCheck = MutableStateFlow<ConnectionCheck?>(null)
@@ -126,6 +138,7 @@ class SettingsViewModel(
                     container.pairing,
                     container.syncScheduler,
                     container::api,
+                    container.updates,
                 )
             }
         }

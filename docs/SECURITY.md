@@ -192,9 +192,11 @@ data or library; an `--api` URL without an explicit port is refused) without
   would have to be uninstalled, which deletes the pages not sent yet.
 - **Permissions**: the app uses the network, and WorkManager adds permissions
   granted without asking (wake lock, network state, restart at boot). The only
-  permission asked of the user is the **camera**, and only when the app's own
-  camera opens (CameraX). Google's document scanner and QR
+  runtime permission asked of the user is the **camera**, and only when the
+  app's own camera opens (CameraX). Google's document scanner and QR
   code reader (ML Kit), provided by Google Play services, do not need it.
+  For updates only, Android also asks once for the "Install unknown apps"
+  access (see Updates).
   Importing goes through the system photo picker, without storage permission.
   Photos shared from another app ("Share › ScanMyLib") are read only as the
   `content:` URIs of another app's provider, with the access the share grants:
@@ -204,6 +206,19 @@ data or library; an `--api` URL without an explicit port is refused) without
   itself (the app's private files). The copy stops a byte past the server's
   size limit, and the format is checked as for imported photos.
   Photos stay in the app's private storage until they are sent.
+- **Updates**: the app may install apps (`REQUEST_INSTALL_PACKAGES`), only to
+  install the update the paired PC offers, through Android's installer, which
+  asks the user each time; Android also asks once to allow ScanMyLib to install
+  apps ("Install unknown apps"). The app downloads the APK from the paired PC
+  only (the path that `/api/health` gives is checked, never an address, and a
+  redirect is not followed), without the token, up to 512 MiB, then installs it
+  only if it is the file `/api/health` announced (size, SHA-256 and
+  versionCode), its own package, and newer. Where Android reports signing
+  certificates (Android 9 and later), the app also compares them with the
+  installed app's, to say clearly why it refuses another key; Android's own
+  check covers the rest: it refuses an update signed with another key in any
+  case, so a swapped APK on the network cannot replace the app. Pairing with
+  another PC, or unpairing, forgets what the previous one offered.
 - **Token**: it is only sent to the paired PC, never to another address (not
   even for thumbnails). It is excluded from Android backups and from transfers
   to another phone.

@@ -18,6 +18,8 @@ import fr.scanmylib.model.ServerConfig
 import fr.scanmylib.settings.SettingsRepository
 import fr.scanmylib.sync.SyncScheduler
 import fr.scanmylib.ui.container
+import fr.scanmylib.update.AppUpdater
+import fr.scanmylib.update.UpdateState
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -70,7 +72,11 @@ class LibraryViewModel(
     private val settings: SettingsRepository,
     private val syncScheduler: SyncScheduler,
     private val api: (ServerConfig) -> ScanMyLibApi,
+    private val updates: AppUpdater,
 ) : ViewModel() {
+
+    /** The update the PC offers, if any. */
+    val updateState: StateFlow<UpdateState> = updates.state
 
     private val refreshing = MutableStateFlow(false)
 
@@ -92,13 +98,21 @@ class LibraryViewModel(
         refresh()
     }
 
-    /** Refreshes the library and the PC status, and retries pending uploads right away. */
+    fun installUpdate() = updates.install()
+
+    fun cancelUpdate() = updates.cancel()
+
+    /**
+     * Refreshes the library and the PC status, and retries pending uploads right away; asks the PC
+     * for an update unless it was asked recently.
+     */
     fun refresh() {
         if (refreshing.value) return
         refreshing.value = true
+        updates.checkIfDue()
         viewModelScope.launch {
             try {
-                pc.value = fetchFromServer(retryUploads = true)
+                showPc(fetchFromServer(retryUploads = true))
             } finally {
                 refreshing.value = false
             }
@@ -108,9 +122,10 @@ class LibraryViewModel(
     /**
      * Keeps the library and the PC status up to date while the screen is visible, until
      * canceled: refreshes them once pages are uploaded, then while the PC processes pages (see
-     * [autoRefresh]).
+     * [autoRefresh]). Asks the PC for an update as the screen shows, unless it was asked recently.
      */
     suspend fun keepUpToDate() {
+        updates.checkIfDue()
         val work = combine(uiState, library.observeUnlistedUploads()) { state, unlistedUploads ->
             libraryWork(state.documents, unlistedUploads, (state.pc as? PcState.Online)?.status?.queue)
         }
@@ -119,10 +134,17 @@ class LibraryViewModel(
             viewModelScope.async {
                 // Not retrying the uploads: that would cut their backoff delay short again and again.
                 val state = fetchFromServer(retryUploads = false)
-                pc.value = state
+                showPc(state)
                 state is PcState.Online
             }.await()
         }
+    }
+
+    /** Shows the PC's [state]; once the PC answers again, a check for updates that could not reach it is made again. */
+    private fun showPc(state: PcState) {
+        val wasOnline = pc.value is PcState.Online
+        pc.value = state
+        if (state is PcState.Online && !wasOnline) updates.onPcBack()
     }
 
     private suspend fun fetchFromServer(retryUploads: Boolean): PcState {
@@ -153,6 +175,7 @@ class LibraryViewModel(
                     container.settings,
                     container.syncScheduler,
                     container::api,
+                    container.updates,
                 )
             }
         }

@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from .. import API_LEVEL, __version__
 from ..auth import SESSION_COOKIE, SESSION_MAX_AGE_S
 from ..ocr_client import OcrUnavailable
+from ..published_apk import APK_DOWNLOAD_PATH, published_apk
 from ..qr import qr_svg
 from ..text import single_line
 from .deps import Services, ServicesDep, public_url, require_auth
@@ -19,12 +20,17 @@ from .schemas import SessionBody
 public = APIRouter()
 protected = APIRouter(dependencies=[Depends(require_auth)])
 
-APK_DOWNLOAD_PATH = "/download/scanmylib.apk"
 
-
+# Not async: it reads the APK's metadata file (FastAPI runs it in its thread pool).
 @public.get("/api/health")
-async def health() -> dict:
-    return {"name": "ScanMyLib", "version": __version__, "api": API_LEVEL}
+def health(services: ServicesDep) -> dict:
+    # The published APK: the app offers it as an update when its version code is higher.
+    return {
+        "name": "ScanMyLib",
+        "version": __version__,
+        "api": API_LEVEL,
+        "apk": published_apk(services.settings.apk_path),
+    }
 
 
 @public.post("/api/session", status_code=204)

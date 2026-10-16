@@ -22,9 +22,17 @@ Pairing URI (QR code shown by the web UI): `scanmylib://pair?url=<urlencoded PUB
 
 | Method | Path | Response |
 |---|---|---|
-| GET | `/api/health` | `{"name": "ScanMyLib", "version": "0.2.3", "api": 1}`: `version` is the project version (`VERSION`), `api` the level of this contract |
+| GET | `/api/health` | `{"name": "ScanMyLib", "version": "0.2.3", "api": 1, "apk": {…} or null}`: `version` is the project version (`VERSION`), `api` the level of this contract, `apk` the published APK (below) |
 | GET | `/download/scanmylib.apk` | the Android APK (`application/vnd.android.package-archive`), 404 if not built |
 | GET | `/`, `/static/…` | web UI |
+
+`apk` describes the APK `/download/scanmylib.apk` serves: `{"application_id": "fr.scanmylib", "version": "0.2.3",
+"version_code": 203, "sha256": "…", "size": 12345678, "path": "/download/scanmylib.apk"}`. The api reads it from the
+metadata `scripts/build-apk.sh` publishes next to the APK (`scanmylib.json`, with the keys `application_id`,
+`version_name`, `version_code`, `sha256` and `size`) and checks each field: `apk` is null without an APK, or without
+metadata that holds up, or with the metadata of another APK (not the size of the one published). The app offers the
+update when `version_code` is higher than its own and `application_id` is its own; it then checks the downloaded file
+against `sha256` and its signing certificate against its own.
 
 ## Session
 

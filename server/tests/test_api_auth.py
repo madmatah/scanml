@@ -39,7 +39,7 @@ PROTECTED = [
 def test_health_is_public(client):
     response = client.get("/api/health")
     assert response.status_code == 200
-    assert response.json() == {"name": "ScanMyLib", "version": __version__, "api": 1}
+    assert response.json() == {"name": "ScanMyLib", "version": __version__, "api": 1, "apk": None}
 
 
 @pytest.mark.parametrize(("method", "path"), PROTECTED)

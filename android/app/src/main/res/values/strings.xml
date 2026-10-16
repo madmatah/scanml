@@ -194,6 +194,8 @@
     <string name="settings_section_about">About</string>
     <string name="settings_version">ScanMyLib for Android %1$s</string>
     <string name="settings_about">Scanned pages are sent to your PC as soon as it’s reachable; text recognition (OCR) happens on the PC.</string>
+    <string name="settings_last_crash">Last crash report</string>
+    <string name="settings_last_crash_help">Tap to see, share or delete it</string>
 
     <plurals name="library_pc_online_busy">
         <item quantity="one">PC connected · OCR %1$s · %2$d page to process</item>
@@ -327,8 +329,10 @@
         <item quantity="other">%d photos couldn’t be imported and were skipped.</item>
     </plurals>
     <string name="crash_title">ScanMyLib stopped</string>
-    <string name="crash_intro">The app stopped because of an error last time. Copy this report and pass it on so it can be fixed. It doesn’t contain your scans or your token.</string>
-    <string name="crash_copy">Copy report</string>
+    <string name="crash_intro">The app stopped because of an error last time. Share or copy this report so it can be fixed. It doesn’t contain your scans or your token. It stays in Settings › About until you delete it.</string>
+    <string name="crash_copy">Copy</string>
     <string name="crash_copied">Report copied</string>
     <string name="crash_close">Close</string>
+    <string name="crash_share">Share</string>
+    <string name="crash_share_subject">ScanMyLib crash report</string>
 </resources>

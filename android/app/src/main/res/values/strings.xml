@@ -60,7 +60,8 @@
     <string name="new_document_unwarp">Bound book</string>
     <string name="new_document_unwarp_help">Flattens pages curved by the binding during OCR.</string>
     <string name="new_document_create">Create</string>
-    <string name="document_scan_pages">Scan pages</string>
+    <string name="document_scan">Scan</string>
+    <string name="document_choose_camera">Choose the camera</string>
     <string name="document_not_on_pc_yet">Not on the PC yet</string>
     <string name="document_not_on_pc_yet_long">This document isn’t on the PC yet: it will be created there with the next upload.</string>
     <string name="document_coverage">Pages covered: %1$s</string>
@@ -69,7 +70,7 @@
     <string name="document_folder">Folder on the PC: %1$s</string>
     <string name="document_unwarp_on">Flattening of curved pages is on.</string>
     <string name="document_upload_refused">The PC rejected this document: %1$s</string>
-    <string name="document_no_pages">No pages yet. Tap “Scan pages” to add some.</string>
+    <string name="document_no_pages">No pages yet. Tap “Scan” or “Import” to add some.</string>
     <string name="document_gone">This document no longer exists: it was deleted on the PC.</string>
     <string name="page_label">p. %1$s</string>
     <string name="page_without_number">Unnumbered</string>
@@ -103,17 +104,18 @@
     <string name="local_page_failed">Rejected: %1$s.</string>
     <string name="local_page_will_retry">Last attempt: %1$s. Will retry automatically.</string>
     <string name="local_page_needs_pairing">The PC rejected the token: pair the app again to resume uploading.</string>
-    <string name="scan_setup_title">Scan pages</string>
-    <string name="scan_setup_help">Enter the first page number if you know it: it helps order pages whose number isn’t printed.</string>
-    <string name="scan_setup_start">Start scanner</string>
-    <string name="scan_setup_start_camera">Take photos</string>
-    <string name="scan_setup_start_picker">Choose photos</string>
     <string name="scan_source_google">Google scanner</string>
-    <string name="scan_source_google_help">Crops and straightens each page (retouching adjustable in Settings).</string>
-    <string name="scan_source_camera">Camera, page by page</string>
-    <string name="scan_source_camera_help">Original photos, unretouched, one page after another.</string>
-    <string name="scan_source_picker">Import photos</string>
-    <string name="scan_source_picker_help">Existing photos, in the order they were taken.</string>
+    <string name="scan_source_google_help">Text pages: automatic cropping</string>
+    <string name="scan_source_camera">Camera</string>
+    <string name="scan_source_camera_help">Illustrations: original photos, true colors</string>
+    <string name="scan_source_picker">Import</string>
+    <string name="scan_source_picker_help">Photos already taken, untouched</string>
+    <string name="camera_sheet_title">Scan with…</string>
+    <string name="camera_default">Default</string>
+    <string name="camera_use_as_default">Use as default</string>
+    <string name="camera_use_as_default_help">“Scan” will open it directly</string>
+    <string name="camera_did_not_start">Didn’t start last time: tap to try again</string>
+    <string name="camera_none_on_phone">No camera on this phone</string>
     <string name="scan_preparing">Preparing pages…</string>
     <string name="scan_preparing_progress">%1$d of %2$d</string>
     <string name="scan_first_page">First page number</string>
@@ -138,11 +140,11 @@
     <string name="message_import_failed">Couldn’t save the pages. Try again.</string>
     <string name="message_send_failed">Couldn’t add the pages to the upload queue. Try again.</string>
     <string name="message_storage_full">Not enough space on the phone: free up some space, then try again.</string>
-    <string name="message_nothing_scanned">No pages received from the Google scanner.</string>
     <string name="message_adding_interrupted">The app was closed while pages were being added: check the pages waiting to be sent, and add any missing ones again.</string>
     <string name="message_setting_not_saved">Setting not saved: check the free space on the phone.</string>
     <string name="message_photo_picker_unavailable">Couldn’t open the photo picker.</string>
-    <string name="message_scanner_unavailable">The document scanner isn’t available (it requires Google Play services).</string>
+    <string name="message_scanner_unavailable">Google’s scanner isn’t available on this phone (it requires Google Play services).</string>
+    <string name="message_scanner_failed">Google’s scanner stopped without returning the pages. Try again.</string>
     <string name="message_page_busy">This page is being uploaded: try again in a moment.</string>
     <string name="settings_title">Settings</string>
     <string name="settings_section_pc">PC</string>
@@ -158,7 +160,8 @@
     <string name="settings_wifi_only_help">Upload scans only on an unmetered Wi-Fi network.</string>
     <string name="settings_keep_copies">Keep scans on the phone</string>
     <string name="settings_keep_copies_help">Keeps a copy of each image after it’s sent to the PC.</string>
-    <string name="settings_scanner_help">Google’s scanner never returns the original photo: it always crops and straightens the page, even without retouching. To keep photos as they are (including the colors of illustrations), choose “Camera, page by page” or “Import photos” when you scan.</string>
+    <string name="settings_scanner_help">Google’s scanner never returns the original photo: it always crops and straightens the page, even without retouching. To keep photos as they are (including the colors of illustrations), use the camera or import them.</string>
+    <string name="settings_default_camera">“Scan” opens</string>
     <string name="settings_scanner_mode">Google scanner retouching</string>
     <string name="settings_scanner_mode_crop">None — crop only</string>
     <string name="settings_scanner_mode_crop_help">Crops and straightens the page, without filters.</string>
@@ -229,10 +232,6 @@
     <plurals name="scan_review_title">
         <item quantity="one">%d scanned page</item>
         <item quantity="other">%d scanned pages</item>
-    </plurals>
-    <plurals name="scan_setup_adding">
-        <item quantity="one">%d page is already waiting to be sent: new pages will be added after it.</item>
-        <item quantity="other">%d pages are already waiting to be sent: new pages will be added after them.</item>
     </plurals>
     <plurals name="scan_discard_title">
         <item quantity="one">Delete %d page?</item>

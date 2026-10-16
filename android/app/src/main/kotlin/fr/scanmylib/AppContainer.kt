@@ -1,6 +1,9 @@
 package fr.scanmylib
 
 import android.content.Context
+import android.content.pm.PackageManager
+import android.os.storage.StorageManager
+import android.util.Log
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.preferencesDataStoreFile
 import androidx.work.WorkManager
@@ -21,6 +24,7 @@ import fr.scanmylib.settings.SettingsRepository
 import fr.scanmylib.sync.PageUploader
 import fr.scanmylib.sync.SyncScheduler
 import java.io.File
+import java.io.IOException
 import java.time.Clock
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CoroutineScope
@@ -51,6 +55,22 @@ class AppContainer(private val context: Context) {
     private val database by lazy { ScanMyLibDatabase.create(context) }
 
     private val scanFiles by lazy { ScanFileStore(File(context.filesDir, "scans")) }
+
+    /**
+     * Bytes the app can still write on the storage that holds its files, the runs included, the
+     * caches the system would clear counted in; [Long.MAX_VALUE] if the system cannot tell. A
+     * binder call: not on the main thread.
+     */
+    fun freeStorage(): Long = try {
+        val storage = context.getSystemService(StorageManager::class.java)
+        storage.getAllocatableBytes(storage.getUuidForPath(context.filesDir))
+    } catch (e: IOException) {
+        Log.w("AppContainer", "free storage unknown", e)
+        Long.MAX_VALUE
+    }
+
+    /** Whether the phone has a camera, for the app's own camera screen. */
+    val hasCamera: Boolean by lazy { context.packageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_ANY) }
 
     /** Pages captured, scanned or imported, until the user sends them (same storage as [scanFiles]). */
     val staging by lazy {

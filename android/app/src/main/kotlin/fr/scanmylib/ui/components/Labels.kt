@@ -10,8 +10,31 @@ import fr.scanmylib.api.PageStatus
 import fr.scanmylib.db.UploadFailure
 import fr.scanmylib.db.UploadState
 import fr.scanmylib.model.DocumentKind
+import fr.scanmylib.model.ScanSource
 
 // Labels and icons of the states shown in the UI.
+
+@StringRes
+fun ScanSource.labelRes(): Int = when (this) {
+    ScanSource.GOOGLE_SCANNER -> R.string.scan_source_google
+    ScanSource.CAMERA -> R.string.scan_source_camera
+    ScanSource.PHOTO_PICKER -> R.string.scan_source_picker
+}
+
+/** When to use the source, in a few words. */
+@StringRes
+fun ScanSource.descriptionRes(): Int = when (this) {
+    ScanSource.GOOGLE_SCANNER -> R.string.scan_source_google_help
+    ScanSource.CAMERA -> R.string.scan_source_camera_help
+    ScanSource.PHOTO_PICKER -> R.string.scan_source_picker_help
+}
+
+@DrawableRes
+fun ScanSource.iconRes(): Int = when (this) {
+    ScanSource.GOOGLE_SCANNER -> R.drawable.ic_document_scanner
+    ScanSource.CAMERA -> R.drawable.ic_photo_camera
+    ScanSource.PHOTO_PICKER -> R.drawable.ic_photo_library
+}
 
 @StringRes
 fun DocumentKind.labelRes(): Int = when (this) {

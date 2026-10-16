@@ -84,22 +84,27 @@ Internet.
 
 - **New document**: title, author, kind (book or document). For a book, flattening of pages curved by the binding
   (**Bound book**) is on by default.
-- **Scan pages** offers three capture sources:
-  - **Google scanner**: detects the edges and crops the page. The **Google scanner retouching** setting chooses between
-    **None — crop only** (the default), **Filters** and **Full** (filters plus finger and stain removal). This scanner
-    never returns the original photo. To chain pages, tap "+" on its preview screen.
-  - **Camera, page by page**: the app's own camera stays open. One tap is one photo and one page, at full resolution and
-    without retouching. Turn the page and tap again, then **Done**. Only this mode asks for the camera permission.
-  - **Import photos**: photos taken with any app, put back in shooting order (EXIF date) and sent as they are. JPEG, PNG
-    and WebP are accepted (no HEIC). A photo that cannot be read (a cloud photo while offline…) or that is too large
-    (over 40 MB or 120 megapixels) is skipped with a message; the others are imported.
-- **First page number** (optional): for pages without a printed number that should be numbered. With **Consecutive
-  pages** (on by default), the following pages get the next numbers. Leave it blank for front matter (cover, title
-  page, preface).
+- **Scan** opens the default camera at once, with no question:
+  - **Google scanner** (the default): detects the edges and crops the page. The **Google scanner retouching** setting
+    chooses between **None — crop only** (the default), **Filters** and **Full** (filters plus finger and stain
+    removal). This scanner never returns the original photo. To chain pages, tap "+" on its preview screen.
+  - **Camera**: the app's own camera stays open. One tap is one photo and one page, at full resolution and without
+    retouching. Turn the page and tap again, then **Done**. Only this camera asks for the camera permission.
+
+  The arrow next to **Scan** (or a long press on it) opens the other camera for this time only, or from now on with
+  **Use as default**; the default is also in the settings ("“Scan” opens"). If Google's scanner cannot start on the
+  phone (no Google Play services), **Scan** opens the app's camera instead, until the scanner, chosen again in **Scan
+  with…** or in the settings, starts.
+- **Import** opens the photo picker: photos taken with any app, put back in shooting order (EXIF date) and sent as they
+  are. JPEG, PNG and WebP are accepted (no HEIC). A photo that cannot be read (a cloud photo while offline…) or that is
+  too large (over 40 MB or 120 megapixels) is skipped with a message; the others are imported.
 - **Before sending**, the pages wait on the phone: tap a thumbnail to see it full size or remove it, **Add pages** to
-  complete the series from any source, **Send** to queue them for upload. **Later** (or Back) keeps them on the phone,
-  and the library then shows "N pages to check before sending". **Discard** asks for confirmation, since these pages
-  exist nowhere else.
+  scan more or import photos, **Send** to queue them for upload. **Later** (or Back) keeps them on the phone, and the
+  library then shows "N pages to check before sending". **Discard** asks for confirmation, since these pages exist
+  nowhere else.
+- **First page number** (optional, before sending): for pages without a printed number that should be numbered. With
+  **Consecutive pages** (on by default), the following pages get the next numbers. Leave it blank for front matter
+  (cover, title page, preface).
 
 The web UI can also add pages to a document, from the PC or from the phone's browser: import photos, or take a photo.
 

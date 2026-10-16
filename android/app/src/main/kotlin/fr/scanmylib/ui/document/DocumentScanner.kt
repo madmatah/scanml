@@ -33,15 +33,24 @@ private fun scannerOptions(mode: ScannerMode) = GmsDocumentScannerOptions.Builde
  * camera permission needed) in the given mode, and reports the scanned pages, in order, as JPEG
  * files: none when the user cancels, or when the scanner fails to hand them over (it then
  * cancels too, e.g. when the phone's storage is full).
+ *
+ * [onStarted]: the scanner is about to open, so it works on this phone. [onUnavailable]: it could
+ * not be started (Google Play services missing, outdated or disabled, its module not downloaded
+ * yet...). [onFailed]: anything else went wrong (the screen left meanwhile, a result that cannot
+ * be read), which says nothing about the phone.
  */
 @Composable
 fun rememberDocumentScanner(
     onScanned: (List<Uri>) -> Unit,
+    onStarted: () -> Unit,
     onUnavailable: (Exception) -> Unit,
+    onFailed: (Exception) -> Unit,
 ): (ScannerMode) -> Unit {
     val activity = checkNotNull(LocalActivity.current) { "the document scanner needs an activity" }
     val currentOnScanned by rememberUpdatedState(onScanned)
+    val currentOnStarted by rememberUpdatedState(onStarted)
     val currentOnUnavailable by rememberUpdatedState(onUnavailable)
+    val currentOnFailed by rememberUpdatedState(onFailed)
     // One contract: a new one at each recomposition would register the launcher again each time.
     val contract = remember { ActivityResultContracts.StartIntentSenderForResult() }
     val launcher = rememberLauncherForActivityResult(contract) { result ->
@@ -50,7 +59,7 @@ fun rememberDocumentScanner(
                 val pages = GmsDocumentScanningResult.fromActivityResultIntent(result.data)?.pages.orEmpty()
                 currentOnScanned(pages.map { it.imageUri })
             } catch (e: Exception) {
-                currentOnUnavailable(e)
+                currentOnFailed(e)
             }
         } else {
             currentOnScanned(emptyList())
@@ -62,12 +71,13 @@ fun rememberDocumentScanner(
                 GmsDocumentScanning.getClient(scannerOptions(mode))
                     .getStartScanIntent(activity)
                     .addOnSuccessListener { intentSender ->
+                        currentOnStarted()
                         // Runs later, on the main thread: by then the screen (and the launcher's
                         // registration) may be gone.
                         try {
                             launcher.launch(IntentSenderRequest.Builder(intentSender).build())
                         } catch (e: Exception) {
-                            currentOnUnavailable(e)
+                            currentOnFailed(e)
                         }
                     }
                     .addOnFailureListener { currentOnUnavailable(it) }

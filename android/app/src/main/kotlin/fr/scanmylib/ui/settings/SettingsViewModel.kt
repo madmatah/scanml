@@ -8,6 +8,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import fr.scanmylib.api.ScanMyLibApi
 import fr.scanmylib.library.KeptCopies
 import fr.scanmylib.library.LibraryRepository
+import fr.scanmylib.model.ScanSource
 import fr.scanmylib.model.ScannerMode
 import fr.scanmylib.model.ServerConfig
 import fr.scanmylib.pairing.ConnectionCheck
@@ -84,6 +85,11 @@ class SettingsViewModel(
 
     fun setScannerMode(mode: ScannerMode) {
         viewModelScope.launch { save { settings.setScannerMode(mode) } }
+    }
+
+    /** The camera "Scan" opens: Google's scanner or the app's camera. */
+    fun setDefaultCamera(camera: ScanSource) {
+        viewModelScope.launch { save { settings.setDefaultCamera(camera) } }
     }
 
     /** Writes a setting; returns false if it could not be written. */

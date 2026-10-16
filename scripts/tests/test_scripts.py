@@ -62,17 +62,20 @@ def port_in_use(port: int) -> bool:
 
 
 class Health:
-    """GET /api/health of a fake api, reporting `version`; counts the requests it gets."""
+    """GET /api/health of a fake api, reporting `version` and the published APK's `apk_version`
+    (None: no APK); counts the requests it gets."""
 
     def __init__(self, port: int) -> None:
         self.version = VERSION
+        self.apk_version: str | None = VERSION
         self.requests = 0
         health = self
 
         class Handler(http.server.BaseHTTPRequestHandler):
             def do_GET(self) -> None:  # noqa: N802
                 health.requests += 1
-                body = json.dumps({"name": "ScanMyLib", "version": health.version, "api": 1}).encode()
+                apk = None if health.apk_version is None else {"version": health.apk_version, "version_code": 1}
+                body = json.dumps({"name": "ScanMyLib", "version": health.version, "api": 1, "apk": apk}).encode()
                 self.send_response(200 if self.path == "/api/health" else 404)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(body)))
@@ -612,6 +615,18 @@ class DeployTest(ScriptsTestCase):
         self.assertIn("tag scanmylib-api:latest scanmylib-api:deployed", self.commands())
         self.assertEqual(self.remote_tags(), "")
 
+    def test_deploy_checks_that_the_api_offers_the_new_apk(self):
+        for apk_version in (None, "0.0.1"):
+            with self.subTest(apk_version=apk_version):
+                if self.log.exists():
+                    self.log.unlink()
+                self.health.apk_version = apk_version
+                result = self.deploy("--apk")
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn('DEPLOY FAILED during the step "apk"', result.stdout)
+                self.assertIn(f"the api offers the APK '{apk_version}', not {VERSION}", result.stdout + result.stderr)
+                self.assertEqual(self.remote_tags(), "")
+
     def test_failed_isolation_check_stops_the_ocr_service(self):
         result = self.deploy(rules=sandbox_rules(f"{self.prod}/sandbox", str(self.prod), network="bridge"))
         self.assertNotEqual(result.returncode, 0)
@@ -841,7 +856,46 @@ class BuildApkTest(ScriptsTestCase):
         # The signer refuses any other app than fr.scanmylib.dev with the versionCode of VERSION.
         self.assertIn("EXPECTED_PACKAGE=fr.scanmylib.dev ", sign)
         self.assertIn(f"EXPECTED_VERSION_CODE={VERSION_CODE} ", sign)
-        self.assertIn("apk_identity", sign)
+        # The definitions, not only their calls in sign_main ("declare -f" prints "name () ").
+        self.assertIn("apk_identity () ", sign)
+        # Its version is published next to it, for /api/health.
+        self.assertIn(f"EXPECTED_VERSION_NAME={VERSION} ", sign)
+        self.assertIn("write_apk_metadata () ", sign)
+
+    def write_apk_metadata(self, file: Path, *values: str) -> subprocess.CompletedProcess:
+        """Runs write_apk_metadata of build-apk.sh, as the signing container does."""
+        script = (REPO / "scripts" / "build-apk.sh").read_text()
+        function = script[script.index("write_apk_metadata() {"):]
+        function = function[:function.index("\n}\n") + 3]
+        return subprocess.run(
+            ["bash", "-c", 'die() { echo "error: $*" >&2; exit 1; }\n' + function + '\nwrite_apk_metadata "$@"',
+             "bash", str(file), *values],
+            capture_output=True, text=True, check=False,
+        )
+
+    def test_the_published_apk_metadata_is_checked_json(self):
+        out = self.base / "app"
+        out.mkdir()
+        sha256 = "0123456789abcdef" * 4
+        metadata = out / ".scanmylib.json.partial"
+        result = self.write_apk_metadata(metadata, "fr.scanmylib.dev", "1.2.3", "10203", sha256, "4567")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(metadata.read_text()), {
+            "application_id": "fr.scanmylib.dev", "version_name": "1.2.3", "version_code": 10203,
+            "sha256": sha256, "size": 4567,
+        })
+        self.assertEqual(sorted(path.name for path in out.iterdir()), [".scanmylib.json.partial"])
+        # Anything that could break the JSON, or that the app could not trust, is refused.
+        for values in [('fr.scanmylib", "x": "', "1.2.3", "10203", sha256, "4567"),
+                       ("fr.scanmylib", "1.2.3\"", "10203", sha256, "4567"),
+                       ("fr.scanmylib", "1.2.3", "10203, \"x\": 1", sha256, "4567"),
+                       ("fr.scanmylib", "1.2.3", "10203", "not-a-digest", "4567"),
+                       ("fr.scanmylib", "1.2.3", "10203", sha256, "")]:
+            with self.subTest(values=values):
+                result = self.write_apk_metadata(metadata, *values)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("unexpected APK metadata", result.stderr)
+                self.assertEqual(json.loads(metadata.read_text())["version_code"], 10203)
 
     def test_a_worktree_never_builds_the_release_app(self):
         (self.worktree / ".env").write_text(self.dev_env(APP_VARIANT="release"))

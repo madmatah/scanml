@@ -62,9 +62,13 @@
 #    checked apksigner.jar's own manifest parser) and refuses anything but the variant's app,
 #    fr.scanmylib.dev (dev) or fr.scanmylib (release), with the versionCode of VERSION: a change
 #    that drops the ".dev" suffix never gets the production app signed in a worktree. It signs
-#    the APK and publishes it as $DATA_DIR/app/scanmylib.apk. Both variants are signed with the
-#    same key. With --create-signing-key and no key yet, a first container without network
-#    creates it (read-write mount, the only one).
+#    the APK and publishes it as $DATA_DIR/app/scanmylib.apk, with its application id, version
+#    (VERSION), versionCode, SHA-256 and size as $DATA_DIR/app/scanmylib.json, which the api
+#    serves in /api/health so that the app can offer the update: both are written in full first,
+#    the previous metadata removed, then the APK and its metadata renamed into place, so that a
+#    publish cut short leaves no metadata (no offer), never the previous APK's. Both variants are
+#    signed with the same key. With --create-signing-key and no key yet, a first container
+#    without network creates it (read-write mount, the only one).
 #
 # Downloads are verified: the Android command-line tools against the SHA-1 and size published in
 # Google's SDK repository XML, the Gradle distribution and wrapper jar against the SHA-256 sums
@@ -254,11 +258,33 @@ checked against their pinned SHA-256)"
         --ks-pass "file:$password_file" --out /tmp/scanmylib.apk /tmp/aligned.apk
     java -Xmx1024M -jar "$tools/lib/apksigner.jar" verify --verbose --print-certs /tmp/scanmylib.apk \
         | grep -E '^(Verified using v[0-9]+ scheme|Signer #1 certificate (DN|SHA-256 digest))'
+    # Both written in full first, the metadata from the very file published. Then the previous
+    # metadata goes before the APK is replaced: a publish cut short leaves an APK without metadata,
+    # which the api does not offer, never the previous APK's metadata next to this one.
     cp /tmp/scanmylib.apk /out/.scanmylib.apk.partial
+    local sha256 size
+    sha256=$(sha256sum /out/.scanmylib.apk.partial | cut -d ' ' -f 1)
+    size=$(stat -c %s /out/.scanmylib.apk.partial)
+    write_apk_metadata /out/.scanmylib.json.partial "$EXPECTED_PACKAGE" "$EXPECTED_VERSION_NAME" \
+        "$EXPECTED_VERSION_CODE" "$sha256" "$size"
+    rm -f /out/scanmylib.json
     mv /out/.scanmylib.apk.partial /out/scanmylib.apk
-    log "Published $PUBLISHED_PATH ($APP_VARIANT)"
-    sha256sum /out/scanmylib.apk | cut -d ' ' -f 1 | sed 's/^/sha256: /'
-    stat -c 'size:   %s bytes' /out/scanmylib.apk
+    mv /out/.scanmylib.json.partial /out/scanmylib.json
+    log "Published $PUBLISHED_PATH ($APP_VARIANT) and its metadata, scanmylib.json"
+    echo "sha256: $sha256"
+    echo "size:   $size bytes"
+}
+
+# Writes the metadata of an APK to FILE, published as scanmylib.json next to it: the api serves
+# it in /api/health, and the app offers the update when its versionCode is higher. Every value is
+# checked first: the file is written without a JSON tool.
+write_apk_metadata() {  # write_apk_metadata FILE PACKAGE VERSION_NAME VERSION_CODE SHA256 SIZE
+    local file=$1 package=$2 name=$3 code=$4 sha256=$5 size=$6
+    [[ $package =~ ^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$ && $name =~ ^[0-9]{1,3}\.[0-9]{1,2}\.[0-9]{1,2}$ \
+        && $code =~ ^[1-9][0-9]{0,8}$ && $sha256 =~ ^[0-9a-f]{64}$ && $size =~ ^[1-9][0-9]{0,11}$ ]] \
+        || die "unexpected APK metadata: '$package' '$name' '$code' '$sha256' '$size'"
+    printf '{"application_id": "%s", "version_name": "%s", "version_code": %s, "sha256": "%s", "size": %s}\n' \
+        "$package" "$name" "$code" "$sha256" "$size" > "$file"
 }
 
 # Prints "<package name> <versionCode>" of an APK, read from its binary AndroidManifest.xml by the
@@ -395,9 +421,11 @@ main() {
     fi
     [[ $android_dir == /* ]] || die "ANDROID_DIR must be an absolute path"
     [[ -f $ROOT/VERSION ]] || die "missing $ROOT/VERSION"
-    local expected_package=$APPLICATION_ID expected_version_code
+    local expected_package=$APPLICATION_ID expected_version_code expected_version_name
     [[ $variant == dev ]] && expected_package=$APPLICATION_ID.dev
     expected_version_code=$(version_code "$ROOT/VERSION")
+    # The app's versionName is VERSION (android/app/build.gradle.kts), checked by version_code.
+    expected_version_name=$(tr -d '[:space:]' < "$ROOT/VERSION")
 
     local gradle_args=("$@")
     ((${#gradle_args[@]})) || gradle_args=(test "assemble${variant^}" lint)
@@ -487,13 +515,14 @@ with scripts/build-apk.sh --create-signing-key in production's checkout (scripts
         --env APP_VARIANT="$variant" \
         --env EXPECTED_PACKAGE="$expected_package" \
         --env EXPECTED_VERSION_CODE="$expected_version_code" \
+        --env EXPECTED_VERSION_NAME="$expected_version_name" \
         --env PUBLISHED_PATH="$data_dir/app/scanmylib.apk" \
         --volume "$ROOT/android/app/build/outputs/apk/$variant:/apk:ro" \
         --volume "$android_dir/sdk/build-tools/$BUILD_TOOLS_VERSION:/build-tools:ro" \
         --volume "$keystore_dir:/keystore:ro" \
         --volume "$data_dir/app:/out" \
         "$BUILDER_IMAGE" \
-        bash -c "$(declare -f sign_main apk_identity log die); sign_main"
+        bash -c "$(declare -f sign_main apk_identity write_apk_metadata log die); sign_main"
 }
 
 # Without .env (CI only), the settings come from the environment, which common.sh clears.

@@ -185,7 +185,7 @@ fun ScanReviewDialog(
         },
         confirmButton = {
             TextButton(onClick = onConfirm, enabled = scan.numbering != null && !scan.sending) {
-                Text(stringResource(R.string.scan_review_confirm))
+                Text(pluralStringResource(R.plurals.scan_review_confirm, count, count))
             }
         },
         dismissButton = {

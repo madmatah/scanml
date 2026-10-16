@@ -59,6 +59,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import fr.scanmylib.R
 import fr.scanmylib.model.DocumentKind
 import fr.scanmylib.ui.components.iconRes
+import fr.scanmylib.ui.components.labelRes
 
 /**
  * "New document", a full-screen form: the title (focused), the author, the kind, and whether
@@ -164,7 +165,7 @@ fun NewDocumentScreen(
                             },
                             modifier = Modifier.heightIn(min = 48.dp),
                         ) {
-                            Text(stringResource(option.choiceRes()))
+                            Text(stringResource(option.labelRes()))
                         }
                     }
                 }
@@ -231,10 +232,4 @@ private fun CreateButton(label: Int, icon: Int, enabled: Boolean, filled: Boolea
     } else {
         FilledTonalButton(onClick = onClick, enabled = enabled, modifier = modifier) { content() }
     }
-}
-
-/** The kind as offered in the form: "Book | Other". */
-private fun DocumentKind.choiceRes(): Int = when (this) {
-    DocumentKind.BOOK -> R.string.kind_book
-    DocumentKind.DOCUMENT -> R.string.new_document_kind_other
 }

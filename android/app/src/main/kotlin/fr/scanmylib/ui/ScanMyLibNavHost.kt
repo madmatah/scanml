@@ -26,9 +26,12 @@ data object PairingRoute
 @Serializable
 data object LibraryRoute
 
-/** A document; [importShared]: the photos shared with the app join its run once it opens. */
+/**
+ * A document; [importShared]: the photos shared with the app join its run once it opens;
+ * [scanOnOpen]: its default camera opens once it opens (the library card's scan button).
+ */
 @Serializable
-data class DocumentRoute(val documentId: String, val importShared: Boolean = false)
+data class DocumentRoute(val documentId: String, val importShared: Boolean = false, val scanOnOpen: Boolean = false)
 
 /** "Add to…": choosing the document that receives photos shared from another app. */
 @Serializable
@@ -61,9 +64,12 @@ fun ScanMyLibNavHost(navController: NavHostController, paired: Boolean, share: L
                 onBack = navController.previousBackStackEntry?.let { { navController.navigateUp() } },
             )
         }
-        composable<LibraryRoute> {
+        composable<LibraryRoute> { entry ->
+            // Once only: a second tap would open the document twice, and its camera with it.
+            fun resumed() = entry.lifecycle.currentState == Lifecycle.State.RESUMED
             LibraryScreen(
-                onOpenDocument = { navController.navigate(DocumentRoute(it)) },
+                onOpenDocument = { if (resumed()) navController.navigate(DocumentRoute(it)) },
+                onScanDocument = { if (resumed()) navController.navigate(DocumentRoute(it, scanOnOpen = true)) },
                 onOpenSettings = { navController.navigate(SettingsRoute) },
             )
         }
@@ -90,6 +96,7 @@ fun ScanMyLibNavHost(navController: NavHostController, paired: Boolean, share: L
                 onBack = { if (navController.previousBackStackEntry != null) navController.navigateUp() else onExit() },
                 onOpenCamera = { navController.navigate(CaptureRoute(route.documentId)) { launchSingleTop = true } },
                 sharedPhotos = if (route.importShared) share.orEmpty() else emptyList(),
+                scanOnOpen = route.scanOnOpen,
             )
         }
         composable<CaptureRoute> {

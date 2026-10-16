@@ -328,6 +328,16 @@ class DocumentViewModel(
         onPhotosPicked(photos)
     }
 
+    /**
+     * Whether the screen, opened from a library card's scan button, must open its camera now:
+     * true once only, not when the screen is recreated or comes back from the camera.
+     */
+    fun takeScanOnOpen(): Boolean {
+        if (savedState.get<Boolean>(KEY_SCANNED_ON_OPEN) == true) return false
+        savedState[KEY_SCANNED_ON_OPEN] = true
+        return true
+    }
+
     /** Runs [addPages], which reports how many of the [total] images it has copied so far. */
     private fun prepare(total: Int, cancellable: Boolean, addPages: suspend (onProgress: (Int) -> Unit) -> Unit) {
         val id = ++preparationId
@@ -454,6 +464,7 @@ class DocumentViewModel(
     companion object {
         private const val TAG = "Document"
         private const val KEY_SHARED_IMPORTED = "scan_shared_imported"
+        private const val KEY_SCANNED_ON_OPEN = "scan_scanned_on_open"
         private const val KEY_FIRST_PAGE = "scan_first_page"
         private const val KEY_CONSECUTIVE = "scan_consecutive"
         private const val MAX_FIRST_PAGE_DIGITS = 4

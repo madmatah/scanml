@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -55,11 +56,11 @@ import fr.scanmylib.ui.components.ServerImage
 import fr.scanmylib.ui.components.StatusLine
 import fr.scanmylib.ui.components.iconRes
 import fr.scanmylib.ui.components.ocrStateLabel
-import fr.scanmylib.ui.components.pageStatsText
 
 @Composable
 fun LibraryScreen(
     onOpenDocument: (String) -> Unit,
+    onScanDocument: (String) -> Unit,
     onOpenSettings: () -> Unit,
     viewModel: LibraryViewModel = viewModel(factory = LibraryViewModel.Factory),
 ) {
@@ -116,6 +117,7 @@ fun LibraryScreen(
                         stagedPages = state.stagedPages[row.document.id] ?: 0,
                         server = state.server,
                         onClick = { onOpenDocument(row.document.id) },
+                        onScan = { onScanDocument(row.document.id) },
                     )
                 }
             }
@@ -177,11 +179,25 @@ private fun EmptyLibrary() {
     )
 }
 
+/**
+ * A document: its title, author, pages and what differs from normal ([cardLines]), and a button
+ * that opens it straight into its default camera ([onScan]).
+ */
 @Composable
-private fun DocumentCard(row: LibraryRow, stagedPages: Int, server: ServerConfig?, onClick: () -> Unit) {
+private fun DocumentCard(
+    row: LibraryRow,
+    stagedPages: Int,
+    server: ServerConfig?,
+    onClick: () -> Unit,
+    onScan: () -> Unit,
+) {
     val document = row.document
     Card(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(12.dp)) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(start = 12.dp, top = 12.dp, end = 4.dp, bottom = 12.dp),
+        ) {
             Cover(document, server)
             Column(verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.weight(1f)) {
                 Text(
@@ -199,25 +215,65 @@ private fun DocumentCard(row: LibraryRow, stagedPages: Int, server: ServerConfig
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-                val serverState = document.server
-                if (serverState == null) {
-                    Text(stringResource(R.string.document_not_on_pc_yet), style = MaterialTheme.typography.bodySmall)
-                } else {
-                    if (serverState.coverage.isNotEmpty()) {
-                        Text(
-                            stringResource(R.string.document_coverage, serverState.coverage),
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                    }
+                document.server?.takeIf { it.pages > 0 }?.let { serverState ->
                     Text(
-                        pageStatsText(serverState),
+                        pagesSummary(serverState.pages, serverState.coverage),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                UploadStatus(row, stagedPages)
+                cardLines(row, stagedPages).forEach { CardLineText(it) }
+            }
+            FilledTonalIconButton(onClick = onScan) {
+                Icon(
+                    painterResource(R.drawable.ic_document_scanner),
+                    contentDescription = stringResource(R.string.library_scan_in, document.title),
+                )
             }
         }
+    }
+}
+
+/** "25 pages · pp. 12–31, 88–90": the pages on the PC, and the numbers they cover. */
+@Composable
+private fun pagesSummary(pages: Int, coverage: String): String {
+    val count = pluralStringResource(R.plurals.stats_pages, pages, pages)
+    return if (coverage.isEmpty()) count else stringResource(R.string.library_pages_summary, count, coverage)
+}
+
+@Composable
+private fun CardLineText(line: CardLine) {
+    when (line) {
+        is CardLine.ToSend -> StatusLine(
+            pluralStringResource(R.plurals.library_pages_to_confirm, line.count, line.count),
+            R.drawable.ic_schedule,
+            color = MaterialTheme.colorScheme.tertiary,
+        )
+        is CardLine.Refused -> StatusLine(
+            pluralStringResource(R.plurals.library_pages_failed, line.count, line.count),
+            R.drawable.ic_error,
+            color = MaterialTheme.colorScheme.error,
+        )
+        CardLine.DocumentRefused -> StatusLine(
+            stringResource(R.string.library_document_refused),
+            R.drawable.ic_error,
+            color = MaterialTheme.colorScheme.error,
+        )
+        is CardLine.ReadFailed -> StatusLine(
+            pluralStringResource(R.plurals.library_pages_read_failed, line.count, line.count),
+            R.drawable.ic_error,
+            color = MaterialTheme.colorScheme.error,
+        )
+        is CardLine.InTransit -> StatusLine(
+            pluralStringResource(R.plurals.library_pages_in_transit, line.count, line.count),
+            R.drawable.ic_cloud_upload,
+        )
+        is CardLine.BeingRead -> StatusLine(
+            pluralStringResource(R.plurals.library_pages_being_read, line.count, line.count),
+            R.drawable.ic_autorenew,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        CardLine.NotOnPcYet -> StatusLine(stringResource(R.string.document_not_on_pc_yet), R.drawable.ic_cloud_off)
     }
 }
 
@@ -238,39 +294,5 @@ private fun Cover(document: DocumentEntity, server: ServerConfig?) {
         document.server?.coverThumbUrl?.let { url ->
             ServerImage(server, url, contentDescription = null, modifier = Modifier.matchParentSize())
         }
-    }
-}
-
-/** Where the document's local pages are: waiting for the user's confirmation, for upload, or refused. */
-@Composable
-private fun UploadStatus(row: LibraryRow, stagedPages: Int) {
-    if (stagedPages > 0) {
-        // Not sent yet: opening the document shows them, to send or discard.
-        StatusLine(
-            pluralStringResource(R.plurals.library_pages_to_confirm, stagedPages, stagedPages),
-            R.drawable.ic_schedule,
-            color = MaterialTheme.colorScheme.tertiary,
-        )
-    }
-    if (row.pagesToUpload > 0) {
-        StatusLine(
-            pluralStringResource(R.plurals.library_pages_to_upload, row.pagesToUpload, row.pagesToUpload),
-            R.drawable.ic_cloud_upload,
-            color = MaterialTheme.colorScheme.primary,
-        )
-    }
-    if (row.failedPages > 0) {
-        StatusLine(
-            pluralStringResource(R.plurals.library_pages_failed, row.failedPages, row.failedPages),
-            R.drawable.ic_error,
-            color = MaterialTheme.colorScheme.error,
-        )
-    }
-    if (row.document.uploadError != null) {
-        StatusLine(
-            stringResource(R.string.library_document_refused),
-            R.drawable.ic_error,
-            color = MaterialTheme.colorScheme.error,
-        )
     }
 }

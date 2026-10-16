@@ -19,13 +19,10 @@ import fr.scanmylib.settings.SettingsRepository
 import fr.scanmylib.sync.SyncScheduler
 import fr.scanmylib.ui.container
 import kotlinx.coroutines.async
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -80,7 +77,6 @@ class LibraryViewModel(
     /** Refreshes asked by the user and automatic ones, one at a time. */
     private val refreshMutex = Mutex()
     private val pc = MutableStateFlow<PcState>(PcState.Unknown)
-    private val createdDocuments = Channel<String>(Channel.BUFFERED)
 
     val uiState: StateFlow<LibraryUiState> = combine(
         library.observeLibrary(),
@@ -91,9 +87,6 @@ class LibraryViewModel(
     ) { documents, stagedPages, settings, refreshing, pc ->
         LibraryUiState(documents, stagedPages, settings.server, refreshing, pc)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LibraryUiState())
-
-    /** Ids of documents just created, to open them. */
-    val documentsToOpen: Flow<String> = createdDocuments.receiveAsFlow()
 
     init {
         refresh()
@@ -147,13 +140,6 @@ class LibraryViewModel(
                 is ApiException.Unauthorized -> PcState.TokenRefused
                 else -> PcState.Error(e.message.orEmpty())
             }
-        }
-    }
-
-    fun createDocument(document: NewDocument) {
-        viewModelScope.launch {
-            val id = library.createDocument(document.title, document.author, document.kind, document.unwarp)
-            createdDocuments.send(id)
         }
     }
 

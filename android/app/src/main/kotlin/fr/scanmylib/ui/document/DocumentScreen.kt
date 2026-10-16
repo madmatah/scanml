@@ -86,6 +86,8 @@ fun DocumentScreen(
     sharedPhotos: List<Uri> = emptyList(),
     /** Opens the default camera when the screen first opens, once the settings are read. */
     scanOnOpen: Boolean = false,
+    /** Opens the photo picker when the screen first opens. */
+    importOnOpen: Boolean = false,
     viewModel: DocumentViewModel = viewModel(factory = DocumentViewModel.Factory),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -153,7 +155,10 @@ fun DocumentScreen(
     }
     // Again once the settings are read: before, the default camera is not known.
     LaunchedEffect(viewModel, scanOnOpen, scan.loaded) {
-        if (scanOnOpen && scan.loaded && viewModel.takeScanOnOpen()) currentOpenCamera(scan.camera, false)
+        if (scanOnOpen && scan.loaded && viewModel.takeActionOnOpen()) currentOpenCamera(scan.camera, false)
+    }
+    LaunchedEffect(viewModel, importOnOpen) {
+        if (importOnOpen && viewModel.takeActionOnOpen()) importPhotos()
     }
     // Ids rather than entities: the dialogs follow the live state of the page.
     var selectedLocalPage by rememberSaveable { mutableStateOf<String?>(null) }

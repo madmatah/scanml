@@ -329,12 +329,13 @@ class DocumentViewModel(
     }
 
     /**
-     * Whether the screen, opened from a library card's scan button, must open its camera now:
-     * true once only, not when the screen is recreated or comes back from the camera.
+     * Whether the screen, opened to scan or import at once (a library card's scan button, a new
+     * document), must do so now: true once only, not when the screen is recreated or comes back
+     * from the camera or the photo picker.
      */
-    fun takeScanOnOpen(): Boolean {
-        if (savedState.get<Boolean>(KEY_SCANNED_ON_OPEN) == true) return false
-        savedState[KEY_SCANNED_ON_OPEN] = true
+    fun takeActionOnOpen(): Boolean {
+        if (savedState.get<Boolean>(KEY_ACTION_ON_OPEN_DONE) == true) return false
+        savedState[KEY_ACTION_ON_OPEN_DONE] = true
         return true
     }
 
@@ -464,7 +465,7 @@ class DocumentViewModel(
     companion object {
         private const val TAG = "Document"
         private const val KEY_SHARED_IMPORTED = "scan_shared_imported"
-        private const val KEY_SCANNED_ON_OPEN = "scan_scanned_on_open"
+        private const val KEY_ACTION_ON_OPEN_DONE = "scan_action_on_open_done"
         private const val KEY_FIRST_PAGE = "scan_first_page"
         private const val KEY_CONSECUTIVE = "scan_consecutive"
         private const val MAX_FIRST_PAGE_DIGITS = 4

@@ -18,12 +18,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
@@ -37,25 +32,21 @@ import fr.scanmylib.R
 import fr.scanmylib.db.DocumentEntity
 import fr.scanmylib.ui.components.iconRes
 import fr.scanmylib.ui.components.labelRes
-import fr.scanmylib.ui.library.NewDocumentDialog
 
 /**
  * "Add to…": photos shared from another app, [photoCount] of them, wait for the user to choose
- * the document they join ([onChoose]), or a new one. Closing ([onClose]) imports nothing.
+ * the document they join ([onChoose]), or a new one ([onNewDocument]). Closing ([onClose])
+ * imports nothing.
  */
 @Composable
 fun ShareScreen(
     photoCount: Int,
     onChoose: (documentId: String) -> Unit,
+    onNewDocument: () -> Unit,
     onClose: () -> Unit,
     viewModel: ShareViewModel = viewModel(factory = ShareViewModel.Factory),
 ) {
     val documents by viewModel.documents.collectAsStateWithLifecycle()
-    val currentOnChoose by rememberUpdatedState(onChoose)
-    LaunchedEffect(viewModel) {
-        viewModel.documentsToOpen.collect { currentOnChoose(it) }
-    }
-    var creatingDocument by rememberSaveable { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -92,7 +83,7 @@ fun ShareScreen(
                     ListItem(
                         headlineContent = { Text(stringResource(R.string.new_document_title)) },
                         leadingContent = { Icon(painterResource(R.drawable.ic_add), contentDescription = null) },
-                        modifier = Modifier.clickable(role = Role.Button) { creatingDocument = true },
+                        modifier = Modifier.clickable(role = Role.Button, onClick = onNewDocument),
                     )
                     HorizontalDivider()
                 }
@@ -101,16 +92,6 @@ fun ShareScreen(
                 }
             }
         }
-    }
-
-    if (creatingDocument) {
-        NewDocumentDialog(
-            onDismiss = { creatingDocument = false },
-            onCreate = {
-                creatingDocument = false
-                viewModel.createDocument(it)
-            },
-        )
     }
 }
 

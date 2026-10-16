@@ -16,6 +16,8 @@ import androidx.navigation.compose.rememberNavController
 import fr.scanmylib.diagnostics.CrashReportDialog
 import fr.scanmylib.diagnostics.CrashReporter
 import fr.scanmylib.ui.ScanMyLibNavHost
+import fr.scanmylib.ui.share.isShare
+import fr.scanmylib.ui.share.sharedPhotos
 import fr.scanmylib.ui.theme.ScanMyLibTheme
 
 class MainActivity : ComponentActivity() {
@@ -24,6 +26,8 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         val settings = (application as ScanMyLibApplication).container.settings
+        // Read again when the activity is recreated: the document screen imports them once only.
+        val share = if (intent.isShare) intent.sharedPhotos(packageName) else null
         setContent {
             ScanMyLibTheme {
                 Surface(Modifier.fillMaxSize()) {
@@ -32,7 +36,7 @@ class MainActivity : ComponentActivity() {
                     val paired by produceState<Boolean?>(initialValue = null) {
                         value = settings.current().server != null
                     }
-                    paired?.let { ScanMyLibNavHost(navController, paired = it) }
+                    paired?.let { ScanMyLibNavHost(navController, paired = it, share = share, onExit = ::finish) }
                     var crashReport by remember { mutableStateOf(CrashReporter.lastCrash(this@MainActivity)) }
                     crashReport?.let { report ->
                         CrashReportDialog(report) {

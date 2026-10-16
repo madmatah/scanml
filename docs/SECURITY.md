@@ -196,6 +196,13 @@ data or library; an `--api` URL without an explicit port is refused) without
   camera opens (CameraX). Google's document scanner and QR
   code reader (ML Kit), provided by Google Play services, do not need it.
   Importing goes through the system photo picker, without storage permission.
+  Photos shared from another app ("Share › ScanMyLib") are read only as the
+  `content:` URIs of another app's provider, with the access the share grants:
+  `file:` paths and the app's own providers are refused (an authority must be
+  a plain provider name: a user part such as `0@` is refused), so that another
+  app cannot make ScanMyLib read, then send to the PC, files it cannot read
+  itself (the app's private files). The copy stops a byte past the server's
+  size limit, and the format is checked as for imported photos.
   Photos stay in the app's private storage until they are sent.
 - **Token**: it is only sent to the paired PC, never to another address (not
   even for thumbnails). It is excluded from Android backups and from transfers

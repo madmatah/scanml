@@ -23,6 +23,8 @@ import java.util.UUID
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 
 /** Outcome of an import from the photo picker. */
@@ -131,10 +133,27 @@ class ScanImporter(
         return count
     }
 
-    private fun copyContent(source: Uri, target: File) {
+    /**
+     * Copies [source] to [target], up to a byte past what the server accepts: a huge or endless
+     * stream (a photo shared by any app) stops there, and is then refused as too large. An import
+     * can be canceled between two blocks.
+     */
+    private suspend fun copyContent(source: Uri, target: File) {
         val input = context.contentResolver.openInputStream(source)
             ?: throw FileNotFoundException("cannot open $source")
-        input.use { content -> FileOutputStream(target).use { content.copyTo(it) } }
+        input.use { content ->
+            FileOutputStream(target).use { output ->
+                val buffer = ByteArray(COPY_BUFFER_SIZE)
+                var copied = 0L
+                while (copied <= MAX_SCAN_BYTES) {
+                    currentCoroutineContext().ensureActive()
+                    val read = content.read(buffer)
+                    if (read < 0) break
+                    output.write(buffer, 0, read)
+                    copied += read
+                }
+            }
+        }
     }
 
     /** Whether the server would refuse the image in [file]. */
@@ -191,7 +210,7 @@ internal suspend fun <T> importPhotos(
     photos: List<T>,
     staging: StagingArea,
     importedAt: Instant,
-    copy: (T, File) -> Unit,
+    copy: suspend (T, File) -> Unit,
     check: (File) -> PhotoRejection?,
     takenAt: (File) -> Instant?,
     onProgress: (Int) -> Unit = {},
@@ -356,3 +375,5 @@ private suspend fun deleteQuietly(files: List<File>) {
 }
 
 private const val TAG = "ScanImporter"
+
+private const val COPY_BUFFER_SIZE = 64 * 1024

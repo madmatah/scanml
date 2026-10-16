@@ -98,6 +98,8 @@ Internet.
 - **Import** opens the photo picker: photos taken with any app, put back in shooting order (EXIF date) and sent as they
   are. JPEG, PNG and WebP are accepted (no HEIC). A photo that cannot be read (a cloud photo while offline…) or that is
   too large (over 40 MB or 120 megapixels) is skipped with a message; the others are imported.
+- **Share** from the gallery or another app: select photos, then **Share › ScanMyLib**, and choose their document (or
+  create one). They join its pages to send, as with **Import**; Back then returns to the gallery.
 - **Before sending**, the pages wait on the phone: tap a thumbnail to see it full size or remove it, **Add pages** to
   scan more or import photos, **Send** to queue them for upload. **Later** (or Back) keeps them on the phone, and the
   library then shows "N pages to check before sending". **Discard** asks for confirmation, since these pages exist

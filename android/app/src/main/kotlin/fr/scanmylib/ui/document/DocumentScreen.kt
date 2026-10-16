@@ -4,6 +4,7 @@ package fr.scanmylib.ui.document
 
 import android.content.ActivityNotFoundException
 import android.content.res.Resources
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts.PickMultipleVisualMedia
@@ -81,6 +82,8 @@ import fr.scanmylib.ui.components.pageStatsText
 fun DocumentScreen(
     onBack: () -> Unit,
     onOpenCamera: () -> Unit,
+    /** Photos shared from another app, to import into the run when the screen first opens. */
+    sharedPhotos: List<Uri> = emptyList(),
     viewModel: DocumentViewModel = viewModel(factory = DocumentViewModel.Factory),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -143,6 +146,9 @@ fun DocumentScreen(
         }
     }
     var choosingCamera by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(viewModel, sharedPhotos) {
+        if (sharedPhotos.isNotEmpty()) viewModel.importSharedPhotos(sharedPhotos)
+    }
     // Ids rather than entities: the dialogs follow the live state of the page.
     var selectedLocalPage by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedServerPage by rememberSaveable { mutableStateOf<String?>(null) }

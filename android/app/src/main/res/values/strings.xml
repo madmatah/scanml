@@ -116,6 +116,13 @@
     <string name="camera_use_as_default_help">“Scan” will open it directly</string>
     <string name="camera_did_not_start">Didn’t start last time: tap to try again</string>
     <string name="camera_none_on_phone">No camera on this phone</string>
+    <string name="share_title">Add to…</string>
+    <string name="share_add_here">Add here</string>
+    <string name="share_nothing">Nothing to import: share photos (JPEG, PNG or WebP) from the gallery.</string>
+    <plurals name="share_photos">
+        <item quantity="one">%d photo to add: choose its document.</item>
+        <item quantity="other">%d photos to add: choose their document.</item>
+    </plurals>
     <string name="scan_preparing">Preparing pages…</string>
     <string name="scan_preparing_progress">%1$d of %2$d</string>
     <string name="scan_first_page">First page number</string>

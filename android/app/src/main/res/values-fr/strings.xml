@@ -67,9 +67,14 @@
     <string name="new_document_title">Nouveau document</string>
     <string name="new_document_name">Titre</string>
     <string name="new_document_author">Auteur (facultatif)</string>
-    <string name="new_document_unwarp">Livre relié</string>
-    <string name="new_document_unwarp_help">Redresse lors de l’OCR les pages courbées par la reliure.</string>
-    <string name="new_document_create">Créer</string>
+    <string name="new_document_unwarp">Aplatir les pages courbées</string>
+    <string name="new_document_unwarp_help">Pour les pages courbées près de la reliure ; fait par le PC, un peu plus lent</string>
+    <string name="new_document_create_scan">Créer et scanner</string>
+    <string name="new_document_create_import">Créer et importer</string>
+    <string name="new_document_create_add_shared">Créer et ajouter les photos</string>
+    <string name="new_document_failed">Le document n’a pas pu être créé. Réessayez.</string>
+    <string name="new_document_kind">Type</string>
+    <string name="new_document_kind_other">Autre</string>
     <string name="document_scan">Scanner</string>
     <string name="document_choose_camera">Choisir l’appareil photo</string>
     <string name="document_not_on_pc_yet">Pas encore sur le PC</string>

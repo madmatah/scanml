@@ -28,10 +28,6 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -61,15 +57,11 @@ import fr.scanmylib.ui.components.ocrStateLabel
 fun LibraryScreen(
     onOpenDocument: (String) -> Unit,
     onScanDocument: (String) -> Unit,
+    onNewDocument: () -> Unit,
     onOpenSettings: () -> Unit,
     viewModel: LibraryViewModel = viewModel(factory = LibraryViewModel.Factory),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    var creatingDocument by rememberSaveable { mutableStateOf(false) }
-    val currentOnOpenDocument by rememberUpdatedState(onOpenDocument)
-    LaunchedEffect(viewModel) {
-        viewModel.documentsToOpen.collect { currentOnOpenDocument(it) }
-    }
     // While visible, the screen follows the upload of the pages, then their processing on the PC.
     val lifecycleOwner = LocalLifecycleOwner.current
     LaunchedEffect(viewModel, lifecycleOwner) {
@@ -89,7 +81,7 @@ fun LibraryScreen(
         },
         floatingActionButton = {
             ExtendedFloatingActionButton(
-                onClick = { creatingDocument = true },
+                onClick = onNewDocument,
                 icon = { Icon(painterResource(R.drawable.ic_add), contentDescription = null) },
                 text = { Text(stringResource(R.string.library_new_document)) },
             )
@@ -122,16 +114,6 @@ fun LibraryScreen(
                 }
             }
         }
-    }
-
-    if (creatingDocument) {
-        NewDocumentDialog(
-            onDismiss = { creatingDocument = false },
-            onCreate = {
-                creatingDocument = false
-                viewModel.createDocument(it)
-            },
-        )
     }
 }
 

@@ -82,8 +82,10 @@ Internet.
 
 ## Scanning
 
-- **New document**: title, author, kind (book or document). For a book, flattening of pages curved by the binding
-  (**Bound book**) is on by default.
+- **New document**: title, author, kind (book or other), and **Flatten curved pages** (pages curved near the binding,
+  done by the PC), on by default for a book and available for both kinds. **Create and scan** then opens the default
+  camera, **Create and import** the photo picker. It works with the PC off: the PC gets the document with its first
+  upload.
 - **Scan** opens the default camera at once, with no question; in the library, the scan button of a card opens the
   document straight into it:
   - **Google scanner** (the default): detects the edges and crops the page. The **Google scanner retouching** setting

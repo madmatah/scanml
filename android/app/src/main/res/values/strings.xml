@@ -67,9 +67,14 @@
     <string name="new_document_title">New document</string>
     <string name="new_document_name">Title</string>
     <string name="new_document_author">Author (optional)</string>
-    <string name="new_document_unwarp">Bound book</string>
-    <string name="new_document_unwarp_help">Flattens pages curved by the binding during OCR.</string>
-    <string name="new_document_create">Create</string>
+    <string name="new_document_unwarp">Flatten curved pages</string>
+    <string name="new_document_unwarp_help">For pages curved near the binding; done by the PC, a little slower</string>
+    <string name="new_document_create_scan">Create and scan</string>
+    <string name="new_document_create_import">Create and import</string>
+    <string name="new_document_create_add_shared">Create and add the photos</string>
+    <string name="new_document_failed">The document couldn’t be created. Try again.</string>
+    <string name="new_document_kind">Kind</string>
+    <string name="new_document_kind_other">Other</string>
     <string name="document_scan">Scan</string>
     <string name="document_choose_camera">Choose the camera</string>
     <string name="document_not_on_pc_yet">Not on the PC yet</string>

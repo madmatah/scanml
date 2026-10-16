@@ -14,7 +14,9 @@ import fr.scanmylib.AppContainer
 import fr.scanmylib.ScanMyLibApplication
 import fr.scanmylib.ui.capture.CaptureScreen
 import fr.scanmylib.ui.document.DocumentScreen
+import fr.scanmylib.ui.library.AfterCreate
 import fr.scanmylib.ui.library.LibraryScreen
+import fr.scanmylib.ui.library.NewDocumentScreen
 import fr.scanmylib.ui.pairing.PairingScreen
 import fr.scanmylib.ui.settings.SettingsScreen
 import fr.scanmylib.ui.share.ShareScreen
@@ -27,11 +29,21 @@ data object PairingRoute
 data object LibraryRoute
 
 /**
- * A document; [importShared]: the photos shared with the app join its run once it opens;
- * [scanOnOpen]: its default camera opens once it opens (the library card's scan button).
+ * A document. Once it opens: [importShared], the photos shared with the app join its run;
+ * [scanOnOpen], its default camera opens (the library card's scan button, "Create and scan");
+ * [importOnOpen], the photo picker opens ("Create and import").
  */
 @Serializable
-data class DocumentRoute(val documentId: String, val importShared: Boolean = false, val scanOnOpen: Boolean = false)
+data class DocumentRoute(
+    val documentId: String,
+    val importShared: Boolean = false,
+    val scanOnOpen: Boolean = false,
+    val importOnOpen: Boolean = false,
+)
+
+/** "New document"; [forShare]: the photos shared with the app join it. */
+@Serializable
+data class NewDocumentRoute(val forShare: Boolean = false)
 
 /** "Add to…": choosing the document that receives photos shared from another app. */
 @Serializable
@@ -70,6 +82,7 @@ fun ScanMyLibNavHost(navController: NavHostController, paired: Boolean, share: L
             LibraryScreen(
                 onOpenDocument = { if (resumed()) navController.navigate(DocumentRoute(it)) },
                 onScanDocument = { if (resumed()) navController.navigate(DocumentRoute(it, scanOnOpen = true)) },
+                onNewDocument = { if (resumed()) navController.navigate(NewDocumentRoute()) },
                 onOpenSettings = { navController.navigate(SettingsRoute) },
             )
         }
@@ -85,7 +98,31 @@ fun ScanMyLibNavHost(navController: NavHostController, paired: Boolean, share: L
                         }
                     }
                 },
+                onNewDocument = {
+                    if (entry.lifecycle.currentState == Lifecycle.State.RESUMED) {
+                        navController.navigate(NewDocumentRoute(forShare = true))
+                    }
+                },
                 onClose = onExit,
+            )
+        }
+        composable<NewDocumentRoute> { entry ->
+            val forShare = entry.toRoute<NewDocumentRoute>().forShare
+            NewDocumentScreen(
+                forShare = forShare,
+                // The document takes the place of the form, and of "Add to…" for shared photos.
+                onCreated = { id, then ->
+                    val route = DocumentRoute(
+                        id,
+                        importShared = then == AfterCreate.ADD_SHARED,
+                        scanOnOpen = then == AfterCreate.SCAN,
+                        importOnOpen = then == AfterCreate.IMPORT,
+                    )
+                    navController.navigate(route) {
+                        if (forShare) popUpTo<ShareRoute> { inclusive = true } else popUpTo<NewDocumentRoute> { inclusive = true }
+                    }
+                },
+                onCancel = { navController.navigateUp() },
             )
         }
         composable<DocumentRoute> { entry ->
@@ -97,6 +134,7 @@ fun ScanMyLibNavHost(navController: NavHostController, paired: Boolean, share: L
                 onOpenCamera = { navController.navigate(CaptureRoute(route.documentId)) { launchSingleTop = true } },
                 sharedPhotos = if (route.importShared) share.orEmpty() else emptyList(),
                 scanOnOpen = route.scanOnOpen,
+                importOnOpen = route.importOnOpen,
             )
         }
         composable<CaptureRoute> {

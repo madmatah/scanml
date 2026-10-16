@@ -23,6 +23,8 @@ import fr.scanmylib.pairing.PairingManager
 import fr.scanmylib.settings.SettingsRepository
 import fr.scanmylib.sync.PageUploader
 import fr.scanmylib.sync.SyncScheduler
+import fr.scanmylib.update.AndroidInstaller
+import fr.scanmylib.update.AppUpdater
 import java.io.File
 import java.io.IOException
 import java.time.Clock
@@ -89,7 +91,7 @@ class AppContainer(private val context: Context) {
         ScanImporter(context, database.pendingPageDao(), scanFiles, staging, syncScheduler, clock)
     }
 
-    val pairing by lazy { PairingManager(settings, library, syncScheduler) }
+    val pairing by lazy { PairingManager(settings, library, syncScheduler, updates) }
 
     val uploader by lazy { PageUploader(settings, ::api, database, scanFiles, clock) }
 
@@ -107,6 +109,12 @@ class AppContainer(private val context: Context) {
     }
 
     fun api(server: ServerConfig): ScanMyLibApi = ScanMyLibApi(httpClient, server)
+
+    /** The app's updates, offered by the paired PC. */
+    val updates by lazy {
+        val downloads = File(context.cacheDir, "updates")
+        AppUpdater(AndroidInstaller(context), downloads, settings, ::api, httpClient, applicationScope, clock)
+    }
 
     private companion object {
         const val THUMBNAIL_CACHE_BYTES = 128L * 1024 * 1024

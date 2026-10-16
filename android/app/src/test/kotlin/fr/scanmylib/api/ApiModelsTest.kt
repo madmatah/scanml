@@ -11,6 +11,20 @@ class ApiModelsTest {
     @Test
     fun `decodes the health and status examples`() {
         assertEquals(Health(name = "ScanMyLib", api = 1), ApiJson.decodeFromString(Health.serializer(), ApiFixtures.HEALTH))
+        val withApk = """
+            {"name": "ScanMyLib", "version": "0.8.0", "api": 1, "apk": {"application_id": "fr.scanmylib",
+             "version": "0.8.0", "version_code": 800, "sha256": "${"ab".repeat(32)}", "size": 1234,
+             "path": "/download/scanmylib.apk"}}
+        """.trimIndent()
+        assertEquals(
+            PublishedApk("fr.scanmylib", "0.8.0", 800, "ab".repeat(32), 1234, "/download/scanmylib.apk"),
+            ApiJson.decodeFromString(Health.serializer(), withApk).apk,
+        )
+        assertNull(ApiJson.decodeFromString(Health.serializer(), """{"name": "ScanMyLib", "api": 1, "apk": null}""").apk)
+        // A malformed description leaves the health check as it is: pairing still works.
+        val malformed = ApiJson.decodeFromString(Health.serializer(), """{"name": "ScanMyLib", "api": 1, "apk": {"version": 3}}""")
+        assertEquals("ScanMyLib", malformed.name)
+        assertNull(malformed.apk)
         val status = ApiJson.decodeFromString(ServerStatus.serializer(), ApiFixtures.STATUS)
         assertEquals("0.1.0", status.version)
         assertEquals("idle", status.ocr.state)

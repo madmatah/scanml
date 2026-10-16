@@ -50,8 +50,10 @@ import fr.scanmylib.model.ServerConfig
 import fr.scanmylib.ui.components.MessageCard
 import fr.scanmylib.ui.components.ServerImage
 import fr.scanmylib.ui.components.StatusLine
+import fr.scanmylib.ui.components.UpdateBanner
 import fr.scanmylib.ui.components.iconRes
 import fr.scanmylib.ui.components.ocrStateLabel
+import fr.scanmylib.update.UpdateState
 
 @Composable
 fun LibraryScreen(
@@ -62,7 +64,9 @@ fun LibraryScreen(
     viewModel: LibraryViewModel = viewModel(factory = LibraryViewModel.Factory),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    // While visible, the screen follows the upload of the pages, then their processing on the PC.
+    val update by viewModel.updateState.collectAsStateWithLifecycle()
+    // While visible, the screen follows the upload of the pages, then their processing on the PC,
+    // and asks the PC for an update when due.
     val lifecycleOwner = LocalLifecycleOwner.current
     LaunchedEffect(viewModel, lifecycleOwner) {
         lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) { viewModel.keepUpToDate() }
@@ -99,7 +103,16 @@ fun LibraryScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 modifier = Modifier.fillMaxSize(),
             ) {
+                // First, even while empty (the PC's state unknown): the list keeps its first visible
+                // item in place, so an item that appears later, like the update, shows below it
+                // rather than above the screen.
                 item(key = "pc") { PcStatusCard(state.pc) }
+                // After the PC's card: a PC that refuses the token comes first.
+                if (update is UpdateState.WithUpdate) {
+                    item(key = "update") {
+                        UpdateBanner(update, onInstall = viewModel::installUpdate, onCancel = viewModel::cancelUpdate)
+                    }
+                }
                 if (state.documents.isEmpty()) {
                     item(key = "empty") { EmptyLibrary() }
                 }

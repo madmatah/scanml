@@ -22,6 +22,12 @@ import fr.scanmylib.ui.theme.ScanMyLibTheme
 
 class MainActivity : ComponentActivity() {
 
+    override fun onResume() {
+        super.onResume()
+        // Maybe back from the system page that allows installing the update.
+        (application as ScanMyLibApplication).container.updates.onReturn()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)

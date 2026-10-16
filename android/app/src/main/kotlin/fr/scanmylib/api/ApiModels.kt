@@ -4,6 +4,7 @@ import fr.scanmylib.model.DocumentKind
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
 
 // JSON models of the ScanMyLib API (docs/API.md), limited to the fields the app uses.
 
@@ -24,6 +25,24 @@ const val SUPPORTED_API_VERSION = 1
 data class Health(
     val name: String,
     val api: Int = 0,
+    /** The APK the PC serves, as sent: read with [apk], so that a malformed one never fails the health check. */
+    @SerialName("apk") private val apkJson: JsonElement? = null,
+) {
+    /** The APK the PC serves; null if none is published, or if its description cannot be read. */
+    val apk: PublishedApk?
+        get() = apkJson?.let { runCatching { ApiJson.decodeFromJsonElement(PublishedApk.serializer(), it) }.getOrNull() }
+}
+
+/** The APK published on the PC, as `/api/health` describes it. */
+@Serializable
+data class PublishedApk(
+    @SerialName("application_id") val applicationId: String,
+    val version: String,
+    @SerialName("version_code") val versionCode: Long,
+    val sha256: String,
+    val size: Long,
+    /** Its download path on the PC, e.g. `/download/scanmylib.apk`. */
+    val path: String,
 )
 
 /** `GET /api/status` */

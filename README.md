@@ -76,6 +76,13 @@ The services restart automatically with Docker (`restart: unless-stopped`); ther
    the app then knows the PC's address and its access token. Without a QR code reader, type the **PC address** and the
    **Token** shown under the QR code, then tap **Test and pair**.
 
+**Updates.** Once paired, the app asks the PC which app it publishes, when the library shows or is refreshed, at most
+once an hour, and again once the library reaches the PC if it could not before. When it is newer, the library shows
+"ScanMyLib X.Y.Z is available · Install": the app downloads it, checks it (the file the PC announced, the same app,
+newer, signed with the same key), then hands it to Android, which asks to confirm. The first time, Android asks to allow
+ScanMyLib to install apps, on a page of its settings; the install goes on when you come back.
+**Settings › Check for updates** asks the PC at once.
+
 The phone and the PC must be on the same network. Away from it, the app keeps the pages and sends them once the PC is
 reachable again. To send pages from elsewhere, use a VPN (WireGuard, Tailscale…) rather than exposing the port to the
 Internet.
@@ -239,7 +246,8 @@ scripts/deploy.sh --apk        # deploys, and publishes the new app
    are kept);
 3. restarts `api` and `ocr`, checks their health and the sandbox's isolation (the sandbox is stopped if that check
    fails), and tags the images that now run `:deployed`, the rollback target;
-4. with `--apk`, builds and publishes the new app (without it, phones keep their app);
+4. with `--apk`, builds and publishes the new app, which the phones then offer to install (without it, phones keep
+   their app);
 5. tags the version (`vX.Y.Z`) and pushes the tag.
 
 If a step fails, it says what state production is in and prints the commands to roll back to the `:deployed` images and

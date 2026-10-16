@@ -9,6 +9,10 @@
          app: Google's document and QR code scanners run in Google Play services, without it. -->
     <uses-permission android:name="android.permission.CAMERA" />
 
+    <!-- To install the updates the paired PC offers, through Android's installer, which asks the
+         user each time; the first time, Android also asks to allow ScanMyLib to install apps. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
     <!-- The app works without a camera (photo import, Google's scanner). -->
     <uses-feature
         android:name="android.hardware.camera"
@@ -47,6 +51,11 @@
                 <data android:mimeType="image/*" />
             </intent-filter>
         </activity>
+
+        <!-- The results of an update's installation: only the app's own pending intent reaches it. -->
+        <receiver
+            android:name=".update.UpdateInstallReceiver"
+            android:exported="false" />
 
         <!-- Lets Google Play services download the QR code scanner when the app is installed. -->
         <meta-data

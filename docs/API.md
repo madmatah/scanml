@@ -32,7 +32,8 @@ metadata `scripts/build-apk.sh` publishes next to the APK (`scanmylib.json`, wit
 `version_name`, `version_code`, `sha256` and `size`) and checks each field: `apk` is null without an APK, or without
 metadata that holds up, or with the metadata of another APK (not the size of the one published). The app offers the
 update when `version_code` is higher than its own and `application_id` is its own; it then checks the downloaded file
-against `sha256` and its signing certificate against its own.
+against `size`, `sha256`, `application_id` and `version_code`, and, on Android 9 and later, its signing certificate
+against its own.
 
 ## Session
 

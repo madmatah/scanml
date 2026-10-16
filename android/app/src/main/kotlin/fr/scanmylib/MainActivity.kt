@@ -37,12 +37,14 @@ class MainActivity : ComponentActivity() {
                         value = settings.current().server != null
                     }
                     paired?.let { ScanMyLibNavHost(navController, paired = it, share = share, onExit = ::finish) }
-                    var crashReport by remember { mutableStateOf(CrashReporter.lastCrash(this@MainActivity)) }
+                    // Once: closing keeps the report, which "About" shows until the user deletes it.
+                    val crashReports = remember { CrashReporter.reports(this@MainActivity) }
+                    var crashReport by remember { mutableStateOf(crashReports.unseen()) }
                     crashReport?.let { report ->
-                        CrashReportDialog(report) {
-                            CrashReporter.clear(this@MainActivity)
+                        CrashReportDialog(report, onClose = {
+                            crashReports.markSeen()
                             crashReport = null
-                        }
+                        })
                     }
                 }
             }

@@ -195,6 +195,8 @@
     <string name="settings_section_about">À propos</string>
     <string name="settings_version">ScanMyLib pour Android %1$s</string>
     <string name="settings_about">Les pages scannées partent vers votre PC dès qu’il est joignable ; la reconnaissance du texte (OCR) se fait sur le PC.</string>
+    <string name="settings_last_crash">Dernier rapport d’erreur</string>
+    <string name="settings_last_crash_help">Touchez pour le voir, le partager ou le supprimer</string>
 
     <plurals name="library_pc_online_busy">
         <item quantity="one">PC connecté · OCR %1$s · %2$d page à traiter</item>
@@ -356,8 +358,10 @@
         <item quantity="other">%d photos n’ont pas pu être importées : elles sont ignorées.</item>
     </plurals>
     <string name="crash_title">ScanMyLib s’est arrêtée</string>
-    <string name="crash_intro">La dernière fois, l’appli s’est arrêtée à cause d’une erreur. Copiez ce rapport et transmettez-le pour qu’elle soit corrigée. Il ne contient ni vos scans ni votre jeton.</string>
-    <string name="crash_copy">Copier le rapport</string>
+    <string name="crash_intro">La dernière fois, l’appli s’est arrêtée à cause d’une erreur. Partagez ou copiez ce rapport pour qu’elle soit corrigée. Il ne contient ni vos scans ni votre jeton. Il reste dans Paramètres › À propos jusqu’à ce que vous le supprimiez.</string>
+    <string name="crash_copy">Copier</string>
     <string name="crash_copied">Rapport copié</string>
     <string name="crash_close">Fermer</string>
+    <string name="crash_share">Partager</string>
+    <string name="crash_share_subject">Rapport d’erreur de ScanMyLib</string>
 </resources>

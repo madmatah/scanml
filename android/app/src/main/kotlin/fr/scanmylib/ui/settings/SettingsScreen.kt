@@ -5,6 +5,7 @@ package fr.scanmylib.ui.settings
 import android.content.pm.PackageManager
 import android.text.format.Formatter
 import androidx.annotation.StringRes
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -55,6 +56,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import fr.scanmylib.BuildConfig
 import fr.scanmylib.R
+import fr.scanmylib.diagnostics.CrashReportDialog
+import fr.scanmylib.diagnostics.CrashReporter
 import fr.scanmylib.model.ScanSource
 import fr.scanmylib.model.ScannerMode
 import fr.scanmylib.ui.components.BackButton
@@ -197,6 +200,27 @@ fun SettingsScreen(
                 headlineContent = { Text(stringResource(R.string.settings_version, BuildConfig.VERSION_NAME)) },
                 supportingContent = { Text(stringResource(R.string.settings_about)) },
             )
+            val crashReports = remember(context) { CrashReporter.reports(context) }
+            var crashReport by remember { mutableStateOf(crashReports.read()) }
+            var showingCrashReport by rememberSaveable { mutableStateOf(false) }
+            crashReport?.let { report ->
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.settings_last_crash)) },
+                    supportingContent = { Text(stringResource(R.string.settings_last_crash_help)) },
+                    modifier = Modifier.clickable(role = Role.Button) { showingCrashReport = true },
+                )
+                if (showingCrashReport) {
+                    CrashReportDialog(
+                        report,
+                        onClose = { showingCrashReport = false },
+                        onDelete = {
+                            crashReports.delete()
+                            crashReport = null
+                            showingCrashReport = false
+                        },
+                    )
+                }
+            }
         }
     }
 

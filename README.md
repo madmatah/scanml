@@ -84,7 +84,8 @@ Internet.
 
 - **New document**: title, author, kind (book or document). For a book, flattening of pages curved by the binding
   (**Bound book**) is on by default.
-- **Scan** opens the default camera at once, with no question:
+- **Scan** opens the default camera at once, with no question; in the library, the scan button of a card opens the
+  document straight into it:
   - **Google scanner** (the default): detects the edges and crops the page. The **Google scanner retouching** setting
     chooses between **None — crop only** (the default), **Filters** and **Full** (filters plus finger and stain
     removal). This scanner never returns the original photo. To chain pages, tap "+" on its preview screen.
@@ -102,7 +103,7 @@ Internet.
   create one). They join its pages to send, as with **Import**; Back then returns to the gallery.
 - **Before sending**, the pages wait on the phone: tap a thumbnail to see it full size or remove it, **Add pages** to
   scan more or import photos, **Send** to queue them for upload. **Later** (or Back) keeps them on the phone, and the
-  library then shows "N pages to check before sending". **Discard** asks for confirmation, since these pages exist
+  library then shows "N pages to send". **Discard** asks for confirmation, since these pages exist
   nowhere else.
 - **First page number** (optional, before sending): for pages without a printed number that should be numbered. With
   **Consecutive pages** (on by default), the following pages get the next numbers. Leave it blank for front matter

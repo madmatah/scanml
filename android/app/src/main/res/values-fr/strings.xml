@@ -52,6 +52,18 @@
     <string name="library_pc_token_refused">Le PC refuse le jeton : associez à nouveau l’appli dans les paramètres.</string>
     <string name="library_pc_error">Erreur du PC : %1$s</string>
     <string name="library_document_refused">Refusé par le PC</string>
+    <string name="library_scan_in">Scanner des pages dans %1$s</string>
+    <string name="library_pages_summary">%1$s · p. %2$s</string>
+    <plurals name="library_pages_read_failed">
+        <item quantity="one">%d échec de lecture</item>
+        <item quantity="many">%d échecs de lecture</item>
+        <item quantity="other">%d échecs de lecture</item>
+    </plurals>
+    <plurals name="library_pages_being_read">
+        <item quantity="one">%d en lecture</item>
+        <item quantity="many">%d en lecture</item>
+        <item quantity="other">%d en lecture</item>
+    </plurals>
     <string name="new_document_title">Nouveau document</string>
     <string name="new_document_name">Titre</string>
     <string name="new_document_author">Auteur (facultatif)</string>
@@ -184,20 +196,20 @@
         <item quantity="many">PC connecté · OCR %1$s · %2$d pages à traiter</item>
         <item quantity="other">PC connecté · OCR %1$s · %2$d pages à traiter</item>
     </plurals>
-    <plurals name="library_pages_to_upload">
+    <plurals name="library_pages_in_transit">
+        <item quantity="one">%d en route vers le PC</item>
+        <item quantity="many">%d en route vers le PC</item>
+        <item quantity="other">%d en route vers le PC</item>
+    </plurals>
+    <plurals name="library_pages_failed">
+        <item quantity="one">%d refusée</item>
+        <item quantity="many">%d refusées</item>
+        <item quantity="other">%d refusées</item>
+    </plurals>
+    <plurals name="library_pages_to_confirm">
         <item quantity="one">%d page à envoyer</item>
         <item quantity="many">%d pages à envoyer</item>
         <item quantity="other">%d pages à envoyer</item>
-    </plurals>
-    <plurals name="library_pages_failed">
-        <item quantity="one">%d page refusée</item>
-        <item quantity="many">%d pages refusées</item>
-        <item quantity="other">%d pages refusées</item>
-    </plurals>
-    <plurals name="library_pages_to_confirm">
-        <item quantity="one">%d page à vérifier avant l’envoi</item>
-        <item quantity="many">%d pages à vérifier avant l’envoi</item>
-        <item quantity="other">%d pages à vérifier avant l’envoi</item>
     </plurals>
     <plurals name="stats_pages">
         <item quantity="one">%d page</item>

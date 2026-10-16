@@ -54,6 +54,16 @@
     <string name="library_pc_token_refused">Token rejected by the PC: pair the app again in Settings.</string>
     <string name="library_pc_error">PC error: %1$s</string>
     <string name="library_document_refused">Rejected by the PC</string>
+    <string name="library_scan_in">Scan pages into %1$s</string>
+    <string name="library_pages_summary">%1$s · pp. %2$s</string>
+    <plurals name="library_pages_read_failed">
+        <item quantity="one">%d couldn’t be read</item>
+        <item quantity="other">%d couldn’t be read</item>
+    </plurals>
+    <plurals name="library_pages_being_read">
+        <item quantity="one">%d being read</item>
+        <item quantity="other">%d being read</item>
+    </plurals>
     <string name="new_document_title">New document</string>
     <string name="new_document_name">Title</string>
     <string name="new_document_author">Author (optional)</string>
@@ -184,17 +194,17 @@
         <item quantity="one">PC connected · OCR %1$s · %2$d page to process</item>
         <item quantity="other">PC connected · OCR %1$s · %2$d pages to process</item>
     </plurals>
-    <plurals name="library_pages_to_upload">
-        <item quantity="one">%d page to upload</item>
-        <item quantity="other">%d pages to upload</item>
+    <plurals name="library_pages_in_transit">
+        <item quantity="one">%d on its way to the PC</item>
+        <item quantity="other">%d on their way to the PC</item>
     </plurals>
     <plurals name="library_pages_failed">
-        <item quantity="one">%d page rejected</item>
-        <item quantity="other">%d pages rejected</item>
+        <item quantity="one">%d rejected</item>
+        <item quantity="other">%d rejected</item>
     </plurals>
     <plurals name="library_pages_to_confirm">
-        <item quantity="one">%d page to check before sending</item>
-        <item quantity="other">%d pages to check before sending</item>
+        <item quantity="one">%d page to send</item>
+        <item quantity="other">%d pages to send</item>
     </plurals>
     <plurals name="stats_pages">
         <item quantity="one">%d page</item>

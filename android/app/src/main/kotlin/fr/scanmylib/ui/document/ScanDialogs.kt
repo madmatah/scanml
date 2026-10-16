@@ -1,9 +1,10 @@
+@file:OptIn(ExperimentalMaterial3Api::class)
+
 package fr.scanmylib.ui.document
 
-import android.content.pm.PackageManager
-import androidx.annotation.StringRes
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -15,37 +16,47 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
@@ -55,116 +66,82 @@ import fr.scanmylib.library.PageNumbering
 import fr.scanmylib.library.StagedPage
 import fr.scanmylib.model.ScanSource
 import fr.scanmylib.ui.components.LocalImage
+import fr.scanmylib.ui.components.descriptionRes
+import fr.scanmylib.ui.components.iconRes
+import fr.scanmylib.ui.components.labelRes
+import kotlinx.coroutines.launch
 
 /**
- * Before scanning: where the pages come from, their optional numbering, then the scanner. The
- * pages join the run waiting for confirmation, if there is one. Messages show in the dialog
- * ([snackbarHostState]): behind it, they would be dimmed.
+ * "Scan with…": the cameras "Scan" can open, for this run only, or from now on with "Use as
+ * default". The app's camera is disabled on a phone without one. Google's scanner stays
+ * available after it failed to start, with a word about it: choosing it tries again.
  */
 @Composable
-fun ScanSetupDialog(
+fun CameraSheet(
     scan: ScanUiState,
-    snackbarHostState: SnackbarHostState,
-    onSourceChange: (ScanSource) -> Unit,
-    onFirstPageChange: (String) -> Unit,
-    onConsecutiveChange: (Boolean) -> Unit,
-    onStart: () -> Unit,
+    onChoose: (camera: ScanSource, makeDefault: Boolean) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val context = LocalContext.current
-    val hasCamera = remember(context) { context.packageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_ANY) }
-    val sourceAvailable = scan.source != ScanSource.CAMERA || hasCamera
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.scan_setup_title)) },
-        text = {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.verticalScroll(rememberScrollState()),
-            ) {
-                val waiting = scan.stagedPages.size
-                if (waiting > 0) {
-                    Text(
-                        pluralStringResource(R.plurals.scan_setup_adding, waiting, waiting),
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                }
-                Column(Modifier.selectableGroup()) {
-                    ScanSource.entries.forEach { source ->
-                        SourceOption(
-                            source = source,
-                            selected = scan.source == source,
-                            enabled = source != ScanSource.CAMERA || hasCamera,
-                            onSelect = { onSourceChange(source) },
-                        )
-                    }
-                }
-                Text(stringResource(R.string.scan_setup_help), style = MaterialTheme.typography.bodyMedium)
-                NumberingFields(scan, onFirstPageChange, onConsecutiveChange)
-                SnackbarHost(snackbarHostState)
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onStart, enabled = scan.numbering != null && sourceAvailable) {
-                Text(stringResource(scan.source.startLabelRes()))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
-        },
-    )
-}
-
-@Composable
-private fun SourceOption(source: ScanSource, selected: Boolean, enabled: Boolean, onSelect: () -> Unit) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .selectable(selected = selected, enabled = enabled, role = Role.RadioButton, onClick = onSelect)
-            .padding(vertical = 4.dp),
-    ) {
-        RadioButton(selected = selected, onClick = null, enabled = enabled)
-        Column(
-            Modifier
-                .weight(1f)
-                .padding(start = 12.dp),
-        ) {
-            Text(stringResource(source.labelRes()), style = MaterialTheme.typography.bodyLarge)
+    var makeDefault by rememberSaveable { mutableStateOf(false) }
+    val sheetState = rememberModalBottomSheetState()
+    val scope = rememberCoroutineScope()
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+        Column(Modifier.padding(bottom = 16.dp)) {
             Text(
-                stringResource(source.descriptionRes()),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                stringResource(R.string.camera_sheet_title),
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier
+                    .padding(horizontal = 24.dp, vertical = 8.dp)
+                    .semantics { heading() },
+            )
+            ScanSource.CAMERAS.forEach { camera ->
+                val enabled = camera != ScanSource.CAMERA || scan.hasCamera
+                val note = when {
+                    !enabled -> R.string.camera_none_on_phone
+                    camera == ScanSource.GOOGLE_SCANNER && scan.googleScannerUnavailable -> R.string.camera_did_not_start
+                    else -> null
+                }
+                ListItem(
+                    headlineContent = { Text(stringResource(camera.labelRes())) },
+                    supportingContent = { Text(stringResource(note ?: camera.descriptionRes())) },
+                    leadingContent = { Icon(painterResource(camera.iconRes()), contentDescription = null) },
+                    trailingContent = if (camera == scan.defaultCamera) {
+                        {
+                            Text(
+                                stringResource(R.string.camera_default),
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                    } else {
+                        null
+                    },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                    modifier = Modifier
+                        .alpha(if (enabled) 1f else DISABLED_ALPHA)
+                        .clickable(enabled = enabled, role = Role.Button) {
+                            // The camera opens once the sheet has slid away.
+                            scope.launch { sheetState.hide() }.invokeOnCompletion { onChoose(camera, makeDefault) }
+                        },
+                )
+            }
+            HorizontalDivider(Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+            ListItem(
+                headlineContent = { Text(stringResource(R.string.camera_use_as_default)) },
+                supportingContent = { Text(stringResource(R.string.camera_use_as_default_help)) },
+                leadingContent = { Checkbox(checked = makeDefault, onCheckedChange = null) },
+                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                modifier = Modifier.toggleable(value = makeDefault, role = Role.Checkbox) { makeDefault = it },
             )
         }
     }
 }
 
-@StringRes
-private fun ScanSource.labelRes(): Int = when (this) {
-    ScanSource.GOOGLE_SCANNER -> R.string.scan_source_google
-    ScanSource.CAMERA -> R.string.scan_source_camera
-    ScanSource.PHOTO_PICKER -> R.string.scan_source_picker
-}
-
-@StringRes
-private fun ScanSource.descriptionRes(): Int = when (this) {
-    ScanSource.GOOGLE_SCANNER -> R.string.scan_source_google_help
-    ScanSource.CAMERA -> R.string.scan_source_camera_help
-    ScanSource.PHOTO_PICKER -> R.string.scan_source_picker_help
-}
-
-@StringRes
-private fun ScanSource.startLabelRes(): Int = when (this) {
-    ScanSource.GOOGLE_SCANNER -> R.string.scan_setup_start
-    ScanSource.CAMERA -> R.string.scan_setup_start_camera
-    ScanSource.PHOTO_PICKER -> R.string.scan_setup_start_picker
-}
-
 /**
  * After scanning: the pages of the run, in order, whose numbering can still be set or corrected
  * before they are queued. A page can be looked at and taken out ([onRemovePage]), more pages can
- * join the run ([onAddPages]), and the run can wait for later ([onLater], or Back): it stays on
+ * join the run ([onScanMore] with either camera, [onImportMore] from the photo picker), and the
+ * run can wait for later ([onLater], or Back): it stays on
  * the phone. A tap outside does nothing, and discarding the run asks first, so that a stray tap
  * cannot lose it. Messages show in the dialog ([snackbarHostState]): behind it, they would be
  * dimmed.
@@ -178,7 +155,8 @@ fun ScanReviewDialog(
     onConfirm: () -> Unit,
     onDiscard: () -> Unit,
     onRemovePage: (StagedPage) -> Unit,
-    onAddPages: () -> Unit,
+    onScanMore: (camera: ScanSource) -> Unit,
+    onImportMore: () -> Unit,
     onLater: () -> Unit,
 ) {
     val count = scan.stagedPages.size
@@ -195,11 +173,7 @@ fun ScanReviewDialog(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
             ) {
                 StagedPagesStrip(scan.stagedPages, onClick = { if (!scan.sending) shownPage = it.file.path })
-                TextButton(onClick = onAddPages, enabled = !scan.sending) {
-                    Icon(painterResource(R.drawable.ic_add), contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text(stringResource(R.string.scan_review_add))
-                }
+                AddPagesButton(scan, enabled = !scan.sending, onScan = onScanMore, onImport = onImportMore)
                 NumberingFields(scan, onFirstPageChange, onConsecutiveChange)
                 Text(
                     numberingSummary(scan.numbering, count),
@@ -248,6 +222,48 @@ fun ScanReviewDialog(
             },
             onDismiss = { shownPage = null },
         )
+    }
+}
+
+/**
+ * "Add pages": a menu with either camera, the default first, then the photo picker. The app's
+ * camera is disabled on a phone without one.
+ */
+@Composable
+private fun AddPagesButton(
+    scan: ScanUiState,
+    enabled: Boolean,
+    onScan: (camera: ScanSource) -> Unit,
+    onImport: () -> Unit,
+) {
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    Box {
+        TextButton(onClick = { expanded = true }, enabled = enabled) {
+            Icon(painterResource(R.drawable.ic_add), contentDescription = null)
+            Spacer(Modifier.width(8.dp))
+            Text(stringResource(R.string.scan_review_add))
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            ScanSource.CAMERAS.sortedByDescending { it == scan.camera }.forEach { camera ->
+                DropdownMenuItem(
+                    text = { Text(stringResource(camera.labelRes())) },
+                    leadingIcon = { Icon(painterResource(camera.iconRes()), contentDescription = null) },
+                    enabled = camera != ScanSource.CAMERA || scan.hasCamera,
+                    onClick = {
+                        expanded = false
+                        onScan(camera)
+                    },
+                )
+            }
+            DropdownMenuItem(
+                text = { Text(stringResource(ScanSource.PHOTO_PICKER.labelRes())) },
+                leadingIcon = { Icon(painterResource(ScanSource.PHOTO_PICKER.iconRes()), contentDescription = null) },
+                onClick = {
+                    expanded = false
+                    onImport()
+                },
+            )
+        }
     }
 }
 
@@ -396,3 +412,5 @@ private fun numberingSummary(numbering: PageNumbering?, count: Int): String {
         else -> stringResource(R.string.scan_summary_range, first, last)
     }
 }
+
+private const val DISABLED_ALPHA = 0.38f

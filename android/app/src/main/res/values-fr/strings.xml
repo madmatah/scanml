@@ -58,7 +58,8 @@
     <string name="new_document_unwarp">Livre relié</string>
     <string name="new_document_unwarp_help">Redresse lors de l’OCR les pages courbées par la reliure.</string>
     <string name="new_document_create">Créer</string>
-    <string name="document_scan_pages">Scanner des pages</string>
+    <string name="document_scan">Scanner</string>
+    <string name="document_choose_camera">Choisir l’appareil photo</string>
     <string name="document_not_on_pc_yet">Pas encore sur le PC</string>
     <string name="document_not_on_pc_yet_long">Ce document n’est pas encore sur le PC : il y sera créé au prochain envoi.</string>
     <string name="document_coverage">Pages couvertes : %1$s</string>
@@ -67,7 +68,7 @@
     <string name="document_folder">Dossier sur le PC : %1$s</string>
     <string name="document_unwarp_on">Redressement des pages courbées activé.</string>
     <string name="document_upload_refused">Le PC a refusé ce document : %1$s</string>
-    <string name="document_no_pages">Aucune page pour l’instant : touchez « Scanner des pages ».</string>
+    <string name="document_no_pages">Aucune page pour l’instant : touchez « Scanner » ou « Importer ».</string>
     <string name="document_gone">Ce document n’existe plus : il a été supprimé sur le PC.</string>
     <string name="page_label">p. %1$s</string>
     <string name="page_without_number">Sans numéro</string>
@@ -101,17 +102,18 @@
     <string name="local_page_failed">Refusée : %1$s.</string>
     <string name="local_page_will_retry">Dernier essai : %1$s. Nouvel essai automatique.</string>
     <string name="local_page_needs_pairing">Le PC a refusé le jeton : associez à nouveau l’appli pour reprendre l’envoi.</string>
-    <string name="scan_setup_title">Scanner des pages</string>
-    <string name="scan_setup_help">Indiquez le numéro de la première page si vous le connaissez : il aide à classer les pages dont le numéro n’est pas imprimé.</string>
-    <string name="scan_setup_start">Lancer le scanner</string>
-    <string name="scan_setup_start_camera">Prendre les photos</string>
-    <string name="scan_setup_start_picker">Choisir les photos</string>
     <string name="scan_source_google">Scanner Google</string>
-    <string name="scan_source_google_help">Recadre et redresse chaque page (retouche réglable dans les paramètres).</string>
-    <string name="scan_source_camera">Appareil photo, page par page</string>
-    <string name="scan_source_camera_help">Photos d’origine, sans retouche, une page après l’autre.</string>
-    <string name="scan_source_picker">Importer des photos</string>
-    <string name="scan_source_picker_help">Photos déjà prises, classées par date de prise de vue.</string>
+    <string name="scan_source_google_help">Pages de texte : recadrage automatique</string>
+    <string name="scan_source_camera">Appareil photo</string>
+    <string name="scan_source_camera_help">Illustrations : photos d’origine, couleurs fidèles</string>
+    <string name="scan_source_picker">Importer</string>
+    <string name="scan_source_picker_help">Photos déjà prises, sans retouche</string>
+    <string name="camera_sheet_title">Scanner avec…</string>
+    <string name="camera_default">Par défaut</string>
+    <string name="camera_use_as_default">Utiliser par défaut</string>
+    <string name="camera_use_as_default_help">« Scanner » l’ouvrira directement</string>
+    <string name="camera_did_not_start">Ne s’est pas lancé la dernière fois : touchez pour réessayer</string>
+    <string name="camera_none_on_phone">Pas d’appareil photo sur ce téléphone</string>
     <string name="scan_preparing">Préparation des pages…</string>
     <string name="scan_preparing_progress">%1$d sur %2$d</string>
     <string name="scan_first_page">Numéro de la première page</string>
@@ -136,11 +138,11 @@
     <string name="message_import_failed">Impossible d’enregistrer les pages. Réessayez.</string>
     <string name="message_send_failed">Impossible d’ajouter les pages à l’envoi. Réessayez.</string>
     <string name="message_storage_full">Plus assez de place sur le téléphone : libérez de l’espace, puis réessayez.</string>
-    <string name="message_nothing_scanned">Aucune page reçue du scanner Google.</string>
     <string name="message_adding_interrupted">L’appli a été fermée pendant l’ajout de pages : vérifiez celles qui attendent l’envoi, et ajoutez de nouveau celles qui manquent.</string>
     <string name="message_setting_not_saved">Réglage non enregistré : vérifiez la place libre sur le téléphone.</string>
     <string name="message_photo_picker_unavailable">Impossible d’ouvrir le sélecteur de photos.</string>
-    <string name="message_scanner_unavailable">Le scanner de documents n’est pas disponible (il nécessite les services Google Play).</string>
+    <string name="message_scanner_unavailable">Le scanner Google n’est pas disponible sur ce téléphone (il nécessite les services Google Play).</string>
+    <string name="message_scanner_failed">Le scanner Google s’est arrêté sans rendre les pages. Réessayez.</string>
     <string name="message_page_busy">Cette page est en cours d’envoi : réessayez dans un instant.</string>
     <string name="settings_title">Paramètres</string>
     <string name="settings_section_pc">PC</string>
@@ -156,7 +158,8 @@
     <string name="settings_wifi_only_help">N’envoyer les scans que sur un réseau Wi-Fi (non limité).</string>
     <string name="settings_keep_copies">Conserver les scans sur le téléphone</string>
     <string name="settings_keep_copies_help">Garde une copie de chaque image après son envoi au PC.</string>
-    <string name="settings_scanner_help">Le scanner de Google ne renvoie jamais la photo d’origine : il recadre et redresse toujours la page, même sans retouche. Pour garder les photos telles quelles (couleurs des illustrations comprises), choisissez « Appareil photo, page par page » ou « Importer des photos » au moment de scanner.</string>
+    <string name="settings_scanner_help">Le scanner de Google ne renvoie jamais la photo d’origine : il recadre et redresse toujours la page, même sans retouche. Pour garder les photos telles quelles (couleurs des illustrations comprises), utilisez l’appareil photo ou importez-les.</string>
+    <string name="settings_default_camera">« Scanner » ouvre</string>
     <string name="settings_scanner_mode">Retouche par le scanner Google</string>
     <string name="settings_scanner_mode_crop">Aucune — recadrage seul</string>
     <string name="settings_scanner_mode_crop_help">Recadre et redresse la page, sans filtre.</string>
@@ -242,11 +245,6 @@
         <item quantity="one">%d page scannée</item>
         <item quantity="many">%d pages scannées</item>
         <item quantity="other">%d pages scannées</item>
-    </plurals>
-    <plurals name="scan_setup_adding">
-        <item quantity="one">%d page attend déjà l’envoi : les nouvelles s’y ajouteront.</item>
-        <item quantity="many">%d pages attendent déjà l’envoi : les nouvelles s’y ajouteront.</item>
-        <item quantity="other">%d pages attendent déjà l’envoi : les nouvelles s’y ajouteront.</item>
     </plurals>
     <plurals name="scan_discard_title">
         <item quantity="one">Supprimer %d page ?</item>

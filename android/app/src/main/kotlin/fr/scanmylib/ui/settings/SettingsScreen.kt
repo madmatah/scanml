@@ -2,6 +2,7 @@
 
 package fr.scanmylib.ui.settings
 
+import android.content.pm.PackageManager
 import android.text.format.Formatter
 import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
@@ -42,6 +43,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.painterResource
@@ -53,9 +55,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import fr.scanmylib.BuildConfig
 import fr.scanmylib.R
+import fr.scanmylib.model.ScanSource
 import fr.scanmylib.model.ScannerMode
 import fr.scanmylib.ui.components.BackButton
 import fr.scanmylib.ui.components.connectionCheckMessage
+import fr.scanmylib.ui.components.descriptionRes
+import fr.scanmylib.ui.components.labelRes
 
 @Composable
 fun SettingsScreen(
@@ -151,6 +156,23 @@ fun SettingsScreen(
             }
 
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            SectionHeader(R.string.settings_default_camera)
+            val context = LocalContext.current
+            val hasCamera = remember(context) { context.packageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_ANY) }
+            Column(Modifier.selectableGroup()) {
+                ScanSource.CAMERAS.forEach { camera ->
+                    val enabled = camera != ScanSource.CAMERA || hasCamera
+                    RadioItem(
+                        title = camera.labelRes(),
+                        description = if (enabled) camera.descriptionRes() else R.string.camera_none_on_phone,
+                        selected = settings?.defaultCamera == camera,
+                        enabled = enabled,
+                        onSelect = { viewModel.setDefaultCamera(camera) },
+                    )
+                }
+            }
+
+            HorizontalDivider(Modifier.padding(vertical = 8.dp))
             SectionHeader(R.string.settings_scanner_mode)
             Text(
                 stringResource(R.string.settings_scanner_help),
@@ -217,14 +239,19 @@ private fun RadioItem(
     @StringRes description: Int,
     selected: Boolean,
     onSelect: () -> Unit,
+    enabled: Boolean = true,
 ) {
     ListItem(
         headlineContent = { Text(stringResource(title)) },
         supportingContent = { Text(stringResource(description)) },
-        leadingContent = { RadioButton(selected = selected, onClick = null) },
-        modifier = Modifier.selectable(selected = selected, role = Role.RadioButton, onClick = onSelect),
+        leadingContent = { RadioButton(selected = selected, onClick = null, enabled = enabled) },
+        modifier = Modifier
+            .alpha(if (enabled) 1f else DISABLED_ALPHA)
+            .selectable(selected = selected, enabled = enabled, role = Role.RadioButton, onClick = onSelect),
     )
 }
+
+private const val DISABLED_ALPHA = 0.38f
 
 @StringRes
 private fun ScannerMode.labelRes(): Int = when (this) {

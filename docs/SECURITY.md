@@ -192,8 +192,8 @@ data or library; an `--api` URL without an explicit port is refused) without
   would have to be uninstalled, which deletes the pages not sent yet.
 - **Permissions**: the app uses the network, and WorkManager adds permissions
   granted without asking (wake lock, network state, restart at boot). The only
-  permission asked of the user is the **camera**, and only when entering the
-  "Camera, page by page" mode (CameraX). Google's document scanner and QR
+  permission asked of the user is the **camera**, and only when the app's own
+  camera opens (CameraX). Google's document scanner and QR
   code reader (ML Kit), provided by Google Play services, do not need it.
   Importing goes through the system photo picker, without storage permission.
   Photos stay in the app's private storage until they are sent.

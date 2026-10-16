@@ -32,6 +32,7 @@ import fr.scanmylib.ui.container
 import java.io.File
 import java.io.IOException
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
@@ -46,6 +47,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 data class DocumentUiState(
     val loading: Boolean = true,
@@ -57,12 +59,19 @@ data class DocumentUiState(
 )
 
 /**
- * The "scan pages" flow: the source of the pages and their optional numbering, then the pages of
- * the run, kept on the phone until the user confirms them for upload (or discards them).
+ * Adding pages: "Scan" opens a camera at once and "Import" the photo picker, with no question
+ * before; the pages of the run then wait on the phone, with their optional numbering, until the
+ * user confirms them for upload (or discards them).
  */
 data class ScanUiState(
-    val setupVisible: Boolean = false,
-    val source: ScanSource = ScanSource.DEFAULT,
+    /** The camera chosen by the user: Google's scanner or the app's camera. */
+    val defaultCamera: ScanSource = ScanSource.DEFAULT,
+    /** Google's scanner failed to start on this phone, and has not started since. */
+    val googleScannerUnavailable: Boolean = false,
+    /** The phone has a camera, for the app's own camera screen. */
+    val hasCamera: Boolean = true,
+    /** The settings are read: until then, the default camera is not known. */
+    val loaded: Boolean = false,
     val scannerMode: ScannerMode = ScannerMode.DEFAULT,
     val firstPage: String = "",
     val consecutive: Boolean = true,
@@ -77,6 +86,16 @@ data class ScanUiState(
     val numbering: PageNumbering? get() = PageNumbering.fromInput(firstPage, consecutive)
 
     val preparing: Boolean get() = preparation != null
+
+    /**
+     * The camera "Scan" opens: the default one; the app's camera while Google's scanner is known
+     * not to start on this phone; Google's scanner on a phone without a camera.
+     */
+    val camera: ScanSource get() = when {
+        defaultCamera == ScanSource.CAMERA && !hasCamera -> ScanSource.GOOGLE_SCANNER
+        defaultCamera == ScanSource.GOOGLE_SCANNER && googleScannerUnavailable && hasCamera -> ScanSource.CAMERA
+        else -> defaultCamera
+    }
 }
 
 /** Scanned or imported images being copied to the run: [done] of [total] so far. */
@@ -110,15 +129,15 @@ sealed interface DocumentMessage {
     /** Photos left out of an import: they could not be read. */
     data class UnreadablePhotos(val count: Int) : DocumentMessage
 
-    /** Google's scanner returned without pages: canceled, or it could not hand them over. */
-    data object NothingScanned : DocumentMessage
-
     /** Images on their way to the run were cut short when the app was last closed. */
     data object AddingInterrupted : DocumentMessage
 
     data object SettingNotSaved : DocumentMessage
 
     data object ScannerUnavailable : DocumentMessage
+
+    /** Google's scanner stopped without handing pages over, for another reason than the phone. */
+    data object ScannerFailed : DocumentMessage
 
     data object PhotoPickerUnavailable : DocumentMessage
 
@@ -133,6 +152,9 @@ class DocumentViewModel(
     private val staging: StagingArea,
     private val settings: SettingsRepository,
     private val syncScheduler: SyncScheduler,
+    /** Free bytes on the storage that holds the runs; a binder call, run off the main thread. */
+    private val freeStorage: () -> Long,
+    private val hasCamera: Boolean,
 ) : ViewModel() {
 
     private val documentId = savedState.toRoute<DocumentRoute>().documentId
@@ -162,12 +184,19 @@ class DocumentViewModel(
     // The form is kept in the saved state, as the process may be killed while the scanner or the
     // camera is in front; the pages of the run are files (StagingArea).
     private val scanForm: Flow<ScanUiState> = combine(
-        savedState.getStateFlow(KEY_SETUP_VISIBLE, false),
         savedState.getStateFlow(KEY_FIRST_PAGE, ""),
         savedState.getStateFlow(KEY_CONSECUTIVE, true),
         settings.settings,
-    ) { setupVisible, firstPage, consecutive, settings ->
-        ScanUiState(setupVisible, settings.scanSource, settings.scannerMode, firstPage, consecutive)
+    ) { firstPage, consecutive, settings ->
+        ScanUiState(
+            defaultCamera = settings.defaultCamera,
+            googleScannerUnavailable = settings.googleScannerUnavailable,
+            hasCamera = hasCamera,
+            loaded = true,
+            scannerMode = settings.scannerMode,
+            firstPage = firstPage,
+            consecutive = consecutive,
+        )
     }
 
     val scanState: StateFlow<ScanUiState> = combine(
@@ -237,14 +266,6 @@ class DocumentViewModel(
         }
     }
 
-    fun openScanSetup() {
-        savedState[KEY_SETUP_VISIBLE] = true
-    }
-
-    fun closeScanSetup() {
-        savedState[KEY_SETUP_VISIBLE] = false
-    }
-
     fun onFirstPageChange(text: String) {
         savedState[KEY_FIRST_PAGE] = text.filter(Char::isDigit).take(MAX_FIRST_PAGE_DIGITS)
     }
@@ -253,23 +274,31 @@ class DocumentViewModel(
         savedState[KEY_CONSECUTIVE] = consecutive
     }
 
-    /** Remembers the source, offered first for the next runs too. */
-    fun onSourceChange(source: ScanSource) {
+    /** Makes [camera] the one "Scan" opens from now on. */
+    fun makeDefaultCamera(camera: ScanSource) {
         viewModelScope.launch {
             try {
-                settings.setScanSource(source)
+                settings.setDefaultCamera(camera)
             } catch (e: IOException) {
-                // The storage may be full: the choice still applies to this run, not saved.
-                Log.w(TAG, "scan source not saved", e)
+                // The storage may be full: the camera opens all the same.
+                Log.w(TAG, "default camera not saved", e)
                 messageChannel.send(DocumentMessage.SettingNotSaved)
             }
         }
     }
 
-    /** Pages returned by Google's scanner: they join the run, waiting for confirmation. */
+    /**
+     * What Google's scanner returned: its pages join the run, waiting for confirmation. Without
+     * pages, the user canceled, or the scanner could not hand them over: the two look the same, so
+     * nothing is said, unless the phone's storage is nearly full, the likely reason for a failure.
+     */
     fun onPagesScanned(pages: List<Uri>) {
         if (pages.isEmpty()) {
-            messageChannel.trySend(DocumentMessage.NothingScanned)
+            viewModelScope.launch {
+                if (withContext(Dispatchers.IO) { isStorageLow(freeStorage()) }) {
+                    messageChannel.send(DocumentMessage.StorageFull)
+                }
+            }
             return
         }
         // Not cancellable: the scanned pages exist nowhere else.
@@ -317,9 +346,36 @@ class DocumentViewModel(
         preparation.value = null
     }
 
+    /** Google's scanner is about to open: whatever failed before, it works on this phone. */
+    fun onScannerStarted() {
+        viewModelScope.launch {
+            saveQuietly { if (settings.current().googleScannerUnavailable) settings.setGoogleScannerUnavailable(false) }
+        }
+    }
+
+    /**
+     * Google's scanner could not be started: it is remembered, so that "Scan" opens the app's
+     * camera until the scanner starts again (chosen in "Scan with…" or in the settings).
+     */
     fun onScannerUnavailable(error: Exception) {
         Log.w(TAG, "document scanner unavailable", error)
         messageChannel.trySend(DocumentMessage.ScannerUnavailable)
+        viewModelScope.launch { saveQuietly { settings.setGoogleScannerUnavailable(true) } }
+    }
+
+    /** Google's scanner failed for another reason than the phone: said, not remembered. */
+    fun onScannerFailed(error: Exception) {
+        Log.w(TAG, "document scanner failed", error)
+        messageChannel.trySend(DocumentMessage.ScannerFailed)
+    }
+
+    /** Writes a setting the user did not choose: if it cannot be written, it is only logged. */
+    private suspend fun saveQuietly(write: suspend () -> Unit) {
+        try {
+            write()
+        } catch (e: IOException) {
+            Log.w(TAG, "setting not saved", e)
+        }
     }
 
     fun onPhotoPickerUnavailable(error: Exception) {
@@ -387,7 +443,6 @@ class DocumentViewModel(
 
     companion object {
         private const val TAG = "Document"
-        private const val KEY_SETUP_VISIBLE = "scan_setup_visible"
         private const val KEY_FIRST_PAGE = "scan_first_page"
         private const val KEY_CONSECUTIVE = "scan_consecutive"
         private const val MAX_FIRST_PAGE_DIGITS = 4
@@ -402,11 +457,21 @@ class DocumentViewModel(
                     container.staging,
                     container.settings,
                     container.syncScheduler,
+                    container::freeStorage,
+                    container.hasCamera,
                 )
             }
         }
     }
 }
+
+/**
+ * Whether [freeBytes] is too little for Google's scanner to hand its pages over: it writes each
+ * page, a few megabytes, before returning them, and then the app copies them.
+ */
+internal fun isStorageLow(freeBytes: Long): Boolean = freeBytes < LOW_STORAGE_BYTES
+
+private const val LOW_STORAGE_BYTES = 100L * 1024 * 1024
 
 /** Whether [this] failed because the phone's storage is full (files or database). */
 internal fun Throwable.isStorageFull(): Boolean = generateSequence(this) { it.cause }.take(MAX_CAUSES).any {

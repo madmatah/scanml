@@ -26,8 +26,13 @@ data class AppSettings(
     val keepLocalCopies: Boolean,
     /** How much Google's document scanner retouches the pages. */
     val scannerMode: ScannerMode,
-    /** Source of the last scanning run, offered first for the next one. */
-    val scanSource: ScanSource,
+    /**
+     * The camera the "Scan" action opens: Google's scanner or the app's camera, never the photo
+     * picker, which has its own action ("Import").
+     */
+    val defaultCamera: ScanSource,
+    /** Google's scanner failed to start on this phone, and has not started since. */
+    val googleScannerUnavailable: Boolean,
 )
 
 /**
@@ -44,7 +49,11 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
                 wifiOnly = preferences[WIFI_ONLY] ?: false,
                 keepLocalCopies = preferences[KEEP_LOCAL_COPIES] ?: false,
                 scannerMode = storedEnum(preferences[SCANNER_MODE], ScannerMode.DEFAULT),
-                scanSource = storedEnum(preferences[SCAN_SOURCE], ScanSource.DEFAULT),
+                // Before "Import" had its own action, this was the source of the last run: a stored
+                // photo picker leaves the default camera.
+                defaultCamera = storedEnum(preferences[SCAN_SOURCE], ScanSource.DEFAULT)
+                    .takeIf { it.isCamera } ?: ScanSource.DEFAULT,
+                googleScannerUnavailable = preferences[GOOGLE_SCANNER_UNAVAILABLE] ?: false,
             )
         }
         .distinctUntilChanged()
@@ -86,8 +95,17 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         dataStore.edit { it[SCANNER_MODE] = mode.name }
     }
 
-    suspend fun setScanSource(source: ScanSource) {
-        dataStore.edit { it[SCAN_SOURCE] = source.name }
+    /** Choosing Google's scanner also gives it another try, if it failed to start before. */
+    suspend fun setDefaultCamera(camera: ScanSource) {
+        require(camera.isCamera) { "not a camera: $camera" }
+        dataStore.edit {
+            it[SCAN_SOURCE] = camera.name
+            if (camera == ScanSource.GOOGLE_SCANNER) it[GOOGLE_SCANNER_UNAVAILABLE] = false
+        }
+    }
+
+    suspend fun setGoogleScannerUnavailable(unavailable: Boolean) {
+        dataStore.edit { it[GOOGLE_SCANNER_UNAVAILABLE] = unavailable }
     }
 
     private fun serverOf(preferences: Preferences): ServerConfig? {
@@ -102,7 +120,9 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         val WIFI_ONLY = booleanPreferencesKey("wifi_only")
         val KEEP_LOCAL_COPIES = booleanPreferencesKey("keep_local_copies")
         val SCANNER_MODE = stringPreferencesKey("scanner_mode")
+        /** The default camera (named after the source of the last run, which it replaced). */
         val SCAN_SOURCE = stringPreferencesKey("scan_source")
+        val GOOGLE_SCANNER_UNAVAILABLE = booleanPreferencesKey("google_scanner_unavailable")
 
         /** Server whose documents are cached; kept when unpairing, to detect a change of server. */
         val LIBRARY_SERVER_URL = stringPreferencesKey("library_server_url")

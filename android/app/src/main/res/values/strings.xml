@@ -253,26 +253,44 @@
     <string name="capture_flash_on">Flash on</string>
     <string name="capture_last_photo">Last photo</string>
     <string name="capture_delete_photo">Delete this photo</string>
-    <string name="capture_leave_title">Stop taking photos?</string>
-    <string name="capture_leave_keep">Keep</string>
-    <string name="capture_leave_discard">Delete</string>
     <string name="capture_camera_unavailable">Couldn’t open the camera.</string>
     <string name="capture_camera_busy">The camera is unavailable right now: another app may be using it.</string>
     <string name="capture_saving_photo">Saving photo…</string>
     <string name="capture_shot_failed">The photo couldn’t be taken. Try again.</string>
     <string name="capture_shot_not_saved">The photo couldn’t be saved: check the free space on the phone.</string>
+    <string name="capture_photos_not_deleted">Some photos couldn’t be deleted: they’re still here.</string>
     <string name="capture_permission_title">Camera access</string>
     <string name="capture_permission_rationale">To photograph pages, ScanMyLib needs the camera. Photos stay in the app until they’re sent to your PC: they don’t go to the gallery or anywhere else.</string>
     <string name="capture_permission_grant">Allow camera</string>
     <string name="capture_permission_denied">Camera access isn’t allowed. To photograph pages, allow it in the app’s settings (Permissions › Camera), or ask again.</string>
     <string name="capture_permission_settings">Open settings</string>
     <plurals name="capture_count">
-        <item quantity="one">%d page</item>
-        <item quantity="other">%d pages</item>
+        <item quantity="one">%d photo</item>
+        <item quantity="other">%d photos</item>
     </plurals>
-    <plurals name="capture_leave_message">
-        <item quantity="one">%d page photographed. Keep it for sending, or delete it?</item>
-        <item quantity="other">%d pages photographed. Keep them for sending, or delete them?</item>
+    <plurals name="capture_count_waiting">
+        <item quantity="one">· +%d waiting</item>
+        <item quantity="other">· +%d waiting</item>
+    </plurals>
+    <plurals name="capture_waiting_only">
+        <item quantity="one">%d page waiting</item>
+        <item quantity="other">%d pages waiting</item>
+    </plurals>
+    <plurals name="capture_leave_title">
+        <item quantity="one">Keep %d photo?</item>
+        <item quantity="other">Keep the %d photos?</item>
+    </plurals>
+    <plurals name="capture_leave_waiting">
+        <item quantity="one">%d page already waiting isn’t affected.</item>
+        <item quantity="other">The %d pages already waiting aren’t affected.</item>
+    </plurals>
+    <plurals name="capture_leave_keep">
+        <item quantity="one">Keep %d photo</item>
+        <item quantity="other">Keep the %d photos</item>
+    </plurals>
+    <plurals name="capture_leave_discard">
+        <item quantity="one">Delete %d photo</item>
+        <item quantity="other">Delete these %d photos</item>
     </plurals>
     <plurals name="message_unsupported_photos">
         <item quantity="one">%d photo skipped: the PC only accepts JPEG, PNG, and WebP.</item>

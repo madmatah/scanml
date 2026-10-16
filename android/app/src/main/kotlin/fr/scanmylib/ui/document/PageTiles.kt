@@ -70,7 +70,7 @@ fun ServerPageTile(page: ServerPageEntity, server: ServerConfig?, onClick: () ->
                 page.duplicate -> StatusLine(stringResource(R.string.page_duplicate), R.drawable.ic_content_copy)
                 page.excluded -> StatusLine(stringResource(R.string.page_excluded), R.drawable.ic_block)
                 else -> StatusLine(
-                    stringResource(page.status.labelRes()),
+                    stringResource(page.status.badgeRes()),
                     page.status.iconRes(),
                     color = if (page.status == PageStatus.ERROR) {
                         MaterialTheme.colorScheme.error
@@ -104,6 +104,13 @@ private fun PageTile(
             status()
         }
     }
+}
+
+/** The status in the few words a tile has room for; the page's dialog says it in full. */
+private fun PageStatus.badgeRes(): Int = when (this) {
+    PageStatus.QUEUED -> R.string.page_badge_queued
+    PageStatus.ERROR -> R.string.page_badge_failed
+    else -> labelRes()
 }
 
 /** Portrait page (A4 is about 1:1.41). */

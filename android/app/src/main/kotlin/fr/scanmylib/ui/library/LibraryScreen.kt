@@ -52,7 +52,7 @@ import fr.scanmylib.ui.components.ServerImage
 import fr.scanmylib.ui.components.StatusLine
 import fr.scanmylib.ui.components.UpdateBanner
 import fr.scanmylib.ui.components.iconRes
-import fr.scanmylib.ui.components.ocrStateLabel
+import fr.scanmylib.ui.components.readingUnavailable
 import fr.scanmylib.update.UpdateState
 
 @Composable
@@ -134,7 +134,10 @@ fun LibraryScreen(
 private fun PcStatusCard(pc: PcState) {
     when (pc) {
         PcState.Unknown -> Unit
-        is PcState.Online -> MessageCard(pcOnlineText(pc.status), R.drawable.ic_cloud_done)
+        is PcState.Online -> MessageCard(
+            pcOnlineText(pc.status),
+            if (pc.status.readingUnavailable) R.drawable.ic_error else R.drawable.ic_cloud_done,
+        )
         PcState.Unreachable -> MessageCard(stringResource(R.string.library_pc_unreachable), R.drawable.ic_cloud_off)
         PcState.TokenRefused -> MessageCard(
             stringResource(R.string.library_pc_token_refused),
@@ -151,13 +154,13 @@ private fun PcStatusCard(pc: PcState) {
 
 @Composable
 private fun pcOnlineText(status: ServerStatus): String {
-    val ocr = ocrStateLabel(status.ocr.state)
     val ocrError = status.ocr.lastError
     val waiting = status.queue.queued + status.queue.processing
     return when {
         status.ocr.state == "error" && ocrError != null -> stringResource(R.string.library_pc_online_ocr_error, ocrError)
-        waiting == 0 -> stringResource(R.string.library_pc_online_idle, ocr)
-        else -> pluralStringResource(R.plurals.library_pc_online_busy, waiting, ocr, waiting)
+        status.readingUnavailable -> stringResource(R.string.library_pc_online_reading_unavailable)
+        waiting == 0 -> stringResource(R.string.library_pc_online_idle)
+        else -> pluralStringResource(R.plurals.library_pc_online_busy, waiting, waiting)
     }
 }
 

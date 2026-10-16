@@ -100,15 +100,3 @@ fun UploadFailure.labelRes(): Int = when (this) {
     UploadFailure.REJECTED -> R.string.upload_failure_rejected
     UploadFailure.FILE_MISSING -> R.string.upload_failure_file_missing
 }
-
-/** State of the OCR engine as reported by `GET /api/status`. */
-@Composable
-fun ocrStateLabel(state: String): String = when (state) {
-    "idle" -> stringResource(R.string.ocr_state_idle)
-    "starting" -> stringResource(R.string.ocr_state_starting)
-    "ready" -> stringResource(R.string.ocr_state_ready)
-    "stopping" -> stringResource(R.string.ocr_state_stopping)
-    "error" -> stringResource(R.string.ocr_state_error)
-    "unreachable" -> stringResource(R.string.ocr_state_unreachable)
-    else -> state
-}

@@ -388,7 +388,7 @@ private fun DocumentSummary(document: DocumentEntity, onRetryUpload: () -> Unit)
                 val noCoverage = stringResource(R.string.document_coverage_none)
                 Text(stringResource(R.string.document_coverage, server.coverage.ifEmpty { noCoverage }))
                 if (server.missing.isNotEmpty()) {
-                    Text(stringResource(R.string.document_missing, server.missing), color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(R.string.document_missing, server.missing))
                 }
                 if (server.unnumbered > 0) {
                     Text(pluralStringResource(R.plurals.document_unnumbered, server.unnumbered, server.unnumbered))

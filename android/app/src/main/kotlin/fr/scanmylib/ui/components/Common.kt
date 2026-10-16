@@ -18,8 +18,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import fr.scanmylib.R
+import fr.scanmylib.api.ServerStatus
 import fr.scanmylib.pairing.ConnectionCheck
 
 @Composable
@@ -74,15 +76,28 @@ fun StatusLine(
         modifier = modifier,
     ) {
         Icon(painterResource(icon), contentDescription = null, tint = color, modifier = Modifier.size(16.dp))
-        Text(text, style = MaterialTheme.typography.labelMedium, color = color, maxLines = 1)
+        Text(
+            text,
+            style = MaterialTheme.typography.labelMedium,
+            color = color,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
+
+/** The PC answers, but its text recognition does not: the pages wait there. */
+val ServerStatus.readingUnavailable: Boolean
+    get() = ocr.state == "unreachable" || ocr.state == "error"
 
 /** User-facing explanation of a [ConnectionCheck]. */
 @Composable
 fun connectionCheckMessage(check: ConnectionCheck): String = when (check) {
-    is ConnectionCheck.Ok ->
-        stringResource(R.string.connection_ok, check.status.version, ocrStateLabel(check.status.ocr.state))
+    is ConnectionCheck.Ok -> if (check.status.readingUnavailable) {
+        stringResource(R.string.connection_ok_reading_unavailable, check.status.version)
+    } else {
+        stringResource(R.string.connection_ok, check.status.version)
+    }
     ConnectionCheck.Unreachable -> stringResource(R.string.connection_unreachable)
     ConnectionCheck.NotScanMyLib -> stringResource(R.string.connection_not_scanmylib)
     ConnectionCheck.IncompatibleServer -> stringResource(R.string.connection_incompatible)

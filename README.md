@@ -74,7 +74,8 @@ The services restart automatically with Docker (`restart: unless-stopped`); ther
    installs from the browser.
 3. Open the ScanMyLib app. On the **Pair with PC** screen, tap **Scan the QR code** and aim at the QR code of step 2:
    the app then knows the PC's address and its access token. Without a QR code reader, type the **PC address** and the
-   **Token** shown under the QR code, then tap **Test and pair**.
+   **Token** shown under the QR code into the app's **PC address** and **Access token** fields, then tap **Test and
+   pair**.
 
 **Updates.** Once paired, the app asks the PC which app it publishes, when the library shows or is refreshed, at most
 once an hour, and again once the library reaches the PC if it could not before. When it is newer, the library shows
@@ -111,8 +112,8 @@ Internet.
 - **Share** from the gallery or another app: select photos, then **Share › ScanMyLib**, and choose their document (or
   create one). They join its pages to send, as with **Import**; Back then returns to the gallery.
 - **Before sending**, the pages wait on the phone: tap a thumbnail to see it full size or remove it, **Add pages** to
-  scan more or import photos, **Send** to queue them for upload. **Later** (or Back) keeps them on the phone, and the
-  library then shows "N pages to send". **Discard** asks for confirmation, since these pages exist
+  scan more or import photos, **Send N pages** to queue them for upload. **Later** (or Back) keeps them on the phone,
+  and the library then shows "N pages to send". **Delete these pages** asks for confirmation, since these pages exist
   nowhere else.
 - **First page number** (optional, before sending): for pages without a printed number that should be numbered. With
   **Consecutive pages** (on by default), the following pages get the next numbers. Leave it blank for front matter

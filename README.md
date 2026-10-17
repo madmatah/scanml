@@ -292,8 +292,10 @@ sh`…): it refuses any setting that would reach production or leave the stack's
 commands and options that could (`cp`, `run -v`, `exec --privileged`…). The guards and their limits are described in
 [`docs/SECURITY.md`](docs/SECURITY.md); the repository's conventions are in [`CLAUDE.md`](CLAUDE.md).
 
-Every pull request runs the continuous integration (`.github/workflows/ci.yml`): server, web UI, OCR sandbox, scripts
-and Android tests. Pull requests are merged when it is green.
+`scripts/check.sh` is the gate: the tests of the scripts, on the host's `python3`, and, in throwaway containers, those
+of the web UI, the server and the OCR sandbox, and the Android tests and lint (`scripts/check.sh server web` checks
+those areas only). Every commit pushed passes it, and every pull request runs it in the continuous integration
+(`.github/workflows/ci.yml`, one job per area). Pull requests are merged when it is green.
 
 ## Releasing
 

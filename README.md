@@ -43,12 +43,14 @@ for download by the web UI.
 ```bash
 git clone https://github.com/madmatah/scanml.git ~/Dev/scanmylib
 cd ~/Dev/scanmylib
+git checkout "$(git describe --tags --abbrev=0)"   # the latest release
 scripts/setup.sh          # images, OCR sandbox (~17 GB download), app, start, isolation checks
 ```
 
 The scripts treat `~/Dev/scanmylib` as the checkout production runs from (`DEFAULT_CHECKOUT` in
-`scripts/lib/stack.py`). `scripts/setup.sh` only performs a first installation; later versions are installed with
-`scripts/deploy.sh` (see "Updating").
+`scripts/lib/stack.py`). It runs releases only, published on GitHub with their notes (`CHANGELOG.md`).
+`scripts/setup.sh` only performs a first installation; later releases are installed with `scripts/deploy.sh` (see
+"Updating").
 
 `scripts/setup.sh` writes `.env` from `.env.example`. The scripts accept only a strict format: one `KEY=VALUE` per line,
 without spaces, quotes or comments after a value.
@@ -226,20 +228,23 @@ scripts/verify-sandbox.sh                  # prove the sandbox is isolated
 `scripts/prod.sh compose` runs docker compose with production's `.env` and nothing else: plain `docker compose` would
 also read the shell's environment (`COMPOSE_*`, `DATA_DIR`…), which overrides `.env`. It only runs in the production
 checkout, and refuses builds and one-off containers, since production changes only through `scripts/deploy.sh`. `up`
-applies what the checkout describes, so it needs a clean `main`, and never builds; `restart` works in any state.
+applies what the checkout describes, so it needs a clean release, and never builds; `restart` works in any state.
 
 ## Updating
 
-A new version is installed from the production checkout, on `main`:
+A new version is a release, published on GitHub: its tag `vX.Y.Z` and its notes, also in `CHANGELOG.md`. It is
+installed from the production checkout:
 
 ```bash
-git pull
+git fetch --tags origin
+git checkout v0.3.0            # the release to install
 scripts/deploy.sh --dry-run    # checks and plan; changes nothing
 scripts/deploy.sh --apk        # deploys, and publishes the new app
 ```
 
-`scripts/deploy.sh` refuses to run outside the production checkout, off `main`, with local or untracked changes, when
-`main` differs from `origin`, or when `.env` is not production's. It then:
+`scripts/deploy.sh` refuses to run outside the production checkout, with local or untracked changes, on anything but
+a release published on GitHub (the commit of its tag on `origin`), on a release older than the one production runs
+(unless `--allow-downgrade`), or when `.env` is not production's. It then:
 
 1. builds the images from the commit (`git archive HEAD`) and runs the unit tests on them; if they fail, production is
    unchanged;
@@ -248,8 +253,7 @@ scripts/deploy.sh --apk        # deploys, and publishes the new app
 3. restarts `api` and `ocr`, checks their health and the sandbox's isolation (the sandbox is stopped if that check
    fails), and tags the images that now run `:deployed`, the rollback target;
 4. with `--apk`, builds and publishes the new app, which the phones then offer to install (without it, phones keep
-   their app);
-5. tags the version (`vX.Y.Z`) and pushes the tag.
+   their app).
 
 If a step fails, it says what state production is in and prints the commands to roll back to the `:deployed` images and
 the backup of the state. A closed terminal does not interrupt it, and each run is logged in
@@ -264,7 +268,8 @@ Changes are made on branches, each in its own worktree, next to a running instal
 
 ```bash
 cd ~/Dev/scanmylib
-git worktree add -b my-change ../scanmylib-worktrees/my-change main
+git fetch origin
+git worktree add --no-track -b my-change ../scanmylib-worktrees/my-change origin/main
 cd ../scanmylib-worktrees/my-change
 scripts/dev-env.sh        # .env of the development stack
 scripts/dev.sh up         # api + fake OCR; scripts/dev.sh up --real-ocr for the real one

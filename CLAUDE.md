@@ -81,8 +81,9 @@ The user's account holds many secrets, and the OCR stack (PaddlePaddle, PaddleOC
 
 ## Development workflow
 
-- **Branches and pull requests.** `main` is what production runs. Every change is made on its own branch and reaches
-  `main` through a pull request on GitHub (`origin`); nothing is committed to `main` directly. Pull requests are
+- **Branches and pull requests.** `main` is where every change lands; production runs its releases (see
+  "Deployment"). Every change is made on its own branch and reaches `main` through a pull request on GitHub
+  (`origin`); nothing is committed to `main` directly. Pull requests are
   merged with "Rebase and merge" only, so `main` keeps their commits as they are.
 - **Commits.** Each commit is atomic: one logical change, with its tests and documentation, and the project builds and
   passes its tests at every commit. Messages follow Conventional Commits: `type(scope): summary`, in the imperative
@@ -90,9 +91,11 @@ The user's account holds many secrets, and the OCR stack (PaddlePaddle, PaddleOC
   change is confined to one part (`ocr`, `server`, `web`, `android`, `scripts`). The body says why. Before a pull
   request is merged, its history is cleaned up (fixups folded into the commits they fix).
 - **One worktree per branch**, under `~/Dev/scanmylib-worktrees/<branch>`, created from the primary checkout
-  with `git worktree add -b <branch> ../scanmylib-worktrees/<branch> main` and removed after the merge
-  (`git worktree remove`). The primary checkout, `~/Dev/scanmylib`, stays on `main`: it is production's
-  checkout (its `.env` is production's), never a place to develop. The scripts recognize production's checkout as the
+  with `git fetch origin` then `git worktree add --no-track -b <branch> ../scanmylib-worktrees/<branch> origin/main`,
+  and removed after the merge (`git worktree remove`, then `git branch -D <branch>`: after a rebase merge, git does not
+  see it as merged). The primary checkout, `~/Dev/scanmylib`, is production's
+  checkout (its `.env` is production's): it holds the release production runs (`git checkout vX.Y.Z`), and is never
+  a place to develop. The scripts recognize production's checkout as the
   directory production's containers were started from (their `com.docker.compose.project.working_dir` label), or
   `~/Dev/scanmylib` when no production container exists; another clone holding a copy of production's `.env` is not
   production.
@@ -121,7 +124,7 @@ The user's account holds many secrets, and the OCR stack (PaddlePaddle, PaddleOC
   `exec --privileged`, `config -o`...) and `up` without service names (it would start both OCR services). A setting a
   change needs goes into that allowlist in the same pull request. In production's checkout, `scripts/prod.sh compose
   COMMAND...` runs docker compose with production's `.env` only (plain `docker compose` would let the shell's
-  environment override it), for operations, never builds (`up` only on a clean `main`). A
+  environment override it), for operations, never builds (`up` only on a clean release). A
   `.env` keeps to a strict format that every script checks
   (`KEY=VALUE`, comments, blank lines; see `.env.example`); never copy `.env.example` or production's `.env` into a
   worktree.
@@ -139,7 +142,7 @@ The user's account holds many secrets, and the OCR stack (PaddlePaddle, PaddleOC
 - **One version.** `VERSION` (MAJOR.MINOR.PATCH) is the version of a release: of production's api (`/api/health`) and
   of the release app, whose `versionCode` is major × 10000 + minor × 100 + patch (minor and patch stay below 100), so
   that every release installs over the previous one. Bump it in the pull request of any change to deploy; each
-  deployed version is tagged `vX.Y.Z`. Development builds (the development stack's api, the dev app, CI) are versioned
+  release is tagged `vX.Y.Z` by `.github/workflows/release.yml`. Development builds (the development stack's api, the dev app, CI) are versioned
   from git, as a pre-release of the next patch: `0.2.4-dev.27+g1a2b3c4d5e6f` is 27 commits after `v0.2.3`
   (`scripts/lib/version.py`); the dev app's versionCode is the time of its build, so that each build installs over the
   previous one.
@@ -152,13 +155,18 @@ The user's account holds many secrets, and the OCR stack (PaddlePaddle, PaddleOC
   workflow that writes to the repository (`contents: write`, with the run's own token) and runs nothing but
   `scripts/release.py` and the runner's `git` and `gh`; every other workflow only reads it. CI uses no secrets and never
   touches production.
-- **Deployment.** Production changes only through `scripts/deploy.sh`, run in production's checkout on a clean `main`
-  equal to main on `origin` (`--dry-run` first, `--apk` to publish the app): images built from the commit (`git
-  archive HEAD`), unit tests of the new code, backup of the state, restart of `api` and `ocr`, health and isolation
-  checks (then the new images are tagged `:deployed`), the app with `--apk`, then the tag `vVERSION`, pushed; on
-  failure it says what state production is in and how to roll back. Never deploy from a worktree or with `docker
-  compose` by hand. The release app is built only in production's checkout, on `main` as on `origin`. `scripts/setup.sh`
-  only installs a new production and refuses once it exists. A rehearsal on a throwaway stack is described in
+- **Deployment.** There is no official instance: each installation deploys the releases it chooses, and production
+  (the one on this machine) changes only through `scripts/deploy.sh`, run in production's checkout, clean, on a
+  published release (`git fetch --tags origin`, then `git checkout vX.Y.Z`: HEAD must be the commit of the tag
+  `vVERSION` on `origin`), `--dry-run` first, `--apk` to publish the app: images built from the commit (`git archive
+  HEAD`), unit tests of the new code, backup of the state, restart of `api` and `ocr`, health and isolation checks
+  (then the new images are tagged `:deployed`), then the app with `--apk`; on failure it says what state production is
+  in and how to roll back. It refuses a release older than the one production runs, unless `--allow-downgrade`. It
+  never tags: releases are published on GitHub. Only releases are deployed, since the
+  release app's versionCode comes from `VERSION`: an app built from a later commit of `main` would have the same one,
+  and phones would not install it. Never deploy from a worktree or with `docker compose` by hand. The release app is
+  built only in production's checkout, on a published release. `scripts/setup.sh` installs a new production, from a
+  published release, and refuses once it exists. A rehearsal on a throwaway stack is described in
   `scripts/deploy.sh`'s header.
 
 ## Layout and commands
@@ -171,7 +179,7 @@ The user's account holds many secrets, and the OCR stack (PaddlePaddle, PaddleOC
 | Android app | `android/` | `scripts/build-apk.sh` (tests, build of the `APP_VARIANT` app, lint, offline signing) |
 | Development stack | `compose.yaml`, `.env` | `scripts/dev-env.sh` once per worktree, then `scripts/dev.sh up`, `status`, `logs`, `down`, `build`, `compose ...` |
 | Scripts | `scripts/`, `scripts/tests/` | `python3 -m unittest discover -s scripts/tests` (host `python3`, stdlib only; a docker stand-in, nothing is built or started) |
-| Deployment | `scripts/deploy.sh` | `scripts/deploy.sh --dry-run`, then `scripts/deploy.sh [--apk]`, in production's checkout on `main`; first install: `scripts/setup.sh` |
+| Deployment | `scripts/deploy.sh` | `scripts/deploy.sh --dry-run`, then `scripts/deploy.sh [--apk]`, in production's checkout on a published release (`git checkout vX.Y.Z`); first install: `scripts/setup.sh` |
 | Production operations | `scripts/prod.sh` | `scripts/prod.sh compose ps`, `logs -f api ocr`, `restart api`... in production's checkout |
 | End to end | `scripts/e2e_test.py` | `scripts/e2e_test.py IMAGE...` against the stack of the checkout's `.env` (production refused without `--production`) |
 

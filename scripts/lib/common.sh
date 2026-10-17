@@ -65,6 +65,41 @@ hidden_changes() {  # hidden_changes DIR
     git -C "$1" ls-files -v | sed -n 's/^[a-zS] //p'
 }
 
+# Production runs published releases only (CLAUDE.md, "Deployment"): HEAD must be the commit of the
+# tag vVERSION, VERSION being HEAD's, as published on origin (git ls-remote), or with "local" as
+# this checkout's tags say. Prints why not, and fails.
+release_problem() {  # release_problem DIR [local]
+    local dir=$1 version tag head named
+    version=$(git -C "$dir" show HEAD:VERSION 2> /dev/null | tr -d '[:space:]' || true)
+    if [[ ! $version =~ ^[0-9]{1,3}\.[0-9]{1,2}\.[0-9]{1,2}$ ]]; then
+        echo "VERSION must be MAJOR.MINOR.PATCH (minor and patch below 100), not '$version'"
+        return 1
+    fi
+    tag=v$version
+    head=$(git -C "$dir" rev-parse HEAD)
+    if [[ ${2:-} == local ]]; then
+        named=$(git -C "$dir" rev-parse --verify --quiet "refs/tags/$tag^{commit}" || true)
+    elif ! named=$(git -C "$dir" ls-remote --tags origin "refs/tags/$tag" "refs/tags/$tag^{}" \
+        | sort -k 2 | tail -n 1 | cut -f 1); then
+        echo "cannot read the tags of origin (git ls-remote --tags origin)"
+        return 1
+    fi
+    if [[ -z $named && ${2:-} == local ]]; then
+        echo "no tag $tag in this checkout: check out a published release (git fetch --tags origin, then git \
+checkout vX.Y.Z)"
+        return 1
+    elif [[ -z $named ]]; then
+        echo "$tag is not published on origin: its release workflow publishes it once the release pull request is \
+merged; check out a published release (git fetch --tags origin, then git checkout vX.Y.Z)"
+        return 1
+    fi
+    if [[ $named != "$head" ]]; then
+        echo "HEAD ${head:0:12} is not the release $tag (${named:0:12}): production runs releases only (git checkout $tag, \
+or a later release)"
+        return 1
+    fi
+}
+
 # docker compose on the stack of ROOT (set by the calling script), configured by its .env only
 # (STACK_ENV_FILE, default ROOT/.env): COMPOSE_*, the stack's variables and anything else in the
 # caller's environment never reach it. COMPOSE_ROOT replaces ROOT as the project directory (the

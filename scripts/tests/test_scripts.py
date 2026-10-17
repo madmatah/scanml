@@ -2,7 +2,8 @@
 
 Each test builds, in a temporary directory: a bare "origin", production's checkout (at
 ~/Dev/scanmylib of a temporary home directory, with a production .env whose paths are all
-temporary) and a worktree, with the scripts of this checkout. `docker` is the stand-in: docker
+temporary) on the release VERSION, published on origin (the tag vVERSION), and a worktree, with
+the scripts of this checkout. `docker` is the stand-in: docker
 compose only resolves configurations (offline), any other call is logged and answered by the
 test's rules; nothing reaches the Docker daemon. Production's containers (the stand-in's answer
 unless a test says otherwise) were started from that checkout: without them, the scripts would
@@ -41,10 +42,10 @@ COPIED = [
 ]
 VERSION = (REPO / "VERSION").read_text().strip()
 VERSION_CODE = sum(int(part) * factor for part, factor in zip(VERSION.split("."), (10000, 100, 1)))
-#: The version of a development build of the test repositories, which have no tag
-#: (scripts/lib/version.py): the next patch, then the commit.
+#: The version of a development build of the test repositories, whose only commit is the release
+#: VERSION (scripts/lib/version.py): the next patch, no commit since, then the commit.
 _MAJOR, _MINOR, _PATCH = (int(part) for part in VERSION.split("."))
-DEV_VERSION = re.escape(f"{_MAJOR}.{_MINOR}.{_PATCH + 1}-dev+g") + "[0-9a-f]{12}"
+DEV_VERSION = re.escape(f"{_MAJOR}.{_MINOR}.{_PATCH + 1}-dev.0+g") + "[0-9a-f]{12}"
 REAL_DOCKER = shutil.which("docker")
 #: The home directory of the password database, which the scripts refuse whatever $HOME says.
 PASSWD_HOME = pwd.getpwuid(os.getuid()).pw_dir
@@ -219,8 +220,10 @@ class ScriptsTestCase(unittest.TestCase):
             shutil.copy2(REPO / name, target)
         self.git(self.primary, "add", "--all")
         self.git(self.primary, "commit", "--quiet", "--message", "Initial commit")
+        # The release VERSION, as .github/workflows/release.yml publishes it.
+        self.git(self.primary, "tag", "--annotate", f"v{VERSION}", "--message", f"ScanMyLib {VERSION}")
         self.git(self.primary, "remote", "add", "origin", str(self.origin))
-        self.git(self.primary, "push", "--quiet", "origin", "main")
+        self.git(self.primary, "push", "--quiet", "origin", "main", f"refs/tags/v{VERSION}")
         self.git(self.primary, "worktree", "add", "--quiet", "-b", "feature", str(self.worktree), "main")
         (self.primary / ".env").write_text(self.production_env())
 
@@ -490,23 +493,25 @@ class DeployTest(ScriptsTestCase):
         directory = self.prod / "backups"
         return sorted(entry.name for entry in directory.iterdir()) if directory.exists() else []
 
-    def remote_tags(self) -> str:
-        return self.git(self.primary, "ls-remote", "--tags", "origin")
+    def assertTagsUnchanged(self) -> None:
+        """The tags of production's checkout and of origin are the release's: deploy.sh never tags."""
+        self.assertEqual(self.git(self.primary, "tag"), f"v{VERSION}\n")
+        self.assertEqual([line.split("\t")[1] for line in self.git(self.primary, "ls-remote", "--tags", "origin")
+                          .splitlines()], [f"refs/tags/v{VERSION}", f"refs/tags/v{VERSION}^{{}}"])
 
     def test_dry_run_changes_nothing(self):
         result = self.deploy("--dry-run", "--apk")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("Dry run: nothing was changed.", result.stdout)
         self.assertIn(f"production's checkout ({self.primary})", result.stdout)
-        self.assertIn("equal to main on origin", result.stdout)
+        self.assertIn(f"the release v{VERSION}, as published on origin", result.stdout)
         self.assertIn("holds the database", result.stdout)
         self.assertIn("would run: docker tag sha256:oldapi scanmylib-api:deployed", result.stdout)
         self.assertOnlyReads()
         self.assertEqual(self.health.requests, 0, "a dry run sends no request to the api")
         self.assertEqual(self.backups(), [])
         self.assertFalse((self.prod / "logs").exists())
-        self.assertEqual(self.remote_tags(), "")
-        self.assertEqual(self.git(self.primary, "tag"), "")
+        self.assertTagsUnchanged()
 
     def test_deploy(self):
         snapshot = self.base / "built"
@@ -540,9 +545,9 @@ class DeployTest(ScriptsTestCase):
         self.assertEqual(sorted(path.name for path in copy.iterdir()), ["scanmylib.db", "token"])
         with closing(sqlite3.connect(copy / "scanmylib.db")) as database:
             self.assertEqual(database.execute("SELECT id FROM documents").fetchall(), [("d1",)])
-        self.assertIn(f"refs/tags/v{VERSION}", self.remote_tags())
+        self.assertTagsUnchanged()
         # :deployed names the images the containers ran before the build, then the new ones as
-        # soon as they pass the isolation check, before the APK and the tag.
+        # soon as they pass the isolation check, before the APK.
         self.assertLess(commands.index("tag sha256:oldapi scanmylib-api:deployed"), commands.index(build))
         self.assertLess(commands.index("tag sha256:oldocr scanmylib-ocr:deployed"), commands.index(build))
         retag = commands.index("tag scanmylib-api:latest scanmylib-api:deployed")
@@ -573,7 +578,7 @@ class DeployTest(ScriptsTestCase):
         self.assertEqual(self.backups(), [])
 
     def test_failed_restart_explains_the_rollback(self):
-        self.health.version = "9.9.9"
+        self.health.version = "0.0.1"
         result = self.deploy()
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('DEPLOY FAILED during the step "restart"', result.stdout)
@@ -585,14 +590,14 @@ class DeployTest(ScriptsTestCase):
         self.assertIn(f"cp -a {self.prod}/backups/{backup} {self.prod}/state", result.stdout)
         self.assertIn(f"mv {self.prod}/state {self.prod}/state.failed-", result.stdout)
         self.assertNotIn("tag scanmylib-api:latest scanmylib-api:deployed", self.commands())
-        self.assertEqual(self.remote_tags(), "")
+        self.assertTagsUnchanged()
 
     def test_deployed_images_are_kept_for_rollbacks(self):
         # :deployed already names the images production runs: a new deploy keeps it until the
         # new images run and pass the isolation check, even after a failed attempt.
         deployed = [{"match": r"^image inspect --format \{\{\.Id\}\} scanmylib-(api|ocr):deployed$", "stdout": "sha256:good\n"},
                     {"match": r"^inspect --format \{\{\.Image\}\} (api|ocr)id$", "stdout": "sha256:good\n"}]
-        self.health.version = "9.9.9"
+        self.health.version = "0.0.1"
         result = self.deploy(rules=deployed)
         self.assertNotEqual(result.returncode, 0)
         self.assertNotIn("tag scanmylib-api:latest scanmylib-api:deployed", self.commands())
@@ -627,7 +632,7 @@ class DeployTest(ScriptsTestCase):
         self.assertIn('DEPLOY FAILED during the step "apk"', result.stdout)
         self.assertIn("its images tagged :deployed", result.stdout)
         self.assertIn("tag scanmylib-api:latest scanmylib-api:deployed", self.commands())
-        self.assertEqual(self.remote_tags(), "")
+        self.assertTagsUnchanged()
 
     def test_deploy_checks_that_the_api_offers_the_new_apk(self):
         for apk_version in (None, "0.0.1"):
@@ -639,7 +644,7 @@ class DeployTest(ScriptsTestCase):
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn('DEPLOY FAILED during the step "apk"', result.stdout)
                 self.assertIn(f"the api offers the APK '{apk_version}', not {VERSION}", result.stdout + result.stderr)
-                self.assertEqual(self.remote_tags(), "")
+                self.assertTagsUnchanged()
 
     def test_failed_isolation_check_stops_the_ocr_service(self):
         result = self.deploy(rules=sandbox_rules(f"{self.prod}/sandbox", str(self.prod), network="bridge"))
@@ -647,7 +652,7 @@ class DeployTest(ScriptsTestCase):
         self.assertIn('DEPLOY FAILED during the step "isolation"', result.stdout)
         self.assertTrue(any(command.startswith("compose") and command.endswith(" stop ocr") for command in self.commands()))
         self.assertNotIn("tag scanmylib-api:latest scanmylib-api:deployed", self.commands())
-        self.assertEqual(self.remote_tags(), "")
+        self.assertTagsUnchanged()
 
     def test_old_backups_are_pruned(self):
         backups = self.prod / "backups"
@@ -676,8 +681,11 @@ class DeployTest(ScriptsTestCase):
                 self.production_env(LIBRARY_DIR=f"{self.base}/missing")), "is not a directory"),
             ("an untracked file", lambda: (self.primary / "notes.txt").write_text("x"), "untracked changes"),
             ("a hidden change", self.hide_a_change, "assume-unchanged or skip-worktree"),
-            ("a commit not on origin", lambda: self.git(self.primary, "commit", "--quiet", "--allow-empty", "-m", "x"),
-             "differs from main on origin"),
+            ("a commit after the release", lambda: self.git(self.primary, "commit", "--quiet", "--allow-empty", "-m", "x"),
+             f"is not the release v{VERSION}"),
+            ("a release not published", lambda: self.git(self.primary, "push", "--quiet", "origin",
+                                                         f":refs/tags/v{VERSION}"),
+             f"v{VERSION} is not published on origin"),
             ("a development .env", lambda: (self.primary / ".env").write_text(
                 self.production_env(COMPOSE_PROJECT_NAME="scanmylib-dev")), "not production's"),
             ("an empty .env", lambda: (self.primary / ".env").write_text("# nothing\n"), "not production's"),
@@ -690,6 +698,48 @@ class DeployTest(ScriptsTestCase):
                 self.assertIn(expected, result.stdout + result.stderr)
                 self.assertIn("Refusing to deploy", result.stderr)
                 self.assertOnlyReads()
+
+    def test_never_an_older_release_than_production_runs(self):
+        self.health.version = "99.0.0"
+        result = self.deploy()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(f"production runs 99.0.0, newer than this release {VERSION}", result.stdout)
+        self.assertIn("Refusing to deploy", result.stderr)
+        self.assertOnlyReads()
+        # A dry run sends no request to the api: it says what a real run checks.
+        self.health.requests = 0
+        result = self.deploy("--dry-run")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("a real run checks that production does not run a release newer", result.stdout)
+        self.assertEqual(self.health.requests, 0)
+        # A version that cannot be read, or is not a release, is not compared, and says so.
+        for version, expected in (("unknown", "reports 'unknown', not a release"),
+                                  (None, "cannot read the version of the running api")):
+            with self.subTest(version=version):
+                self.log.unlink(missing_ok=True)
+                if version is None:
+                    self.health.close()
+                else:
+                    self.health.version = version
+                result = self.deploy("--skip-tests")
+                self.assertIn(expected, result.stdout)
+                self.assertNotIn("newer than this release", result.stdout)
+        self.health = Health(self.api_port)
+        self.addCleanup(self.health.close)
+        self.health.version = "99.0.0"
+        # Unless the downgrade is wanted (the fake api then never reports VERSION).
+        self.log.unlink()
+        result = self.deploy("--allow-downgrade", "--skip-tests")
+        self.assertIn("production runs 99.0.0, newer than", result.stdout)
+        self.assertIn("a downgrade (--allow-downgrade)", result.stdout)
+        self.assertNotIn("Refusing to deploy", result.stderr)
+
+    def test_deploy_from_the_release_s_tag(self):
+        # Production's checkout holds a release: its tag, checked out.
+        self.git(self.primary, "checkout", "--quiet", f"v{VERSION}")
+        result = self.deploy("--dry-run")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn(f"the release v{VERSION}, as published on origin", result.stdout)
 
     def make_repository_fresh(self) -> None:
         shutil.rmtree(self.base / "worktrees", ignore_errors=True)
@@ -769,11 +819,11 @@ class DeployTest(ScriptsTestCase):
                                  SCANMYLIB_DEPLOY_REHEARSAL="scanmylib-review-test")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn(f"the api offers the APK {rehearsal.apk_version} to the phones", result.stdout)
-        self.assertIn("rehearsal: no tag, no push", result.stdout)
+        self.assertIn("skip  the release on origin (rehearsal", result.stdout)
         self.assertIn("uncommitted or untracked changes", result.stdout)
         self.assertNotIn("# uncommitted", (snapshot / "compose.yaml").read_text())
         self.assertFalse((snapshot / "untracked.txt").exists())
-        self.assertEqual(self.remote_tags(), "")
+        self.assertTagsUnchanged()
         self.assertFalse(any("scanmylib-api" in command and "scanmylib-review" not in command
                              for command in self.commands() if not command.startswith(("ps", "inspect"))))
         self.assertIn("tag scanmylib-review-test-api:latest scanmylib-review-test-api:deployed", self.commands())
@@ -967,7 +1017,7 @@ class BuildApkTest(ScriptsTestCase):
         self.assertIn(f"only built in production's checkout ({self.primary})", result.stderr)
         self.assertEqual(self.runs(), [])
 
-    def test_the_release_app_comes_from_production_s_checkout_on_main_as_on_origin(self):
+    def test_the_release_app_comes_from_production_s_checkout_on_a_published_release(self):
         result = self.run_script(self.primary, "build-apk.sh")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         build, sign = self.runs()
@@ -987,8 +1037,11 @@ class BuildApkTest(ScriptsTestCase):
             ("a hidden change", lambda: (self.git(self.primary, "update-index", "--assume-unchanged", "VERSION"),
                                          (self.primary / "VERSION").write_text("9.9.9\n")),
              "assume-unchanged or skip-worktree"),
-            ("a commit not on origin", lambda: self.git(self.primary, "commit", "--quiet", "--allow-empty", "-m", "x"),
-             "differs from main on origin"),
+            ("a commit after the release", lambda: self.git(self.primary, "commit", "--quiet", "--allow-empty", "-m", "x"),
+             "built from a published release only: HEAD"),
+            ("a release not published", lambda: self.git(self.primary, "push", "--quiet", "origin",
+                                                         f":refs/tags/v{VERSION}"),
+             f"v{VERSION} is not published on origin"),
         ]:
             with self.subTest(name):
                 shutil.rmtree(self.base / "worktrees", ignore_errors=True)
@@ -1110,14 +1163,16 @@ class ProdShTest(ScriptsTestCase):
         [call] = [call for call in self.calls() if call["argv"][0] == "compose"]
         self.assertEqual(call["argv"][-5:], ["up", "--no-build", "-d", "api", "ocr"])
 
-    def test_up_only_on_a_clean_main(self):
+    def test_up_only_on_a_clean_release(self):
         for name, prepare, expected in [
             ("an untracked file", lambda: (self.primary / "notes.txt").write_text("x"), "uncommitted or untracked"),
             ("a change", lambda: (self.primary / "compose.yaml").write_text("services: {}\n"), "uncommitted"),
             ("a hidden change", lambda: (self.git(self.primary, "update-index", "--skip-worktree", "compose.yaml"),
                                          (self.primary / "compose.yaml").write_text("services: {}\n")),
              "assume-unchanged or skip-worktree"),
-            ("another branch", lambda: self.git(self.primary, "switch", "--quiet", "-c", "other"), "not main"),
+            ("a commit after the release", lambda: self.git(self.primary, "commit", "--quiet", "--allow-empty", "-m", "x"),
+             f"is not the release v{VERSION}"),
+            ("no tag", lambda: self.git(self.primary, "tag", "--delete", f"v{VERSION}"), f"no tag v{VERSION}"),
         ]:
             with self.subTest(name):
                 shutil.rmtree(self.base / "worktrees", ignore_errors=True)
@@ -1185,6 +1240,11 @@ class SetupAndVerifyTest(ScriptsTestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("deploy new versions with scripts/deploy.sh", result.stderr)
         self.assertOnlyReads()
+        # A first installation is a published release too.
+        self.git(self.primary, "commit", "--quiet", "--allow-empty", "--message", "x")
+        result = self.run_script(self.primary, "setup.sh")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("install a published release: HEAD", result.stderr)
 
     def test_verify_sandbox_passes_on_an_isolated_sandbox(self):
         self.rules(sandbox_rules(f"{self.prod}/sandbox", str(self.prod)))

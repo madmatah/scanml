@@ -61,6 +61,7 @@ review: read what a check needs of them.
   file; a file committed by accident, such as build output, a log or a temporary capture; a real document's title,
   author or excerpt; and anything personal, such as a path of an installation, an address, a hostname or a time zone,
   where a placeholder belongs.
+- **Pull request template** (`.claude/rules/documents.md` > Pull request template): a timing in its checklist.
 - **Language** (`CLAUDE.md` > Language): English with American spelling, in the documents.
 
 Leave comments in code and configuration to the conventions expert.

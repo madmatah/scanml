@@ -102,6 +102,8 @@ Production runs on this machine, from the main checkout, `~/Dev/scanmylib`, and 
 - **Releases** are pull requests of their own, which the `release` skill prepares (`.claude/rules/releases.md`).
 - **A branch reaches `main` only through a pull request whose CI passes.** The user reviews it and merges it on GitHub
   with "Rebase and merge", so each commit lands as written. Never merge into `main` yourself.
+- **The `pull-request` skill holds the procedure:** starting a branch, stacking it on another, shaping its history,
+  reviewing it, opening and updating its pull request, and reviewing someone else's.
 
 ## Commands
 
@@ -157,10 +159,12 @@ read the file before you do what its line says.
 - `tests.md`, for any test or test support, and before fixing a bug, since the fix starts with a test: writing a test,
   test levels and test support.
 - `documents.md`, for any document or agent guidance, and any reference to a document, tool messages included: present
-  tense, where each statement lives, references by heading, rules files, expert reviewers and skills.
+  tense, where each statement lives, references by heading, rules files, expert reviewers, skills and the pull request
+  template.
 
 ## Skills
 
+- `pull-request`: from a new branch to a merged pull request, and reviewing someone else's.
 - `expert-review`: `/expert-review [<pr#>|<branch>|<range>] [--post] [focus]`, the review of a diff before it
   reaches `main`.
 - `release`: `/release [major|minor|patch]`, the pull request of a new release, which a workflow publishes once the user

@@ -162,6 +162,7 @@ The modules as they are, and the layer each one belongs to, whose directory the 
 scanmylib/
 ├── .claude/                     # Claude Code: rules, skills and the expert reviewers
 ├── .github/
+│   ├── pull_request_template.md # The body of every pull request, with its checklist
 │   └── workflows/               # CI (the gate on every pull request and every push to main), and the release
 ├── android/                     # The app: Kotlin, Compose, Gradle
 ├── docs/
@@ -240,6 +241,8 @@ against the domain. `.claude/rules/conventions.md` states them, and a rules file
 - **The main checkout holds production's release, not `main`,** because production runs from it: its containers were
   started there, its `.env` is there, and a deployment builds from its HEAD. Only releases are deployed, since the
   release app's versionCode comes from `VERSION`.
+- **A stacked branch** costs only a rebase of its own commits when its base is rewritten, so no work waits for a
+  merge.
 - **A history rewritten before it is pushed,** into atomic commits whose messages say why, keeps the reasons that a diff
   cannot show. Each commit passing the gate keeps `main` a safe start for any work.
 - **"Rebase and merge"** lands each commit as written, after the review ([Code review](#code-review)) and CI

@@ -264,13 +264,14 @@ app's version code is derived from it, so a new app always installs over the pre
 
 ## Development
 
-Changes are made on branches, each in its own worktree, next to a running installation and without touching it:
+Changes are made on branches, each in its own worktree under `.claude/worktrees/` (ignored by git), next to a running
+installation and without touching it:
 
 ```bash
 cd ~/Dev/scanmylib
 git fetch origin
-git worktree add --no-track -b my-change ../scanmylib-worktrees/my-change origin/main
-cd ../scanmylib-worktrees/my-change
+git worktree add --no-track -b feat/my-change .claude/worktrees/my-change origin/main
+cd .claude/worktrees/my-change
 scripts/dev-env.sh        # .env of the development stack
 scripts/dev.sh up         # api + fake OCR; scripts/dev.sh up --real-ocr for the real one
 scripts/e2e_test.py page1.jpg page2.jpg   # end-to-end test, acting like the phone
@@ -302,12 +303,12 @@ worktree on `main`:
 ```bash
 cd ~/Dev/scanmylib
 git fetch --prune --tags origin
-git worktree add --detach ../scanmylib-worktrees/release/next origin/main
-cd ../scanmylib-worktrees/release/next
+git worktree add --detach .claude/worktrees/release-next origin/main
+cd .claude/worktrees/release-next
 scripts/release.py            # the next version, why, and the draft of its section of CHANGELOG.md
 git switch -c release/v0.4.0  # the branch of the version it proposes, 0.4.0 here, and its worktree:
-git -C ~/Dev/scanmylib worktree move ../scanmylib-worktrees/release/next ../scanmylib-worktrees/release/v0.4.0
-cd ~/Dev/scanmylib-worktrees/release/v0.4.0
+git -C ~/Dev/scanmylib worktree move .claude/worktrees/release-next .claude/worktrees/release-v0.4.0
+cd ~/Dev/scanmylib/.claude/worktrees/release-v0.4.0
 scripts/release.py --commit   # writes VERSION and that section, and commits them
 scripts/release.py --description   # the pull request's description: what merging does, then the notes
 git push --set-upstream origin release/v0.4.0

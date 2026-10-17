@@ -334,6 +334,11 @@ it in a new pull request. With Claude Code, the release skill (`.claude/skills/r
 - [`docs/OCR_SANDBOX.md`](docs/OCR_SANDBOX.md): protocol between the api and the sandbox
 - [`docs/SECURITY.md`](docs/SECURITY.md): threat model and guarantees
 
+## Credits
+
+[`CREDITS.md`](CREDITS.md) lists the external work ScanMyLib reuses: the libraries of the api, the web UI and
+the app, the OCR engine and its models, and the development tools, with their terms.
+
 ## License
 
 ScanMyLib is released under the MIT License: see [`LICENSE`](LICENSE).

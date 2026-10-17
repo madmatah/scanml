@@ -294,6 +294,31 @@ commands and options that could (`cp`, `run -v`, `exec --privileged`…). The gu
 Every pull request runs the continuous integration (`.github/workflows/ci.yml`): server, web UI, OCR sandbox, scripts
 and Android tests. Pull requests are merged when it is green.
 
+## Releasing
+
+Pull requests never change `VERSION`. A release is a pull request of its own, `chore(release): X.Y.Z`, prepared in a
+worktree on `main`:
+
+```bash
+cd ~/Dev/scanmylib
+git fetch --tags origin
+git worktree add --no-track -b release ../scanmylib-worktrees/release origin/main
+cd ../scanmylib-worktrees/release
+scripts/release.py            # the next version, why, and the draft of its section of CHANGELOG.md
+scripts/release.py --commit   # writes VERSION and that section, and commits them; prints the pull request's text
+git push --set-upstream origin release
+```
+
+`scripts/release.py` reads the Conventional Commits since the last release: a major release for breaking changes (a
+minor one before 1.0), else a minor release for features, a patch otherwise (`--bump` chooses another). The section of
+[`CHANGELOG.md`](CHANGELOG.md) is drafted from them, in the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
+format, and edited in the pull request: by amending its commit, or with commits that change `CHANGELOG.md` only. Merge
+nothing else while it is open. Once it is merged, `.github/workflows/release.yml` tags `vX.Y.Z` on its release commit
+(or on the last edit of its notes right after it; later commits belong to the next release) and publishes a GitHub
+release with that section as its notes. If a feature, fix or breaking change was merged in between, the notes miss it:
+the workflow publishes nothing and says so, and `scripts/release.py`, run again on `main`, completes the release with
+it in a new pull request. With Claude Code, the release skill (`.claude/skills/release/`) runs these steps.
+
 ## Technical documentation
 
 - [`docs/foundations.md`](docs/foundations.md): the structuring choices of the project

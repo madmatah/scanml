@@ -20,3 +20,6 @@ android/.kotlin/
 *.apk
 *.jks
 *.keystore
+
+# Claude Code settings of one machine (the project's skills in .claude/skills/ are committed)
+/.claude/settings.local.json

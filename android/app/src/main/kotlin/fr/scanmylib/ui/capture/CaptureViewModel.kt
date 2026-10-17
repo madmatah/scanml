@@ -20,6 +20,7 @@ import java.io.File
 import java.io.IOException
 import java.time.Clock
 import java.time.Instant
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.Channel
@@ -91,6 +92,8 @@ class CaptureViewModel(
     private val documentId: String,
     private val staging: StagingArea,
     private val clock: Clock,
+    /** The dispatcher of the disk's work; tests give their own, to run it in a fixed order. */
+    private val io: CoroutineDispatcher = Dispatchers.IO,
 ) : ViewModel() {
 
     private val shooting = MutableStateFlow(false)
@@ -283,14 +286,14 @@ class CaptureViewModel(
     private suspend fun awaitPhoto(photo: File): Boolean {
         // CameraX writes a temporary file, then renames it: once there, the photo is complete.
         repeat(LATE_PHOTO_WAIT_MS / LATE_PHOTO_POLL_MS) {
-            if (withContext(Dispatchers.IO) { photo.length() > 0 }) return true
+            if (withContext(io) { photo.length() > 0 }) return true
             delay(LATE_PHOTO_POLL_MS.toLong())
         }
-        return withContext(Dispatchers.IO) { photo.length() > 0 }
+        return withContext(io) { photo.length() > 0 }
     }
 
     private suspend fun deleteQuietly(file: File) {
-        withContext(NonCancellable + Dispatchers.IO) { file.delete() }
+        withContext(NonCancellable + io) { file.delete() }
     }
 
     companion object {

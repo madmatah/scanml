@@ -1,21 +1,25 @@
 #!/usr/bin/env bash
-# Deploys main to production: the only way production changes (see CLAUDE.md).
+# Deploys a published release to production: the only way production changes (see CLAUDE.md).
 #
-# Usage: scripts/deploy.sh [--dry-run] [--skip-tests] [--apk] [--first-install]
+# Usage: scripts/deploy.sh [--dry-run] [--skip-tests] [--apk] [--first-install] [--allow-downgrade]
 #   --dry-run        check the preconditions and print every step without doing it
 #   --skip-tests     skip the server, web UI and OCR unit tests
 #   --apk            also build and publish the release APK (scripts/build-apk.sh)
 #   --first-install  production has no database yet (DATA_DIR/state/scanmylib.db)
+#   --allow-downgrade  deploy a release older than the one production runs, whose api must read
+#                    the database as the newer release left it
 #
 # Preconditions, all checked before anything changes, under a lock (one deploy at a time from a
 # checkout): run from production's checkout (the project directory of production's containers,
-# else ~/Dev/scanmylib: scripts/lib/stack.py), on main, clean (untracked files included, and no
-# file marked assume-unchanged or skip-worktree, which git status would not compare), equal to
-# main on origin (git ls-remote); production's .env, in the strict format of scripts/lib/stack.py,
+# else ~/Dev/scanmylib: scripts/lib/stack.py), clean (untracked files included, and no file marked
+# assume-unchanged or skip-worktree, which git status would not compare), on a published release:
+# HEAD is the commit of the tag vVERSION on origin (git ls-remote), which .github/workflows/release.yml
+# created (git checkout vX.Y.Z); production's .env, in the strict format of scripts/lib/stack.py,
 # with production's identity (COMPOSE_PROJECT_NAME=scanmylib, the OCR sandbox, the release app),
 # an existing DATA_DIR holding production's database (unless --first-install), an existing
-# LIBRARY_DIR and an installed OCR sandbox; VERSION is MAJOR.MINOR.PATCH and its tag vVERSION does
-# not exist yet, here or on origin, unless it already points to this commit.
+# LIBRARY_DIR and an installed OCR sandbox; in a real run, the running api (/api/health) not on a
+# newer release, unless --allow-downgrade. It never tags: releases are published on GitHub, and
+# each installation deploys the ones it wants.
 #
 # The commit is exported first (git archive HEAD), and every docker compose call reads the
 # compose.yaml of that export, so that nothing uncommitted, ignored or untracked is checked, built
@@ -41,31 +45,31 @@
 #      images become :deployed: production runs them
 #   6. with --apk: scripts/build-apk.sh (tests, release build, lint, signing, publication), then a check
 #      that /api/health offers the published APK
-#   7. the annotated tag vVERSION on this commit (unless it exists), pushed to origin
 # A real run ignores SIGHUP (a lost terminal does not stop it halfway) and is also logged to
 # DATA_DIR/logs/deploy-<time>.log. On failure, it says what state production is in after the
 # step that failed, and how to roll back (the :deployed images, the backup of the state).
 #
 # Rehearsal on a throwaway stack: SCANMYLIB_DEPLOY_REHEARSAL=<project> deploys the .env of this
 # checkout instead, when its COMPOSE_PROJECT_NAME is <project> and the export passes the isolation
-# check of scripts/dev.sh. The git checks are then only reported (HEAD is still what is checked,
-# built and started: commit first), the fake OCR is allowed (OCR_SERVICE=ocr-fake), the app is the
-# dev one, and nothing is tagged or pushed.
+# check of scripts/dev.sh. The git checks are then only reported, and HEAD need not be a release
+# (it is still what is checked, built and started: commit first), the fake OCR is allowed
+# (OCR_SERVICE=ocr-fake), and the app is the dev one.
 set -euo pipefail
 
 ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 # shellcheck source=lib/common.sh
 source "$ROOT/scripts/lib/common.sh"
 
-usage() { sed -n '/^# Usage:/,/^#   --first-install/{s/^# \{0,1\}//;p}' "${BASH_SOURCE[0]}" >&2; exit 2; }
+usage() { sed -n '/^# Usage:/,/^#   *the database as/{s/^# \{0,1\}//;p}' "${BASH_SOURCE[0]}" >&2; exit 2; }
 
-DRY_RUN=0 SKIP_TESTS=0 BUILD_APK=0 FIRST_INSTALL=0
+DRY_RUN=0 SKIP_TESTS=0 BUILD_APK=0 FIRST_INSTALL=0 ALLOW_DOWNGRADE=0
 for arg in "$@"; do
     case $arg in
         --dry-run) DRY_RUN=1 ;;
         --skip-tests) SKIP_TESTS=1 ;;
         --apk) BUILD_APK=1 ;;
         --first-install) FIRST_INSTALL=1 ;;
+        --allow-downgrade) ALLOW_DOWNGRADE=1 ;;
         *) usage ;;
     esac
 done
@@ -112,9 +116,6 @@ else
     read_origin=0
 fi
 
-branch=$(git symbolic-ref --quiet --short HEAD || echo "a detached HEAD")
-if [[ $branch == main ]]; then pass "on main"; else git_fail "on $branch, not main"; read_origin=0; fi
-
 changes=$(git status --porcelain --untracked-files=all)
 if [[ -z $changes ]]; then
     pass "clean working tree, untracked files included"
@@ -128,19 +129,14 @@ $(tr '\n' ' ' <<< "$hidden")(git update-index --no-assume-unchanged --no-skip-wo
 fi
 
 if [[ -n $REHEARSAL ]]; then
-    printf '  skip  main and the tags on origin (rehearsal: no network)\n'
+    printf '  skip  the release on origin (rehearsal: no network, and any commit)\n'
 elif ! ((read_origin)); then
-    printf '  skip  main and the tags on origin (not main in production'"'"'s checkout)\n'
+    printf '  skip  the release on origin (not production'"'"'s checkout)\n'
+# Read on origin itself, in a dry run as in a real one: nothing local is trusted or updated.
+elif release_error=$(release_problem "$ROOT"); then
+    pass "the release v$(git show HEAD:VERSION | tr -d '[:space:]'), as published on origin (${head_commit:0:12})"
 else
-    # Read on origin itself, in a dry run as in a real one: nothing local is trusted or updated.
-    remote_main=$(git ls-remote origin refs/heads/main | cut -f 1) || remote_main=
-    if [[ -z $remote_main ]]; then
-        fail "cannot read main on origin (git ls-remote origin refs/heads/main)"
-    elif [[ $remote_main == "$head_commit" ]]; then
-        pass "equal to main on origin (${head_commit:0:12})"
-    else
-        fail "HEAD ${head_commit:0:12} differs from main on origin (${remote_main:0:12}): pull or push first"
-    fi
+    fail "$release_error"
 fi
 
 declare -A STACK=()
@@ -224,33 +220,36 @@ if ((env_read)); then
 fi
 
 VERSION=$(tr -d '[:space:]' 2> /dev/null < VERSION || true)
-TAG=v$VERSION
 if [[ $VERSION =~ ^[0-9]{1,3}\.[0-9]{1,2}\.[0-9]{1,2}$ ]]; then
     pass "VERSION $VERSION"
 else
     fail "VERSION must be MAJOR.MINOR.PATCH (minor and patch below 100), not '$VERSION'"
 fi
 
-tag_state=new remote_tag=
-local_tag=$(git rev-parse --verify --quiet "refs/tags/$TAG^{commit}" || true)
-if [[ -n $local_tag && $local_tag != "$head_commit" ]]; then
-    git_fail "tag $TAG already exists on ${local_tag:0:12}, not on this commit: bump VERSION"
-elif [[ -n $local_tag ]]; then
-    tag_state=exists
-fi
-if ((read_origin)); then
-    remote_tag=$(git ls-remote --tags origin "refs/tags/$TAG" "refs/tags/$TAG^{}" | sort -k 2 | tail -n 1 | cut -f 1) \
-        || fail "cannot read the tags of origin"
-    if [[ -n $remote_tag && $remote_tag != "$head_commit" ]]; then
-        fail "tag $TAG already exists on origin on ${remote_tag:0:12}, not on this commit: bump VERSION"
-    elif [[ -n $remote_tag ]]; then
-        tag_state=exists
+# An older release than production runs may not read the database the newer one migrated, and its
+# app has a lower versionCode, which phones refuse. A dry run sends no request to the api.
+if ((env_read)) && [[ -z $REHEARSAL && $VERSION =~ ^[0-9]{1,3}\.[0-9]{1,2}\.[0-9]{1,2}$ ]] && ! ((FIRST_INSTALL)); then
+    if ((DRY_RUN)); then
+        info "a real run checks that production does not run a release newer than $VERSION (/api/health)"
+    else
+        running=$(curl -fsS --max-time 3 "http://127.0.0.1:$API_PORT/api/health" 2> /dev/null \
+            | python3 -c 'import json, sys; print(json.load(sys.stdin).get("version", ""))' 2> /dev/null || true)
+        if [[ -z $running ]]; then
+            warn "cannot read the version of the running api (http://127.0.0.1:$API_PORT/api/health): not compared"
+        elif [[ ! $running =~ ^[0-9]{1,3}\.[0-9]{1,2}\.[0-9]{1,2}$ ]]; then
+            warn "the running api reports '$running', not a release: not compared"
+        elif [[ $running != "$VERSION" && $(printf '%s\n' "$VERSION" "$running" | sort -V | tail -n 1) == "$running" ]]; then
+            if ((ALLOW_DOWNGRADE)); then
+                warn "production runs $running, newer than $VERSION: a downgrade (--allow-downgrade)"
+            else
+                fail "production runs $running, newer than this release $VERSION: check out $running or a later \
+release (--allow-downgrade to go back, if $VERSION reads the database as $running left it)"
+            fi
+        else
+            pass "production runs ${running}: not a newer release"
+        fi
     fi
 fi
-case $tag_state in
-    new) pass "tag $TAG is new" ;;
-    exists) pass "tag $TAG already points to this commit (redeploy)" ;;
-esac
 
 if ((BUILD_APK)); then
     stray=$(android_stray_files "$ROOT")
@@ -354,7 +353,7 @@ rollback_help() {
     fi
     echo "  $COMPOSE_HINT up -d --no-build api $OCR_SERVICE"
     echo "Pages uploaded since the restart stay in the library but not in the restored database."
-    echo "Then revert the change on main (pull request) before deploying again."
+    echo "Then fix the problem in a new release before deploying again."
 }
 
 on_exit() {
@@ -385,11 +384,6 @@ on_exit() {
                 echo "the phones keep the previous app. Fix the problem, then run scripts/build-apk.sh here"
                 echo "(or roll back)."
                 [[ -n $BACKUP ]] && echo "Backup of the state before the restart: $BACKUP"
-                ;;
-            tag)
-                echo "$WHO runs $VERSION$( ((BUILD_APK)) && echo ' and the APK is published'); only the tag is missing:"
-                [[ $tag_state == new ]] && echo "  git tag --annotate $TAG --message 'ScanMyLib $VERSION' ${head_commit:0:12}"
-                echo "  git push origin refs/tags/$TAG"
                 ;;
         esac
     fi
@@ -583,23 +577,6 @@ if ((BUILD_APK)); then
     fi
 else
     echo "  skipped (no --apk)"
-fi
-
-STEP=tag
-say "7. Tag"
-if [[ -n $REHEARSAL ]]; then
-    echo "  rehearsal: no tag, no push (production would tag $TAG on ${head_commit:0:12} and push it)"
-else
-    if [[ $tag_state == new ]]; then
-        run git tag --annotate "$TAG" --message "ScanMyLib $VERSION" "$head_commit"
-    else
-        echo "  $TAG already points to ${head_commit:0:12}"
-    fi
-    if [[ $remote_tag == "$head_commit" ]]; then
-        echo "  $TAG is already on origin"
-    else
-        run git push origin "refs/tags/$TAG"
-    fi
 fi
 
 STEP=done

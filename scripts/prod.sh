@@ -5,10 +5,11 @@
 # compose would also read the caller's environment (COMPOSE_*, DATA_DIR...), which overrides .env.
 # Production changes through scripts/deploy.sh: builds, one-off containers, cp, push... are refused
 # (scripts/lib/stack.py, check-compose-command), and so is the fake OCR. up applies this
-# checkout's compose.yaml to production, so only on a clean main (untracked files included, and no
-# file marked assume-unchanged or skip-worktree, as in scripts/deploy.sh), and never builds
-# (--no-build is added): it starts the images scripts/deploy.sh built. start and restart restart
-# the existing containers as they were created.
+# checkout's compose.yaml to production, so only on a release (HEAD is the commit of the tag
+# vVERSION, as this checkout's tags say: deploy.sh checked it on origin), clean (untracked files
+# included, and no file marked assume-unchanged or skip-worktree, as in scripts/deploy.sh), and
+# never builds (--no-build is added): it starts the images scripts/deploy.sh built. start and
+# restart restart the existing containers as they were created.
 #
 # Usage: scripts/prod.sh compose COMMAND [ARGS...]
 #   e.g. scripts/prod.sh compose ps
@@ -38,10 +39,9 @@ load_env "$ROOT/.env" STACK
 
 case $1 in
     up)
-        # What up applies is this checkout's compose.yaml: main as committed, nothing else. start
-        # and restart only restart the existing containers, as they were created.
-        branch=$(git -C "$ROOT" symbolic-ref --quiet --short HEAD || echo "a detached HEAD")
-        [[ $branch == main ]] || die "production's checkout is on $branch, not main: nothing was done"
+        # What up applies is this checkout's compose.yaml: a release as committed, nothing else.
+        # start and restart only restart the existing containers, as they were created.
+        release_error=$(release_problem "$ROOT" local) || die "$release_error: nothing was done"
         [[ -z $(git -C "$ROOT" status --porcelain --untracked-files=all) ]] \
             || die "production's checkout has uncommitted or untracked changes (git status): nothing was done"
         hidden=$(hidden_changes "$ROOT")

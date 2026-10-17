@@ -9,9 +9,10 @@
 # .env exists, the environment is ignored:
 #   APP_VARIANT   release: the production app, fr.scanmylib, built only in production's checkout
 #                 (scripts/lib/stack.py: the project directory of production's containers), with
-#                 production's .env (COMPOSE_PROJECT_NAME=scanmylib), on a clean main equal to
-#                 main on origin (git ls-remote), without assume-unchanged or skip-worktree files:
-#                 normally by scripts/deploy.sh --apk
+#                 production's .env (COMPOSE_PROJECT_NAME=scanmylib), clean, without
+#                 assume-unchanged or skip-worktree files, on a published release (HEAD is the
+#                 commit of the tag vVERSION on origin, git ls-remote): normally by
+#                 scripts/deploy.sh --apk
 #                 dev: the development app, fr.scanmylib.dev, "ScanMyLib (dev)", the only one a
 #                 worktree builds, once its .env passes the isolation check of scripts/dev.sh
 #                 (default: release with production's .env, else dev)
@@ -345,16 +346,14 @@ assembles_variant() {
     return 1
 }
 
-# The release app is production's: production's checkout and .env, main as on origin, clean.
+# The release app is production's: production's checkout and .env, a published release, clean.
 assert_production_release() {  # assert_production_release PROJECT
-    local checkout branch stray hidden head remote
+    local checkout stray hidden release_error
     checkout=$(production_checkout) || die "cannot tell production's checkout (see above)"
     is_production_checkout "$ROOT" "$checkout" || die "the release app is only built in production's checkout \
 ($checkout), by scripts/deploy.sh --apk; a worktree builds the dev app (APP_VARIANT=dev, scripts/dev-env.sh)"
     [[ $1 == "$PRODUCTION_PROJECT" ]] \
         || die "APP_VARIANT=release needs production's .env (COMPOSE_PROJECT_NAME=$PRODUCTION_PROJECT), not '$1'"
-    branch=$(git -C "$ROOT" symbolic-ref --quiet --short HEAD || true)
-    [[ $branch == main ]] || die "the release app is built from main only, not from '${branch:-a detached HEAD}'"
     [[ -z $(git -C "$ROOT" status --porcelain --untracked-files=all) ]] \
         || die "the release app is built from a clean checkout only (git status)"
     hidden=$(hidden_changes "$ROOT")
@@ -362,10 +361,7 @@ assert_production_release() {  # assert_production_release PROJECT
 $(tr '\n' ' ' <<< "$hidden")(git update-index --no-assume-unchanged --no-skip-worktree FILE)"
     stray=$(android_stray_files "$ROOT")
     [[ -z $stray ]] || die "ignored files under android/ could end up in the release app: $(tr '\n' ' ' <<< "$stray")"
-    head=$(git -C "$ROOT" rev-parse HEAD)
-    remote=$(git -C "$ROOT" ls-remote origin refs/heads/main | cut -f 1) || remote=
-    [[ -n $remote ]] || die "cannot read main on origin (git ls-remote origin refs/heads/main)"
-    [[ $remote == "$head" ]] || die "HEAD ${head:0:12} differs from main on origin (${remote:0:12}): pull or push first"
+    release_error=$(release_problem "$ROOT") || die "the release app is built from a published release only: $release_error"
 }
 
 main() {

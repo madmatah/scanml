@@ -141,7 +141,7 @@ marked assume-unchanged or skip-worktree, whose changes `git status` hides. A
 rehearsal checks the stack twice, as the build resolves it (from the export)
 and as `up` resolves it (relative `extends` files and bind sources are read
 from the checkout, uncommitted changes included).
-`scripts/prod.sh compose` runs `up` only on a clean `main` (the same checks),
+`scripts/prod.sh compose` runs `up` only on a clean release (the same checks),
 and `up` never builds; `start` and `restart` only restart the existing
 containers. Without a `.env`,
 `scripts/build-apk.sh` only runs in CI, outside production's paths and the
@@ -187,7 +187,7 @@ data or library; an `--api` URL without an explicit port is refused) without
   (`protectionLevel="signature"`), exported components protected by one, or a
   `sharedUserId`, which a development app signed with the same key could use;
   revisit this before adding any. The release app is only built in
-  production's checkout, on `main` as on GitHub; without a `.env`, only CI
+  production's checkout, on a release published on GitHub; without a `.env`, only CI
   builds, never signed, never in production's directories nor in the home
   directory. **Back up this folder.** Without it, a new APK cannot update the installed app: it
   would have to be uninstalled, which deletes the pages not sent yet.

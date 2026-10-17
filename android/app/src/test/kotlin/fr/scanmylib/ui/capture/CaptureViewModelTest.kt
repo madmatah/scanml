@@ -15,8 +15,11 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.currentTime
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -76,15 +79,24 @@ class CaptureViewModelTest {
     private val stagingRoot get() = File(folder.root, "staging")
 
     /**
+     * The disk's work, on the test's scheduler like the rest: each test runs on one thread, in a
+     * fixed order, and nothing it started runs after it (on another thread, it raced the test's
+     * assertions and resumed on a main dispatcher already reset).
+     */
+    private val TestScope.io get() = StandardTestDispatcher(testScheduler)
+
+    /** The staging area, on a fresh read of the disk as by a new process. */
+    private fun TestScope.staging() = StagingArea(stagingRoot, io)
+
+    /**
      * The camera screen, on the document's run in [staging], restored from [savedState] if given,
-     * once it knows where its visit starts: that read runs on the IO dispatcher, and must not
-     * resume on the main dispatcher after the test has reset it.
+     * once it knows where its visit starts.
      */
     private suspend fun TestScope.screen(
-        staging: StagingArea = StagingArea(stagingRoot),
+        staging: StagingArea = staging(),
         savedState: SavedStateHandle = SavedStateHandle(),
     ): Screen {
-        val screen = Screen(CaptureViewModel(savedState, document, staging, clock))
+        val screen = Screen(CaptureViewModel(savedState, document, staging, clock, io))
         val collector = UnconfinedTestDispatcher(testScheduler)
         backgroundScope.launch(collector) {
             screen.viewModel.closed.collect {
@@ -117,7 +129,7 @@ class CaptureViewModelTest {
 
     @Test
     fun `with no photo of its own, the visit has nothing to keep or delete, and the draft stays`() = runTest {
-        val staging = StagingArea(stagingRoot)
+        val staging = staging()
         val scanned = staging.scanned(5)
         val screen = screen(staging)
 
@@ -135,7 +147,7 @@ class CaptureViewModelTest {
 
     @Test
     fun `discarding deletes this visit's photos only`() = runTest {
-        val staging = StagingArea(stagingRoot)
+        val staging = staging()
         val scanned = staging.scanned(5)
         val screen = screen(staging)
         screen.photograph("photo 1")
@@ -153,7 +165,7 @@ class CaptureViewModelTest {
 
     @Test
     fun `deleting the last photo leaves the pages from before the visit`() = runTest {
-        val staging = StagingArea(stagingRoot)
+        val staging = staging()
         val scanned = staging.scanned(2)
         val screen = screen(staging)
         screen.photograph("blurred")
@@ -169,19 +181,19 @@ class CaptureViewModelTest {
 
     @Test
     fun `the start of the visit survives the end of the process`() = runTest {
-        val staging = StagingArea(stagingRoot)
+        val staging = staging()
         staging.scanned(5)
         val savedState = SavedStateHandle()
         screen(staging, savedState).photograph("photo 1")
 
         // The process ends; the screen comes back with its saved state, on the files left on disk.
         val restored = SavedStateHandle(savedState.keys().associateWith { savedState.get<Any?>(it) })
-        val state = screen(StagingArea(stagingRoot), restored).awaitState { it.ready }
+        val state = screen(staging(), restored).awaitState { it.ready }
         assertEquals(listOf("photo 1"), state.pages.map { it.file.readText() })
         assertEquals(5, state.waiting)
 
         // A new visit to the camera starts after that photo.
-        val newVisit = screen(StagingArea(stagingRoot)).awaitState { it.ready }
+        val newVisit = screen(staging()).awaitState { it.ready }
         assertEquals(emptyList<Any>(), newVisit.pages)
         assertEquals(6, newVisit.waiting)
     }
@@ -219,6 +231,7 @@ class CaptureViewModelTest {
         val shot = screen.shoot()
         screen.viewModel.finish()
 
+        shot.file.writeText("half a photo") // the camera failed while writing it
         screen.viewModel.onShotFailed(shot, ImageCaptureException(ImageCapture.ERROR_CAPTURE_FAILED, "failed", null))
         val state = screen.awaitState { !it.shooting }
         assertFalse(state.finishing)
@@ -238,6 +251,10 @@ class CaptureViewModelTest {
         // The phone was locked during the save: CameraX reports the camera closed, then finishes
         // writing the photo all the same.
         screen.viewModel.onShotFailed(shot, cameraClosed)
+        // The screen waits for the photo while the camera is still writing it (well within the
+        // wait, and before the screen's state stops being shared, 5 s after its last observer).
+        advanceTimeBy(1_000)
+        assertEquals(emptyList<CaptureMessage>(), screen.messages)
         shot.file.writeText("page")
 
         val state = screen.awaitState { it.pages.size == 1 && !it.shooting }
@@ -250,8 +267,11 @@ class CaptureViewModelTest {
         val screen = screen()
         val shot = screen.shoot()
 
+        shot.file.createNewFile() // left empty by the camera
         screen.viewModel.onShotFailed(shot, cameraClosed)
         val state = screen.awaitState { !it.shooting }
+        // Only once the camera had its time to write it: 5 s.
+        assertTrue(currentTime >= 5_000)
         assertTrue(state.pages.isEmpty())
         assertEquals(listOf<CaptureMessage>(CaptureMessage.ShotFailed), screen.messages)
         assertFalse(shot.file.exists())

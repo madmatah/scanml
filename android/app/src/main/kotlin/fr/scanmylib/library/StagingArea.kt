@@ -6,6 +6,7 @@ import java.io.IOException
 import java.time.Instant
 import java.util.Locale
 import java.util.UUID
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
@@ -41,6 +42,7 @@ data class StagingInput(val file: File, val capturedAt: Instant)
  * Images are written in an `incoming` subdirectory first and join the run once complete; what an
  * interrupted shot or copy leaves there is deleted when the run is first read by a new process.
  *
+ * @param io the dispatcher of the disk's work; tests give their own, to run it in a fixed order.
  * @param recoverSend called when a run is first read by a new process and holds the journal of a
  *   send that the previous process did not finish (see [sendJournal]): it must put back in the run
  *   directory the pages that left the run without reaching the upload queue, delete the journal,
@@ -48,6 +50,7 @@ data class StagingInput(val file: File, val capturedAt: Instant)
  */
 class StagingArea(
     private val root: File,
+    private val io: CoroutineDispatcher = Dispatchers.IO,
     private val recoverSend: suspend (journal: File, runDirectory: File) -> Unit = { _, _ -> },
 ) {
 
@@ -90,7 +93,7 @@ class StagingArea(
     suspend fun incomingFile(documentId: String): File = mutex.withLock {
         // Reading the run first cleans up the incoming directory: never after this file exists.
         loadLocked(documentId)
-        withContext(Dispatchers.IO) {
+        withContext(io) {
             val incoming = File(directory(documentId), INCOMING)
             if (!incoming.isDirectory && !incoming.mkdirs()) throw IOException("cannot create $incoming")
             File(incoming, "${UUID.randomUUID()}.tmp")
@@ -107,7 +110,7 @@ class StagingArea(
         val run = loadLocked(documentId)
         val added = mutableListOf<StagedPage>()
         try {
-            withContext(Dispatchers.IO) {
+            withContext(io) {
                 var seq = run.maxOfOrNull { it.seq } ?: 0
                 for (input in inputs) {
                     if (input.file.length() == 0L) throw IOException("empty image: ${input.file}")
@@ -130,7 +133,7 @@ class StagingArea(
     suspend fun remove(documentId: String, page: StagedPage) {
         mutex.withLock {
             val run = loadLocked(documentId)
-            withContext(Dispatchers.IO) {
+            withContext(io) {
                 if (!page.file.delete() && page.file.exists()) throw IOException("cannot delete ${page.file}")
             }
             runs.update { it + (documentId to run - page) }
@@ -146,7 +149,7 @@ class StagingArea(
     suspend fun removeAfter(documentId: String, seq: Int) {
         mutex.withLock {
             val run = loadLocked(documentId)
-            val left = withContext(Dispatchers.IO) {
+            val left = withContext(io) {
                 run.filter { it.seq > seq && !it.file.delete() && it.file.exists() }
             }
             runs.update { it + (documentId to run.filter { page -> page.seq <= seq || page in left }) }
@@ -157,7 +160,7 @@ class StagingArea(
     /** Deletes [documentId]'s run. */
     suspend fun discard(documentId: String) {
         mutex.withLock {
-            withContext(Dispatchers.IO) { directory(documentId).deleteRecursively() }
+            withContext(io) { directory(documentId).deleteRecursively() }
             runs.update { it + (documentId to emptyList()) }
         }
     }
@@ -179,7 +182,7 @@ class StagingArea(
             send(run)
         } finally {
             // Normally all pages or none have moved: the files tell.
-            withContext(NonCancellable + Dispatchers.IO) {
+            withContext(NonCancellable + io) {
                 val left = run.filter { it.file.exists() }
                 runs.update { it + (documentId to left) }
                 if (left.isEmpty()) {
@@ -200,7 +203,7 @@ class StagingArea(
     suspend fun retainRuns(existingDocuments: suspend (documentsWithPages: Set<String>) -> Set<String>) {
         mutex.withLock {
             val kept = existingDocuments(withPagesLocked())
-            val deleted = withContext(Dispatchers.IO) {
+            val deleted = withContext(io) {
                 root.listFiles().orEmpty()
                     .filter { it.isDirectory && it.name !in kept }
                     .onEach { it.deleteRecursively() }
@@ -215,7 +218,7 @@ class StagingArea(
 
     /** Reads every run on disk; returns all the runs. */
     private suspend fun loadAllLocked(): Map<String, List<StagedPage>> {
-        val documentIds = withContext(Dispatchers.IO) {
+        val documentIds = withContext(io) {
             root.listFiles().orEmpty().filter { it.isDirectory && DOCUMENT_ID.matches(it.name) }.map { it.name }
         }
         documentIds.forEach { loadLocked(it) }
@@ -226,8 +229,8 @@ class StagingArea(
         runs.value[documentId]?.let { return it }
         val directory = directory(documentId)
         val journal = File(directory, SEND_JOURNAL)
-        if (withContext(Dispatchers.IO) { journal.exists() }) recoverSend(journal, directory)
-        val (run, cutShort) = withContext(Dispatchers.IO) {
+        if (withContext(io) { journal.exists() }) recoverSend(journal, directory)
+        val (run, cutShort) = withContext(io) {
             val incoming = File(directory, INCOMING)
             val cutShort = incoming.listFiles().orEmpty().isNotEmpty()
             incoming.deleteRecursively()

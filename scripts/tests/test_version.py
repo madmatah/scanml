@@ -15,19 +15,16 @@ import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest import mock
+
+from git_environment import build_git_environment
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
 import version  # noqa: E402
 
-GIT_ENV = {
-    "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_AUTHOR_NAME": "Test",
-    "GIT_AUTHOR_EMAIL": "test@example.invalid", "GIT_COMMITTER_NAME": "Test",
-    "GIT_COMMITTER_EMAIL": "test@example.invalid",
-}
-
 
 def git(repository: Path, *args: str) -> str:
-    return subprocess.run(["git", *args], cwd=repository, env={**os.environ, **GIT_ENV}, check=True,
+    return subprocess.run(["git", *args], cwd=repository, env=build_git_environment(os.environ), check=True,
                           capture_output=True, text=True).stdout.strip()
 
 
@@ -47,6 +44,10 @@ class ReleaseTest(unittest.TestCase):
 
 class DevVersionTest(unittest.TestCase):
     def setUp(self) -> None:
+        # version.py runs git in this process, with its environment.
+        isolated_environment = mock.patch.dict(os.environ, build_git_environment(os.environ), clear=True)
+        isolated_environment.start()
+        self.addCleanup(isolated_environment.stop)
         directory = tempfile.TemporaryDirectory(prefix="scanmylib-version-")
         self.addCleanup(directory.cleanup)
         self.repository = Path(directory.name)

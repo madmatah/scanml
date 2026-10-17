@@ -65,7 +65,7 @@ hidden_changes() {  # hidden_changes DIR
     git -C "$1" ls-files -v | sed -n 's/^[a-zS] //p'
 }
 
-# Production runs published releases only (CLAUDE.md, "Deployment"): HEAD must be the commit of the
+# Production runs published releases only (.claude/rules/releases.md): HEAD must be the commit of the
 # tag vVERSION, VERSION being HEAD's, as published on origin (git ls-remote), or with "local" as
 # this checkout's tags say. Prints why not, and fails.
 release_problem() {  # release_problem DIR [local]

@@ -2,14 +2,14 @@
 """Prepares the next release of ScanMyLib, from the commits since the last one.
 
 The last release is VERSION, tagged vVERSION. The commits since that tag follow Conventional
-Commits (CLAUDE.md, "Commits"), which give the next version as SemVer reads them:
+Commits (CLAUDE.md > Workflow, "Commits"), which give the next version as SemVer reads them:
   - a breaking change ("type!: ..." or a "BREAKING CHANGE:" footer): the next major version, or
     the next minor one while the major version is 0;
   - else a feature ("feat"): the next minor version;
   - else (fixes and any other change): the next patch.
 They also give the draft of the release's section of CHANGELOG.md (Keep a Changelog): features
 under "Added", fixes under "Fixed", breaking changes under "Changed", marked as such. The other
-commits (refactor, test, build, ci, docs, chore, and those that do not follow Conventional
+commits (refactor, perf, test, build, ci, docs, chore, and those that do not follow Conventional
 Commits) are left out and listed, so that the release pull request adds the ones that matter to
 the readers; it is where the section is edited.
 

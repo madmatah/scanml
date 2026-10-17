@@ -139,13 +139,21 @@ The user's account holds many secrets, and the OCR stack (PaddlePaddle, PaddleOC
   app (`fr.scanmylib`, "ScanMyLib")
   and is published as `<DATA_DIR>-dev/app/scanmylib.apk`, offered by the development stack's Pairing tab
   (`http://<LAN IP>:8770`). The production APK is only built by `scripts/deploy.sh --apk`.
-- **One version.** `VERSION` (MAJOR.MINOR.PATCH) is the version of a release: of production's api (`/api/health`) and
-  of the release app, whose `versionCode` is major × 10000 + minor × 100 + patch (minor and patch stay below 100), so
-  that every release installs over the previous one. Bump it in the pull request of any change to deploy; each
-  release is tagged `vX.Y.Z` by `.github/workflows/release.yml`. Development builds (the development stack's api, the dev app, CI) are versioned
-  from git, as a pre-release of the next patch: `0.2.4-dev.27+g1a2b3c4d5e6f` is 27 commits after `v0.2.3`
-  (`scripts/lib/version.py`); the dev app's versionCode is the time of its build, so that each build installs over the
-  previous one.
+- **Releases.** `VERSION` (MAJOR.MINOR.PATCH) is the last release: the version of an api deployed from it
+  (`/api/health`) and of its release app, whose `versionCode` is major × 10000 + minor × 100 + patch (minor and patch
+  stay below 100), so that every release installs over the previous one. Pull requests never change it. A release is
+  the maintainer's work on GitHub: a pull request of its own, `chore(release): X.Y.Z`, prepared with the release skill
+  (`.claude/skills/release/`), whose one commit, made by `scripts/release.py --commit`, sets `VERSION` and adds the
+  release's section to `CHANGELOG.md` (Keep a Changelog). The version follows from the Conventional Commits since the
+  last release (a major release for breaking changes, a minor one before 1.0; else a minor release for features, a
+  patch otherwise); the section is drafted from them and edited in the pull request. Nothing else is merged while it
+  is open. Once it is merged, `.github/workflows/release.yml` tags `vX.Y.Z` on its release commit (or on the last edit
+  of its notes right after it) and publishes the release, with the section as its notes, unless a feature, fix or
+  breaking change was merged after the notes were written, or the section is empty (`scripts/release.py`, run again,
+  then completes the release); deploying it is each installation's choice (see "Deployment").
+  Development builds (the development stack's api, the dev app, CI) are versioned from git, as a pre-release of the
+  next patch: `0.2.4-dev.27+g1a2b3c4d5e6f` is 27 commits after `v0.2.3` (`scripts/lib/version.py`); the dev app's
+  versionCode is the time of its build, so that each build installs over the previous one.
 - **Continuous integration.** `.github/workflows/ci.yml` runs the server, web UI, OCR sandbox (stdlib, no models),
   scripts (`scripts/tests/`) and Android (`scripts/build-apk.sh test lint`, never signed; without a `.env` it only
   runs with `CI=true`, never in production's directories nor in the home directory, except GitHub Actions'
@@ -179,6 +187,7 @@ The user's account holds many secrets, and the OCR stack (PaddlePaddle, PaddleOC
 | Android app | `android/` | `scripts/build-apk.sh` (tests, build of the `APP_VARIANT` app, lint, offline signing) |
 | Development stack | `compose.yaml`, `.env` | `scripts/dev-env.sh` once per worktree, then `scripts/dev.sh up`, `status`, `logs`, `down`, `build`, `compose ...` |
 | Scripts | `scripts/`, `scripts/tests/` | `python3 -m unittest discover -s scripts/tests` (host `python3`, stdlib only; a docker stand-in, nothing is built or started) |
+| Releases | `scripts/release.py`, `CHANGELOG.md`, `.github/workflows/release.yml` | `scripts/release.py`, then `scripts/release.py --commit` on the release's own branch, and a pull request (the release skill, `.claude/skills/release/`) |
 | Deployment | `scripts/deploy.sh` | `scripts/deploy.sh --dry-run`, then `scripts/deploy.sh [--apk]`, in production's checkout on a published release (`git checkout vX.Y.Z`); first install: `scripts/setup.sh` |
 | Production operations | `scripts/prod.sh` | `scripts/prod.sh compose ps`, `logs -f api ocr`, `restart api`... in production's checkout |
 | End to end | `scripts/e2e_test.py` | `scripts/e2e_test.py IMAGE...` against the stack of the checkout's `.env` (production refused without `--production`) |

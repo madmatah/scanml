@@ -7,6 +7,33 @@ The notable changes of each release of ScanMyLib. The format is based on
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-17
+
+### Added
+
+- App: scan straight from the default camera, or import photos, in one tap
+- App: import photos shared from another app
+- App: scan from the library card
+- App: create a document and scan or import it in one step
+- App: share the crash report, and keep it until it is deleted
+- App: check for updates and install them from the app, from the APK the PC publishes with `scripts/deploy.sh --apk`
+  (`/api/health` says which). Phones install 0.3.0 itself once by hand, from the Pairing tab of the web UI
+- Releases published on GitHub, with their notes from this changelog
+
+### Changed
+
+- **Breaking:** Scripts: deploy only published releases. Fetch and check out a release (`git fetch --tags origin`, then
+  `git checkout vX.Y.Z`) before `scripts/deploy.sh`, which no longer tags, and refuses a release older than the running
+  one unless `--allow-downgrade`. `scripts/setup.sh` and `scripts/prod.sh compose up` need a release too
+- Development builds are versioned from git (`0.3.1-dev.N+g…`), and each build of the dev app installs over the
+  previous one
+
+### Fixed
+
+- App: delete only the photos of the camera's own visit
+- App: clearer feedback in the camera and after an import
+- App: one vocabulary in English and French
+
 ## [0.2.3] - 2026-10-15
 
 ### Added
@@ -25,5 +52,6 @@ The notable changes of each release of ScanMyLib. The format is based on
 
 - OCR: read the whole request body before refusing a request
 
-[unreleased]: https://github.com/madmatah/scanml/compare/v0.2.3...HEAD
+[unreleased]: https://github.com/madmatah/scanml/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/madmatah/scanml/compare/v0.2.3...v0.3.0
 [0.2.3]: https://github.com/madmatah/scanml/tree/v0.2.3

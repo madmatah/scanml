@@ -1,6 +1,5 @@
-# Runs the test suites of CLAUDE.md ("Layout and commands"), in throwaway containers as on a development
-# machine. No secret is used anywhere. Images are tagged :ci so that running these commands locally never
-# replaces an image in use.
+# Each job runs one area of scripts/check.sh, the gate every commit passes before it is pushed, so that CI checks
+# exactly what a session checks, and the areas run in parallel.
 name: CI
 
 on:
@@ -29,11 +28,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Build the test image
-        working-directory: server
-        run: docker build --target test -t scanmylib-api:ci .
-      - name: Run the tests without network, on a read-only root filesystem
-        run: docker run --rm --network none --read-only --tmpfs /tmp scanmylib-api:ci
+      - name: Run the tests in the test image, without network, on a read-only root filesystem
+        run: scripts/check.sh server
 
   web:
     name: Web UI
@@ -44,10 +40,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Run the unit tests
-        run: >-
-          docker run --rm --network none --read-only --user 1000:1000
-          -v "$PWD/server/scanmylib/web:/web:ro"
-          node:22-bookworm-slim node --test '/web/tests/*.test.js'
+        run: scripts/check.sh web
 
   ocr:
     name: OCR sandbox
@@ -57,17 +50,11 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Build the sandbox image
-        run: docker build -t scanmylib-ocr:ci ocr
       # The image's python3 has the standard library only. The engine environments and the models are never
       # installed in CI, so the tests that need Pillow (the worker's venv) are skipped. The isolation of the
       # running service (scripts/verify-sandbox.sh) needs the deployed stack and is not checked here.
-      - name: Run the unit tests with the image's Python
-        run: >-
-          docker run --rm --init --network none --read-only --tmpfs /tmp
-          --cap-drop ALL --security-opt no-new-privileges:true --user 1000:1000
-          -v "$PWD/ocr:/app:ro" scanmylib-ocr:ci
-          python3 -m unittest discover -s /app/tests -v
+      - name: Run the unit tests in the sandbox image, with its Python
+        run: scripts/check.sh ocr
 
   scripts:
     name: Scripts
@@ -83,7 +70,7 @@ jobs:
       # The .env parser, the isolation check from production and the scripts that use them, with a docker stand-in
       # (scripts/tests/docker_shim.py): docker compose only resolves configurations, nothing is built or started.
       - name: Run the tests of the scripts
-        run: python3 -m unittest discover -s scripts/tests -v
+        run: scripts/check.sh scripts
 
   android:
     name: Android
@@ -116,4 +103,4 @@ jobs:
       # CI has no signing key. With an empty cache, every dependency, metadata files included,
       # is downloaded and checked against android/gradle/verification-metadata.xml.
       - name: Run the unit tests and lint
-        run: scripts/build-apk.sh test lint
+        run: scripts/check.sh android

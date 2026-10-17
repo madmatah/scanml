@@ -31,6 +31,8 @@ import unittest
 from contextlib import closing
 from pathlib import Path
 
+from docker_shim import image_id
+
 REPO = Path(__file__).resolve().parents[2]
 SHIM = Path(__file__).resolve().parent / "docker_shim.py"
 #: What the scripts need from the repository (the docker builds are only logged).
@@ -38,7 +40,7 @@ COPIED = [
     "compose.yaml", ".env.example", ".gitignore", "VERSION", "scripts/lib/common.sh", "scripts/lib/stack.py",
     "scripts/lib/version.py",
     "scripts/dev-env.sh", "scripts/dev.sh", "scripts/prod.sh", "scripts/deploy.sh", "scripts/build-apk.sh",
-    "scripts/setup.sh", "scripts/verify-sandbox.sh", "scripts/e2e_test.py",
+    "scripts/setup.sh", "scripts/verify-sandbox.sh", "scripts/e2e_test.py", "scripts/check.sh",
 ]
 VERSION = (REPO / "VERSION").read_text().strip()
 VERSION_CODE = sum(int(part) * factor for part, factor in zip(VERSION.split("."), (10000, 100, 1)))
@@ -1263,6 +1265,110 @@ class SetupAndVerifyTest(ScriptsTestCase):
         self.rules(sandbox_rules(f"{self.prod}/sandbox", f"{self.prod}-dev", kind="ocr-fake"))
         result = self.run_script(self.worktree, "verify-sandbox.sh")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+
+class CheckTest(ScriptsTestCase):
+    def list_checks(self) -> list[list[str]]:
+        return [call["argv"] for call in self.calls() if call["argv"][:1] in (["build"], ["run"])]
+
+    @staticmethod
+    def list_areas_checked(gate_run: subprocess.CompletedProcess) -> list[str]:
+        return re.findall(r"Checking (\w+)", gate_run.stdout)
+
+    def write_scripts_test(self, body: str) -> None:
+        # The fixture holds no tests of scripts/: the scripts area runs this one instead.
+        tests = self.worktree / "scripts" / "tests"
+        tests.mkdir(parents=True)
+        (tests / "test_placeholder.py").write_text(
+            "import os\nimport unittest\n\n\nclass Placeholder(unittest.TestCase):\n"
+            f"    def test_placeholder(self) -> None:\n        {body}\n")
+
+    def test_the_gate_runs_only_the_areas_given_in_their_order(self) -> None:
+        gate_run = self.run_script(self.worktree, "check.sh", "server", "web")
+        self.assertEqual(gate_run.returncode, 0, gate_run.stdout + gate_run.stderr)
+        self.assertEqual(self.list_areas_checked(gate_run), ["server", "web"])
+        build, server_tests, web_tests = (" ".join(argv) for argv in self.list_checks())
+        self.assertIn(f"--target test {self.worktree}/server", build)
+        self.assertIn("node --test", web_tests)
+
+    def test_the_web_server_and_sandbox_tests_run_without_network_on_a_read_only_filesystem(self) -> None:
+        gate_run = self.run_script(self.worktree, "check.sh", "web", "server", "ocr")
+        self.assertEqual(gate_run.returncode, 0, gate_run.stdout + gate_run.stderr)
+        runs = [" ".join(argv) for argv in self.list_checks() if argv[0] == "run"]
+        self.assertEqual(len(runs), 3)
+        for run in runs:
+            self.assertIn("--network none --read-only", run)
+
+    def test_the_gate_runs_the_image_its_build_wrote(self) -> None:
+        gate_run = self.run_script(self.worktree, "check.sh", "server")
+        self.assertEqual(gate_run.returncode, 0, gate_run.stdout + gate_run.stderr)
+        build, server_tests = self.list_checks()
+        self.assertEqual(server_tests[-1], image_id(build))
+
+    def test_the_sandbox_tests_run_without_privileges_on_read_only_sources(self) -> None:
+        gate_run = self.run_script(self.worktree, "check.sh", "ocr")
+        self.assertEqual(gate_run.returncode, 0, gate_run.stdout + gate_run.stderr)
+        build, sandbox_tests = (" ".join(argv) for argv in self.list_checks())
+        self.assertTrue(build.endswith(f"{self.worktree}/ocr"), build)
+        self.assertIn("--cap-drop ALL --security-opt no-new-privileges:true --user ", sandbox_tests)
+        self.assertIn(f"-v {self.worktree}/ocr:/app:ro ", sandbox_tests)
+
+    def test_on_github_actions_the_android_area_hands_its_settings_to_the_build(self) -> None:
+        runner_temp = self.home / "work" / "_temp"
+        ci_data_directory = runner_temp / "data"
+        gate_run = self.run_script(self.worktree, "check.sh", "android", GITHUB_ACTIONS="true",
+                                   RUNNER_TEMP=str(runner_temp), DATA_DIR=str(ci_data_directory))
+        self.assertEqual(gate_run.returncode, 0, gate_run.stdout + gate_run.stderr)
+        [android_build] = (" ".join(argv) for argv in self.list_checks())
+        self.assertIn(f"{ci_data_directory}/android/sdk:/opt/android-sdk", android_build)
+
+    def test_by_default_the_gate_checks_every_area_in_order(self) -> None:
+        self.write_scripts_test("pass")
+        gate_run = self.run_script(self.worktree, "check.sh", CI="true", DATA_DIR=str(self.base / "ci"))
+        self.assertEqual(gate_run.returncode, 0, gate_run.stdout + gate_run.stderr)
+        self.assertEqual(self.list_areas_checked(gate_run), ["scripts", "web", "server", "ocr", "android"])
+        self.assertIn("Ran 1 test", gate_run.stderr)
+
+    def test_the_gate_drops_the_git_variables_of_its_caller(self) -> None:
+        self.write_scripts_test('self.assertNotIn("GIT_DIR", os.environ)')
+        # What `git rebase --exec` exports in a worktree, at a path where no repository can be touched.
+        gate_run = self.run_script(self.worktree, "check.sh", "scripts", GIT_DIR="/nonexistent/caller/.git")
+        self.assertEqual(gate_run.returncode, 0, gate_run.stdout + gate_run.stderr)
+
+    def test_a_failing_build_stops_the_gate(self) -> None:
+        self.rules([{"match": r"^build ", "exit": 1}])
+        gate_run = self.run_script(self.worktree, "check.sh", "server", "web")
+        self.assertNotEqual(gate_run.returncode, 0)
+        [build] = self.list_checks()
+        self.assertIn("--target test", " ".join(build))
+
+    def test_a_build_that_writes_no_image_id_stops_the_gate(self) -> None:
+        self.rules([{"match": r"^build ", "no_image_id": True}])
+        gate_run = self.run_script(self.worktree, "check.sh", "server")
+        self.assertNotEqual(gate_run.returncode, 0)
+        self.assertIn("docker build wrote no image id", gate_run.stderr)
+        self.assertEqual([argv[0] for argv in self.list_checks()], ["build"])
+
+    def test_a_failed_build_never_runs_the_image_of_an_earlier_one(self) -> None:
+        self.rules([{"match": r"^build .*/ocr$", "exit": 1}])
+        gate_run = self.run_script(self.worktree, "check.sh", "server", "ocr")
+        self.assertNotEqual(gate_run.returncode, 0)
+        self.assertEqual([argv[0] for argv in self.list_checks()], ["build", "run", "build"])
+
+    def test_the_gate_refuses_an_area_it_does_not_know(self) -> None:
+        # The second is one argument holding two areas, which a match on the joined list of areas would accept.
+        for arguments in (["web", "docs"], ["web server"]):
+            with self.subTest(arguments=arguments):
+                gate_run = self.run_script(self.worktree, "check.sh", *arguments)
+                self.assertNotEqual(gate_run.returncode, 0)
+                self.assertIn(f"unknown area '{arguments[-1]}'", gate_run.stderr)
+                self.assertEqual(self.calls(), [])
+
+    def test_the_gate_never_runs_in_production_s_checkout(self) -> None:
+        gate_run = self.run_script(self.primary, "check.sh", "web")
+        self.assertNotEqual(gate_run.returncode, 0)
+        self.assertIn("is production's checkout", gate_run.stderr)
+        self.assertEqual(self.list_checks(), [])
 
 
 if __name__ == "__main__":

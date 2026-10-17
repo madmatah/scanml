@@ -85,8 +85,8 @@ The user's account holds many secrets, and the OCR stack (PaddlePaddle, PaddleOC
   "Deployment"). Every change is made on its own branch and reaches `main` through a pull request on GitHub
   (`origin`); nothing is committed to `main` directly. Pull requests are
   merged with "Rebase and merge" only, so `main` keeps their commits as they are.
-- **Commits.** Each commit is atomic: one logical change, with its tests and documentation, and the project builds and
-  passes its tests at every commit. Messages follow Conventional Commits: `type(scope): summary`, in the imperative
+- **Commits.** Each commit is atomic: one logical change, with its tests and documentation, and every commit passes the
+  gate, `scripts/check.sh`. Messages follow Conventional Commits: `type(scope): summary`, in the imperative
   and lowercase, with `feat`, `fix`, `refactor`, `test`, `docs`, `build`, `ci` or `chore`, and a scope when the
   change is confined to one part (`ocr`, `server`, `web`, `android`, `scripts`). The body says why. Before a pull
   request is merged, its history is cleaned up (fixups folded into the commits they fix).
@@ -181,6 +181,7 @@ The user's account holds many secrets, and the OCR stack (PaddlePaddle, PaddleOC
 
 | Area | Path | Test or run |
 |---|---|---|
+| The gate | every area | `scripts/check.sh [AREA...]`: the checks of `scripts`, `web`, `server`, `ocr` and `android`, as CI runs them (all by default); every commit pushed passes it |
 | OCR sandbox | `ocr/` | `docker run --rm --init --network none --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges:true --user 1000:1000 -v "$PWD/ocr:/app:ro" -v "$SANDBOX_DIR:/opt/sandbox:ro" scanmylib-dev-ocr:latest /opt/sandbox/venv-paddle/bin/python -m unittest discover -s /app/tests` (the image: `scripts/dev.sh build ocr` in a worktree); isolation of the running service: `scripts/verify-sandbox.sh` |
 | api and web UI | `server/` | `cd server && docker build --target test -t scanmylib-dev-api:test . && docker run --rm --network none --read-only --tmpfs /tmp scanmylib-dev-api:test` |
 | Web UI unit tests | `server/scanmylib/web/tests/` | `docker run --rm --network none --read-only --user 1000:1000 -v "$PWD/server/scanmylib/web:/web:ro" node:22-bookworm-slim node --test '/web/tests/*.test.js'` |

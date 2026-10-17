@@ -147,7 +147,11 @@ The user's account holds many secrets, and the OCR stack (PaddlePaddle, PaddleOC
   scripts (`scripts/tests/`) and Android (`scripts/build-apk.sh test lint`, never signed; without a `.env` it only
   runs with `CI=true`, never in production's directories nor in the home directory, except GitHub Actions'
   `RUNNER_TEMP`) checks on every pull request and on `main`. A pull
-  request is merged only when CI is green. CI uses no secrets and never touches production.
+  request is merged only when CI is green. `.github/workflows/release.yml` publishes a release once its pull request
+  is merged: the tag `vX.Y.Z` and a GitHub release whose notes are its section of `CHANGELOG.md`. It is the only
+  workflow that writes to the repository (`contents: write`, with the run's own token) and runs nothing but
+  `scripts/release.py` and the runner's `git` and `gh`; every other workflow only reads it. CI uses no secrets and never
+  touches production.
 - **Deployment.** Production changes only through `scripts/deploy.sh`, run in production's checkout on a clean `main`
   equal to main on `origin` (`--dry-run` first, `--apk` to publish the app): images built from the commit (`git
   archive HEAD`), unit tests of the new code, backup of the state, restart of `api` and `ocr`, health and isolation

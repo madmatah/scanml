@@ -439,5 +439,174 @@ class CommandTest(unittest.TestCase):
         self.assertIn("can be published as it is", result.stderr)
         self.assertIn(".github/workflows/release.yml publishes it", result.stderr)
 
+    def to_publish(self, ref: str = "HEAD") -> subprocess.CompletedProcess:
+        return self.release("--ref", ref, "--to-publish", str(self.repository / ".git" / "notes.md"))
+
+    def published(self, ref: str = "HEAD") -> tuple[str, str]:
+        """The version --to-publish publishes and the commit it tags."""
+        result = self.to_publish(ref)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        version, commit = result.stdout.split()
+        return version, commit
+
+    def notes(self) -> str:
+        return (self.repository / ".git" / "notes.md").read_text()
+
+    def test_publishing_a_merged_release(self):
+        self.commit("feat(android): scan from the card")
+        self.commit("fix(server): a leak")
+        self.prepare_release()
+        self.merge_release("release/v0.3.0")
+        release_commit = self.head()
+        self.assertEqual(self.published(), ("0.3.0", release_commit))
+        self.assertEqual(self.notes(), "### Added\n\n- App: scan from the card\n\n### Fixed\n\n- Server: a leak\n")
+        # Run again once tagged (the GitHub release failed): it is still to finish.
+        self.git("tag", "--annotate", "v0.3.0", "--message", "ScanMyLib 0.3.0")
+        self.assertEqual(self.published(), ("0.3.0", release_commit))
+        # A later change to the changelog publishes nothing.
+        with (self.repository / "CHANGELOG.md").open("a") as changelog:
+            changelog.write("\n")
+        self.git("commit", "--quiet", "--all", "--message", "docs: fix the changelog")
+        result = self.to_publish()
+        self.assertEqual((result.returncode, result.stdout), (0, ""), result.stderr)
+        self.assertIn("nothing to publish", result.stderr)
+        self.assertEqual(self.published(release_commit), ("0.3.0", release_commit))
+
+    def test_publishing_refuses_a_release_with_commits_merged_in_between(self):
+        self.commit("feat(android): scan from the card")
+        self.prepare_release()
+        self.commit("fix(server): a leak")
+        self.merge_release("release/v0.3.0")
+        result = self.to_publish()
+        self.assertEqual((result.returncode, result.stdout), (1, ""))
+        self.assertRegex(result.stderr, r"miss features, fixes or breaking changes merged after [0-9a-f]{12}, the "
+                                        r"commit they were written on:\n  [0-9a-f]{12} fix\(server\): a leak\n")
+        self.assertIn("completes the release 0.3.0", result.stderr)
+        # Completed in a pull request of its own, it is published with all its notes.
+        self.git("switch", "--quiet", "-c", "release/v0.3.0-complete")
+        self.assertEqual(self.release("--commit").returncode, 0)
+        self.merge_release("release/v0.3.0-complete")
+        self.assertEqual(self.published(), ("0.3.0", self.head()))
+        self.assertEqual(self.notes(), "### Added\n\n- App: scan from the card\n\n### Fixed\n\n- Server: a leak\n")
+
+    def test_publishing_the_notes_edited_after_the_release_commit(self):
+        # Edited in its pull request (suggestions, on GitHub), with commits the notes need not list
+        # and an edit of the changelog alone merged in between: published with the edited notes.
+        self.commit("feat(android): scan from the card")
+        self.prepare_release("scan from the card", "scan straight from the card")
+        self.commit("docs: explain the card")
+        with (self.repository / "CHANGELOG.md").open("a") as changelog:
+            changelog.write("\n")
+        self.git("commit", "--quiet", "--all", "--message", "fix: the notes of 0.2.3")
+        self.merge_release("release/v0.3.0")
+        edited = self.head()
+        self.assertEqual(self.published(), ("0.3.0", edited))
+        self.assertEqual(self.notes(), "### Added\n\n- App: scan straight from the card\n")
+        # Later commits belong to the next release, whatever they change.
+        self.commit("feat(server): a later feature")
+        with (self.repository / "CHANGELOG.md").open("a") as changelog:
+            changelog.write("\n")
+        self.git("commit", "--quiet", "--all", "--message", "Update CHANGELOG.md")
+        self.assertEqual(self.published(), ("0.3.0", edited))
+
+    def test_a_commit_after_the_release_commit_belongs_to_the_next_release(self):
+        # Pushed to the release branch after its release commit, or merged with it.
+        self.commit("feat(android): scan from the card")
+        self.prepare_release()
+        self.git("switch", "--quiet", "release/v0.3.0")
+        release_commit = self.head()
+        self.commit("fix(server): a last-minute leak")
+        self.git("switch", "--quiet", "-c", "side", "HEAD~2")
+        self.commit("fix(server): another leak")
+        self.git("switch", "--quiet", "release/v0.3.0")
+        self.git("merge", "--quiet", "--no-ff", "--no-edit", "side")
+        self.assertEqual(self.published(), ("0.3.0", release_commit))
+
+    def test_publishing_refuses_an_empty_section_until_it_is_written(self):
+        self.commit("feat(android): scan from the card")
+        self.prepare_release("### Added\n\n- App: scan from the card\n\n", "")
+        self.merge_release("release/v0.3.0")
+        result = self.to_publish()
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("the section [0.3.0] of CHANGELOG.md has no entry, or is missing", result.stderr)
+        # A pull request that only writes the section publishes the release.
+        changelog = self.repository / "CHANGELOG.md"
+        changelog.write_text(changelog.read_text().replace("## [0.3.0] - ", "## [0.3.0] - ", 1).replace(
+            "\n## [0.2.3]", "### Added\n\n- App: scan from the card\n\n## [0.2.3]", 1))
+        self.git("commit", "--quiet", "--all", "--message", "docs: write the notes of 0.3.0")
+        self.assertEqual(self.published(), ("0.3.0", self.head()))
+        self.assertEqual(self.notes(), "### Added\n\n- App: scan from the card\n")
+
+    def test_publishing_refuses_anything_but_a_release(self):
+        self.commit("feat: a")
+        (self.repository / "VERSION").write_text("0.3.0\n")
+        self.git("commit", "--quiet", "--all", "--message", "build: set VERSION by hand")
+        result = self.to_publish()
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("no release commit 'chore(release): 0.3.0'", result.stderr)
+        changelog = self.repository / "CHANGELOG.md"
+        changelog.write_text(changelog.read_text().replace("## [0.2.3]", "## [0.3.0] - 2026-10-20\n\n### Added\n\n- A\n\n"
+                                                                         "## [0.2.3]"))
+        self.git("commit", "--quiet", "--all", "--message", "chore(release): 0.3.0")  # by hand: no trailer
+        result = self.to_publish()
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("has no 'Release-Base' trailer", result.stderr)
+        # A version tagged before release commits had a Release-Base: nothing to publish.
+        self.git("reset", "--quiet", "--hard", "v0.2.3")
+        with (self.repository / "CHANGELOG.md").open("a") as changelog:
+            changelog.write("\n")
+        self.git("commit", "--quiet", "--all", "--message", "docs: start the changelog")
+        result = self.to_publish()
+        self.assertEqual((result.returncode, result.stdout), (0, ""), result.stderr)
+
+
+class WorkflowTest(unittest.TestCase):
+    """The release workflow is the only one that writes to the repository, and runs nothing else."""
+
+    WORKFLOWS = SCRIPTS.parent / ".github" / "workflows"
+    #: Any permission that writes, quoted or not, comments included.
+    WRITES = r"[\"']?[a-z-]+[\"']?\s*:\s*[\"']?write\b[\"']?|\bwrite-all\b"
+
+    def test_what_counts_as_writing(self):
+        for text in ('contents: "write"', "pull-requests:\twrite", "permissions: write-all", "contents: write  # x",
+                     "contents: 'write'", '"contents": write', "'pull-requests': write", "contents : write",
+                     'permissions: {"contents": write}'):
+            with self.subTest(text):
+                self.assertTrue(re.findall(self.WRITES, text))
+        self.assertEqual(re.findall(self.WRITES, "contents: read\n# it writes nothing\n"), [])
+
+    def test_only_the_release_workflow_writes(self):
+        workflows = sorted(self.WORKFLOWS.glob("*.y*ml"))
+        self.assertEqual([workflow.name for workflow in workflows], ["ci.yml", "release.yml"])
+        for workflow in workflows:
+            with self.subTest(workflow.name):
+                text = workflow.read_text()
+                self.assertNotIn("secrets.", text)
+                self.assertNotRegex(text, r"\bpull_request_target\b")
+                for action in re.findall(r"^\s*(?:- )?uses: (\S+)", text, re.MULTILINE):
+                    self.assertRegex(action, r"^actions/checkout@[0-9a-f]{40}$|^actions/cache@[0-9a-f]{40}$")
+                writes = re.findall(self.WRITES, text)
+                if workflow.name == "release.yml":
+                    self.assertEqual(writes, ["contents: write"])
+                else:
+                    self.assertEqual(writes, [])
+                    self.assertRegex(text, r"\npermissions:\n  contents: read\n")
+
+    def test_the_release_workflow(self):
+        text = (self.WORKFLOWS / "release.yml").read_text()
+        on = text.split("\non:\n", 1)[1].split("\n\n", 1)[0]
+        self.assertEqual(on, "  push:\n    branches: [main]\n    paths: [VERSION, CHANGELOG.md]")
+        self.assertIn("\npermissions: {}\n", text)
+        self.assertIn("persist-credentials: false", text)
+        # scripts/release.py reads the history and the tags.
+        self.assertIn("fetch-depth: 0", text)
+        self.assertEqual(re.findall(r"uses: (\S+)", text), ["actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"])
+        self.assertIn('python3 scripts/release.py --ref "$COMMIT" --to-publish', text)
+        # It tags the commit release.py names, never the push's head.
+        self.assertIn('read -r version target <<< "$release"', text)
+        self.assertIn('-f object="$target"', text)
+        self.assertEqual(text.count("$COMMIT"), 1)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -305,7 +305,8 @@ git fetch --tags origin
 git worktree add --no-track -b release ../scanmylib-worktrees/release origin/main
 cd ../scanmylib-worktrees/release
 scripts/release.py            # the next version, why, and the draft of its section of CHANGELOG.md
-scripts/release.py --commit   # writes VERSION and that section, and commits them; prints the pull request's text
+scripts/release.py --commit   # writes VERSION and that section, and commits them
+scripts/release.py --description   # the pull request's description: what merging does, then the notes
 git push --set-upstream origin release
 ```
 

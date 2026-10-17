@@ -16,7 +16,9 @@ the readers; it is where the section is edited.
 Without --commit, it prints the next version, why, the section and the commits left out, and
 changes nothing. With --commit, on the release's own branch, it writes VERSION and the section, and
 commits them as "chore(release): X.Y.Z" with the commit the notes were written on (trailer
-"Release-Base: <commit>"); it prints the description of the release pull request.
+"Release-Base: <commit>"); it prints the description of the release pull request: what merging it
+does, then the notes it publishes. --description prints it again, from the section as committed,
+once the notes are edited.
 
 If VERSION has no tag yet because its release cannot be published (see --to-publish), it is
 completed instead, with another "chore(release): X.Y.Z". If its notes miss features, fixes or
@@ -38,7 +40,7 @@ It refuses commits still to fold (fixup!, amend!, squash!), and names the ones t
 Conventional Commits. Run it in a checkout; standard library only.
 
 Usage: scripts/release.py [--ref REF] [--bump major|minor|patch] [--allow-unfolded]
-                          [--version-only | --notes-only | --commit | --to-publish NOTES]
+                          [--version-only | --notes-only | --commit | --description | --to-publish NOTES]
   --ref REF         the commit to release (default: HEAD)
   --bump LEVEL      another increment than the commits give, e.g. for a breaking change they do
                     not mark as such
@@ -48,6 +50,8 @@ Usage: scripts/release.py [--ref REF] [--bump major|minor|patch] [--allow-unfold
   --notes-only      print the release's section of the changelog only, without its heading
   --commit          write VERSION and CHANGELOG.md and commit them (HEAD, on a branch other than
                     main); prints the description of the release pull request
+  --description     print the description of the release pull request at REF, from its section of
+                    CHANGELOG.md as committed
   --to-publish NOTES  the release REF publishes, if any (its version is printed, its notes written
                     to the file NOTES), for .github/workflows/release.yml
 """
@@ -507,30 +511,26 @@ def to_publish(ref: str) -> tuple[str, str, str] | None:
     return version, published.notes, published.point
 
 
-def pull_request(release: Plan) -> str:
-    """The description of the release pull request."""
-    version, last = format_release(release.following), format_release(release.last)
-    if release.rewrite:
-        lines = [f"Completes the release {version}: its release commit could not be published, because its section of "
-                 f"`{CHANGELOG}` has no entry (or its notes cannot be checked). The section is written again from its "
-                 f"commits since v{last}."]
-    elif release.completing:
-        lines = [f"Completes the release {version}: its release commit could not be published, because features, "
-                 f"fixes or breaking changes were merged between its notes and it. They are added to its section of "
-                 f"`{CHANGELOG}`."]
-    else:
-        lines = [f"Release {version}: {summary(release.changes)} since v{last}."]
-    lines += ["", f"Its notes are its section of `{CHANGELOG}`, in this pull request's changes: edit them here, by "
-                  f"amending its commit or with commits that change `{CHANGELOG}` only."]
-    omitted = left_out(release.changes)
-    if omitted:
-        lines += ["", "## Not in the changelog", "", "Add the ones that matter to the readers.", "", *omitted]
-    lines += ["", f"Once merged, `.github/workflows/release.yml` tags `v{version}` on its release commit, or on the last "
-                  f"edit of its notes right after it, and publishes the release with these notes. Merge nothing else "
-                  f"before: if a feature, a fix or a breaking change is merged after `{release.base[:12]}`, the commit "
-                  f"these notes were written on, it publishes nothing, and `scripts/release.py`, run again on `main`, "
-                  f"completes the release."]
-    return "\n".join(lines) + "\n"
+def pull_request(ref: str = "HEAD") -> str:
+    """The description of the release pull request at `ref`: what merging it does, then the notes it
+    publishes, as its section of the changelog holds them there, under the section's heading with its
+    compare link."""
+    commit = git("rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}").strip()
+    version = format_release(release_version(commit))
+    if tagged_commit(f"v{version}"):
+        raise ReleaseError(f"{version} is released already (v{version}): {ref} is not a release pull request's")
+    changelog = git("show", f"{commit}:{CHANGELOG}")
+    start, _ = _section_lines(changelog.split("\n"), version)
+    heading = changelog.split("\n")[start]
+    if not any(line.strip() and not line.startswith("### ")
+               for line in section_of(changelog, version).splitlines()):
+        raise ReleaseError(f"the section [{version}] of {CHANGELOG} has no entry: the release would publish nothing")
+    link = re.search(rf"^\[{re.escape(version)}\]: (\S+)$", changelog, re.MULTILINE)
+    if link:
+        heading = f"## [{version}]({link[1]}){heading[len(f'## [{version}]'):]}"
+    return (f"Merging this pull request publishes ScanMyLib {version}: `.github/workflows/release.yml` tags "
+            f"`v{version}` and creates the GitHub release with the notes below. Merge nothing else before it.\n\n"
+            f"{heading}\n\n{section_of(changelog, version)}")
 
 
 def commit_release(release: Plan, section: str, date: str) -> None:
@@ -586,9 +586,18 @@ def main(argv: list[str] | None = None) -> int:
                         help="print the release's section of the changelog only, without its heading")
     output.add_argument("--commit", action="store_true",
                         help="write VERSION and CHANGELOG.md and commit them; prints the pull request's description")
+    output.add_argument("--description", action="store_true",
+                        help="print the description of the release pull request at REF")
     output.add_argument("--to-publish", metavar="NOTES", type=Path,
                         help="print the version REF publishes, if any, and write its notes to NOTES")
     args = parser.parse_args(argv)
+    if args.description:
+        try:
+            print(pull_request(args.ref), end="")
+        except ReleaseError as error:
+            print(f"error: {error}", file=sys.stderr)
+            return 1
+        return 0
     if args.to_publish:
         try:
             published = to_publish(args.ref)
@@ -620,7 +629,7 @@ def main(argv: list[str] | None = None) -> int:
     elif args.notes_only:
         print(section, end="")
     elif args.commit:
-        print(pull_request(release), end="")
+        print(pull_request(), end="")
     elif release.completing:
         print(f"Release to complete: {version} (VERSION, not tagged: its release commit could not be published)")
         if release.rewrite:

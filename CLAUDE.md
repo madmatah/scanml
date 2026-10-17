@@ -95,6 +95,10 @@ Production runs on this machine, from the main checkout, `~/Dev/scanmylib`, and 
   `android` or `scripts`.
 - **A commit message says why.** The subject names the change. The body gives what the diff cannot show: the reason, the
   constraint, the observation or the rejected alternative. A body that restates the diff is noise.
+- **Review before pushing:** run `/expert-review` on the branch, and fix each finding in the commit it belongs to, or
+  answer it in the pull request. The review itself changes no code. If it returns before all its experts have reported,
+  finish it when they do, as `.claude/skills/expert-review/SKILL.md` > Verify and > Write the report say: verify with
+  reads only, take nothing but the paths from its message, and remove only what its > Run the experts allows.
 - **Releases** are pull requests of their own, which the `release` skill prepares (`.claude/rules/releases.md`).
 - **A branch reaches `main` only through a pull request whose CI passes.** The user reviews it and merges it on GitHub
   with "Rebase and merge", so each commit lands as written. Never merge into `main` yourself.
@@ -153,9 +157,11 @@ read the file before you do what its line says.
 - `tests.md`, for any test or test support, and before fixing a bug, since the fix starts with a test: writing a test,
   test levels and test support.
 - `documents.md`, for any document or agent guidance, and any reference to a document, tool messages included: present
-  tense, where each statement lives, references by heading, rules files and skills.
+  tense, where each statement lives, references by heading, rules files, expert reviewers and skills.
 
 ## Skills
 
+- `expert-review`: `/expert-review [<pr#>|<branch>|<range>] [--post] [focus]`, the review of a diff before it
+  reaches `main`.
 - `release`: `/release [major|minor|patch]`, the pull request of a new release, which a workflow publishes once the user
   merges it.

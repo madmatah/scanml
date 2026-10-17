@@ -33,8 +33,8 @@
 #      failed once the containers were recreated): rebuilding moves :latest, and docker then
 #      forgets the previous image unless a tag still names it
 #   2. unit tests of the new code and images: server (pytest in the api test image), web UI (node
-#      --test), OCR (unittest in the new ocr image). If anything fails up to step 3, :latest goes
-#      back to :deployed: production is unchanged
+#      --test), OCR (unittest in the new ocr image). If anything fails before the restart, :latest
+#      goes back to :deployed: production is unchanged
 #   3. backup of DATA_DIR/state (without its thumbnail cache) into
 #      DATA_DIR/backups/state-<time>-v<version>/, the database copied with SQLite's online backup
 #      (consistent while the api runs) and checked, right before the restart (what changes in the

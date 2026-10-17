@@ -1,0 +1,67 @@
+# Publishes a release once its pull request (chore(release): X.Y.Z, made by scripts/release.py
+# --commit) is merged: the annotated tag vX.Y.Z on the release commit (or on the notes edited right
+# after it), and a GitHub release whose notes are the version's section of CHANGELOG.md.
+# scripts/release.py refuses a release whose notes miss features, fixes or breaking changes merged
+# between the commit they were written on and the release commit, or whose section is empty; the
+# release is then completed (scripts/release.py, run again).
+#
+# The only workflow that writes to the repository: to its contents, with the token GitHub gives each
+# run (no secret). It runs on main only, uses no action but GitHub's checkout (pinned), and
+# downloads, builds and runs nothing but the runner's git, gh and python3, and scripts/release.py
+# (standard library) as merged on main.
+name: Release
+
+on:
+  push:
+    branches: [main]
+    paths: [VERSION, CHANGELOG.md]
+
+permissions: {}
+
+# One publication at a time, never canceled halfway.
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The whole history and the tags, which scripts/release.py reads.
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          # The version and the commit to tag: the release commit, or the notes edited right after it.
+          release=$(python3 scripts/release.py --ref "$COMMIT" --to-publish "$RUNNER_TEMP/notes.md")
+          if [[ -z $release ]]; then
+            exit 0
+          fi
+          read -r version target <<< "$release"
+          tag=v$version
+          # A run again after a failure finishes what is missing.
+          if [[ -z $(git tag --list "$tag") ]]; then
+            object=$(gh api "repos/$REPOSITORY/git/tags" -f tag="$tag" -f message="ScanMyLib $version" \
+              -f object="$target" -f type=commit --jq .sha)
+            gh api "repos/$REPOSITORY/git/refs" -f ref="refs/tags/$tag" -f sha="$object" > /dev/null
+            echo "Tagged $tag on $target"
+          fi
+          if ! gh release view "$tag" --repo "$REPOSITORY" > /dev/null 2>&1; then
+            gh release create "$tag" --repo "$REPOSITORY" --verify-tag --title "ScanMyLib $version" \
+              --notes-file "$RUNNER_TEMP/notes.md"
+          fi

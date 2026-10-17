@@ -18,18 +18,27 @@ changes nothing. With --commit, on the release's own branch, it writes VERSION a
 commits them as "chore(release): X.Y.Z" with the commit the notes were written on (trailer
 "Release-Base: <commit>"); it prints the description of the release pull request.
 
-If VERSION has no tag yet because its release cannot be published, it is completed instead, with
-another "chore(release): X.Y.Z". If its notes miss features, fixes or breaking changes merged after
-they were written, the commits merged since are drafted, and --commit adds them to the release's
-section. If its section has no entry, or is missing, the section is drafted again from the commits
-since the last release, and --commit writes it in place. Commits that only edit CHANGELOG.md are
-left out.
+If VERSION has no tag yet because its release cannot be published (see --to-publish), it is
+completed instead, with another "chore(release): X.Y.Z". If its notes miss features, fixes or
+breaking changes merged after they were written, the commits merged since are drafted, and --commit
+adds them to the release's section. If its section has no entry, or is missing, the section is
+drafted again from the commits since the last release, and --commit writes it in place. Commits
+that only edit CHANGELOG.md are left out.
+
+With --to-publish, .github/workflows/release.yml asks which release a commit of main publishes,
+and on which commit: the version of VERSION if it is not tagged yet, on its latest release commit
+followed by the commits right after it that only edit CHANGELOG.md (the notes edited in the release
+pull request; later commits belong to the next release); none if VERSION is tagged on another
+commit. It refuses when features, fixes or breaking changes were merged between the commit the
+notes were written on and that release commit (the notes miss them), or when the release's section
+is empty: the release is then to be completed. It prints the version and the commit to tag, and
+writes the release's section of the changelog, its notes.
 
 It refuses commits still to fold (fixup!, amend!, squash!), and names the ones that do not follow
 Conventional Commits. Run it in a checkout; standard library only.
 
 Usage: scripts/release.py [--ref REF] [--bump major|minor|patch] [--allow-unfolded]
-                          [--version-only | --notes-only | --commit]
+                          [--version-only | --notes-only | --commit | --to-publish NOTES]
   --ref REF         the commit to release (default: HEAD)
   --bump LEVEL      another increment than the commits give, e.g. for a breaking change they do
                     not mark as such
@@ -39,6 +48,8 @@ Usage: scripts/release.py [--ref REF] [--bump major|minor|patch] [--allow-unfold
   --notes-only      print the release's section of the changelog only, without its heading
   --commit          write VERSION and CHANGELOG.md and commit them (HEAD, on a branch other than
                     main); prints the description of the release pull request
+  --to-publish NOTES  the release REF publishes, if any (its version is printed, its notes written
+                    to the file NOTES), for .github/workflows/release.yml
 """
 
 from __future__ import annotations
@@ -473,6 +484,29 @@ def plan(ref: str, chosen: str | None, allow_unfolded: bool = False) -> Plan:
                 warnings, commit, False)
 
 
+def to_publish(ref: str) -> tuple[str, str, str] | None:
+    """The version `ref` publishes, its notes and the commit to tag (see Publication): None if VERSION
+    is tagged on another commit, or released before release commits. ReleaseError if it cannot be
+    published."""
+    commit = git("rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}").strip()
+    version = format_release(release_version(commit))
+    tagged = tagged_commit(f"v{version}")
+    if tagged:
+        # Tagged by a run that did not finish: the release itself is still to publish.
+        releases = release_commits(version, commit)
+        if not releases or publication_point(releases[0], commit) != tagged:
+            return None
+        return version, section_of(git("show", f"{tagged}:{CHANGELOG}"), version), tagged
+    published = publication(version, commit)
+    if published is None:
+        raise ReleaseError(f"VERSION {version} is not released, and no release commit 'chore(release): {version}' "
+                           f"(scripts/release.py --commit) is in the history of {commit[:12]}")
+    if published.problem:
+        raise ReleaseError(f"{published.problem}\nRun scripts/release.py again on main (.claude/skills/release): it "
+                           f"completes the release {version} in a pull request of its own")
+    return version, published.notes, published.point
+
+
 def pull_request(release: Plan) -> str:
     """The description of the release pull request."""
     version, last = format_release(release.following), format_release(release.last)
@@ -552,7 +586,21 @@ def main(argv: list[str] | None = None) -> int:
                         help="print the release's section of the changelog only, without its heading")
     output.add_argument("--commit", action="store_true",
                         help="write VERSION and CHANGELOG.md and commit them; prints the pull request's description")
+    output.add_argument("--to-publish", metavar="NOTES", type=Path,
+                        help="print the version REF publishes, if any, and write its notes to NOTES")
     args = parser.parse_args(argv)
+    if args.to_publish:
+        try:
+            published = to_publish(args.ref)
+        except ReleaseError as error:
+            print(f"error: {error}", file=sys.stderr)
+            return 1
+        if published is None:
+            print("VERSION is released already, on another commit: nothing to publish", file=sys.stderr)
+        else:
+            args.to_publish.write_text(published[1])
+            print(published[0], published[2])
+        return 0
     date = datetime.datetime.now(datetime.timezone.utc).date().isoformat()
     try:
         if args.commit and args.ref != "HEAD":

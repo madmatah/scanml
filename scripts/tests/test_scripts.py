@@ -210,7 +210,8 @@ class ScriptsTestCase(unittest.TestCase):
         self.origin = self.base / "origin.git"
         # Production's checkout when no production container names another: ~/Dev/scanmylib.
         self.primary = self.home / "Dev" / "scanmylib"
-        self.worktree = self.base / "worktrees" / "feature"
+        # Where the worktrees of production's checkout live, ignored by its .gitignore.
+        self.worktree = self.primary / ".claude" / "worktrees" / "feature"
         self.primary.parent.mkdir(parents=True, exist_ok=True)
         self.git(self.base, "init", "--quiet", "--bare", "--initial-branch=main", str(self.origin))
         self.git(self.base, "init", "--quiet", "--initial-branch=main", str(self.primary))
@@ -742,7 +743,6 @@ class DeployTest(ScriptsTestCase):
         self.assertIn(f"the release v{VERSION}, as published on origin", result.stdout)
 
     def make_repository_fresh(self) -> None:
-        shutil.rmtree(self.base / "worktrees", ignore_errors=True)
         for path in (self.origin, self.primary):
             shutil.rmtree(path)
         self.make_production_db()
@@ -1044,7 +1044,6 @@ class BuildApkTest(ScriptsTestCase):
              f"v{VERSION} is not published on origin"),
         ]:
             with self.subTest(name):
-                shutil.rmtree(self.base / "worktrees", ignore_errors=True)
                 for path in (self.origin, self.primary):
                     shutil.rmtree(path)
                 self.make_repository()
@@ -1175,7 +1174,6 @@ class ProdShTest(ScriptsTestCase):
             ("no tag", lambda: self.git(self.primary, "tag", "--delete", f"v{VERSION}"), f"no tag v{VERSION}"),
         ]:
             with self.subTest(name):
-                shutil.rmtree(self.base / "worktrees", ignore_errors=True)
                 for path in (self.origin, self.primary):
                     shutil.rmtree(path)
                 self.make_repository()

@@ -90,9 +90,9 @@ The user's account holds many secrets, and the OCR stack (PaddlePaddle, PaddleOC
   and lowercase, with `feat`, `fix`, `refactor`, `test`, `docs`, `build`, `ci` or `chore`, and a scope when the
   change is confined to one part (`ocr`, `server`, `web`, `android`, `scripts`). The body says why. Before a pull
   request is merged, its history is cleaned up (fixups folded into the commits they fix).
-- **One worktree per branch**, under `~/Dev/scanmylib-worktrees/<branch>`, created from the primary checkout
-  with `git fetch origin` then `git worktree add --no-track -b <branch> ../scanmylib-worktrees/<branch> origin/main`,
-  and removed after the merge (`git worktree remove`, then `git branch -D <branch>`: after a rebase merge, git does not
+- **One worktree per branch**, under `.claude/worktrees/<topic>` of the primary checkout (ignored by git), created
+  from the primary checkout with `git fetch origin` then
+  `git worktree add --no-track -b <type>/<topic> .claude/worktrees/<topic> origin/main`, and removed after the merge (`git worktree remove`, then `git branch -D <branch>`: after a rebase merge, git does not
   see it as merged). The primary checkout, `~/Dev/scanmylib`, is production's
   checkout (its `.env` is production's): it holds the release production runs (`git checkout vX.Y.Z`), and is never
   a place to develop. The scripts recognize production's checkout as the

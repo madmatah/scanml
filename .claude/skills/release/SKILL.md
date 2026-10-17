@@ -26,14 +26,14 @@ cd ~/Dev/scanmylib && git fetch --prune --tags origin   # --prune: branches dele
 gh run list --workflow ci.yml --branch main --limit 1    # CI green on the last commit of main
 gh run list --workflow release.yml --limit 1             # the last release's publication
 gh pr list --state open                                  # no release pull request open yet
-git worktree list | grep scanmylib-worktrees/release     # leftovers of an earlier release
+git worktree list | grep .claude/worktrees/release        # leftovers of an earlier release
 git branch --all --list 'release' 'release/*' 'origin/release' 'origin/release/*'
 ```
 
 Stop and tell the user if CI is not green on the last commit of `main`, or if a release pull request is already
 open. A failed release run is not a reason to stop: its release could not be published, and this procedure completes
 it (step 2). Name the other open pull requests: they are not in this release, and must not be merged while its pull
-request is open. A worktree under `../scanmylib-worktrees/release/` or a branch `release` or `release/…`, local or on
+request is open. A worktree `.claude/worktrees/release-…` or a branch `release` or `release/…`, local or on
 `origin`, is a previous release's that was not removed after its merge: tell the user, and remove it with their
 agreement (a branch `release` also stands in the way of any `release/…` one).
 
@@ -42,8 +42,8 @@ agreement (a branch `release` also stands in the way of any `release/…` one).
 From the primary checkout, a worktree on `main` as on `origin`, without a branch until the version is known:
 
 ```bash
-cd ~/Dev/scanmylib && git worktree add --detach ../scanmylib-worktrees/release/next origin/main
-cd ~/Dev/scanmylib-worktrees/release/next && scripts/release.py      # or: scripts/release.py --bump LEVEL
+cd ~/Dev/scanmylib && git worktree add --detach .claude/worktrees/release-next origin/main
+cd ~/Dev/scanmylib/.claude/worktrees/release-next && scripts/release.py      # or: scripts/release.py --bump LEVEL
 ```
 
 It prints the last release, the commits since, the next version and why, the draft of the release's section of
@@ -70,9 +70,9 @@ matters to the readers added, a Security or Removed section.
 The release's branch is named after its version, `release/vX.Y.Z`, and so is its worktree:
 
 ```bash
-cd ~/Dev/scanmylib-worktrees/release/next && git switch -c release/vX.Y.Z
-cd ~/Dev/scanmylib && git worktree move ../scanmylib-worktrees/release/next ../scanmylib-worktrees/release/vX.Y.Z
-cd ~/Dev/scanmylib-worktrees/release/vX.Y.Z && scripts/release.py --commit     # same --bump as accepted
+cd ~/Dev/scanmylib/.claude/worktrees/release-next && git switch -c release/vX.Y.Z
+cd ~/Dev/scanmylib && git worktree move .claude/worktrees/release-next .claude/worktrees/release-vX.Y.Z
+cd ~/Dev/scanmylib/.claude/worktrees/release-vX.Y.Z && scripts/release.py --commit     # same --bump as accepted
 ```
 
 It writes `VERSION` and the section (dated today, UTC) and commits them as `chore(release): X.Y.Z` with the commit the
@@ -80,7 +80,7 @@ notes were written on (trailer `Release-Base`). Apply the changes the user asked
 `git add CHANGELOG.md && git commit --amend --no-edit`: the release stays one commit, with its trailer. Then:
 
 ```bash
-cd ~/Dev/scanmylib-worktrees/release/vX.Y.Z \
+cd ~/Dev/scanmylib/.claude/worktrees/release-vX.Y.Z \
   && scripts/release.py --description > /path/to/release-pr.md \
   && git push --set-upstream origin release/vX.Y.Z \
   && gh pr create --base main --title "chore(release): X.Y.Z" --body-file /path/to/release-pr.md
@@ -95,7 +95,7 @@ Later changes to the notes are made the same way, then `git push --force-with-le
 regenerated so that it shows them:
 
 ```bash
-cd ~/Dev/scanmylib-worktrees/release/vX.Y.Z \
+cd ~/Dev/scanmylib/.claude/worktrees/release-vX.Y.Z \
   && scripts/release.py --description > /path/to/release-pr.md \
   && gh api -X PATCH "repos/{owner}/{repo}/pulls/<number>" -F body=@/path/to/release-pr.md
 ```

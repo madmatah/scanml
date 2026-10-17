@@ -21,5 +21,6 @@ android/.kotlin/
 *.jks
 *.keystore
 
-# Claude Code settings of one machine (the project's skills in .claude/skills/ are committed)
+# The rest of .claude/ is committed: only one machine's settings and its sessions' worktrees stay local
 /.claude/settings.local.json
+/.claude/worktrees/

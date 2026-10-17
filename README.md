@@ -301,13 +301,16 @@ worktree on `main`:
 
 ```bash
 cd ~/Dev/scanmylib
-git fetch --tags origin
-git worktree add --no-track -b release ../scanmylib-worktrees/release origin/main
-cd ../scanmylib-worktrees/release
+git fetch --prune --tags origin
+git worktree add --detach ../scanmylib-worktrees/release/next origin/main
+cd ../scanmylib-worktrees/release/next
 scripts/release.py            # the next version, why, and the draft of its section of CHANGELOG.md
+git switch -c release/v0.4.0  # the branch of the version it proposes, 0.4.0 here, and its worktree:
+git -C ~/Dev/scanmylib worktree move ../scanmylib-worktrees/release/next ../scanmylib-worktrees/release/v0.4.0
+cd ~/Dev/scanmylib-worktrees/release/v0.4.0
 scripts/release.py --commit   # writes VERSION and that section, and commits them
 scripts/release.py --description   # the pull request's description: what merging does, then the notes
-git push --set-upstream origin release
+git push --set-upstream origin release/v0.4.0
 ```
 
 `scripts/release.py` reads the Conventional Commits since the last release: a major release for breaking changes (a

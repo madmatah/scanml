@@ -540,7 +540,7 @@ def commit_release(release: Plan, section: str, date: str) -> None:
     version, last = format_release(release.following), format_release(release.last)
     if not branch or branch == "main":
         raise ReleaseError(f"prepare the release on its own branch, not on {branch or 'a detached HEAD'} (git "
-                           "worktree add --no-track -b release ../scanmylib-worktrees/release origin/main)")
+                           f"switch -c release/v{version})")
     if git("status", "--porcelain", "--untracked-files=no").strip():
         raise ReleaseError("commit or stash the changes of this checkout first (git status)")
     # The commit the notes are written on must stay in main's history: "Rebase and merge" rewrites the

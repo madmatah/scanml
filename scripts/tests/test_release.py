@@ -15,16 +15,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from git_environment import build_git_environment
+
 SCRIPTS = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(SCRIPTS))
 import release  # noqa: E402
 from release import Change  # noqa: E402
 
-GIT_ENV = {
-    "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_AUTHOR_NAME": "Test",
-    "GIT_AUTHOR_EMAIL": "test@example.invalid", "GIT_COMMITTER_NAME": "Test",
-    "GIT_COMMITTER_EMAIL": "test@example.invalid",
-}
 CHANGELOG = """# Changelog
 
 The notable changes of each release.
@@ -168,8 +165,8 @@ class CommandTest(unittest.TestCase):
         self.git("tag", "--annotate", "v0.2.3", "--message", "ScanMyLib 0.2.3")
 
     def git(self, *args: str) -> str:
-        return subprocess.run(["git", *args], cwd=self.repository, env={**os.environ, **GIT_ENV}, check=True,
-                              capture_output=True, text=True).stdout
+        return subprocess.run(["git", *args], cwd=self.repository, env=build_git_environment(os.environ),
+                              check=True, capture_output=True, text=True).stdout
 
     def commit(self, message: str) -> str:
         self.git("commit", "--quiet", "--allow-empty", "--message", message)
@@ -179,7 +176,7 @@ class CommandTest(unittest.TestCase):
         if "--commit" in args:
             self.git("update-ref", "refs/remotes/origin/main", "main")  # main as fetched from origin
         return subprocess.run([sys.executable, str(SCRIPTS / "release.py"), *args], cwd=self.repository,
-                              env={**os.environ, **GIT_ENV}, capture_output=True, text=True, check=False)
+                              env=build_git_environment(os.environ), capture_output=True, text=True, check=False)
 
     def today(self) -> str:
         return datetime.datetime.now(datetime.timezone.utc).date().isoformat()

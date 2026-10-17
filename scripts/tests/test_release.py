@@ -269,10 +269,39 @@ class CommandTest(unittest.TestCase):
                       "### Fixed\n\n- App: a crash\n\n## [0.2.3] - 2026-10-15\n", changelog)
         self.assertIn("[unreleased]: https://github.com/example/project/compare/v0.3.0...HEAD\n"
                       "[0.3.0]: https://github.com/example/project/compare/v0.2.3...v0.3.0\n", changelog)
-        self.assertTrue(result.stdout.startswith("Release 0.3.0: 1 feature, 1 fix since v0.2.3.\n\nIts notes are its "
-                                                 "section of `CHANGELOG.md`"), result.stdout)
-        self.assertIn(f"is merged after `{base[:12]}`, the commit these notes were written on", result.stdout)
-        self.assertNotIn("Not in the changelog", result.stdout)
+        # The pull request's description: what merging it does, then the notes it publishes.
+        self.assertEqual(result.stdout, "\n".join([
+            "Merging this pull request publishes ScanMyLib 0.3.0: `.github/workflows/release.yml` tags `v0.3.0` and "
+            "creates the GitHub release with the notes below. Merge nothing else before it.",
+            "",
+            f"## [0.3.0](https://github.com/example/project/compare/v0.2.3...v0.3.0) - {self.today()}",
+            "",
+            "### Added", "", "- App: scan from the card", "", "### Fixed", "", "- App: a crash", "",
+        ]))
+
+    def test_the_description_follows_the_edited_notes(self):
+        self.commit("feat(android): scan from the card")
+        self.git("switch", "--quiet", "-c", "release/v0.3.0")
+        first = self.release("--commit").stdout
+        changelog = self.repository / "CHANGELOG.md"
+        changelog.write_text(changelog.read_text().replace("scan from the card", "scan straight from the card"))
+        self.git("commit", "--quiet", "--all", "--amend", "--no-edit")
+        result = self.release("--description")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, first.replace("scan from the card", "scan straight from the card"))
+        self.assertEqual(self.release("--description", "--ref", "HEAD").stdout, result.stdout)
+        result = self.release("--description", "--ref", "nonexistent")
+        self.assertEqual((result.returncode, result.stdout), (1, ""))
+        self.assertIn("error:", result.stderr)
+        # Not for a section without entries, nor for a version released already.
+        changelog.write_text(changelog.read_text().replace("- App: scan straight from the card\n", ""))
+        self.git("commit", "--quiet", "--all", "--amend", "--no-edit")
+        result = self.release("--description")
+        self.assertEqual((result.returncode, result.stdout), (1, ""))
+        self.assertIn("the section [0.3.0] of CHANGELOG.md has no entry", result.stderr)
+        result = self.release("--description", "--ref", "v0.2.3")
+        self.assertEqual((result.returncode, result.stdout), (1, ""))
+        self.assertIn("0.2.3 is released already", result.stderr)
 
     def test_commit_with_an_increment_chosen_by_hand(self):
         (self.repository / "VERSION").write_text("0.2.99\n")
@@ -353,7 +382,8 @@ class CommandTest(unittest.TestCase):
         self.git("switch", "--quiet", "-c", "release/v0.3.0-complete")
         result = self.release("--commit")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertTrue(result.stdout.startswith("Completes the release 0.3.0"), result.stdout)
+        self.assertTrue(result.stdout.startswith("Merging this pull request publishes ScanMyLib 0.3.0"), result.stdout)
+        self.assertIn("### Added\n\n- App: scan from the card\n\n### Fixed\n\n- Server: a leak\n", result.stdout)
         self.assertEqual(self.git("log", "-1", "--format=%s%n%(trailers:key=Release-Base,valueonly)").split(),
                          ["chore(release):", "0.3.0", base])
         self.assertEqual(self.git("show", "--name-only", "--format=", "HEAD").split(), ["CHANGELOG.md"])
@@ -413,7 +443,7 @@ class CommandTest(unittest.TestCase):
         self.git("switch", "--quiet", "-c", "release/v0.3.0-complete")
         result = self.release("--commit")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("has no entry", result.stdout)
+        self.assertIn("### Fixed\n\n- Server: a crash\n- Web UI: a later fix\n", result.stdout)
         changelog = (self.repository / "CHANGELOG.md").read_text()
         self.assertRegex(changelog, r"## \[0\.3\.0\] - \d{4}-\d\d-\d\d\n\n### Added\n\n- App: scan from the card\n\n"
                                     r"### Fixed\n\n- Server: a crash\n- Web UI: a later fix\n\n## \[0\.2\.3\]")

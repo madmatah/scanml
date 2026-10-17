@@ -63,23 +63,33 @@ matters to the readers added, a Security or Removed section.
 ## 3. Open the release pull request
 
 ```bash
-scripts/release.py --commit > /path/to/release-pr.md    # same --bump as accepted; a file outside the repository
+scripts/release.py --commit                             # same --bump as accepted
 ```
 
-It writes `VERSION` and the section (dated today, UTC), commits them as `chore(release): X.Y.Z` with the commit the
-notes were written on (trailer `Release-Base`), and prints the pull request's description, which points to the
-section rather than copying it. Apply the changes the user asked for to `CHANGELOG.md`, then
+It writes `VERSION` and the section (dated today, UTC) and commits them as `chore(release): X.Y.Z` with the commit the
+notes were written on (trailer `Release-Base`). Apply the changes the user asked for to `CHANGELOG.md`, then
 `git add CHANGELOG.md && git commit --amend --no-edit`: the release stays one commit, with its trailer. Then:
 
 ```bash
+scripts/release.py --description > /path/to/release-pr.md    # a file outside the repository
 git push --set-upstream origin release
 gh pr create --base main --title "chore(release): X.Y.Z" --body-file /path/to/release-pr.md
 ```
 
-Give the user the link. Later changes to the notes are made the same way (then `git push --force-with-lease`), or as
-commits that change `CHANGELOG.md` only, such as suggestions on GitHub. Remind the user to merge nothing else before
-it: a feature, fix or breaking change merged in between is missing from the notes, and the workflow then publishes
-nothing.
+The description is what merging does, then the notes exactly as they will be published, from the section as
+committed. Nothing else goes in it: the commits left out and the review are for the chat. Give the user the link.
+
+Later changes to the notes are made the same way, then `git push --force-with-lease`, and the description is
+regenerated so that it shows them:
+
+```bash
+scripts/release.py --description > /path/to/release-pr.md
+gh api -X PATCH "repos/{owner}/{repo}/pulls/<number>" -F body=@/path/to/release-pr.md
+```
+
+The notes can also be edited on GitHub, as commits that change `CHANGELOG.md` only (suggestions); pull them, then
+regenerate the description the same way. Remind the user to merge nothing else before the release: a feature, fix or
+breaking change merged in between is missing from the notes, and the workflow then publishes nothing.
 
 ## 4. Once the user says it is merged
 

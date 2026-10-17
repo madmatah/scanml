@@ -160,7 +160,7 @@ The modules as they are, and the layer each one belongs to, whose directory the 
 
 ```
 scanmylib/
-├── .claude/                     # Claude Code: rules and skills
+├── .claude/                     # Claude Code: rules, skills and the expert reviewers
 ├── .github/
 │   └── workflows/               # CI (the gate on every pull request and every push to main), and the release
 ├── android/                     # The app: Kotlin, Compose, Gradle
@@ -210,7 +210,7 @@ Each row names a rule, the rules file that states it, and what enforces it.
 | Production runs published releases only (`.claude/rules/releases.md`) | `scripts/deploy.sh`, `scripts/setup.sh`, `scripts/prod.sh` and `scripts/build-apk.sh` |
 | Never weaken what the lockfile or the registry settings guarantee (`.claude/rules/configuration.md` > Dependencies) | `pip --require-hashes`, Gradle's dependency verification, the checksums of `scripts/build-apk.sh` and `scripts/vendor-katex.sh` |
 | The French translation lives only in the catalogs (`CLAUDE.md` > Language) | The web UI's unit tests; Android lint for missing translations |
-| Every rule no tool can check: architecture, conventions, tests as specification… | Review, before every pull request |
+| Every rule no tool can check: architecture, conventions, tests as specification… | `/expert-review` ([Code review](#code-review)), before every pull request |
 
 ## Conventions
 
@@ -242,7 +242,8 @@ against the domain. `.claude/rules/conventions.md` states them, and a rules file
   release app's versionCode comes from `VERSION`.
 - **A history rewritten before it is pushed,** into atomic commits whose messages say why, keeps the reasons that a diff
   cannot show. Each commit passing the gate keeps `main` a safe start for any work.
-- **"Rebase and merge"** lands each commit as written, after the review and CI ([Technology stack](#technology-stack)).
+- **"Rebase and merge"** lands each commit as written, after the review ([Code review](#code-review)) and CI
+  ([Technology stack](#technology-stack)).
 - **One writer for `.pm/`,** the coordinating session, keeps its commits from racing.
 
 ### Agent guidance
@@ -286,6 +287,27 @@ a rule. `.claude/rules/tests.md` says how tests are written.
 
 No budget is set yet. The first one comes with the benchmark that measures it. The measures of `README.md` > OCR engine
 and the benchmarks of `ocr/bench/` are the references.
+
+### Code review
+
+Every branch goes through `/expert-review` before its pull request. It is a project skill in
+`.claude/skills/expert-review/`, named so that it never shadows the built-in `/code-review`.
+
+- **It runs in its own subagent**, which never saw the code being written, so the review stays independent of the
+  session that wrote the code, and that session keeps its context.
+- **One expert per domain, in parallel.** Correctness reviews every diff, and conventions every diff that holds code or
+  configuration. Architecture, tests, performance, security and documentation join when the diff touches their domain,
+  and so do the project's own experts: isolation (the sandbox, the guards of the scripts, the Dockerfiles and
+  `compose.yaml`) and Android. Each expert is an agent of `.claude/agents/` on the strongest model, and cannot run a
+  command, so that no reviewed text can make it act.
+- **The orchestrator confirms every blocking and should-fix finding** before reporting it, and lists the findings it
+  dropped with their counter-evidence, so the report makes no claim it has not checked.
+- **A target other than the current branch is checked out outside the repository**, so a reviewed `CLAUDE.md` never
+  loads as an instruction.
+- **Reviews can run at the same time, from the same checkout:** each one keeps its scope in a temporary directory of
+  its own.
+- **The report ends the review.** It suggests a fix for each finding but applies none: the session that wrote the code
+  fixes or answers each one, and the user decides at the merge.
 
 ## References
 

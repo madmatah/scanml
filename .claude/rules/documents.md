@@ -82,3 +82,8 @@ Each statement has one home, so that it never drifts from a copy.
 
 - **A skill holds one procedure,** in `.claude/skills/<name>/SKILL.md`, and its `description` says when to use it.
 - **It cites the rules it applies** by file and heading, and does not restate them.
+
+## Pull request template
+
+- **Timings stay out of the checklist** of `.github/pull_request_template.md`, since they depend on the machine and on
+  its state.

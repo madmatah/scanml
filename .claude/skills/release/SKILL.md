@@ -48,7 +48,7 @@ cd ~/Dev/scanmylib/.claude/worktrees/release-next && scripts/release.py      # o
 
 It prints the last release, the commits since, the next version and why, the draft of the release's section of
 `CHANGELOG.md` (Keep a Changelog: features under Added, fixes under Fixed, breaking changes under Changed), and the
-commits it leaves out (refactor, test, build, ci, docs, chore). It changes nothing. It refuses when there is nothing to
+commits it leaves out (refactor, perf, test, build, ci, docs, chore). It changes nothing. It refuses when there is nothing to
 release, or when commits are still to fold (`fixup!`, `amend!`): those are folded in their pull request before it is
 merged; if one reached `main` anyway, `main` is never rewritten, and with the user's agreement `--allow-unfolded`
 releases it as it is. It warns about commits that do not follow Conventional Commits: look at what they change before
@@ -119,8 +119,8 @@ other than edits of its notes, belong to the next release.
 
 ## Rules
 
-- Only a release pull request changes `VERSION`, with `scripts/release.py --commit`; tags and GitHub releases come from
-  `.github/workflows/release.yml` only.
-- This procedure never merges, deploys, or touches production.
+- This procedure applies `.claude/rules/releases.md`: what changes `VERSION`, what is merged while a release pull
+  request is open, and what tags.
+- It never merges, deploys, or touches production.
 - An urgent fix follows the same path: its own pull request, then a release. A patch, unless `main` already holds
   unreleased features, which ship with it.

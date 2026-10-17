@@ -72,12 +72,12 @@ The services restart automatically with Docker (`restart: unless-stopped`); ther
 
 1. On the PC, open the web UI at the address printed by `scripts/setup.sh` (`http://localhost:8765/#token=…`), then
    the **Pairing** tab.
-2. Scan the QR code of step 1 with the phone's camera to download the app, then install it. Android asks once to allow
-   installs from the browser.
-3. Open the ScanMyLib app. On the **Pair with PC** screen, tap **Scan the QR code** and aim at the QR code of step 2:
-   the app then knows the PC's address and its access token. Without a QR code reader, type the **PC address** and the
-   **Token** shown under the QR code into the app's **PC address** and **Access token** fields, then tap **Test and
-   pair**.
+2. Scan the QR code of **Install the Android app** with the phone's camera to download the app, then install it. Android
+   asks once to allow installs from the browser.
+3. Open the ScanMyLib app. On the **Pair with PC** screen, tap **Scan the QR code** and aim at the QR code of **Pair the
+   app with this PC**: the app then knows the PC's address and its access token. Without a QR code reader, type the **PC
+   address** and the **Token** shown under the QR code into the app's **PC address** and **Access token** fields, then
+   tap **Test and pair**.
 
 **Updates.** Once paired, the app asks the PC which app it publishes, when the library shows or is refreshed, at most
 once an hour, and again once the library reaches the PC if it could not before. When it is newer, the library shows
@@ -290,7 +290,9 @@ code is the time of its build, so that each build installs over the previous one
 In a worktree, `scripts/dev.sh` replaces `docker compose` (`scripts/dev.sh build ocr`, `scripts/dev.sh compose exec api
 sh`…): it refuses any setting that would reach production or leave the stack's own `DATA_DIR`, and the docker compose
 commands and options that could (`cp`, `run -v`, `exec --privileged`…). The guards and their limits are described in
-[`docs/SECURITY.md`](docs/SECURITY.md); the repository's conventions are in [`CLAUDE.md`](CLAUDE.md).
+[`docs/SECURITY.md`](docs/SECURITY.md). The repository's rules are in [`.claude/rules/`](.claude/rules/),
+indexed in [`CLAUDE.md`](CLAUDE.md). A rehearsal of a deployment, on a throwaway stack, is described in the header of
+`scripts/deploy.sh`.
 
 `scripts/check.sh` is the gate: the tests of the scripts, on the host's `python3`, and, in throwaway containers, those
 of the web UI, the server and the OCR sandbox, and the Android tests and lint (`scripts/check.sh server web` checks
@@ -328,7 +330,7 @@ it in a new pull request. With Claude Code, the release skill (`.claude/skills/r
 
 ## Technical documentation
 
-- [`docs/foundations.md`](docs/foundations.md): the structuring choices of the project
+- [`docs/foundations.md`](docs/foundations.md): the design of the project and its reasons
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): components, data flow, file layout, page ordering algorithm
 - [`docs/API.md`](docs/API.md): HTTP API used by the app and the web UI
 - [`docs/OCR_SANDBOX.md`](docs/OCR_SANDBOX.md): protocol between the api and the sandbox

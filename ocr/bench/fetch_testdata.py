@@ -64,6 +64,7 @@ import time
 import urllib.parse
 import urllib.request
 from pathlib import Path
+from typing import Any
 
 DEFAULT_USER_AGENT = "ScanMyLib-testdata/0.1 (OCR evaluation)"
 IMAGE_WIDTH = 3840  # one of the thumbnail sizes Wikimedia serves
@@ -72,12 +73,12 @@ TEMPLATE_RULES = {"drop", "first", "space", "word_start", "word_end"}
 _LANGUAGE_CODE = re.compile(r"[a-z]{2,3}(?:-[a-z]+)*")
 
 
-def load_sources(testdata: Path) -> dict:
+def load_sources(testdata: Path) -> dict[str, Any]:
     """The test set described by ``<testdata>/sources.json`` (format: see the module docstring)."""
     path = testdata / SOURCES_FILE
     if not path.is_file():
         sys.exit(f"{path} not found: it lists the books and pages of the test set (see {Path(__file__).name})")
-    sources = json.loads(path.read_text(encoding="utf-8"))
+    sources: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
     for language, rules in sources.get("wikisources", {}).items():
         for name, rule in rules.get("templates", {}).items():
             if isinstance(rule, dict) and isinstance(rule.get("row"), list):
@@ -100,21 +101,23 @@ def http_get(url: str, params: dict[str, str] | None = None, *, user_agent: str)
         url = f"{url}?{urllib.parse.urlencode(params)}"
     request = urllib.request.Request(url, headers={"User-Agent": user_agent})
     with urllib.request.urlopen(request, timeout=60) as response:
-        return response.read()
+        body: bytes = response.read()
+        return body
 
 
 def _strip_html(value: str | None) -> str:
     return " ".join(re.sub(r"<[^>]+>", " ", value or "").split())
 
 
-def commons_file_info(file_name: str, page: int, *, user_agent: str) -> dict:
+def commons_file_info(file_name: str, page: int, *, user_agent: str) -> dict[str, str]:
     data = json.loads(http_get("https://commons.wikimedia.org/w/api.php", {
         "action": "query", "format": "json", "titles": f"File:{file_name}",
         "prop": "imageinfo", "iiprop": "url|extmetadata",
     }, user_agent=user_agent))  # fmt: skip
     info = next(iter(data["query"]["pages"].values()))["imageinfo"][0]
     meta = info.get("extmetadata", {})
-    # https://upload.wikimedia.org/wikipedia/commons/a/ab/<name> -> .../commons/thumb/a/ab/<name>/page<N>-<W>px-<name>.jpg
+    # https://upload.wikimedia.org/wikipedia/commons/a/ab/<name>
+    #   -> .../commons/thumb/a/ab/<name>/page<N>-<W>px-<name>.jpg
     original = info["url"].split("?")[0]
     name = original.rsplit("/", 1)[1]
     thumb = original.replace("/commons/", "/commons/thumb/", 1) + f"/page{page}-{IMAGE_WIDTH}px-{name}.jpg"
@@ -139,7 +142,7 @@ def wikisource_page(language: str, title: str, *, user_agent: str) -> tuple[str,
 _TEMPLATE = re.compile(r"\{\{([^{}]*)\}\}")
 
 
-def _render_template(match: re.Match[str], templates: dict) -> str:
+def _render_template(match: re.Match[str], templates: dict[str, str | dict[str, list[str]]]) -> str:
     name, *args = [part.strip() for part in match.group(1).split("|")]
     positional = [arg for arg in args if "=" not in arg]
     named = dict(arg.split("=", 1) for arg in args if "=" in arg)
@@ -167,7 +170,7 @@ def _table_cell_text(line: str) -> str:
     return content if separator and "=" in attributes else cell
 
 
-def wikitext_to_text(wikitext: str, rules: dict | None = None) -> str:
+def wikitext_to_text(wikitext: str, rules: dict[str, Any] | None = None) -> str:
     """Reading text of a Wikisource page: body and tables; no running header, notes or images.
 
     `rules`: the ``wikisources`` entry of sources.json for the page's Wikisource.
@@ -200,7 +203,7 @@ def main(testdata: Path) -> None:
     user_agent = sources.get("user_agent") or DEFAULT_USER_AGENT
     for sub in ("originals", "groundtruth"):
         (testdata / sub).mkdir(parents=True, exist_ok=True)
-    records = []
+    records: list[dict[str, object]] = []
     for page in sources["pages"]:
         page_id, djvu_page = page["id"], page["djvu_page"]
         book = sources["books"][page["book"]]
@@ -236,7 +239,7 @@ def main(testdata: Path) -> None:
     write_sources(testdata, records)
 
 
-def write_sources(testdata: Path, records: list[dict]) -> None:
+def write_sources(testdata: Path, records: list[dict[str, object]]) -> None:
     lines = [
         "# OCR test set — sources and licenses",
         "",
@@ -258,8 +261,8 @@ def write_sources(testdata: Path, records: list[dict]) -> None:
             f"| [image]({record['image_url']}) ([Commons file]({record['commons_file']})) "
             f"| {record['license']} | [Wikisource]({record['groundtruth_url']}) ({record['groundtruth_quality']}) |"
         )
-    credits = sorted({f"- {r['book']}: {r['digitization']}" for r in records})
-    lines += ["", "Original digitization (according to Commons):", "", *credits, ""]
+    digitization_credits = sorted({f"- {r['book']}: {r['digitization']}" for r in records})
+    lines += ["", "Original digitization (according to Commons):", "", *digitization_credits, ""]
     (testdata / "SOURCES.md").write_text("\n".join(lines), encoding="utf-8")
 
 

@@ -70,7 +70,8 @@ def parse_flag(query: dict[str, list[str]], name: str, default: bool) -> bool:
 def read_manifest(settings: Settings) -> dict[str, Any]:
     try:
         with open(os.path.join(settings.sandbox_dir, "MANIFEST.json"), encoding="utf-8") as manifest:
-            return json.load(manifest)
+            versions: dict[str, Any] = json.load(manifest)
+            return versions
     except (OSError, ValueError) as exc:
         log.warning("cannot read the sandbox manifest: %s", exc)
         return {}
@@ -225,7 +226,7 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
         except (BrokenPipeError, ConnectionResetError):
             log.warning("client went away before the reply to %s %s", self.command, self.path)
 
-    def log_message(self, format: str, *args: Any) -> None:  # noqa: A002 (stdlib signature)
+    def log_message(self, format: str, *args: object) -> None:  # noqa: A002 (stdlib signature)
         # The default implementation prints the client address, which AF_UNIX peers do not have.
         log.debug("%s", format % args)
 
@@ -237,6 +238,7 @@ class UnixHTTPServer(socketserver.ThreadingMixIn, socketserver.UnixStreamServer)
 
     def __init__(self, path: str, supervisor: Supervisor) -> None:
         self.supervisor = supervisor
+        self._socket_path = path
         self._bound = False
         super().__init__(path, RequestHandler, bind_and_activate=False)
         try:
@@ -247,7 +249,7 @@ class UnixHTTPServer(socketserver.ThreadingMixIn, socketserver.UnixStreamServer)
             raise
 
     def server_bind(self) -> None:
-        path = self.server_address
+        path = self._socket_path
         if os.path.exists(path):
             if _socket_in_use(path):
                 raise RuntimeError(f"{path} is served by another process (another ocr container?)")
@@ -265,7 +267,7 @@ class UnixHTTPServer(socketserver.ThreadingMixIn, socketserver.UnixStreamServer)
         if self._bound:
             self._bound = False
             try:
-                os.unlink(self.server_address)
+                os.unlink(self._socket_path)
             except FileNotFoundError:
                 pass
 

@@ -16,7 +16,7 @@ import logging
 import re
 from typing import TYPE_CHECKING, Any
 
-from .base import EngineSpec, PageEngine, PageOptions, PageResult
+from .base import EngineSpec, PageBlock, PageEngine, PageOptions, PageResult
 
 if TYPE_CHECKING:
     from ..config import Settings
@@ -172,7 +172,7 @@ class PaddleOCRVLEngine(PageEngine):
         markdown = _BLANK_LINES.sub("\n\n", markdown).strip()
         markdown = markdown + "\n" if markdown else ""
 
-        blocks = [
+        blocks: list[PageBlock] = [
             {
                 "label": str(block["block_label"]),
                 "content": str(block["block_content"] or ""),

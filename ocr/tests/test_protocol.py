@@ -4,11 +4,10 @@ from __future__ import annotations
 
 import os
 import unittest
-from typing import Any
 from unittest import mock
 
 from scanmylib_ocr import protocol, worker
-from scanmylib_ocr.engines.base import PageEngine, PageOptions
+from scanmylib_ocr.engines.base import PageEngine, PageOptions, PageResult
 from scanmylib_ocr.protocol import Channel
 
 
@@ -16,8 +15,17 @@ class HugeResultEngine(PageEngine):
     def load(self) -> None:
         pass
 
-    def parse(self, image_path: str, options: PageOptions) -> Any:
-        return {"markdown": "x" * 4096}
+    def parse(self, image_path: str, options: PageOptions) -> PageResult:
+        return {
+            "width": 1000,
+            "height": 1400,
+            "markdown": "x" * 4096,
+            "images": [],
+            "blocks": [],
+            "page_numbers": [],
+            "page_continuation": None,
+            "preprocess": {},
+        }
 
 
 class ChannelSizeTest(unittest.TestCase):
@@ -45,6 +53,7 @@ class ChannelSizeTest(unittest.TestCase):
         with self.assertLogs("scanmylib_ocr.worker", "ERROR"):
             worker.serve(self.worker_side, HugeResultEngine())
         reply = self.supervisor_side.receive()
+        assert reply is not None
         self.assertEqual((reply["id"], reply["ok"], reply["error"]), ("job-1", False, protocol.PROCESSING_FAILED))
         self.assertIn("larger than", reply["detail"])
 

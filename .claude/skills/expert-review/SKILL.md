@@ -81,11 +81,18 @@ skill names, with no value but the ones checked here, and read and search with t
 
    A hit is a candidate. Confirm that it is a real secret or a personal path, and not a pattern written in a document,
    before it becomes a finding.
-5. **Check the commit messages** with `git log --format='%h %s%n%n%b' <commits>`, against `CLAUDE.md` > Workflow,
-   "Commits" and "A commit message says why":
+5. **Check the commit messages:** write `git log --format='%h %s%n%n%b' <commits>` to `<dir>/commits.txt`, and read it
+   against `CLAUDE.md` > Workflow, "Commits", "A commit scope names where the change belongs", "A commit message says
+   why" and "A commit footer holds only what tools read":
    - a `fixup!` or `squash!` commit that is still there is `blocking`;
-   - a subject that does not follow the style of "Commits" is `should-fix`, and so is a body that restates the diff
-     instead of giving its reason.
+   - a message that holds a secret, or what `.claude/rules/repository.md` > What belongs in the repository, > No real
+     document names or > No personal information forbids, is `blocking`, since a pushed commit cannot be taken back:
+     search `<dir>/commits.txt` with the patterns of the scan above, and read it for what no pattern finds: document
+     names, usernames, host names, time zones and places, and project-management material;
+   - a header that does not follow "Commits", or whose scope does not follow "A commit scope names where the change
+     belongs", is `should-fix`, and so are a subject that names the files instead of what the change achieves, a body
+     that restates the diff instead of giving its reason, and a footer that lacks what "A commit footer holds only what
+     tools read" requires or holds what it excludes.
 
 ## Classify
 
@@ -163,7 +170,10 @@ Write one report, in one voice: calm, plain, no preamble, no flattery. Its parts
 
 In the terminal, paths are absolute. In a posted report, they are relative to the repository root.
 
-A finding about a secret names its file, its line and the kind of secret, never the value.
+A finding about a secret, a real document name or personal information names where it is and its kind, never the value:
+its file and line, or, when the value is in a commit message, the commit's short hash. When the value is in a file's
+name or path, the report never names that file, in any finding: it gives the short hash of the commit that adds the
+file, or for an uncommitted file its status (staged, unstaged or untracked), and the kind of file.
 
 **With `--post`**, and only for a pull request target:
 

@@ -265,6 +265,11 @@ against the domain. `.claude/rules/conventions.md` states them, and a rules file
   merge.
 - **A history rewritten before it is pushed,** into atomic commits whose messages say why, keeps the reasons that a diff
   cannot show. Each commit passing the gate keeps `main` a safe start for any work.
+- **A header that says what the change achieves, under the scope it belongs to,** lets a reader find a change in
+  `git log --oneline` without opening it, since the diff already lists the files. The release notes that
+  `scripts/release.py` drafts are the subjects of the features and fixes, each prefixed with its scope.
+- **A footer that holds only what tools read** lets the release tooling and the issue tracker trust it. A trailer naming
+  the tool that typed a change would add a line to every message and say nothing of its reason.
 - **"Rebase and merge"** lands each commit as written, after the review ([Code review](#code-review)) and CI
   ([Technology stack](#technology-stack)).
 - **One writer for `.pm/`,** the coordinating session, keeps its commits from racing.

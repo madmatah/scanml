@@ -175,7 +175,7 @@ The modules as they are, and the layer each one belongs to, whose directory the 
 
 ```
 scanmylib/
-├── .claude/                     # Claude Code: rules, skills and the expert reviewers
+├── .claude/                     # Claude Code: settings, rules, skills and the expert reviewers
 ├── .github/
 │   ├── pull_request_template.md # The body of every pull request, with its checklist
 │   └── workflows/               # CI (the gate on every pull request and every push to main), and the release
@@ -231,6 +231,7 @@ Each row names a rule, the rules file that states it, and what enforces it.
 | The Kotlin conventions at 120 columns, file names (`.claude/rules/kotlin.md`) | ktlint, in `scripts/check.sh android` |
 | The rules of the web UI: layout, `const`, strict equality, named exports (`.claude/rules/web.md`) | Biome, in `scripts/check.sh lint` |
 | Part of the rules of continuous integration: actions pinned to commits, the jobs' permissions and credentials, no template injection (`.claude/rules/configuration.md` > Continuous integration) | zizmor, in `scripts/check.sh lint` |
+| A commit footer holds only what tools read (`CLAUDE.md` > Workflow) | `attribution` in `.claude/settings.json`, which keeps Claude Code's own commit trailers and pull request line out |
 | Every rule no tool can check: architecture, conventions, tests as specification… | `/expert-review` ([Code review](#code-review)), before every pull request |
 
 ## Conventions

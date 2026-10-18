@@ -42,7 +42,11 @@ function notifyUnauthorized() {
 function detailFrom(body) {
   const detail = body?.detail;
   if (typeof detail === 'string') return detail;
-  if (Array.isArray(detail)) return detail.map((item) => item?.msg).filter(Boolean).join('; ');
+  if (Array.isArray(detail))
+    return detail
+      .map((item) => item?.msg)
+      .filter(Boolean)
+      .join('; ');
   return '';
 }
 

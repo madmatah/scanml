@@ -52,9 +52,16 @@ function documentParts(content) {
 function preparePage(section, page) {
   const marker = section.querySelector(':scope > .page-marker');
   if (marker && page) {
-    marker.replaceChildren(h('a', {
-      href: href(paths.page(page.id)), title: t('Open this page: scan, number, recognized text'),
-    }, marker.textContent));
+    marker.replaceChildren(
+      h(
+        'a',
+        {
+          href: href(paths.page(page.id)),
+          title: t('Open this page: scan, number, recognized text'),
+        },
+        marker.textContent,
+      ),
+    );
   }
   for (const image of section.querySelectorAll('img[src]')) {
     // A new OCR rewrites the illustrations in place (see views/page.js).
@@ -86,30 +93,45 @@ export function mountReader(root, { route, signal, setTitle }) {
   const titleId = uniqueId('reader-title');
   const title = h('h1', { id: titleId });
   const author = h('p', { class: 'doc-author' });
-  const markdownLink = h('a', { class: 'btn', href: links.markdown(documentId) },
-    icon('download'), t('Download document.md'));
+  const markdownLink = h(
+    'a',
+    { class: 'btn', href: links.markdown(documentId) },
+    icon('download'),
+    t('Download document.md'),
+  );
   const notice = h('div', { class: 'notice reader-notice', role: 'status' });
   const selectId = uniqueId('reader-page');
   const pageSelect = h('select', { id: selectId, class: 'input reader-select' });
   const position = h('span', { class: 'reader-position' });
-  const toolbar = h('div', { class: 'reader-toolbar' },
-    h('label', { class: 'reader-select-label', for: selectId }, t('Page')), pageSelect, position);
+  const toolbar = h(
+    'div',
+    { class: 'reader-toolbar' },
+    h('label', { class: 'reader-select-label', for: selectId }, t('Page')),
+    pageSelect,
+    position,
+  );
   const text = h('article', { class: 'ocr-render reader-text', 'aria-labelledby': titleId });
 
-  const breadcrumb = h('nav', { class: 'breadcrumb', 'aria-label': t('Breadcrumb') },
+  const breadcrumb = h(
+    'nav',
+    { class: 'breadcrumb', 'aria-label': t('Breadcrumb') },
     h('a', { href: href(paths.library()) }, t('Library')),
     h('span', { class: 'breadcrumb-separator', 'aria-hidden': 'true' }, '›'),
     documentLink,
     h('span', { class: 'breadcrumb-separator', 'aria-hidden': 'true' }, '›'),
-    h('span', { 'aria-current': 'page' }, t('Reading')));
-  const header = h('header', { class: 'doc-header reader-header' },
+    h('span', { 'aria-current': 'page' }, t('Reading')),
+  );
+  const header = h(
+    'header',
+    { class: 'doc-header reader-header' },
     h('div', { class: 'view-heading' }, title, author),
-    h('div', { class: 'view-actions' }, markdownLink));
+    h('div', { class: 'view-actions' }, markdownLink),
+  );
 
-  const backToDocument = () => h('a', { class: 'btn', href: href(paths.document(documentId)) },
-    icon('chevron-left'), t('Back to the document'));
-  const reloadButton = () => h('button', { type: 'button', class: 'btn btn-small', onClick: load },
-    icon('refresh'), t('Refresh'));
+  const backToDocument = () =>
+    h('a', { class: 'btn', href: href(paths.document(documentId)) }, icon('chevron-left'), t('Back to the document'));
+  const reloadButton = () =>
+    h('button', { type: 'button', class: 'btn btn-small', onClick: load }, icon('refresh'), t('Refresh'));
 
   // The "Page" bar sticks under the sticky app header; pages jumped to stay clear of both.
   const appHeader = document.getElementById('app-header');
@@ -197,11 +219,17 @@ export function mountReader(root, { route, signal, setTitle }) {
     notice.hidden = waiting === 0;
     if (!waiting) return;
     notice.replaceChildren(
-      h('p', {}, tn(
-        '{count} page is still waiting for OCR: it will be added to the text once processed.',
-        '{count} pages are still waiting for OCR: they will be added to the text once processed.',
-        waiting)),
-      reloadButton());
+      h(
+        'p',
+        {},
+        tn(
+          '{count} page is still waiting for OCR: it will be added to the text once processed.',
+          '{count} pages are still waiting for OCR: they will be added to the text once processed.',
+          waiting,
+        ),
+      ),
+      reloadButton(),
+    );
   }
 
   function emptyMessage(doc) {
@@ -254,12 +282,16 @@ export function mountReader(root, { route, signal, setTitle }) {
 
     if (!sections.length) {
       const waiting = waitingPages(doc) > 0;
-      view.replaceChildren(breadcrumb, header, emptyState({
-        iconName: 'book',
-        title: t('Nothing to read yet'),
-        message: emptyMessage(doc),
-        actions: [waiting && reloadButton(), backToDocument()].filter(Boolean),
-      }));
+      view.replaceChildren(
+        breadcrumb,
+        header,
+        emptyState({
+          iconName: 'book',
+          title: t('Nothing to read yet'),
+          message: emptyMessage(doc),
+          actions: [waiting && reloadButton(), backToDocument()].filter(Boolean),
+        }),
+      );
       return;
     }
 
@@ -296,14 +328,18 @@ export function mountReader(root, { route, signal, setTitle }) {
       }
       shown = false;
       sections = [];
-      view.replaceChildren(errorState({
-        title: notFound ? t('Document not found') : t('Could not load'),
-        message: notFound ? t('This document does not exist or has been deleted.') : errorMessage(error),
-        onRetry: notFound ? null : load,
-        actions: [notFound
-          ? h('a', { class: 'btn', href: href(paths.library()) }, t('Back to the library'))
-          : backToDocument()],
-      }));
+      view.replaceChildren(
+        errorState({
+          title: notFound ? t('Document not found') : t('Could not load'),
+          message: notFound ? t('This document does not exist or has been deleted.') : errorMessage(error),
+          onRetry: notFound ? null : load,
+          actions: [
+            notFound
+              ? h('a', { class: 'btn', href: href(paths.library()) }, t('Back to the library'))
+              : backToDocument(),
+          ],
+        }),
+      );
     } finally {
       loading = false;
     }

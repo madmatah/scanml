@@ -14,11 +14,13 @@ const MAX_VISIBLE = 3;
  */
 export function toast(message, { tone = 'info' } = {}) {
   const region = document.getElementById('toasts');
-  const close = h('button', { type: 'button', class: 'toast-close', 'aria-label': t('Close notification') },
-    icon('x'));
-  const item = h('div', { class: ['toast', `toast-${tone}`], role: tone === 'error' ? 'alert' : 'status' },
+  const close = h('button', { type: 'button', class: 'toast-close', 'aria-label': t('Close notification') }, icon('x'));
+  const item = h(
+    'div',
+    { class: ['toast', `toast-${tone}`], role: tone === 'error' ? 'alert' : 'status' },
     h('p', { class: 'toast-message' }, message),
-    close);
+    close,
+  );
   const dismiss = () => item.remove();
   close.addEventListener('click', dismiss);
   while (region.children.length >= MAX_VISIBLE) region.firstElementChild.remove();

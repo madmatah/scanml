@@ -7,7 +7,12 @@ import { afterEach, beforeEach, describe, test } from 'node:test';
 
 import { setLocale } from '../static/js/lib/i18n.js';
 import {
-  localizeMarkers, missingPagesText, pageAtLine, pageMarkerText, readingOutline, unnumberedHeadingText,
+  localizeMarkers,
+  missingPagesText,
+  pageAtLine,
+  pageMarkerText,
+  readingOutline,
+  unnumberedHeadingText,
 } from '../static/js/lib/reading.js';
 import FRENCH from '../static/js/locales/fr.js';
 
@@ -34,7 +39,8 @@ const PAGES = new Map([
   ['k-notes', { id: 'notes', page_label: null }],
 ]);
 
-const summary = (outline) => outline.map(({ type, index, label }) => (type === 'page' ? [index, label] : [type, label]));
+const summary = (outline) =>
+  outline.map(({ type, index, label }) => (type === 'page' ? [index, label] : [type, label]));
 
 describe('the "Page" list', () => {
   test('the pages in reading order, with the missing pages and the unnumbered ones', () => {
@@ -52,30 +58,44 @@ describe('the "Page" list', () => {
 
   test('each page entry knows its page', () => {
     const entries = readingOutline(PARTS, PAGES).filter((entry) => entry.type === 'page');
-    assert.deepEqual(entries.map((entry) => [entry.key, entry.page.id]), [
-      ['k-i', 'i'], ['k-1', '1'], ['k-plate', 'plate'], ['k-2', '2'], ['k-6', '6'], ['k-notes', 'notes'],
-    ]);
+    assert.deepEqual(
+      entries.map((entry) => [entry.key, entry.page.id]),
+      [
+        ['k-i', 'i'],
+        ['k-1', '1'],
+        ['k-plate', 'plate'],
+        ['k-2', '2'],
+        ['k-6', '6'],
+        ['k-notes', 'notes'],
+      ],
+    );
   });
 
   test('a page missing from the document data (changed meanwhile) keeps the marker of the HTML', () => {
     const outline = readingOutline(PARTS.slice(0, 3), new Map());
-    assert.deepEqual(summary(outline), [[0, 'Page i'], [1, 'Page 1'], [2, 'Unnumbered page']]);
+    assert.deepEqual(summary(outline), [
+      [0, 'Page i'],
+      [1, 'Page 1'],
+      [2, 'Unnumbered page'],
+    ]);
     assert.equal(outline[0].page, null);
   });
 
   test('a letter without page numbers', () => {
     const parts = ['a', 'b', 'c'].map((key) => ({ type: 'page', key, marker: 'Unnumbered page' }));
     const pages = new Map(['a', 'b', 'c'].map((key) => [key, { page_label: null }]));
-    assert.deepEqual(summary(readingOutline(parts, pages)).map(([, label]) => label), [
-      'No number (position 1)', 'No number (position 2)', 'No number (position 3)',
-    ]);
+    assert.deepEqual(
+      summary(readingOutline(parts, pages)).map(([, label]) => label),
+      ['No number (position 1)', 'No number (position 2)', 'No number (position 3)'],
+    );
   });
 
   test('in French', () => {
     setLocale(['fr-FR']);
     const labels = summary(readingOutline(PARTS.slice(0, 3), PAGES)).map(([, label]) => label);
     const position3 = FRENCH['{label} (position {position})']
-      .replace('{label}', FRENCH['No number']).replace('{position}', '3');
+      .replace('{label}', FRENCH['No number'])
+      .replace('{position}', '3');
     assert.deepEqual(labels, ['p. i', 'p. 1', position3]);
   });
 
@@ -112,10 +132,11 @@ function element(selector, { attributes = {}, text = '', children = [] } = {}) {
 
 /** The document HTML of the shared contract, with English markers. */
 function documentContent() {
-  const page = (label, text) => element('section.page', {
-    attributes: { 'data-key': `k-${label}` },
-    children: [element('p.page-marker', { attributes: { 'data-label': label }, text }), element('p')],
-  });
+  const page = (label, text) =>
+    element('section.page', {
+      attributes: { 'data-key': `k-${label}` },
+      children: [element('p.page-marker', { attributes: { 'data-label': label }, text }), element('p')],
+    });
   return {
     children: [
       page('12', 'Page 12'),
@@ -131,8 +152,10 @@ function documentContent() {
   };
 }
 
-const texts = (content) => content.children.map((child) => (
-  child.matches('section.page') ? child.querySelector(':scope > .page-marker').textContent : child.textContent));
+const texts = (content) =>
+  content.children.map((child) =>
+    child.matches('section.page') ? child.querySelector(':scope > .page-marker').textContent : child.textContent,
+  );
 
 describe('the markers of the document HTML', () => {
   test('are written in English as the server writes them', () => {
@@ -152,8 +175,8 @@ describe('the markers of the document HTML', () => {
     setLocale(['fr-FR']);
     const content = documentContent();
     localizeMarkers(content);
-    const fill = (template, values) => Object.entries(values)
-      .reduce((text, [name, value]) => text.replace(`{${name}}`, value), template);
+    const fill = (template, values) =>
+      Object.entries(values).reduce((text, [name, value]) => text.replace(`{${name}}`, value), template);
     assert.deepEqual(texts(content), [
       fill(FRENCH['Page {label}'], { label: '12' }),
       fill(FRENCH['Missing pages: {range}'], { range: '13–44' }),
@@ -183,15 +206,22 @@ describe('the page being read', () => {
   });
 
   test('is the first page before the text reaches the line', () => {
-    assert.equal(pageAtLine(3, (index) => 500 + index * 800, 140), 0);
+    assert.equal(
+      pageAtLine(3, (index) => 500 + index * 800, 140),
+      0,
+    );
   });
 
   test('is found in a few reads, even in a long book', () => {
     let reads = 0;
-    const index = pageAtLine(1000, (page) => {
-      reads += 1;
-      return page * 1000 - 400_000;
-    }, 120);
+    const index = pageAtLine(
+      1000,
+      (page) => {
+        reads += 1;
+        return page * 1000 - 400_000;
+      },
+      120,
+    );
     assert.equal(index, 400);
     assert.ok(reads <= 11, `${reads} reads`);
   });

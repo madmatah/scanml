@@ -16,7 +16,8 @@ const NUMBER_SOURCE = {
   detected: () => ({ label: t('detected'), description: t('Number read on the page by OCR') }),
   hint: () => ({ label: t('hint'), description: t('Number given from the phone') }),
   inferred: () => ({
-    label: t('inferred'), description: t('Number inferred from the neighboring pages (same photo series)'),
+    label: t('inferred'),
+    description: t('Number inferred from the neighboring pages (same photo series)'),
   }),
 };
 
@@ -40,13 +41,17 @@ const ENGINE_STATE = {
     description: t('Engine stopped, graphics memory freed. It restarts on its own with the next page.'),
   }),
   starting: () => ({
-    label: t('OCR starting'), tone: 'warn', description: t('Loading the model on the graphics card…'),
+    label: t('OCR starting'),
+    tone: 'warn',
+    description: t('Loading the model on the graphics card…'),
   }),
   ready: () => ({ label: t('OCR ready'), tone: 'ok', description: t('Engine loaded, ready to process pages.') }),
   stopping: () => ({ label: t('OCR stopping'), tone: 'warn', description: t('Freeing graphics memory…') }),
   error: () => ({ label: t('OCR error'), tone: 'danger', description: t('The engine could not start.') }),
   unreachable: () => ({
-    label: t('OCR unreachable'), tone: 'danger', description: t('The OCR container is not responding.'),
+    label: t('OCR unreachable'),
+    tone: 'danger',
+    description: t('The OCR container is not responding.'),
   }),
 };
 
@@ -76,8 +81,13 @@ export function pagePlacement(placement) {
 }
 
 export function engineState(state) {
-  return entry(ENGINE_STATE, state)
-    ?? { label: t('OCR: {state}', { state: state ?? t('unknown') }), tone: 'neutral', description: '' };
+  return (
+    entry(ENGINE_STATE, state) ?? {
+      label: t('OCR: {state}', { state: state ?? t('unknown') }),
+      tone: 'neutral',
+      description: '',
+    }
+  );
 }
 
 /** The kinds of document, `[value, label]`, in the order of the document form. */

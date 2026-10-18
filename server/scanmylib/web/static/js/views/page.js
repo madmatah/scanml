@@ -58,9 +58,12 @@ function detailRows(page) {
     [t('Number given by the phone'), page.hint_number],
     [t('Captured'), formatDateTime(page.captured_at)],
     [t('Received'), formatDateTime(page.uploaded_at)],
-    [t('Photo series'), page.session_id
-      ? t('{series} · photo no. {seq}', { series: page.session_id.slice(0, 8), seq: page.seq ?? '—' })
-      : null],
+    [
+      t('Photo series'),
+      page.session_id
+        ? t('{series} · photo no. {seq}', { series: page.session_id.slice(0, 8), seq: page.seq ?? '—' })
+        : null,
+    ],
     [t('Rotation'), `${page.rotation ?? 0}°`],
     [t('Dimensions'), page.width && page.height ? `${page.width} × ${page.height} px` : null],
     [t('OCR engine'), ocr.engine],
@@ -114,26 +117,43 @@ export function mountPage(root, { route, signal, setTitle }) {
   const currentCrumb = h('span', { 'aria-current': 'page' });
   const title = h('h1', { tabindex: '-1' });
   const headerChips = h('ul', { class: 'chips', role: 'list' });
-  const previousLink = h('a', { class: 'btn', rel: 'prev' },
-    icon('chevron-left'), h('span', { class: 'btn-label' }, t('Previous')));
-  const nextLink = h('a', { class: 'btn', rel: 'next' },
-    h('span', { class: 'btn-label' }, t('Next')), icon('chevron-right'));
+  const previousLink = h(
+    'a',
+    { class: 'btn', rel: 'prev' },
+    icon('chevron-left'),
+    h('span', { class: 'btn-label' }, t('Previous')),
+  );
+  const nextLink = h(
+    'a',
+    { class: 'btn', rel: 'next' },
+    h('span', { class: 'btn-label' }, t('Next')),
+    icon('chevron-right'),
+  );
   const position = h('span', { class: 'pager-position' });
   const notices = h('div', { class: 'page-notices' });
 
   const numberId = uniqueId('page-number');
   const numberHelpId = uniqueId('page-number-help');
   const numberInput = h('input', {
-    id: numberId, type: 'number', inputmode: 'numeric', min: 1, max: 9999, step: 1,
-    class: 'input input-number', 'aria-describedby': numberHelpId,
+    id: numberId,
+    type: 'number',
+    inputmode: 'numeric',
+    min: 1,
+    max: 9999,
+    step: 1,
+    class: 'input input-number',
+    'aria-describedby': numberHelpId,
   });
   const saveNumberButton = h('button', { type: 'submit', class: 'btn' }, icon('check'), t('Save'));
   const clearNumberButton = h('button', { type: 'button', class: 'btn btn-ghost' }, t('Clear'));
   const numberHint = h('p', { id: numberHelpId, class: 'hint' });
-  const numberForm = h('form', { class: 'number-form', novalidate: true },
+  const numberForm = h(
+    'form',
+    { class: 'number-form', novalidate: true },
     h('label', { for: numberId, class: 'field-label' }, t('Page number')),
     h('div', { class: 'number-controls' }, numberInput, saveNumberButton, clearNumberButton),
-    numberHint);
+    numberHint,
+  );
 
   const rotateLeftButton = iconButton('rotate-left', t('Rotate 90° to the left'));
   const rotateRightButton = iconButton('rotate-right', t('Rotate 90° to the right'));
@@ -145,53 +165,100 @@ export function mountPage(root, { route, signal, setTitle }) {
   const scanImage = h('img', { alt: '', decoding: 'async' });
   const scanFrame = h('div', { class: 'scan-frame' }, scanImage);
   const scanViewport = h('div', { class: 'scan-viewport' }, scanFrame);
-  const zoomButton = h('button', { type: 'button', class: 'btn btn-small', 'aria-pressed': 'false' },
-    icon('expand'), t('Full width'));
-  const originalLink = h('a', { class: 'btn btn-small btn-ghost', target: '_blank', rel: 'noopener' },
-    icon('external'), t('Original'));
-  const markdownToggle = h('button', { type: 'button', class: 'btn btn-small', 'aria-pressed': 'false' },
-    t('Raw Markdown'));
+  const zoomButton = h(
+    'button',
+    { type: 'button', class: 'btn btn-small', 'aria-pressed': 'false' },
+    icon('expand'),
+    t('Full width'),
+  );
+  const originalLink = h(
+    'a',
+    { class: 'btn btn-small btn-ghost', target: '_blank', rel: 'noopener' },
+    icon('external'),
+    t('Original'),
+  );
+  const markdownToggle = h(
+    'button',
+    { type: 'button', class: 'btn btn-small', 'aria-pressed': 'false' },
+    t('Raw Markdown'),
+  );
   const copyButton = h('button', { type: 'button', class: 'btn btn-small btn-ghost' }, icon('copy'), t('Copy'));
   const textBody = h('div', { class: 'text-body' });
   const details = h('dl', { class: 'details-list' });
 
   const actionButtons = [
-    saveNumberButton, clearNumberButton, rotateLeftButton, rotateRightButton,
-    excludeButton, reprocessButton, deleteButton,
+    saveNumberButton,
+    clearNumberButton,
+    rotateLeftButton,
+    rotateRightButton,
+    excludeButton,
+    reprocessButton,
+    deleteButton,
   ];
 
   const layout = [
-    h('nav', { class: 'breadcrumb', 'aria-label': t('Breadcrumb') },
+    h(
+      'nav',
+      { class: 'breadcrumb', 'aria-label': t('Breadcrumb') },
       h('a', { href: href(paths.library()) }, t('Library')),
       h('span', { class: 'breadcrumb-separator', 'aria-hidden': 'true' }, '›'),
       documentLink,
       h('span', { class: 'breadcrumb-separator', 'aria-hidden': 'true' }, '›'),
-      currentCrumb),
-    h('header', { class: 'page-header' },
+      currentCrumb,
+    ),
+    h(
+      'header',
+      { class: 'page-header' },
       h('div', { class: 'page-heading' }, title, headerChips),
-      h('nav', { class: 'pager', 'aria-label': t('Document pages') }, previousLink, position, nextLink)),
+      h('nav', { class: 'pager', 'aria-label': t('Document pages') }, previousLink, position, nextLink),
+    ),
     notices,
-    h('section', { class: 'card page-toolbar', 'aria-label': t('Page actions') },
+    h(
+      'section',
+      { class: 'card page-toolbar', 'aria-label': t('Page actions') },
       numberForm,
-      h('div', { class: 'button-row page-actions' },
-        h('div', { class: 'rotate-group', role: 'group', 'aria-labelledby': rotateLabelId },
+      h(
+        'div',
+        { class: 'button-row page-actions' },
+        h(
+          'div',
+          { class: 'rotate-group', role: 'group', 'aria-labelledby': rotateLabelId },
           h('span', { id: rotateLabelId, class: 'rotate-group-label' }, t('Rotate')),
-          rotateLeftButton, rotateRightButton),
-        excludeButton, reprocessButton, deleteButton)),
-    h('div', { class: 'page-split' },
-      h('section', { class: 'pane scan-pane', 'aria-labelledby': 'scan-title' },
-        h('div', { class: 'pane-header' },
+          rotateLeftButton,
+          rotateRightButton,
+        ),
+        excludeButton,
+        reprocessButton,
+        deleteButton,
+      ),
+    ),
+    h(
+      'div',
+      { class: 'page-split' },
+      h(
+        'section',
+        { class: 'pane scan-pane', 'aria-labelledby': 'scan-title' },
+        h(
+          'div',
+          { class: 'pane-header' },
           h('h2', { id: 'scan-title', class: 'pane-title' }, t('Scan')),
-          h('div', { class: 'pane-tools' }, zoomButton, originalLink)),
-        scanViewport),
-      h('section', { class: 'pane text-pane', 'aria-labelledby': 'text-title' },
-        h('div', { class: 'pane-header' },
+          h('div', { class: 'pane-tools' }, zoomButton, originalLink),
+        ),
+        scanViewport,
+      ),
+      h(
+        'section',
+        { class: 'pane text-pane', 'aria-labelledby': 'text-title' },
+        h(
+          'div',
+          { class: 'pane-header' },
           h('h2', { id: 'text-title', class: 'pane-title' }, t('Recognized text')),
-          h('div', { class: 'pane-tools' }, markdownToggle, copyButton)),
-        textBody)),
-    h('details', { class: 'card page-details' },
-      h('summary', {}, t('Technical details')),
-      details),
+          h('div', { class: 'pane-tools' }, markdownToggle, copyButton),
+        ),
+        textBody,
+      ),
+    ),
+    h('details', { class: 'card page-details' }, h('summary', {}, t('Technical details')), details),
   ];
 
   /** Sizes the scan for its rotation: whole page on screen, or full pane width. */
@@ -251,19 +318,49 @@ export function mountPage(root, { route, signal, setTitle }) {
   function renderNotices() {
     const items = [];
     if (page.status === 'error') {
-      items.push(h('div', { class: 'notice notice-danger' }, icon('alert'),
-        h('p', {}, h('strong', {}, t('OCR failed.')), ' ', t('You can run OCR again or rotate the page.'),
-          page.error && h('span', { class: 'notice-detail' }, t('Details: {error}', { error: page.error })))));
+      items.push(
+        h(
+          'div',
+          { class: 'notice notice-danger' },
+          icon('alert'),
+          h(
+            'p',
+            {},
+            h('strong', {}, t('OCR failed.')),
+            ' ',
+            t('You can run OCR again or rotate the page.'),
+            page.error && h('span', { class: 'notice-detail' }, t('Details: {error}', { error: page.error })),
+          ),
+        ),
+      );
     }
     if (page.duplicate_of) {
-      items.push(h('div', { class: 'notice notice-warn' }, icon('copy'),
-        h('p', {}, h('strong', {}, t('Duplicate.')), ' ',
-          t('A newer scan has the same number and replaces it in the document.'), ' ',
-          h('a', { href: href(paths.page(page.duplicate_of)) }, t('See the page kept')))));
+      items.push(
+        h(
+          'div',
+          { class: 'notice notice-warn' },
+          icon('copy'),
+          h(
+            'p',
+            {},
+            h('strong', {}, t('Duplicate.')),
+            ' ',
+            t('A newer scan has the same number and replaces it in the document.'),
+            ' ',
+            h('a', { href: href(paths.page(page.duplicate_of)) }, t('See the page kept')),
+          ),
+        ),
+      );
     }
     if (page.excluded) {
-      items.push(h('div', { class: 'notice' }, icon('eye-off'),
-        h('p', {}, h('strong', {}, t('Page excluded.')), ' ', t('It does not appear in document.md.'))));
+      items.push(
+        h(
+          'div',
+          { class: 'notice' },
+          icon('eye-off'),
+          h('p', {}, h('strong', {}, t('Page excluded.')), ' ', t('It does not appear in document.md.')),
+        ),
+      );
     }
     notices.replaceChildren(...items);
     notices.hidden = items.length === 0;
@@ -274,15 +371,22 @@ export function mountPage(root, { route, signal, setTitle }) {
     const hasMarkdown = Boolean(page.markdown?.trim());
 
     if (page.status === 'queued' || page.status === 'processing') {
-      textBody.replaceChildren(h('div', { class: 'state state-loading', role: 'status' },
-        h('span', { class: 'spinner', 'aria-hidden': 'true' }),
-        h('span', {}, page.status === 'queued' ? t('Page queued for OCR…') : t('OCR in progress…'))));
+      textBody.replaceChildren(
+        h(
+          'div',
+          { class: 'state state-loading', role: 'status' },
+          h('span', { class: 'spinner', 'aria-hidden': 'true' }),
+          h('span', {}, page.status === 'queued' ? t('Page queued for OCR…') : t('OCR in progress…')),
+        ),
+      );
     } else if (page.status === 'error' && !hasMarkdown) {
       textBody.replaceChildren(h('p', { class: 'state' }, t('No text: the OCR of this page failed.')));
     } else if (showMarkdown) {
-      textBody.replaceChildren(hasMarkdown
-        ? h('pre', { class: 'markdown-source' }, page.markdown)
-        : h('p', { class: 'state' }, t('Empty Markdown.')));
+      textBody.replaceChildren(
+        hasMarkdown
+          ? h('pre', { class: 'markdown-source' }, page.markdown)
+          : h('p', { class: 'state' }, t('Empty Markdown.')),
+      );
     } else if (html.trim()) {
       // Sanitized by the server (allowlist sanitizer), and the CSP forbids
       // inline scripts: this is the only HTML the UI inserts as-is. It is
@@ -326,9 +430,14 @@ export function mountPage(root, { route, signal, setTitle }) {
     documentLink.textContent = doc.title;
     currentCrumb.textContent = heading;
     title.textContent = heading;
-    setChildren(headerChips,
-      source && h('li', { class: ['chip', 'chip-source', `source-${page.number_source}`], title: source.description },
-        source.label),
+    setChildren(
+      headerChips,
+      source &&
+        h(
+          'li',
+          { class: ['chip', 'chip-source', `source-${page.number_source}`], title: source.description },
+          source.label,
+        ),
       h('li', { class: ['chip', `chip-${status.tone}`] }, status.label),
       page.excluded && h('li', { class: 'chip chip-outline' }, tc('one page', 'Excluded')),
       page.duplicate_of && h('li', { class: 'chip chip-warn' }, t('Duplicate')),
@@ -336,9 +445,12 @@ export function mountPage(root, { route, signal, setTitle }) {
 
     const pages = doc.pages ?? [];
     const index = pages.findIndex((candidate) => candidate.id === page.id);
-    const placement = placementChip(page, pages.some((other) => other.in_document && other.placement !== 'unplaced'));
+    const placement = placementChip(
+      page,
+      pages.some((other) => other.in_document && other.placement !== 'unplaced'),
+    );
     if (placement) headerChips.append(h('li', {}, placement));
-    neighbors = { previous: pages[index - 1] ?? null, next: index >= 0 ? pages[index + 1] ?? null : null };
+    neighbors = { previous: pages[index - 1] ?? null, next: index >= 0 ? (pages[index + 1] ?? null) : null };
     setLink(previousLink, neighbors.previous);
     setLink(nextLink, neighbors.next);
     position.textContent = index >= 0 ? `${index + 1} / ${pages.length}` : '';
@@ -351,8 +463,11 @@ export function mountPage(root, { route, signal, setTitle }) {
     numberHint.textContent = numberHelp(page);
     excludeButton.replaceChildren(
       icon(page.excluded ? 'eye' : 'eye-off'),
-      h('span', { class: 'label-long' },
-        page.excluded ? t('Put back in the document') : t('Exclude from the document')),
+      h(
+        'span',
+        { class: 'label-long' },
+        page.excluded ? t('Put back in the document') : t('Exclude from the document'),
+      ),
       h('span', { class: 'label-short' }, page.excluded ? t('Put back') : t('Exclude')),
     );
 
@@ -378,12 +493,14 @@ export function mountPage(root, { route, signal, setTitle }) {
       if (isAbort(error)) return;
       const notFound = error.status === 404;
       if (!doc || notFound) {
-        view.replaceChildren(errorState({
-          title: notFound ? t('Page not found') : t('Could not load'),
-          message: notFound ? t('This page does not exist or has been deleted.') : errorMessage(error),
-          onRetry: notFound ? null : load,
-          actions: [h('a', { class: 'btn', href: href(paths.library()) }, t('Back to the library'))],
-        }));
+        view.replaceChildren(
+          errorState({
+            title: notFound ? t('Page not found') : t('Could not load'),
+            message: notFound ? t('This page does not exist or has been deleted.') : errorMessage(error),
+            onRetry: notFound ? null : load,
+            actions: [h('a', { class: 'btn', href: href(paths.library()) }, t('Back to the library'))],
+          }),
+        );
         return;
       }
       // While the server is unreachable the banner says so; keep the last data.
@@ -443,17 +560,23 @@ export function mountPage(root, { route, signal, setTitle }) {
     act(() => api.updatePage(pageId, { manual_number: null }), t('Manual number cleared.'));
   });
   onActivate(rotateLeftButton, () => {
-    act(() => api.updatePage(pageId, { rotation: ((page.rotation ?? 0) + 270) % 360 }),
-      t('Page rotated: its OCR will run again.'));
+    act(
+      () => api.updatePage(pageId, { rotation: ((page.rotation ?? 0) + 270) % 360 }),
+      t('Page rotated: its OCR will run again.'),
+    );
   });
   onActivate(rotateRightButton, () => {
-    act(() => api.updatePage(pageId, { rotation: ((page.rotation ?? 0) + 90) % 360 }),
-      t('Page rotated: its OCR will run again.'));
+    act(
+      () => api.updatePage(pageId, { rotation: ((page.rotation ?? 0) + 90) % 360 }),
+      t('Page rotated: its OCR will run again.'),
+    );
   });
   onActivate(excludeButton, () => {
     const exclude = !page.excluded;
-    act(() => api.updatePage(pageId, { excluded: exclude }),
-      exclude ? t('Page excluded from the document.') : t('Page put back in the document.'));
+    act(
+      () => api.updatePage(pageId, { excluded: exclude }),
+      exclude ? t('Page excluded from the document.') : t('Page put back in the document.'),
+    );
   });
   onActivate(reprocessButton, () => {
     act(() => api.reprocessPage(pageId), t('OCR restarted for this page.'));
@@ -461,8 +584,10 @@ export function mountPage(root, { route, signal, setTitle }) {
   onActivate(deleteButton, async () => {
     const confirmed = await confirmDialog({
       title: t('Delete this page?'),
-      message: t('The scan and its OCR results will be moved to the library’s trash (.trash), '
-        + 'then the document will be reassembled.'),
+      message: t(
+        'The scan and its OCR results will be moved to the library’s trash (.trash), ' +
+          'then the document will be reassembled.',
+      ),
       confirmLabel: t('Delete page'),
       danger: true,
     });

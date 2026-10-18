@@ -10,13 +10,13 @@ function formatter(kind, create) {
   return formatters.get(key);
 }
 
-const dateTimeFormat = () => formatter('date-time',
-  (locale) => new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }));
-const relativeFormat = () => formatter('relative',
-  (locale) => new Intl.RelativeTimeFormat(locale, { numeric: 'auto' }));
+const dateTimeFormat = () =>
+  formatter('date-time', (locale) => new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }));
+const relativeFormat = () =>
+  formatter('relative', (locale) => new Intl.RelativeTimeFormat(locale, { numeric: 'auto' }));
 const integerFormat = () => formatter('integer', (locale) => new Intl.NumberFormat(locale));
-const decimalFormat = () => formatter('decimal',
-  (locale) => new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }));
+const decimalFormat = () =>
+  formatter('decimal', (locale) => new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }));
 
 function parseDate(value) {
   if (!value) return null;
@@ -31,7 +31,12 @@ export function formatDateTime(value) {
 }
 
 /** Units used by formatRelative, each with the number of them in the next unit. */
-const RELATIVE_UNITS = [['second', 60], ['minute', 60], ['hour', 24], ['day', 7]];
+const RELATIVE_UNITS = [
+  ['second', 60],
+  ['minute', 60],
+  ['hour', 24],
+  ['day', 7],
+];
 
 /** "just now", "5 minutes ago", "yesterday"… then an absolute date after a week. */
 export function formatRelative(value, now = Date.now()) {
@@ -66,10 +71,14 @@ export function formatBytes(bytes) {
   }
   const size = unit === 0 ? formatNumber(value) : formatDecimal(value);
   switch (unit) {
-    case 0: return t('{size} B', { size });
-    case 1: return t('{size} KB', { size });
-    case 2: return t('{size} MB', { size });
-    default: return t('{size} GB', { size });
+    case 0:
+      return t('{size} B', { size });
+    case 1:
+      return t('{size} KB', { size });
+    case 2:
+      return t('{size} MB', { size });
+    default:
+      return t('{size} GB', { size });
   }
 }
 
@@ -104,6 +113,8 @@ export function toLocalIsoString(date) {
   const offset = -date.getTimezoneOffset();
   const sign = offset >= 0 ? '+' : '-';
   const offsetText = `${sign}${pad(Math.floor(Math.abs(offset) / 60))}:${pad(Math.abs(offset) % 60)}`;
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
-    + `T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}${offsetText}`;
+  return (
+    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` +
+    `T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}${offsetText}`
+  );
 }

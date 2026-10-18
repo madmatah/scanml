@@ -44,8 +44,40 @@ function unescape(source, index) {
 }
 
 /** Tokens that may come right before a regular expression literal (else "/" divides). */
-const BEFORE_REGEX = new Set(['', '(', ',', '=', ':', '[', '!', '&', '|', '?', '{', '}', ';', '+', '-', '*', '%',
-  '<', '>', '~', '^', 'return', 'typeof', 'case', 'do', 'else', 'in', 'of', 'new', 'delete', 'void', 'throw']);
+const BEFORE_REGEX = new Set([
+  '',
+  '(',
+  ',',
+  '=',
+  ':',
+  '[',
+  '!',
+  '&',
+  '|',
+  '?',
+  '{',
+  '}',
+  ';',
+  '+',
+  '-',
+  '*',
+  '%',
+  '<',
+  '>',
+  '~',
+  '^',
+  'return',
+  'typeof',
+  'case',
+  'do',
+  'else',
+  'in',
+  'of',
+  'new',
+  'delete',
+  'void',
+  'throw',
+]);
 
 /**
  * Tokens of `source`: { type: 'string', value, line } for string literals and
@@ -82,7 +114,7 @@ function lex(source) {
       } else if (source.startsWith('/*', index)) {
         const end = source.indexOf('*/', index + 2);
         advance((end < 0 ? source.length : end + 2) - index);
-      } else if (char === '\'' || char === '"') {
+      } else if (char === "'" || char === '"') {
         const start = line;
         let value = '';
         advance(1);
@@ -223,8 +255,7 @@ function translationCalls(source) {
     }
     if (args.length === FUNCTIONS[token.value]) {
       calls.push({ name: token.value, args, values: valueKeys(tokens, position, token.value), line });
-    }
-    else calls.push({ name: token.value, dynamic: true, line: line ?? tokens[index + 2]?.line });
+    } else calls.push({ name: token.value, dynamic: true, line: line ?? tokens[index + 2]?.line });
   });
   return calls;
 }
@@ -257,7 +288,11 @@ function htmlMessages() {
 
 /** Every message of the UI: { key (catalog key), plural, english: [forms], values (keys given), where }. */
 function usedMessages() {
-  const messages = htmlMessages().map((message) => ({ ...message, english: [message.key.split('|').at(-1)], values: [] }));
+  const messages = htmlMessages().map((message) => ({
+    ...message,
+    english: [message.key.split('|').at(-1)],
+    values: [],
+  }));
   const dynamic = [];
   for (const file of sourceFiles()) {
     for (const call of translationCalls(readFileSync(file, 'utf8'))) {
@@ -284,10 +319,17 @@ describe('the French catalog', () => {
   test('the scan finds the messages of every screen', () => {
     // Guards the scan itself: a few messages from different files and functions.
     const keys = new Set(messages.map((message) => message.key));
-    for (const key of ['Skip to content', 'header|Sign out', 'Library', 'page status|Done', '{count} page',
-      'Drag a page to move it: if it is selected, the whole selection follows it. Click: select, Shift+click: '
-        + 'range, Ctrl+click: add or remove. Esc cancels a move.',
-      'Markdown files and illustrations are stored in {folder}', 'Unnumbered page']) {
+    for (const key of [
+      'Skip to content',
+      'header|Sign out',
+      'Library',
+      'page status|Done',
+      '{count} page',
+      'Drag a page to move it: if it is selected, the whole selection follows it. Click: select, Shift+click: ' +
+        'range, Ctrl+click: add or remove. Esc cancels a move.',
+      'Markdown files and illustrations are stored in {folder}',
+      'Unnumbered page',
+    ]) {
       assert.ok(keys.has(key), key);
     }
     assert.ok(messages.length > 300, `${messages.length} messages`);
@@ -299,12 +341,18 @@ describe('the French catalog', () => {
 
   test('translates every message of the UI', () => {
     const missing = messages.filter(({ key }) => !Object.hasOwn(FRENCH, key));
-    assert.deepEqual(missing.map(({ key, where }) => `${where}: ${key}`), []);
+    assert.deepEqual(
+      missing.map(({ key, where }) => `${where}: ${key}`),
+      [],
+    );
   });
 
   test('has no entry that the UI does not use', () => {
     const used = new Set(messages.map(({ key }) => key));
-    assert.deepEqual(Object.keys(FRENCH).filter((key) => !used.has(key)), []);
+    assert.deepEqual(
+      Object.keys(FRENCH).filter((key) => !used.has(key)),
+      [],
+    );
   });
 
   test('has plural forms exactly for the messages given to tn()', () => {
@@ -312,10 +360,16 @@ describe('the French catalog', () => {
       const entry = FRENCH[key];
       if (entry === undefined) return false;
       if (!plural) return typeof entry !== 'string';
-      return typeof entry?.one !== 'string' || typeof entry?.other !== 'string'
-        || Object.keys(entry).some((category) => !['zero', 'one', 'two', 'few', 'many', 'other'].includes(category));
+      return (
+        typeof entry?.one !== 'string' ||
+        typeof entry?.other !== 'string' ||
+        Object.keys(entry).some((category) => !['zero', 'one', 'two', 'few', 'many', 'other'].includes(category))
+      );
     });
-    assert.deepEqual(wrong.map(({ key, where }) => `${where}: ${key}`), []);
+    assert.deepEqual(
+      wrong.map(({ key, where }) => `${where}: ${key}`),
+      [],
+    );
   });
 
   test('keeps the placeholders of the English messages', () => {
@@ -351,14 +405,19 @@ describe('the French catalog', () => {
 
   test('contexts never appear in plain messages', () => {
     const plain = messages.filter(({ key, english }) => key === english[0] && key.includes('|'));
-    assert.deepEqual(plain.map(({ where }) => where), []);
+    assert.deepEqual(
+      plain.map(({ where }) => where),
+      [],
+    );
   });
 });
 
 describe('French stays in the French catalog', () => {
   // Letters and signs of French that English text does not use (written as escapes, not to match this file).
-  const FRENCH_CHARACTERS = new RegExp('[\u00e0\u00e2\u00e6\u00e7\u00e8-\u00eb\u00ee\u00ef\u00f4\u00f9\u00fb'
-    + '\u00fc\u00ff\u0153\u00ab\u00bb]', 'i');
+  const FRENCH_CHARACTERS = new RegExp(
+    '[\u00e0\u00e2\u00e6\u00e7\u00e8-\u00eb\u00ee\u00ef\u00f4\u00f9\u00fb' + '\u00fc\u00ff\u0153\u00ab\u00bb]',
+    'i',
+  );
 
   function webFiles(directory = WEB) {
     return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
@@ -371,16 +430,21 @@ describe('French stays in the French catalog', () => {
   test('no French letters elsewhere', () => {
     const found = [];
     for (const file of webFiles()) {
-      readFileSync(file, 'utf8').split('\n').forEach((line, index) => {
-        if (FRENCH_CHARACTERS.test(line)) found.push(`${relative(file)}:${index + 1}: ${line.trim()}`);
-      });
+      readFileSync(file, 'utf8')
+        .split('\n')
+        .forEach((line, index) => {
+          if (FRENCH_CHARACTERS.test(line)) found.push(`${relative(file)}:${index + 1}: ${line.trim()}`);
+        });
     }
     assert.deepEqual(found, []);
   });
 
   test('no French translation written as a string of the code', () => {
-    const translations = new Set(Object.entries(FRENCH).flatMap(([key, entry]) => (
-      (typeof entry === 'string' ? [entry] : Object.values(entry)).filter((form) => form !== key.split('|').at(-1)))));
+    const translations = new Set(
+      Object.entries(FRENCH).flatMap(([key, entry]) =>
+        (typeof entry === 'string' ? [entry] : Object.values(entry)).filter((form) => form !== key.split('|').at(-1)),
+      ),
+    );
     const found = [];
     for (const file of sourceFiles()) {
       for (const token of lex(readFileSync(file, 'utf8'))) {
@@ -463,8 +527,10 @@ describe('messages', () => {
   test('nodes are kept as they are, text around them is merged', () => {
     setLocale(['en-US']);
     const node = { nodeType: 1 };
-    assert.deepEqual(tNodes('{fraction} pages between {min} and {max}', { fraction: node, min: 1, max: 9 }),
-      [node, ' pages between 1 and 9']);
+    assert.deepEqual(tNodes('{fraction} pages between {min} and {max}', { fraction: node, min: 1, max: 9 }), [
+      node,
+      ' pages between 1 and 9',
+    ]);
     assert.deepEqual(tNodes('In {folder}', { folder: node }), ['In ', node]);
     assert.deepEqual(tNodes('Plain text'), ['Plain text']);
   });

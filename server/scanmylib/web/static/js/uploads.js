@@ -77,8 +77,11 @@ class UploadQueue extends EventTarget {
 
   /** True while uploads are pending or running, for one document or any. */
   isBusy(documentId) {
-    return this.#items.some((item) => (documentId === undefined || item.documentId === documentId)
-      && (item.state === 'pending' || item.state === 'uploading'));
+    return this.#items.some(
+      (item) =>
+        (documentId === undefined || item.documentId === documentId) &&
+        (item.state === 'pending' || item.state === 'uploading'),
+    );
   }
 
   retryFailed(documentId) {
@@ -98,8 +101,9 @@ class UploadQueue extends EventTarget {
 
   /** Removes the finished items (sent, failed or rejected) of a document. */
   clearFinished(documentId) {
-    this.#items = this.#items.filter((item) => item.documentId !== documentId
-      || item.state === 'pending' || item.state === 'uploading');
+    this.#items = this.#items.filter(
+      (item) => item.documentId !== documentId || item.state === 'pending' || item.state === 'uploading',
+    );
     this.#emit('change', documentId);
   }
 

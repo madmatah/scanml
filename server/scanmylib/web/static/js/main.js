@@ -137,14 +137,15 @@ async function signInWithLink(token) {
     session.authenticated = true;
     session.loginMessage = null;
   } catch (error) {
-    if (probablySignedIn() && await restoreSession()) {
+    if (probablySignedIn() && (await restoreSession())) {
       session.authenticated = true;
       return;
     }
     session.authenticated = false;
-    session.loginMessage = error instanceof ApiError && error.status === 401
-      ? t('The sign-in link contains an invalid or expired token.')
-      : errorMessage(error, t('Could not sign in.'));
+    session.loginMessage =
+      error instanceof ApiError && error.status === 401
+        ? t('The sign-in link contains an invalid or expired token.')
+        : errorMessage(error, t('Could not sign in.'));
   }
 }
 

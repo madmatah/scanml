@@ -8,11 +8,16 @@ export function errorMessage(error, fallback = t('An unexpected error occurred.'
   }
   if (error instanceof ApiError) {
     switch (error.status) {
-      case 401: return t('Session expired: please sign in again.');
-      case 404: return t('Item not found: it may have been deleted.');
-      case 413: return t('File too large (40 MiB maximum).');
-      case 415: return t('Unsupported format (JPEG, PNG or WebP only).');
-      default: return error.detail ? `${fallback} (${error.detail})` : fallback;
+      case 401:
+        return t('Session expired: please sign in again.');
+      case 404:
+        return t('Item not found: it may have been deleted.');
+      case 413:
+        return t('File too large (40 MiB maximum).');
+      case 415:
+        return t('Unsupported format (JPEG, PNG or WebP only).');
+      default:
+        return error.detail ? `${fallback} (${error.detail})` : fallback;
     }
   }
   return fallback;

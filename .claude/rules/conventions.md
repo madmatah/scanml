@@ -58,7 +58,19 @@ why.
 - **A version label next to a pinned commit SHA is allowed,** such as `# v7.0.1` after an action in a GitHub Actions
   workflow: it names the release, which the SHA cannot say.
 - **Forbidden:** commented-out code, and banners.
-- **Scope:** every file but prose documents, configuration and scripts included. No tool checks comments: review does.
+- **Scope:** every file but prose documents, configuration and scripts included. Ruff flags commented-out Python code;
+  review checks the rest.
+
+## Characters a reader cannot see
+
+- **A character a reader cannot see is written as an escape, never as such:** a control character other than a tab or a
+  line end (a line feed, or a carriage return before it in a file that already ends a line so), a format character
+  (bidirectional, zero-width, tags), another default-ignorable one such as a variation selector, a line or paragraph
+  separator, a private-use or unassigned code point, a letter or a symbol that renders as blank (a Hangul filler, the
+  Braille blank), or a byte that is not UTF-8, anywhere in the source (`\N{ESCAPE}` or `\x1b` in Python, a Unicode
+  escape in JavaScript). A review cannot judge what it cannot see. Ruff checks most bidirectional characters (not the
+  left-to-right and Arabic letter marks), and the backspace, SUB, ESC, NUL and zero-width space in Python strings;
+  review checks the rest.
 
 ## Input from outside the program
 

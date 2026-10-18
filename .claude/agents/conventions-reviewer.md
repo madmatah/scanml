@@ -44,11 +44,14 @@ runs (`CLAUDE.md` > Commands) catch what they can; look for what they cannot see
   - a comment that states a business rule: the rule belongs in a test whose name states it;
   - a comment that says what the code does: better names or structure should say it instead.
 
-  No tool checks comments, as the "Scope" of that section says: also look for commented-out code and banners, and for
-  the task markers of `.claude/rules/repository.md` > What belongs in the repository.
+  Ruff flags commented-out Python code, as the "Scope" of that section says: look for it in the other languages, and
+  everywhere for banners and for the task markers of `.claude/rules/repository.md` > What belongs in the repository.
 - **The language's rules** (`.claude/rules/python.md`, `.claude/rules/kotlin.md`, `.claude/rules/web.md`,
   `.claude/rules/bash.md`): a clear violation of one of the rules of the changed file's language, its directives
   included.
+- **Characters a reader cannot see** (`.claude/rules/conventions.md` > Characters a reader cannot see): such a
+  character written as such in a changed line, outside Python, and in Python where the rule leaves it to review.
+  Search for them by code point: Read shows them as nothing.
 - **Input from outside the program** (`.claude/rules/conventions.md` > Input from outside the program): outside text
   that reaches a parser of markup, queries, URLs, paths or command lines in a changed line. Leave the rest of input
   handling to the security expert.

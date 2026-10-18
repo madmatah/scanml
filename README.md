@@ -294,10 +294,26 @@ commands and options that could (`cp`, `run -v`, `exec --privileged`…). The gu
 indexed in [`CLAUDE.md`](CLAUDE.md). A rehearsal of a deployment, on a throwaway stack, is described in the header of
 `scripts/deploy.sh`.
 
-`scripts/check.sh` is the gate: the tests of the scripts, on the host's `python3`, and, in throwaway containers, those
-of the web UI, the server and the OCR sandbox, and the Android tests and lint (`scripts/check.sh server web` checks
-those areas only). Every commit pushed passes it, and every pull request runs it in the continuous integration
+`scripts/check.sh` is the gate: the formatters, linters and type checker of every language (Ruff and mypy for the
+Python, ShellCheck and shfmt for the shell scripts, Biome for the web UI, ktlint for the app, zizmor for the workflows),
+the tests of the scripts, on the host's `python3`, and, in throwaway containers, those of the web UI, the server and the
+OCR sandbox, and the Android tests and lint (`scripts/check.sh server web` checks those areas only).
+`scripts/check.sh --fix` formats the code and applies the linters' safe fixes: ktlint to the app in place, the other
+formatters to the files git tracks in `server/`, `ocr/` and `scripts/`; read `git diff` before running what it changed.
+Every commit pushed passes the gate, and every pull request runs it in the continuous integration
 (`.github/workflows/ci.yml`, one job per area). Pull requests are merged when it is green.
+
+The tools of the gate are pinned. `scripts/lint/requirements.lock`, the Python tools with their hashes, is regenerated
+from `scripts/lint/requirements.in` in a container, and the web UI's `server/scanmylib/web/package-lock.json` the same
+way:
+
+```bash
+docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD/scripts/lint:/work" -w /work \
+    python:3.12-slim-bookworm sh -c 'pip install --quiet --target /tmp/uv uv==0.13.0 && /tmp/uv/bin/uv pip compile \
+    requirements.in --generate-hashes --python-version 3.12 --no-header -o requirements.lock'
+docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm \
+    -v "$PWD/server/scanmylib/web:/web" -w /web node:22-bookworm-slim npm install --package-lock-only --ignore-scripts
+```
 
 ## Releasing
 

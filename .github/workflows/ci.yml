@@ -20,6 +20,17 @@ defaults:
     shell: bash
 
 jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check the formatting, the lint and the types, without network
+        run: scripts/check.sh lint
+
   server:
     name: Server
     runs-on: ubuntu-latest
@@ -102,5 +113,5 @@ jobs:
       # the environment (inside RUNNER_TEMP: the home directory is refused) and never signs nor publishes anything;
       # CI has no signing key. With an empty cache, every dependency, metadata files included,
       # is downloaded and checked against android/gradle/verification-metadata.xml.
-      - name: Run the unit tests and lint
+      - name: Run the unit tests, lint and ktlint
         run: scripts/check.sh android

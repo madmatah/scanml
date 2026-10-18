@@ -6,6 +6,9 @@
 /.env
 /.env.*.tmp
 
+# Node (the web UI's tools: installed in their image, never in the checkout)
+node_modules/
+
 # Python
 __pycache__/
 *.pyc

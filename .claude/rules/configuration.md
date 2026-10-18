@@ -13,6 +13,14 @@ paths:
   - "scripts/build-apk.sh"
   - "scripts/vendor-katex.sh"
   - "scripts/check.sh"
+  - "scripts/lint/**"
+  - "ruff.toml"
+  - "mypy.ini"
+  - ".editorconfig"
+  - "android/.editorconfig"
+  - ".shellcheckrc"
+  - "server/scanmylib/web/biome.json"
+  - "server/scanmylib/web/package*.json"
   - ".github/workflows/**"
   - ".claude/settings.json"
   - ".claude/agents/**"
@@ -27,10 +35,10 @@ paths:
   into layers, its modules are its files and packages that hold one responsibility each, grouped in the rows of
   `docs/foundations.md` > Layers and modules.
 - **The repository holds five units:** the api (`server/`: `pyproject.toml`, its locks and its `Dockerfile`), the web UI
-  that the api serves (`server/scanmylib/web/`, with its own tests), the app (`android/`: its Gradle build and version
-  catalog), the OCR sandbox (`ocr/`: its `Dockerfile` and `ocr/setup/`, which installs its engines), and the scripts
-  (`scripts/`: Bash and the host's Python standard library). `compose.yaml` assembles the services of a stack from the
-  first and the fourth.
+  that the api serves (`server/scanmylib/web/`, with its own tests and the `package.json` of its tools), the app
+  (`android/`: its Gradle build and version catalog), the OCR sandbox (`ocr/`: its `Dockerfile` and `ocr/setup/`, which
+  installs its engines), and the scripts (`scripts/`: Bash and the host's Python standard library, and `scripts/lint/`,
+  the images of the gate's tools). `compose.yaml` assembles the services of a stack from the first and the fourth.
 - **Each unit has its tests, and its build where it has one:** the build file named above, and the tests at the level
   that `tests.md` > Levels gives it. A new unit comes with both, and with its job in `.github/workflows/ci.yml` through
   `scripts/check.sh`.
@@ -53,7 +61,11 @@ paths:
     `android/gradle/libs.versions.toml`;
   - the Gradle distribution, by the `distributionSha256Sum` of `android/gradle/wrapper/gradle-wrapper.properties`;
   - the signing tools, by the SHA-256 sums of `scripts/build-apk.sh`;
-  - KaTeX, by its SHA-512 in `scripts/vendor-katex.sh`.
+  - KaTeX, by its SHA-512 in `scripts/vendor-katex.sh`;
+  - the Python tools of the gate, by `scripts/lint/requirements.lock`, installed with
+    `pip install --require-hashes --no-deps`, and Biome, by `server/scanmylib/web/package-lock.json`, installed with
+    `npm ci --ignore-scripts`;
+  - ShellCheck and shfmt, by the image digests of `scripts/check.sh`.
 
   The rest is pinned by version, commit or tag, or checked as it downloads, and never loosened further: the Android SDK
   packages by version, which the Android CLI checks, and its command-line tools, the latest, against the SHA-1 Google
@@ -63,7 +75,8 @@ paths:
   image are the release's current ones. No setting lets an install bypass or override a pin, such as another registry or
   index, or `--no-verify`.
 - **A lock is regenerated, never edited by hand,** so that every hash comes from the file it pins: the api's locks with
-  the `uv pip compile` command of `server/README.md`, the app's verification metadata with
+  the `uv pip compile` command of `server/README.md`, the tools' lock with the one of `README.md` > Development, the web
+  UI's lockfile with `npm install --package-lock-only --ignore-scripts`, the app's verification metadata with
   `scripts/build-apk.sh --write-verification-metadata`, as the header of `scripts/build-apk.sh` shows.
 
 ## Continuous integration

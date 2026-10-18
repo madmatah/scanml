@@ -27,4 +27,5 @@ These rules come on top of `conventions.md`.
   exit status.
 - **Temporary files** come from `mktemp`, and a `trap … EXIT` removes them.
 - **Layout:** 4-space indentation, 120 columns.
-- **Directives:** `# shellcheck disable=SCxxxx  # reason` and `# shellcheck source=…`.
+- **Directives:** `# shellcheck disable=SCxxxx  # reason`, `# shellcheck source=…`, and `# shellcheck shell=bash` in a
+  sourced library.

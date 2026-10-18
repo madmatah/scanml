@@ -74,4 +74,5 @@ From the TypeScript handbook and React's "Rules of React" (react.dev).
   closes over its state; classes only describe errors, such as `ApiError`.
 - **Idioms that override the naming rules:** `h()`, the function that builds an element, and `t()`, the translation
   function; and the names the DOM imposes.
-- **Directives:** none, since no linter runs on the web UI.
+- **Directives:** Biome's suppression comment, `// biome-ignore lint/<group>/<rule>: <reason>` (`/* … */` in CSS), with
+  its reason.

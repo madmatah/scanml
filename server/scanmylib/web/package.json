@@ -1,0 +1,8 @@
+{
+  "name": "scanmylib-web",
+  "private": true,
+  "description": "The tools of the web UI's checks; the UI itself is served as it is, without a build.",
+  "devDependencies": {
+    "@biomejs/biome": "2.5.15"
+  }
+}

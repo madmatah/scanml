@@ -8,7 +8,8 @@ verbatim.
 
 ### The base of the images
 
-The api's image and the OCR sandbox's are built on the official `python:3.12-slim-bookworm` image: CPython 3.12
+The api's image, the OCR sandbox's and the image of the gate's Python tools are built on the official
+`python:3.12-slim-bookworm` image: CPython 3.12
 (PSF-2.0, https://www.python.org) on Debian 12 "bookworm" (its packages under their own free-software licenses,
 https://www.debian.org). The sandbox's image adds the Debian packages `gcc`, `libc6-dev`, `libgomp1`, `libgl1` and
 `libglib2.0-0`, which the engine's wheels need, and uv 0.10.9 (MIT or Apache-2.0, https://github.com/astral-sh/uv),
@@ -101,9 +102,16 @@ Tools that build and test the project, run in containers and never shipped.
 | Tool | Role | License | Source |
 |---|---|---|---|
 | pytest | The api's tests | MIT | https://github.com/pytest-dev/pytest |
-| Node.js (`node:22-bookworm-slim`) | The web UI's unit tests | MIT | https://nodejs.org |
+| Node.js (`node:22-bookworm-slim`) | The web UI's unit tests; the image of Biome (`scripts/lint/Dockerfile.web`), and the regeneration of its lockfile | MIT | https://nodejs.org |
 | Eclipse Temurin JDK 21 (`eclipse-temurin:21-jdk`) | The app's build | GPL-2.0 with the Classpath Exception | https://adoptium.net |
 | Gradle, Android Gradle Plugin | The app's build | Apache-2.0 | https://gradle.org, https://developer.android.com/build |
 | Android SDK | The app's build and signing tools | Android Software Development Kit License | https://developer.android.com/studio |
 | JUnit 4, kotlinx-coroutines-test, OkHttp MockWebServer | The app's unit tests | EPL-1.0, Apache-2.0, Apache-2.0 | https://junit.org/junit4 |
-| uv 0.13.0 | Compiles the api's locks (`server/README.md`) | MIT or Apache-2.0 | https://github.com/astral-sh/uv |
+| uv 0.13.0 | Compiles the api's locks (`server/README.md`) and the lock of the gate's Python tools (`README.md` > Development) | MIT or Apache-2.0 | https://github.com/astral-sh/uv |
+| Ruff | Formats and lints the Python; installed from `scripts/lint/requirements.lock` | MIT | https://github.com/astral-sh/ruff |
+| mypy, and librt, ast-serialize, pathspec, mypy-extensions, typing-extensions | Checks the types of the Python; installed from `scripts/lint/requirements.lock` | MIT; pathspec MPL-2.0; typing-extensions PSF-2.0 | https://github.com/python/mypy |
+| zizmor | Audits the GitHub workflows; installed from `scripts/lint/requirements.lock` | MIT | https://github.com/zizmorcore/zizmor |
+| ShellCheck | Lints the shell scripts; its author's image `koalaman/shellcheck`, pinned by digest in `scripts/check.sh` | GPL-3.0 (a tool run in a container, never shipped or linked) | https://github.com/koalaman/shellcheck |
+| shfmt | Formats the shell scripts; its author's image `mvdan/shfmt`, pinned by digest in `scripts/check.sh` | BSD-3-Clause | https://github.com/mvdan/sh |
+| ktlint, and the libraries it runs on: logback, JNA, SLF4J, colormath, Clikt, Mordant, kotlin-logging, ec4j, sarif4k, Poko, the Kotlin compiler and standard library, kotlinx.serialization, kotlinx.coroutines, JetBrains annotations | Formats and lints the app's Kotlin; from Maven Central, through the version catalog (`android/gradle/libs.versions.toml`) | MIT; logback EPL-1.0 or LGPL-2.1; JNA LGPL-2.1-or-later or Apache-2.0; SLF4J and colormath MIT; the others Apache-2.0 | https://github.com/pinterest/ktlint |
+| Biome | Formats and lints the web UI; installed from `server/scanmylib/web/package-lock.json` | MIT or Apache-2.0 | https://github.com/biomejs/biome |

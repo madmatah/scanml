@@ -1,3 +1,26 @@
 line-length = 120
 target-version = "py312"
 include = ["server/**/*.py", "ocr/**/*.py", "scripts/**/*.py"]
+# Where the code imports its own modules from: their imports then come after the third-party ones
+# (.claude/rules/python.md).
+src = ["server", "server/tests", "ocr", "ocr/bench", "scripts", "scripts/lib", "scripts/tests"]
+
+[lint]
+select = [
+    "E", "W", "F", "I", "N", "B", "UP", "ANN", "BLE", "ERA", "PIE", "RUF", "A",
+    # subprocess with a shell, os.system, SQL built from strings (.claude/rules/conventions.md > Input from outside the
+    # program)
+    "S602", "S604", "S605", "S608",
+    # Most bidirectional characters, and the backspace, SUB, ESC, NUL and zero-width space written as such in a string
+    # (.claude/rules/conventions.md > Characters a reader cannot see)
+    "PLE2502", "PLE2510", "PLE2512", "PLE2513", "PLE2514", "PLE2515",
+]
+ignore = [
+    # Exceptions are named after what went wrong, not with an Error suffix (.claude/rules/python.md).
+    "N818",
+    # The UI text and the documents use typographic characters on purpose: … – ’ ×.
+    "RUF001", "RUF002", "RUF003",
+]
+
+[lint.isort]
+required-imports = ["from __future__ import annotations"]

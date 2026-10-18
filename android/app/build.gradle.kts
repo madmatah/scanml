@@ -106,6 +106,8 @@ room {
     schemaDirectory("$projectDir/schemas")
 }
 
+val ktlint: Configuration = configurations.create("ktlint")
+
 dependencies {
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
@@ -135,4 +137,29 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.okhttp.mockwebserver)
+
+    ktlint(libs.ktlint.cli) {
+        attributes {
+            // Its libraries as artifacts of their own, which dependency verification lists, rather than one shaded jar.
+            attribute(Bundling.BUNDLING_ATTRIBUTE, objects.named(Bundling.EXTERNAL))
+        }
+    }
+}
+
+val ktlintSources = listOf("app/src/**/*.kt", "*.kts", "app/*.kts")
+
+tasks.register<JavaExec>("ktlintCheck") {
+    group = "verification"
+    classpath = ktlint
+    mainClass.set("com.pinterest.ktlint.Main")
+    workingDir = rootDir
+    args = listOf("--relative") + ktlintSources
+}
+
+tasks.register<JavaExec>("ktlintFormat") {
+    group = "formatting"
+    classpath = ktlint
+    mainClass.set("com.pinterest.ktlint.Main")
+    workingDir = rootDir
+    args = listOf("--format", "--relative") + ktlintSources
 }

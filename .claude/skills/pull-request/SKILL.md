@@ -38,8 +38,8 @@ may be back in the main checkout between two calls, where a rebase or a commit w
 ## Shape the history
 
 1. Before pushing, rewrite the branch into atomic commits, as `CLAUDE.md` > Workflow, "Commits" and "A commit message
-   says why" ask. Interactive editors are unavailable: fold a change into its commit with
-   `cd <worktree> && git commit --fixup=<commit>`, then
+   says why" ask, and write each message with the `writing-commits` skill. Interactive editors are unavailable: fold a
+   change into its commit with `cd <worktree> && git commit --fixup=<commit>`, then
    `cd <worktree> && GIT_SEQUENCE_EDITOR=: git rebase -i --autosquash <base>`.
 2. Check that every commit passes: `cd <worktree> && git rebase --exec 'scripts/check.sh <areas>' <base>`, with the
    areas the branch changes (`lint`, `scripts`, `web`, `server`, `ocr`, `android`), then

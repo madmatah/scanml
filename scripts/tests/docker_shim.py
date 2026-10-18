@@ -27,6 +27,7 @@ import re
 import shutil
 import subprocess
 import sys
+from typing import Required, TypedDict
 
 #: Global options of docker compose that take a value.
 _COMPOSE_OPTIONS_WITH_VALUE = {
@@ -54,6 +55,20 @@ _WATCHED = (
     "APP_VARIANT",
     "OCR_SERVICE",
 )
+
+
+class Rule(TypedDict, total=False):
+    match: Required[str]
+    stdout: str
+    stderr: str
+    exit: int
+    snapshot: str
+    no_image_id: bool
+
+
+class LoggedCall(TypedDict):
+    argv: list[str]
+    env: dict[str, str]
 
 
 def compose_command(argv: list[str]) -> str | None:
@@ -90,7 +105,8 @@ def main() -> int:
         if name.startswith(("COMPOSE_", "DOCKER_", "BUILDKIT_")) or name in _WATCHED
     }
     with open(config["log"], "a", encoding="utf-8") as log:
-        log.write(json.dumps({"argv": argv, "env": watched}) + "\n")
+        call: LoggedCall = {"argv": argv, "env": watched}
+        log.write(json.dumps(call) + "\n")
     joined = " ".join(argv)
     for rule in config.get("rules", []):
         if re.search(rule["match"], joined):

@@ -13,14 +13,15 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from collections.abc import Callable
 from pathlib import Path
 
 from git_environment import build_git_environment
 
 SCRIPTS = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(SCRIPTS))
-import release  # noqa: E402
-from release import Change  # noqa: E402
+import release  # noqa: E402 (scripts/release.py, found once scripts/ is on the path)
+from release import Change  # noqa: E402 (the same module)
 
 CHANGELOG = """# Changelog
 
@@ -44,7 +45,7 @@ def change(subject: str, body: str = "") -> Change:
 
 
 class ChangesTest(unittest.TestCase):
-    def test_conventional_commits(self):
+    def test_conventional_commits(self) -> None:
         self.assertEqual(
             change("feat(android): scan from the card"),
             Change(
@@ -60,7 +61,7 @@ class ChangesTest(unittest.TestCase):
             with self.subTest(subject=subject):
                 self.assertIsNone(change(subject).type)
 
-    def test_the_increment(self):
+    def test_the_increment(self) -> None:
         fix, feat, breaking = change("fix: a"), change("feat: b"), change("refactor!: c")
         self.assertEqual(release.increment([fix, change("docs: d")], (0, 2, 3)), "patch")
         self.assertEqual(release.increment([fix, feat], (0, 2, 3)), "minor")
@@ -68,7 +69,7 @@ class ChangesTest(unittest.TestCase):
         self.assertEqual(release.increment([fix, breaking], (1, 2, 3)), "major")
         self.assertEqual(release.increment([change("Not conventional")], (1, 2, 3)), "patch")
 
-    def test_bump(self):
+    def test_bump(self) -> None:
         self.assertEqual(release.bump((0, 2, 3), "patch"), (0, 2, 4))
         self.assertEqual(release.bump((0, 2, 3), "minor"), (0, 3, 0))
         self.assertEqual(release.bump((0, 2, 3), "major"), (1, 0, 0))
@@ -76,7 +77,7 @@ class ChangesTest(unittest.TestCase):
             with self.subTest(last=last, level=level), self.assertRaises(release.ReleaseError):
                 release.bump(last, level)
 
-    def test_the_draft_of_the_changelog(self):
+    def test_the_draft_of_the_changelog(self) -> None:
         changes = [
             change("fix(android): a crash"),
             change("feat(server): a route"),
@@ -116,7 +117,7 @@ class ChangesTest(unittest.TestCase):
         )
         self.assertEqual(release.summary(changes), "1 breaking change, 2 features, 1 fix, 3 other changes")
 
-    def test_a_release_with_nothing_notable_lists_its_changes(self):
+    def test_a_release_with_nothing_notable_lists_its_changes(self) -> None:
         changes = [
             change("docs: explain the setup"),
             change("build(scripts): pin a tool"),
@@ -127,7 +128,7 @@ class ChangesTest(unittest.TestCase):
 
 
 class ChangelogTest(unittest.TestCase):
-    def test_a_release_s_section_goes_after_unreleased(self):
+    def test_a_release_s_section_goes_after_unreleased(self) -> None:
         updated = release.add_release(CHANGELOG, "0.3.0", "0.2.3", "2026-10-20", "### Added\n\n- App: updates\n")
         self.assertEqual(
             updated,
@@ -152,7 +153,7 @@ class ChangelogTest(unittest.TestCase):
             ),
         )
 
-    def test_refusals(self):
+    def test_refusals(self) -> None:
         for name, changelog, expected in [
             ("no [Unreleased]", CHANGELOG.replace("## [Unreleased]\n", ""), "no '## [Unreleased]' heading"),
             (
@@ -171,7 +172,7 @@ class ChangelogTest(unittest.TestCase):
             with self.subTest(name), self.assertRaisesRegex(release.ReleaseError, re.escape(expected)):
                 release.add_release(changelog, "0.3.0", "0.2.3", "2026-10-20", "### Added\n\n- App: updates\n")
 
-    def test_completing_a_release_keeps_its_edited_entries(self):
+    def test_completing_a_release_keeps_its_edited_entries(self) -> None:
         changelog = release.add_release(
             CHANGELOG,
             "0.3.0",
@@ -224,7 +225,7 @@ class ChangelogTest(unittest.TestCase):
         with self.assertRaisesRegex(release.ReleaseError, re.escape("no section ## [0.4.0]")):
             release.complete_release(CHANGELOG, "0.4.0", "### Fixed\n\n- OCR: a fix\n")
 
-    def test_the_release_base_of_a_commit_message(self):
+    def test_the_release_base_of_a_commit_message(self) -> None:
         commit = "0123456789abcdef0123456789abcdef01234567"
         self.assertEqual(release.release_base(f"chore(release): 0.3.0\n\nWhy.\n\nRelease-Base: {commit}\n"), commit)
         self.assertIsNone(release.release_base("chore(release): 0.3.0\n\nRelease-Base: 0123\n"))
@@ -257,7 +258,7 @@ class CommandTest(unittest.TestCase):
         self.git("commit", "--quiet", "--allow-empty", "--message", message)
         return self.git("rev-parse", "HEAD").strip()
 
-    def release(self, *args: str) -> subprocess.CompletedProcess:
+    def release(self, *args: str) -> subprocess.CompletedProcess[str]:
         if "--commit" in args:
             self.git("update-ref", "refs/remotes/origin/main", "main")  # main as fetched from origin
         return subprocess.run(
@@ -270,9 +271,9 @@ class CommandTest(unittest.TestCase):
         )
 
     def today(self) -> str:
-        return datetime.datetime.now(datetime.timezone.utc).date().isoformat()
+        return datetime.datetime.now(datetime.UTC).date().isoformat()
 
-    def test_the_next_release_and_its_notes(self):
+    def test_the_next_release_and_its_notes(self) -> None:
         self.commit("fix(android): a crash")
         self.commit("feat(android): scan from the card")
         self.commit("docs: explain the card")
@@ -299,20 +300,20 @@ class CommandTest(unittest.TestCase):
         self.assertIn("a patch release", self.release("--ref", "HEAD~2").stdout)
         self.assertEqual(self.git("status", "--porcelain"), "", "it changes nothing")
 
-    def test_a_breaking_change_before_1_0(self):
+    def test_a_breaking_change_before_1_0(self) -> None:
         self.commit("refactor(server)!: move the routes")
         result = self.release()
         self.assertIn("Next release: 0.3.0, a minor release (breaking changes, before 1.0)", result.stdout)
         self.assertIn("### Changed\n\n- **Breaking:** Server: move the routes\n", result.stdout)
 
-    def test_odd_commits_are_named(self):
+    def test_odd_commits_are_named(self) -> None:
         self.commit("Update things")
         result = self.release("--version-only")
         self.assertEqual(result.stdout, "0.2.4\n")
         self.assertIn("not a Conventional Commit, released as a patch", result.stderr)
         self.assertIn("Update things", result.stderr)
 
-    def test_refusals(self):
+    def test_refusals(self) -> None:
         result = self.release()
         self.assertEqual(result.returncode, 1)
         self.assertIn("nothing to release", result.stderr)
@@ -340,7 +341,7 @@ class CommandTest(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("error:", result.stderr)
 
-    def test_commit(self):
+    def test_commit(self) -> None:
         self.commit("fix(android): a crash")
         base = self.commit("feat(android): scan from the card")
         self.git("switch", "--quiet", "-c", "release/v0.3.0")
@@ -375,8 +376,8 @@ class CommandTest(unittest.TestCase):
             result.stdout,
             "\n".join(
                 [
-                    "Merging this pull request publishes ScanMyLib 0.3.0: `.github/workflows/release.yml` tags `v0.3.0` and "
-                    "creates the GitHub release with the notes below. Merge nothing else before it.",
+                    "Merging this pull request publishes ScanMyLib 0.3.0: `.github/workflows/release.yml` tags "
+                    "`v0.3.0` and creates the GitHub release with the notes below. Merge nothing else before it.",
                     "",
                     f"## [0.3.0](https://github.com/example/project/compare/v0.2.3...v0.3.0) - {self.today()}",
                     "",
@@ -392,7 +393,7 @@ class CommandTest(unittest.TestCase):
             ),
         )
 
-    def test_the_description_follows_the_edited_notes(self):
+    def test_the_description_follows_the_edited_notes(self) -> None:
         self.commit("feat(android): scan from the card")
         self.git("switch", "--quiet", "-c", "release/v0.3.0")
         first = self.release("--commit").stdout
@@ -416,7 +417,7 @@ class CommandTest(unittest.TestCase):
         self.assertEqual((result.returncode, result.stdout), (1, ""))
         self.assertIn("0.2.3 is released already", result.stderr)
 
-    def test_commit_with_an_increment_chosen_by_hand(self):
+    def test_commit_with_an_increment_chosen_by_hand(self) -> None:
         (self.repository / "VERSION").write_text("0.2.99\n")
         self.git("commit", "--quiet", "--all", "--message", "chore(release): 0.2.99")
         self.git("tag", "--annotate", "v0.2.99", "--message", "ScanMyLib 0.2.99")
@@ -432,7 +433,7 @@ class CommandTest(unittest.TestCase):
             "Release 0.3.0 (a minor release chosen by hand): 1 fix since v0.2.99.", self.git("log", "-1", "--format=%B")
         )
 
-    def test_a_release_is_prepared_on_main_as_on_origin(self):
+    def test_a_release_is_prepared_on_main_as_on_origin(self) -> None:
         # Rebase and merge rewrites the commits of a pull request: the commit the notes are
         # written on must be one of main's.
         self.commit("feat: a")
@@ -442,9 +443,9 @@ class CommandTest(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("is not in origin/main", result.stderr)
 
-    def test_commit_refusals(self):
+    def test_commit_refusals(self) -> None:
         self.commit("feat: a")
-        for name, prepare, args, expected in [
+        refusals: list[tuple[str, Callable[[], object], tuple[str, ...], str]] = [
             ("on main", lambda: None, (), "prepare the release on its own branch, not on main"),
             (
                 "another commit",
@@ -453,7 +454,8 @@ class CommandTest(unittest.TestCase):
                 "--commit prepares HEAD",
             ),
             ("changes", lambda: (self.repository / "VERSION").write_text("9.9.9\n"), (), "commit or stash"),
-        ]:
+        ]
+        for name, prepare, args, expected in refusals:
             with self.subTest(name):
                 prepare()
                 result = self.release("--commit", *args)
@@ -475,12 +477,12 @@ class CommandTest(unittest.TestCase):
         self.git("switch", "--quiet", "-c", "release/v0.3.0")
         self.assertEqual(self.release("--commit").returncode, 0)
         changelog = self.repository / "CHANGELOG.md"
-        for old, new in zip(edits[0::2], edits[1::2]):
+        for old, new in zip(edits[0::2], edits[1::2], strict=True):
             changelog.write_text(changelog.read_text().replace(old, new))
             self.git("commit", "--quiet", "--all", "--message", "Update CHANGELOG.md")  # a suggestion, on GitHub
         self.git("switch", "--quiet", "main")
 
-    def test_completing_a_release_after_a_merge_in_between(self):
+    def test_completing_a_release_after_a_merge_in_between(self) -> None:
         self.commit("feat(android): scan from the card")
         self.prepare_release()
         self.commit("fix(server): a leak")  # merged while the release pull request was open
@@ -520,7 +522,7 @@ class CommandTest(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("can be published as it is", result.stderr)
 
-    def test_completing_leaves_out_what_the_notes_need_not_list(self):
+    def test_completing_leaves_out_what_the_notes_need_not_list(self) -> None:
         self.commit("feat(android): scan from the card")
         self.prepare_release("scan from the card", "scan straight from the card")
         self.commit("docs: explain the card")
@@ -533,7 +535,7 @@ class CommandTest(unittest.TestCase):
         self.assertNotIn("Update CHANGELOG.md", result.stdout + result.stderr)
         self.assertRegex(result.stdout, r"Not in the changelog .*:\n- `[0-9a-f]{12}` docs: explain the card\n$")
 
-    def test_a_release_that_can_be_published_is_not_completed(self):
+    def test_a_release_that_can_be_published_is_not_completed(self) -> None:
         self.commit("feat(android): scan from the card")
         self.prepare_release()
         # Merged in between: a commit the notes need not list, and an edit of the changelog alone,
@@ -551,7 +553,7 @@ class CommandTest(unittest.TestCase):
         self.assertIn(f"the release 0.3.0 can be published as it is, on {release_commit[:12]}", result.stderr)
         self.assertIn("git fetch --tags origin", result.stderr)
 
-    def test_completing_a_release_whose_section_has_no_entry(self):
+    def test_completing_a_release_whose_section_has_no_entry(self) -> None:
         # Its entries removed in its pull request (a heading left alone), then other commits merged:
         # the section is written again from the release's commits.
         self.commit("feat(android): scan from the card")
@@ -579,7 +581,7 @@ class CommandTest(unittest.TestCase):
             r"### Fixed\n\n- Server: a crash\n- Web UI: a later fix\n\n## \[0\.2\.3\]",
         )
 
-    def test_completing_a_release_whose_section_is_missing(self):
+    def test_completing_a_release_whose_section_is_missing(self) -> None:
         self.commit("feat(android): scan from the card")
         self.prepare_release("## [0.3.0] - ", "## 0.3.0 - ")
         self.merge_release("release/v0.3.0")
@@ -594,7 +596,7 @@ class CommandTest(unittest.TestCase):
             r"- App: scan from the card\n\n### Fixed\n\n- Server: a leak\n\n## 0\.3\.0 - ",
         )
 
-    def test_a_release_merged_alone_waits_for_its_workflow(self):
+    def test_a_release_merged_alone_waits_for_its_workflow(self) -> None:
         self.commit("feat(android): scan from the card")
         self.prepare_release()
         self.merge_release("release/v0.3.0")
@@ -603,7 +605,7 @@ class CommandTest(unittest.TestCase):
         self.assertIn("can be published as it is", result.stderr)
         self.assertIn(".github/workflows/release.yml publishes it", result.stderr)
 
-    def to_publish(self, ref: str = "HEAD") -> subprocess.CompletedProcess:
+    def to_publish(self, ref: str = "HEAD") -> subprocess.CompletedProcess[str]:
         return self.release("--ref", ref, "--to-publish", str(self.repository / ".git" / "notes.md"))
 
     def published(self, ref: str = "HEAD") -> tuple[str, str]:
@@ -616,7 +618,7 @@ class CommandTest(unittest.TestCase):
     def notes(self) -> str:
         return (self.repository / ".git" / "notes.md").read_text()
 
-    def test_publishing_a_merged_release(self):
+    def test_publishing_a_merged_release(self) -> None:
         self.commit("feat(android): scan from the card")
         self.commit("fix(server): a leak")
         self.prepare_release()
@@ -636,7 +638,7 @@ class CommandTest(unittest.TestCase):
         self.assertIn("nothing to publish", result.stderr)
         self.assertEqual(self.published(release_commit), ("0.3.0", release_commit))
 
-    def test_publishing_refuses_a_release_with_commits_merged_in_between(self):
+    def test_publishing_refuses_a_release_with_commits_merged_in_between(self) -> None:
         self.commit("feat(android): scan from the card")
         self.prepare_release()
         self.commit("fix(server): a leak")
@@ -656,7 +658,7 @@ class CommandTest(unittest.TestCase):
         self.assertEqual(self.published(), ("0.3.0", self.head()))
         self.assertEqual(self.notes(), "### Added\n\n- App: scan from the card\n\n### Fixed\n\n- Server: a leak\n")
 
-    def test_publishing_the_notes_edited_after_the_release_commit(self):
+    def test_publishing_the_notes_edited_after_the_release_commit(self) -> None:
         # Edited in its pull request (suggestions, on GitHub), with commits the notes need not list
         # and an edit of the changelog alone merged in between: published with the edited notes.
         self.commit("feat(android): scan from the card")
@@ -676,7 +678,7 @@ class CommandTest(unittest.TestCase):
         self.git("commit", "--quiet", "--all", "--message", "Update CHANGELOG.md")
         self.assertEqual(self.published(), ("0.3.0", edited))
 
-    def test_a_commit_after_the_release_commit_belongs_to_the_next_release(self):
+    def test_a_commit_after_the_release_commit_belongs_to_the_next_release(self) -> None:
         # Pushed to the release branch after its release commit, or merged with it.
         self.commit("feat(android): scan from the card")
         self.prepare_release()
@@ -689,7 +691,7 @@ class CommandTest(unittest.TestCase):
         self.git("merge", "--quiet", "--no-ff", "--no-edit", "side")
         self.assertEqual(self.published(), ("0.3.0", release_commit))
 
-    def test_publishing_refuses_an_empty_section_until_it_is_written(self):
+    def test_publishing_refuses_an_empty_section_until_it_is_written(self) -> None:
         self.commit("feat(android): scan from the card")
         self.prepare_release("### Added\n\n- App: scan from the card\n\n", "")
         self.merge_release("release/v0.3.0")
@@ -707,7 +709,7 @@ class CommandTest(unittest.TestCase):
         self.assertEqual(self.published(), ("0.3.0", self.head()))
         self.assertEqual(self.notes(), "### Added\n\n- App: scan from the card\n")
 
-    def test_publishing_refuses_anything_but_a_release(self):
+    def test_publishing_refuses_anything_but_a_release(self) -> None:
         self.commit("feat: a")
         (self.repository / "VERSION").write_text("0.3.0\n")
         self.git("commit", "--quiet", "--all", "--message", "build: set VERSION by hand")
@@ -724,8 +726,8 @@ class CommandTest(unittest.TestCase):
         self.assertIn("has no 'Release-Base' trailer", result.stderr)
         # A version tagged before release commits had a Release-Base: nothing to publish.
         self.git("reset", "--quiet", "--hard", "v0.2.3")
-        with (self.repository / "CHANGELOG.md").open("a") as changelog:
-            changelog.write("\n")
+        with (self.repository / "CHANGELOG.md").open("a") as changelog_file:
+            changelog_file.write("\n")
         self.git("commit", "--quiet", "--all", "--message", "docs: start the changelog")
         result = self.to_publish()
         self.assertEqual((result.returncode, result.stdout), (0, ""), result.stderr)
@@ -738,7 +740,7 @@ class WorkflowTest(unittest.TestCase):
     #: Any permission that writes, quoted or not, comments included.
     WRITES = r"[\"']?[a-z-]+[\"']?\s*:\s*[\"']?write\b[\"']?|\bwrite-all\b"
 
-    def test_what_counts_as_writing(self):
+    def test_what_counts_as_writing(self) -> None:
         for text in (
             'contents: "write"',
             "pull-requests:\twrite",
@@ -754,7 +756,7 @@ class WorkflowTest(unittest.TestCase):
                 self.assertTrue(re.findall(self.WRITES, text))
         self.assertEqual(re.findall(self.WRITES, "contents: read\n# it writes nothing\n"), [])
 
-    def test_only_the_release_workflow_writes(self):
+    def test_only_the_release_workflow_writes(self) -> None:
         workflows = sorted(self.WORKFLOWS.glob("*.y*ml"))
         self.assertEqual([workflow.name for workflow in workflows], ["ci.yml", "release.yml"])
         for workflow in workflows:
@@ -771,7 +773,7 @@ class WorkflowTest(unittest.TestCase):
                     self.assertEqual(writes, [])
                     self.assertRegex(text, r"\npermissions:\n  contents: read\n")
 
-    def test_the_release_workflow(self):
+    def test_the_release_workflow(self) -> None:
         text = (self.WORKFLOWS / "release.yml").read_text()
         on = text.split("\non:\n", 1)[1].split("\n\n", 1)[0]
         self.assertEqual(on, "  push:\n    branches: [main]\n    paths: [VERSION, CHANGELOG.md]")

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import fcntl
 import http.server
+import itertools
 import json
 import os
 import pwd
@@ -28,10 +29,11 @@ import subprocess
 import tempfile
 import threading
 import unittest
+from collections.abc import Callable, Mapping
 from contextlib import closing
 from pathlib import Path
 
-from docker_shim import image_id
+from docker_shim import LoggedCall, Rule, image_id
 
 REPO = Path(__file__).resolve().parents[2]
 SHIM = Path(__file__).resolve().parent / "docker_shim.py"
@@ -55,7 +57,7 @@ COPIED = [
     "scripts/check.sh",
 ]
 VERSION = (REPO / "VERSION").read_text().strip()
-VERSION_CODE = sum(int(part) * factor for part, factor in zip(VERSION.split("."), (10000, 100, 1)))
+VERSION_CODE = sum(int(part) * factor for part, factor in zip(VERSION.split("."), (10000, 100, 1), strict=True))
 #: The version of a development build of the test repositories, whose only commit is the release
 #: VERSION (scripts/lib/version.py): the next patch, no commit since, then the commit.
 _MAJOR, _MINOR, _PATCH = (int(part) for part in VERSION.split("."))
@@ -70,7 +72,8 @@ PRODUCTION_PS = r"^ps --all --quiet --filter label=com\.docker\.compose\.project
 def free_port() -> int:
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", 0))
-        return probe.getsockname()[1]
+        port: int = probe.getsockname()[1]
+        return port
 
 
 def port_in_use(port: int) -> bool:
@@ -93,7 +96,7 @@ class Health:
         health = self
 
         class Handler(http.server.BaseHTTPRequestHandler):
-            def do_GET(self) -> None:  # noqa: N802
+            def do_GET(self) -> None:
                 health.requests += 1
                 apk = None if health.apk_version is None else {"version": health.apk_version, "version_code": 1}
                 body = json.dumps({"name": "ScanMyLib", "version": health.version, "api": 1, "apk": apk}).encode()
@@ -103,7 +106,7 @@ class Health:
                 self.end_headers()
                 self.wfile.write(body)
 
-            def log_message(self, *args) -> None:
+            def log_message(self, *args: object) -> None:
                 pass
 
         self.server = http.server.ThreadingHTTPServer(("127.0.0.1", port), Handler)
@@ -114,15 +117,19 @@ class Health:
         self.server.server_close()
 
 
-def sandbox_rules(sandbox: str, data: str, *, kind: str = "ocr", network: str = "none") -> list[dict]:
+def sandbox_rules(sandbox: str, data: str, *, kind: str = "ocr", network: str = "none") -> list[Rule]:
     """Answers that make scripts/verify-sandbox.sh see a running, isolated OCR container."""
     if kind == "ocr":
-        mounts = f"bind|{sandbox}|/opt/sandbox|ro\nbind|{data}/run|/run/scanmylib|rw\nbind|{data}/ocr-cache|/var/cache/ocr|rw\n"
-        found = [{"match": r" ps -q ocr$", "stdout": "ocrid\n"}]
+        mounts = (
+            f"bind|{sandbox}|/opt/sandbox|ro\nbind|{data}/run|/run/scanmylib|rw\n"
+            f"bind|{data}/ocr-cache|/var/cache/ocr|rw\n"
+        )
+        found: list[Rule] = [{"match": r" ps -q ocr$", "stdout": "ocrid\n"}]
     else:
         mounts = f"bind|{data}/run|/run/scanmylib|rw\n"
         found = [{"match": r" ps -q ocr$", "stdout": ""}, {"match": r" ps -q ocr-fake$", "stdout": "fakeid\n"}]
-    return found + [
+    return [
+        *found,
         {"match": r"\{\{\.State\.Running\}\}", "stdout": "true\n"},
         {"match": r"com\.docker\.compose\.service", "stdout": f"{kind}\n"},
         {"match": r"\{\{\.Name\}\}", "stdout": f"/stack-{kind}-1\n"},
@@ -149,7 +156,7 @@ def sandbox_rules(sandbox: str, data: str, *, kind: str = "ocr", network: str = 
     ]
 
 
-def production_container_rules(working_dir: Path | str) -> list[dict]:
+def production_container_rules(working_dir: Path | str) -> list[Rule]:
     """Answers that make production_containers() see production's api, started from working_dir."""
     container = {
         "Name": "/scanmylib-api-1",
@@ -208,7 +215,7 @@ class ScriptsTestCase(unittest.TestCase):
         self.api_port = free_port()
 
     def production_env(self, **changes: str | None) -> str:
-        values = {
+        values: dict[str, str | None] = {
             "SCANMYLIB_UID": str(os.getuid()),
             "SCANMYLIB_GID": str(os.getgid()),
             "DATA_DIR": str(self.prod),
@@ -228,7 +235,7 @@ class ScriptsTestCase(unittest.TestCase):
 
     def dev_env(self, **changes: str | None) -> str:
         dev = f"{self.prod}-dev"
-        values = {
+        values: dict[str, str | None] = {
             "COMPOSE_PROJECT_NAME": "scanmylib-dev",
             "IMAGE_PREFIX": "scanmylib-dev",
             "DATA_DIR": dev,
@@ -295,11 +302,11 @@ class ScriptsTestCase(unittest.TestCase):
         environment.update(extra)
         return environment
 
-    def rules(self, rules: list[dict]) -> None:
+    def rules(self, rules: list[Rule]) -> None:
         rules = rules + production_container_rules(self.home / "Dev" / "scanmylib")
         self.shim_config.write_text(json.dumps({"log": str(self.log), "real_docker": REAL_DOCKER, "rules": rules}))
 
-    def calls(self) -> list[dict]:
+    def calls(self) -> list[LoggedCall]:
         if not self.log.exists():
             return []
         return [json.loads(line) for line in self.log.read_text().splitlines()]
@@ -308,18 +315,23 @@ class ScriptsTestCase(unittest.TestCase):
         return [" ".join(call["argv"]) for call in self.calls()]
 
     def run_script(
-        self, checkout: Path, script: str, *args: str, timeout: float = 60, **environment: str
-    ) -> subprocess.CompletedProcess:
+        self,
+        checkout: Path,
+        script: str,
+        *args: str,
+        timeout: float = 60,
+        environment: Mapping[str, str] | None = None,
+    ) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
             [str(checkout / "scripts" / script), *args],
             cwd=checkout,
             capture_output=True,
             text=True,
             timeout=timeout,
-            env=self.environment(**environment),
+            env=self.environment(**(environment or {})),
         )
 
-    def assertOnlyReads(self) -> None:
+    def assert_only_reads(self) -> None:
         """Every docker call was read-only: listing, inspecting, resolving the configuration."""
         for call in self.calls():
             argv = call["argv"]
@@ -332,7 +344,7 @@ class ScriptsTestCase(unittest.TestCase):
     @staticmethod
     def compose_values(argv: list[str]) -> set[str]:
         values = set()
-        for option, value in zip(argv, argv[1:]):
+        for option, value in itertools.pairwise(argv):
             if option in ("--project-directory", "--file", "--env-file", "--profile"):
                 values.add(value)
         return values
@@ -342,7 +354,7 @@ class DevStackTest(ScriptsTestCase):
     def write_dev_env(self, text: str) -> None:
         (self.worktree / ".env").write_text(text)
 
-    def test_dev_env_writes_an_isolated_development_env(self):
+    def test_dev_env_writes_an_isolated_development_env(self) -> None:
         if port_in_use(8770):
             self.skipTest("port 8770 is in use (a development stack runs)")
         result = self.run_script(self.worktree, "dev-env.sh")
@@ -359,9 +371,9 @@ class DevStackTest(ScriptsTestCase):
         self.assertEqual(env["SANDBOX_DIR"], f"{self.prod}/sandbox")
         self.assertEqual((env["APP_VARIANT"], env["OCR_SERVICE"], env["API_PORT"]), ("dev", "ocr-fake", "8770"))
         self.assertNotIn("SANDBOX_SETUP_DIR", env)
-        self.assertOnlyReads()
+        self.assert_only_reads()
 
-    def test_dev_env_refuses_production_s_checkout_and_foreign_env_files(self):
+    def test_dev_env_refuses_production_s_checkout_and_foreign_env_files(self) -> None:
         result = self.run_script(self.primary, "dev-env.sh")
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("is production's checkout", result.stderr)
@@ -375,20 +387,20 @@ class DevStackTest(ScriptsTestCase):
             self.assertIn(expected, result.stderr)
             self.assertEqual((self.worktree / ".env").read_text(), text)
 
-    def test_a_valid_development_env_passes(self):
+    def test_a_valid_development_env_passes(self) -> None:
         self.write_dev_env(self.dev_env())
         result = self.run_script(self.worktree, "dev.sh", "compose", "ps")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue(any(" ps" in command and "config" not in command for command in self.commands()))
 
-    def test_the_development_api_reports_a_development_version(self):
+    def test_the_development_api_reports_a_development_version(self) -> None:
         self.write_dev_env(self.dev_env())
         result = self.run_script(self.worktree, "dev.sh", "build")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         [build] = [command for command in self.commands() if re.search(r"^compose .* build ", command)]
         self.assertRegex(build, rf" build --build-arg DEV_VERSION={DEV_VERSION} api$")
 
-    def test_dev_sh_refuses_whatever_production_owns(self):
+    def test_dev_sh_refuses_whatever_production_owns(self) -> None:
         prod, base = str(self.prod), str(self.base)
         cases = [
             # .env lines that docker compose reads differently from a naive parser.
@@ -438,12 +450,12 @@ class DevStackTest(ScriptsTestCase):
                 result = self.run_script(self.worktree, "dev.sh", "compose", "ps")
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn(expected, result.stderr)
-                self.assertOnlyReads()
+                self.assert_only_reads()
                 self.assertFalse(
                     any(" ps" in c and " config" not in c and c.startswith("compose") for c in self.commands())
                 )
 
-    def test_compose_yaml_settings_outside_the_allowlist(self):
+    def test_compose_yaml_settings_outside_the_allowlist(self) -> None:
         # A branch that changes compose.yaml: privileges, another container's volumes, the Docker
         # API, host files read into a container, another project's network. As docker compose
         # really resolves them: env_file and label_file only show without interpolation.
@@ -484,9 +496,9 @@ class DevStackTest(ScriptsTestCase):
                 result = self.run_script(self.worktree, "dev.sh", "compose", "ps")
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn(expected, result.stderr)
-                self.assertOnlyReads()
+                self.assert_only_reads()
 
-    def test_running_production_containers_are_production(self):
+    def test_running_production_containers_are_production(self) -> None:
         moved = self.base / "moved-library"
         container = {
             "Name": "/scanmylib-api-1",
@@ -504,7 +516,7 @@ class DevStackTest(ScriptsTestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("mount /library of scanmylib-api-1", result.stderr)
 
-    def test_the_callers_environment_never_reaches_docker_compose(self):
+    def test_the_callers_environment_never_reaches_docker_compose(self) -> None:
         self.write_dev_env(self.dev_env())
         leaked = {
             "COMPOSE_PROJECT_NAME": "scanmylib",
@@ -514,7 +526,7 @@ class DevStackTest(ScriptsTestCase):
             "IMAGE_PREFIX": "scanmylib",
             "API_PORT": "8765",
         }
-        result = self.run_script(self.worktree, "dev.sh", "compose", "ps", **leaked)
+        result = self.run_script(self.worktree, "dev.sh", "compose", "ps", environment=leaked)
         self.assertEqual(result.returncode, 0, result.stderr)
         compose_calls = [call for call in self.calls() if call["argv"][0] == "compose"]
         self.assertTrue(compose_calls)
@@ -522,7 +534,7 @@ class DevStackTest(ScriptsTestCase):
             self.assertEqual(set(call["env"]) - {"DOCKER_HOST"}, set(), call)
             self.assertIn(f"--env-file {self.worktree}/.env", " ".join(call["argv"]))
 
-    def test_compose_global_options_and_commands_outside_the_stack_are_refused(self):
+    def test_compose_global_options_and_commands_outside_the_stack_are_refused(self) -> None:
         self.write_dev_env(self.dev_env())
         for args, expected in [
             (["-p", "scanmylib", "down"], "no global option"),
@@ -545,7 +557,7 @@ class DevStackTest(ScriptsTestCase):
                 result = self.run_script(self.worktree, "dev.sh", "compose", *args)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn(expected, result.stderr)
-                self.assertOnlyReads()
+                self.assert_only_reads()
 
 
 class DeployTest(ScriptsTestCase):
@@ -555,7 +567,7 @@ class DeployTest(ScriptsTestCase):
         self.addCleanup(self.health.close)
         # Containers that run the images in place, never tagged :deployed yet (the first deploy
         # with this script).
-        self.previous = []
+        self.previous: list[Rule] = []
         for service in ("api", "ocr"):
             self.previous += [
                 {
@@ -572,16 +584,16 @@ class DeployTest(ScriptsTestCase):
             ]
 
     def deploy(
-        self, *args: str, rules: list[dict] | None = None, checkout: Path | None = None, **environment: str
-    ) -> subprocess.CompletedProcess:
+        self, *args: str, rules: list[Rule] | None = None, checkout: Path | None = None, **environment: str
+    ) -> subprocess.CompletedProcess[str]:
         self.rules((rules or []) + self.previous + sandbox_rules(f"{self.prod}/sandbox", str(self.prod)))
-        return self.run_script(checkout or self.primary, "deploy.sh", *args, timeout=120, **environment)
+        return self.run_script(checkout or self.primary, "deploy.sh", *args, timeout=120, environment=environment)
 
     def backups(self) -> list[str]:
         directory = self.prod / "backups"
         return sorted(entry.name for entry in directory.iterdir()) if directory.exists() else []
 
-    def assertTagsUnchanged(self) -> None:
+    def assert_tags_unchanged(self) -> None:
         """The tags of production's checkout and of origin are the release's: deploy.sh never tags."""
         self.assertEqual(self.git(self.primary, "tag"), f"v{VERSION}\n")
         self.assertEqual(
@@ -589,7 +601,7 @@ class DeployTest(ScriptsTestCase):
             [f"refs/tags/v{VERSION}", f"refs/tags/v{VERSION}^{{}}"],
         )
 
-    def test_dry_run_changes_nothing(self):
+    def test_dry_run_changes_nothing(self) -> None:
         result = self.deploy("--dry-run", "--apk")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("Dry run: nothing was changed.", result.stdout)
@@ -597,13 +609,13 @@ class DeployTest(ScriptsTestCase):
         self.assertIn(f"the release v{VERSION}, as published on origin", result.stdout)
         self.assertIn("holds the database", result.stdout)
         self.assertIn("would run: docker tag sha256:oldapi scanmylib-api:deployed", result.stdout)
-        self.assertOnlyReads()
+        self.assert_only_reads()
         self.assertEqual(self.health.requests, 0, "a dry run sends no request to the api")
         self.assertEqual(self.backups(), [])
         self.assertFalse((self.prod / "logs").exists())
-        self.assertTagsUnchanged()
+        self.assert_tags_unchanged()
 
-    def test_deploy(self):
+    def test_deploy(self) -> None:
         snapshot = self.base / "built"
         result = self.deploy("--apk", rules=[{"match": r"^compose .* build api ocr$", "snapshot": str(snapshot)}])
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -639,7 +651,7 @@ class DeployTest(ScriptsTestCase):
         self.assertEqual(sorted(path.name for path in copy.iterdir()), ["scanmylib.db", "token"])
         with closing(sqlite3.connect(copy / "scanmylib.db")) as database:
             self.assertEqual(database.execute("SELECT id FROM documents").fetchall(), [("d1",)])
-        self.assertTagsUnchanged()
+        self.assert_tags_unchanged()
         # :deployed names the images the containers ran before the build, then the new ones as
         # soon as they pass the isolation check, before the APK.
         self.assertLess(commands.index("tag sha256:oldapi scanmylib-api:deployed"), commands.index(build))
@@ -652,15 +664,17 @@ class DeployTest(ScriptsTestCase):
         [log] = (self.prod / "logs").iterdir()
         self.assertIn(f"Deployed scanmylib {VERSION}", log.read_text())
 
-    def test_first_deploy_tags_the_images_the_containers_run(self):
+    def test_first_deploy_tags_the_images_the_containers_run(self) -> None:
         # :latest was rebuilt since the containers started: :deployed names what they run.
-        rules = [{"match": r"^image inspect --format \{\{\.Id\}\} scanmylib-api:latest$", "stdout": "sha256:newer\n"}]
+        rules: list[Rule] = [
+            {"match": r"^image inspect --format \{\{\.Id\}\} scanmylib-api:latest$", "stdout": "sha256:newer\n"}
+        ]
         result = self.deploy("--dry-run", rules=rules)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("scanmylib-api:latest (sha256:newer) is not the image api runs", result.stdout)
         self.assertIn("would run: docker tag sha256:oldapi scanmylib-api:deployed", result.stdout)
 
-    def test_failed_tests_leave_production_unchanged(self):
+    def test_failed_tests_leave_production_unchanged(self) -> None:
         result = self.deploy(rules=[{"match": "scanmylib-deploy-pytest", "exit": 1}])
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('DEPLOY FAILED during the step "tests"', result.stdout)
@@ -671,7 +685,7 @@ class DeployTest(ScriptsTestCase):
         self.assertFalse(any(" up " in command for command in commands))
         self.assertEqual(self.backups(), [])
 
-    def test_failed_restart_explains_the_rollback(self):
+    def test_failed_restart_explains_the_rollback(self) -> None:
         self.health.version = "0.0.1"
         result = self.deploy()
         self.assertNotEqual(result.returncode, 0)
@@ -684,12 +698,12 @@ class DeployTest(ScriptsTestCase):
         self.assertIn(f"cp -a {self.prod}/backups/{backup} {self.prod}/state", result.stdout)
         self.assertIn(f"mv {self.prod}/state {self.prod}/state.failed-", result.stdout)
         self.assertNotIn("tag scanmylib-api:latest scanmylib-api:deployed", self.commands())
-        self.assertTagsUnchanged()
+        self.assert_tags_unchanged()
 
-    def test_deployed_images_are_kept_for_rollbacks(self):
+    def test_deployed_images_are_kept_for_rollbacks(self) -> None:
         # :deployed already names the images production runs: a new deploy keeps it until the
         # new images run and pass the isolation check, even after a failed attempt.
-        deployed = [
+        deployed: list[Rule] = [
             {"match": r"^image inspect --format \{\{\.Id\}\} scanmylib-(api|ocr):deployed$", "stdout": "sha256:good\n"},
             {"match": r"^inspect --format \{\{\.Image\}\} (api|ocr)id$", "stdout": "sha256:good\n"},
         ]
@@ -710,10 +724,10 @@ class DeployTest(ScriptsTestCase):
             commands.index(next(c for c in commands if " up -d --no-build" in c)),
         )
 
-    def test_deployed_follows_what_runs(self):
+    def test_deployed_follows_what_runs(self) -> None:
         # A deploy failed once the containers ran the new images (:deployed still names the
         # previous ones): the next deploy tags what runs, the truth to roll back to.
-        lagging = [
+        lagging: list[Rule] = [
             {
                 "match": r"^image inspect --format \{\{\.Id\}\} scanmylib-(api|ocr):deployed$",
                 "stdout": "sha256:older\n",
@@ -730,15 +744,15 @@ class DeployTest(ScriptsTestCase):
         self.assertLess(tagged, commands.index(next(c for c in commands if " build api ocr" in c)))
         self.assertGreater(commands.index("tag scanmylib-api:deployed scanmylib-api:latest"), tagged)
 
-    def test_failed_apk_leaves_deployed_on_what_runs(self):
+    def test_failed_apk_leaves_deployed_on_what_runs(self) -> None:
         result = self.deploy("--apk", rules=[{"match": "^run .*scanmylib-android-build", "exit": 1}])
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('DEPLOY FAILED during the step "apk"', result.stdout)
         self.assertIn("its images tagged :deployed", result.stdout)
         self.assertIn("tag scanmylib-api:latest scanmylib-api:deployed", self.commands())
-        self.assertTagsUnchanged()
+        self.assert_tags_unchanged()
 
-    def test_deploy_checks_that_the_api_offers_the_new_apk(self):
+    def test_deploy_checks_that_the_api_offers_the_new_apk(self) -> None:
         for apk_version in (None, "0.0.1"):
             with self.subTest(apk_version=apk_version):
                 if self.log.exists():
@@ -748,9 +762,9 @@ class DeployTest(ScriptsTestCase):
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn('DEPLOY FAILED during the step "apk"', result.stdout)
                 self.assertIn(f"the api offers the APK '{apk_version}', not {VERSION}", result.stdout + result.stderr)
-                self.assertTagsUnchanged()
+                self.assert_tags_unchanged()
 
-    def test_failed_isolation_check_stops_the_ocr_service(self):
+    def test_failed_isolation_check_stops_the_ocr_service(self) -> None:
         result = self.deploy(rules=sandbox_rules(f"{self.prod}/sandbox", str(self.prod), network="bridge"))
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('DEPLOY FAILED during the step "isolation"', result.stdout)
@@ -758,9 +772,9 @@ class DeployTest(ScriptsTestCase):
             any(command.startswith("compose") and command.endswith(" stop ocr") for command in self.commands())
         )
         self.assertNotIn("tag scanmylib-api:latest scanmylib-api:deployed", self.commands())
-        self.assertTagsUnchanged()
+        self.assert_tags_unchanged()
 
-    def test_old_backups_are_pruned(self):
+    def test_old_backups_are_pruned(self) -> None:
         backups = self.prod / "backups"
         for day in range(1, 13):
             (backups / f"state-202001{day:02d}-000000-v0.0.1").mkdir(parents=True)
@@ -778,8 +792,8 @@ class DeployTest(ScriptsTestCase):
         with (self.primary / "compose.yaml").open("a") as compose:
             compose.write("# hidden change\n")
 
-    def test_preconditions(self):
-        for name, prepare, expected in [
+    def test_preconditions(self) -> None:
+        refusals: list[tuple[str, Callable[[], object], str]] = [
             ("no database", lambda: (self.prod / "state" / "scanmylib.db").unlink(), "no database in"),
             (
                 "a comment in .env",
@@ -809,7 +823,8 @@ class DeployTest(ScriptsTestCase):
                 "not production's",
             ),
             ("an empty .env", lambda: (self.primary / ".env").write_text("# nothing\n"), "not production's"),
-        ]:
+        ]
+        for name, prepare, expected in refusals:
             with self.subTest(name):
                 self.make_repository_fresh()
                 prepare()
@@ -817,15 +832,15 @@ class DeployTest(ScriptsTestCase):
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn(expected, result.stdout + result.stderr)
                 self.assertIn("Refusing to deploy", result.stderr)
-                self.assertOnlyReads()
+                self.assert_only_reads()
 
-    def test_never_an_older_release_than_production_runs(self):
+    def test_never_an_older_release_than_production_runs(self) -> None:
         self.health.version = "99.0.0"
         result = self.deploy()
         self.assertNotEqual(result.returncode, 0)
         self.assertIn(f"production runs 99.0.0, newer than this release {VERSION}", result.stdout)
         self.assertIn("Refusing to deploy", result.stderr)
-        self.assertOnlyReads()
+        self.assert_only_reads()
         # A dry run sends no request to the api: it says what a real run checks.
         self.health.requests = 0
         result = self.deploy("--dry-run")
@@ -856,7 +871,7 @@ class DeployTest(ScriptsTestCase):
         self.assertIn("a downgrade (--allow-downgrade)", result.stdout)
         self.assertNotIn("Refusing to deploy", result.stderr)
 
-    def test_deploy_from_the_release_s_tag(self):
+    def test_deploy_from_the_release_s_tag(self) -> None:
         # Production's checkout holds a release: its tag, checked out.
         self.git(self.primary, "checkout", "--quiet", f"v{VERSION}")
         result = self.deploy("--dry-run")
@@ -875,12 +890,12 @@ class DeployTest(ScriptsTestCase):
         if not database.exists():
             sqlite3.connect(database).close()
 
-    def test_first_install_without_database(self):
+    def test_first_install_without_database(self) -> None:
         (self.prod / "state" / "scanmylib.db").unlink()
         result = self.deploy("--first-install", "--skip-tests")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
-    def test_one_deploy_at_a_time(self):
+    def test_one_deploy_at_a_time(self) -> None:
         lock = os.open(self.primary, os.O_RDONLY)
         self.addCleanup(os.close, lock)
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -889,20 +904,20 @@ class DeployTest(ScriptsTestCase):
         self.assertIn("another deploy is running", result.stderr)
         self.assertEqual(self.calls(), [])
 
-    def test_never_from_a_worktree(self):
+    def test_never_from_a_worktree(self) -> None:
         result = self.deploy(checkout=self.worktree)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn(f"not production's checkout: production runs from {self.primary}", result.stdout)
 
-    def test_never_from_another_clone_with_production_s_env(self):
+    def test_never_from_another_clone_with_production_s_env(self) -> None:
         clone = self.make_clone()
         result = self.deploy(checkout=clone)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn(f"not production's checkout: production runs from {self.primary}", result.stdout)
         self.assertIn("Refusing to deploy", result.stderr)
-        self.assertOnlyReads()
+        self.assert_only_reads()
 
-    def test_production_s_checkout_is_where_its_containers_run_from(self):
+    def test_production_s_checkout_is_where_its_containers_run_from(self) -> None:
         # Production's containers were started from the clone: ~/Dev/scanmylib is not production.
         clone = self.make_clone()
         self.rules(production_container_rules(clone))
@@ -910,7 +925,7 @@ class DeployTest(ScriptsTestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn(f"not production's checkout: production runs from {clone}", result.stdout)
 
-    def test_rehearsal_on_a_throwaway_stack(self):
+    def test_rehearsal_on_a_throwaway_stack(self) -> None:
         data = self.base / "rehearsal"
         port = free_port()
         rehearsal = Health(port)
@@ -930,8 +945,10 @@ class DeployTest(ScriptsTestCase):
         (self.worktree / "untracked.txt").write_text("x")
         snapshot = self.base / "built"
         self.rules(
-            [{"match": r"^compose .* build api ocr$", "snapshot": str(snapshot)}]
-            + sandbox_rules(f"{self.prod}/sandbox", str(data), kind="ocr-fake")
+            [
+                {"match": r"^compose .* build api ocr$", "snapshot": str(snapshot)},
+                *sandbox_rules(f"{self.prod}/sandbox", str(data), kind="ocr-fake"),
+            ]
         )
         # The rehearsal publishes the dev app, a development build: the api must offer the version
         # build-apk.sh published (the stand-in builds nothing: its metadata is written here).
@@ -944,7 +961,7 @@ class DeployTest(ScriptsTestCase):
             "--first-install",
             "--apk",
             timeout=120,
-            SCANMYLIB_DEPLOY_REHEARSAL="scanmylib-review-test",
+            environment={"SCANMYLIB_DEPLOY_REHEARSAL": "scanmylib-review-test"},
         )
         self.assertNotEqual(result.returncode, 0)
         self.assertIn(
@@ -958,7 +975,7 @@ class DeployTest(ScriptsTestCase):
             "--first-install",
             "--apk",
             timeout=120,
-            SCANMYLIB_DEPLOY_REHEARSAL="scanmylib-review-test",
+            environment={"SCANMYLIB_DEPLOY_REHEARSAL": "scanmylib-review-test"},
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn(f"the api offers the APK {rehearsal.apk_version} to the phones", result.stdout)
@@ -966,7 +983,7 @@ class DeployTest(ScriptsTestCase):
         self.assertIn("uncommitted or untracked changes", result.stdout)
         self.assertNotIn("# uncommitted", (snapshot / "compose.yaml").read_text())
         self.assertFalse((snapshot / "untracked.txt").exists())
-        self.assertTagsUnchanged()
+        self.assert_tags_unchanged()
         self.assertFalse(
             any(
                 "scanmylib-api" in command and "scanmylib-review" not in command
@@ -987,13 +1004,13 @@ class DeployTest(ScriptsTestCase):
         )
         self.log.unlink()
         result = self.run_script(
-            self.worktree, "deploy.sh", timeout=120, SCANMYLIB_DEPLOY_REHEARSAL="scanmylib-review-test"
+            self.worktree, "deploy.sh", timeout=120, environment={"SCANMYLIB_DEPLOY_REHEARSAL": "scanmylib-review-test"}
         )
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("not isolated from production", result.stdout)
-        self.assertOnlyReads()
+        self.assert_only_reads()
 
-    def test_rehearsal_checks_the_commit_it_builds(self):
+    def test_rehearsal_checks_the_commit_it_builds(self) -> None:
         # A committed mistake (production's image name) that the working tree no longer shows:
         # the commit is what would be built, so the commit is what is checked.
         data = self.base / "rehearsal"
@@ -1025,12 +1042,12 @@ class DeployTest(ScriptsTestCase):
                     "--first-install",
                     *args,
                     timeout=120,
-                    SCANMYLIB_DEPLOY_REHEARSAL="scanmylib-review-test",
+                    environment={"SCANMYLIB_DEPLOY_REHEARSAL": "scanmylib-review-test"},
                 )
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn("not isolated from production", result.stdout)
                 self.assertIn("the image scanmylib-api:latest is production's", result.stdout)
-                self.assertOnlyReads()
+                self.assert_only_reads()
         self.assertFalse(list(self.base.glob("scanmylib-deploy.*")), "the export is removed")
 
     def commit_rehearsal(self, compose_text: str) -> None:
@@ -1052,16 +1069,16 @@ class DeployTest(ScriptsTestCase):
         self.git(self.worktree, "add", "--all")
         self.git(self.worktree, "commit", "--quiet", "--message", "Relative paths in compose.yaml")
 
-    def rehearse(self) -> subprocess.CompletedProcess:
+    def rehearse(self) -> subprocess.CompletedProcess[str]:
         return self.run_script(
             self.worktree,
             "deploy.sh",
             "--first-install",
             timeout=120,
-            SCANMYLIB_DEPLOY_REHEARSAL="scanmylib-review-test",
+            environment={"SCANMYLIB_DEPLOY_REHEARSAL": "scanmylib-review-test"},
         )
 
-    def test_rehearsal_checks_the_extends_files_of_this_checkout(self):
+    def test_rehearsal_checks_the_extends_files_of_this_checkout(self) -> None:
         # up reads relative extends files from this checkout, not from the export: an uncommitted
         # change there is what would start.
         compose = (self.worktree / "compose.yaml").read_text()
@@ -1075,9 +1092,9 @@ class DeployTest(ScriptsTestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("not isolated from production", result.stdout)
         self.assertIn("privileged", result.stdout)
-        self.assertOnlyReads()
+        self.assert_only_reads()
 
-    def test_rehearsal_checks_the_bind_sources_of_this_checkout(self):
+    def test_rehearsal_checks_the_bind_sources_of_this_checkout(self) -> None:
         # A relative bind source missing from the export is never mounted by the build's resolution,
         # but up resolves it in this checkout, where it exists.
         compose = (self.worktree / "compose.yaml").read_text()
@@ -1094,23 +1111,21 @@ class DeployTest(ScriptsTestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("not isolated from production", result.stdout)
         self.assertIn(".git", result.stdout)
-        self.assertOnlyReads()
+        self.assert_only_reads()
 
 
 class BuildApkTest(ScriptsTestCase):
     def runs(self) -> list[str]:
         return [command for command in self.commands() if command.startswith("run ")]
 
-    def test_a_worktree_builds_the_dev_app_with_its_own_toolchain(self):
+    def test_a_worktree_builds_the_dev_app_with_its_own_toolchain(self) -> None:
         (self.worktree / ".env").write_text(self.dev_env())
         dev = f"{self.prod}-dev"
         # The environment cannot turn this into a release build in production's directories.
         result = self.run_script(
             self.worktree,
             "build-apk.sh",
-            APP_VARIANT="release",
-            DATA_DIR=str(self.prod),
-            ANDROID_DIR=f"{self.prod}/android",
+            environment={"APP_VARIANT": "release", "DATA_DIR": str(self.prod), "ANDROID_DIR": f"{self.prod}/android"},
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         build, sign = self.runs()
@@ -1126,8 +1141,8 @@ class BuildApkTest(ScriptsTestCase):
         # A development build: its version comes from git, its versionCode from the time of the build.
         name = re.search(rf"--env SCANMYLIB_DEV_VERSION_NAME=({DEV_VERSION}) ", build)
         code = re.search(r"--env SCANMYLIB_DEV_VERSION_CODE=([0-9]+) ", build)
-        self.assertIsNotNone(name, build)
-        self.assertIsNotNone(code, build)
+        assert name is not None, build
+        assert code is not None, build
         self.assertGreater(int(code[1]), 400_000)
         self.assertIn(f"Version {name[1]} (versionCode {code[1]})", result.stdout)
         # The signer refuses any other app than fr.scanmylib.dev with that versionCode.
@@ -1149,7 +1164,7 @@ class BuildApkTest(ScriptsTestCase):
         self.assertRegex(build, rf"--env SCANMYLIB_DEV_VERSION_NAME={DEV_VERSION}\.dirty ")
         self.assertIn(f"EXPECTED_VERSION_CODE={int(code[1]) + 6} ", sign)
 
-    def write_apk_metadata(self, file: Path, *values: str) -> subprocess.CompletedProcess:
+    def write_apk_metadata(self, file: Path, *values: str) -> subprocess.CompletedProcess[str]:
         """Runs write_apk_metadata of build-apk.sh, as the signing container does, in its locale."""
         script = (REPO / "scripts" / "build-apk.sh").read_text()
         function = script[script.index("write_apk_metadata() {") :]
@@ -1169,7 +1184,7 @@ class BuildApkTest(ScriptsTestCase):
             env={**os.environ, "LC_ALL": "en_US.UTF-8"},
         )
 
-    def test_the_published_apk_metadata_is_checked_json(self):
+    def test_the_published_apk_metadata_is_checked_json(self) -> None:
         out = self.base / "app"
         out.mkdir()
         sha256 = "0123456789abcdef" * 4
@@ -1211,7 +1226,7 @@ class BuildApkTest(ScriptsTestCase):
                 self.assertIn("unexpected APK metadata", result.stderr)
                 self.assertEqual(json.loads(metadata.read_text())["version_code"], 10203)
 
-    def test_a_worktree_never_builds_the_release_app(self):
+    def test_a_worktree_never_builds_the_release_app(self) -> None:
         (self.worktree / ".env").write_text(self.dev_env(APP_VARIANT="release"))
         result = self.run_script(self.worktree, "build-apk.sh")
         self.assertNotEqual(result.returncode, 0)
@@ -1227,7 +1242,7 @@ class BuildApkTest(ScriptsTestCase):
         self.assertIn(f"only built in production's checkout ({self.primary})", result.stderr)
         self.assertEqual(self.runs(), [])
 
-    def test_the_release_app_comes_from_production_s_checkout_on_a_published_release(self):
+    def test_the_release_app_comes_from_production_s_checkout_on_a_published_release(self) -> None:
         result = self.run_script(self.primary, "build-apk.sh")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         build, sign = self.runs()
@@ -1239,15 +1254,13 @@ class BuildApkTest(ScriptsTestCase):
         self.assertIn(f"EXPECTED_VERSION_NAME={VERSION} ", sign)
         self.assertNotIn("SCANMYLIB_DEV_VERSION", build)
         self.log.unlink()
-        for name, prepare, expected in [
-            (
-                "a stray file",
-                lambda: (
-                    (self.primary / "android" / "app" / "src").mkdir(parents=True),
-                    (self.primary / "android" / "app" / "src" / "stray.jks").write_bytes(b"key"),
-                ),
-                "could end up in the release app",
-            ),
+
+        def add_a_stray_file() -> None:
+            (self.primary / "android" / "app" / "src").mkdir(parents=True)
+            (self.primary / "android" / "app" / "src" / "stray.jks").write_bytes(b"key")
+
+        refusals: list[tuple[str, Callable[[], object], str]] = [
+            ("a stray file", add_a_stray_file, "could end up in the release app"),
             ("an untracked file", lambda: (self.primary / "notes.txt").write_text("x"), "clean checkout"),
             (
                 "a hidden change",
@@ -1267,7 +1280,8 @@ class BuildApkTest(ScriptsTestCase):
                 lambda: self.git(self.primary, "push", "--quiet", "origin", f":refs/tags/v{VERSION}"),
                 f"v{VERSION} is not published on origin",
             ),
-        ]:
+        ]
+        for name, prepare, expected in refusals:
             with self.subTest(name):
                 for path in (self.origin, self.primary):
                     shutil.rmtree(path)
@@ -1278,7 +1292,7 @@ class BuildApkTest(ScriptsTestCase):
                 self.assertIn(expected, result.stderr)
                 self.assertEqual(self.runs(), [])
 
-    def test_the_signing_key_is_only_created_on_request(self):
+    def test_the_signing_key_is_only_created_on_request(self) -> None:
         for name in ("scanmylib-release.p12", "password"):
             (self.prod / "android" / "keystore" / name).unlink()
         result = self.run_script(self.primary, "build-apk.sh")
@@ -1287,7 +1301,7 @@ class BuildApkTest(ScriptsTestCase):
         self.assertEqual(self.runs(), [])
         result = self.run_script(self.primary, "build-apk.sh", "--create-signing-key")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        build, key, sign = self.runs()
+        _, key, sign = self.runs()
         self.assertIn(f"{self.prod}/android/keystore:/keystore ", key + " ")
         self.assertIn("--network none", key)
         self.assertIn(f"{self.prod}/android/keystore:/keystore:ro", sign)
@@ -1296,12 +1310,12 @@ class BuildApkTest(ScriptsTestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("only production creates the signing key", result.stderr)
 
-    def test_without_env_only_ci_builds_and_never_signs(self):
+    def test_without_env_only_ci_builds_and_never_signs(self) -> None:
         data = self.base / "ci"
-        result = self.run_script(self.worktree, "build-apk.sh", "test", "lint", DATA_DIR=str(data))
+        result = self.run_script(self.worktree, "build-apk.sh", "test", "lint", environment={"DATA_DIR": str(data)})
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("only CI builds", result.stderr)
-        result = self.run_script(self.worktree, "build-apk.sh", DATA_DIR=str(data), CI="true")
+        result = self.run_script(self.worktree, "build-apk.sh", environment={"DATA_DIR": str(data), "CI": "true"})
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("never published", result.stdout)
         [build] = self.runs()
@@ -1315,13 +1329,13 @@ class BuildApkTest(ScriptsTestCase):
             with self.subTest(environment=environment):
                 self.log.unlink()
                 result = self.run_script(
-                    self.worktree, "build-apk.sh", "test", "lint", GITHUB_ACTIONS="true", **environment
+                    self.worktree, "build-apk.sh", "test", "lint", environment={"GITHUB_ACTIONS": "true", **environment}
                 )
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn(expected, result.stderr)
                 self.assertEqual(self.runs(), [])
 
-    def test_ci_builds_stay_out_of_the_home_directory(self):
+    def test_ci_builds_stay_out_of_the_home_directory(self) -> None:
         # CI=true on a workstation: the home directory is refused, and nothing is created there.
         android = self.home / "android-ci"
         result = self.run_script(
@@ -1329,9 +1343,7 @@ class BuildApkTest(ScriptsTestCase):
             "build-apk.sh",
             "test",
             "lint",
-            CI="true",
-            DATA_DIR=str(self.base / "ci"),
-            ANDROID_DIR=str(android),
+            environment={"CI": "true", "DATA_DIR": str(self.base / "ci"), "ANDROID_DIR": str(android)},
         )
         self.assertNotEqual(result.returncode, 0)
         self.assertIn(f"ANDROID_DIR: {android} is inside your home directory", result.stderr)
@@ -1344,9 +1356,11 @@ class BuildApkTest(ScriptsTestCase):
             "build-apk.sh",
             "test",
             "lint",
-            GITHUB_ACTIONS="true",
-            RUNNER_TEMP=str(runner_temp),
-            DATA_DIR=str(runner_temp / "data"),
+            environment={
+                "GITHUB_ACTIONS": "true",
+                "RUNNER_TEMP": str(runner_temp),
+                "DATA_DIR": str(runner_temp / "data"),
+            },
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn(f"{runner_temp}/data/android/sdk:/opt/android-sdk", self.runs()[0])
@@ -1356,16 +1370,18 @@ class BuildApkTest(ScriptsTestCase):
             "build-apk.sh",
             "test",
             "lint",
-            GITHUB_ACTIONS="true",
-            RUNNER_TEMP=str(runner_temp),
-            DATA_DIR=str(runner_temp / "data"),
-            ANDROID_DIR=str(android),
+            environment={
+                "GITHUB_ACTIONS": "true",
+                "RUNNER_TEMP": str(runner_temp),
+                "DATA_DIR": str(runner_temp / "data"),
+                "ANDROID_DIR": str(android),
+            },
         )
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("is inside your home directory", result.stderr)
         self.assertEqual(self.runs(), [])
 
-    def test_one_build_at_a_time_per_toolchain(self):
+    def test_one_build_at_a_time_per_toolchain(self) -> None:
         (self.worktree / ".env").write_text(self.dev_env())
         android = Path(f"{self.prod}-dev/android")
         android.mkdir(parents=True)
@@ -1379,14 +1395,14 @@ class BuildApkTest(ScriptsTestCase):
 
 
 class ProdShTest(ScriptsTestCase):
-    def test_docker_compose_on_production_with_its_env_only(self):
+    def test_docker_compose_on_production_with_its_env_only(self) -> None:
         leaked = {
             "COMPOSE_PROJECT_NAME": "scanmylib-dev",
             "COMPOSE_FILE": "/elsewhere.yaml",
             "DATA_DIR": "/elsewhere",
             "COMPOSE_PROFILES": "fake-ocr",
         }
-        result = self.run_script(self.primary, "prod.sh", "compose", "ps", **leaked)
+        result = self.run_script(self.primary, "prod.sh", "compose", "ps", environment=leaked)
         self.assertEqual(result.returncode, 0, result.stderr)
         [call] = [call for call in self.calls() if call["argv"][0] == "compose"]
         self.assertEqual(set(call["env"]) - {"DOCKER_HOST"}, set(), call)
@@ -1395,7 +1411,7 @@ class ProdShTest(ScriptsTestCase):
         self.assertIn(f"--env-file {self.primary}/.env ps", joined)
         self.assertNotIn("--profile", joined)
 
-    def test_only_in_production_s_checkout(self):
+    def test_only_in_production_s_checkout(self) -> None:
         (self.worktree / ".env").write_text(self.dev_env())
         for checkout in (self.worktree, self.make_clone()):
             with self.subTest(checkout=checkout):
@@ -1406,16 +1422,16 @@ class ProdShTest(ScriptsTestCase):
         result = self.run_script(self.primary, "prod.sh", "compose", "ps")
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("is not production's", result.stderr)
-        self.assertOnlyReads()
+        self.assert_only_reads()
 
-    def test_up_never_builds(self):
+    def test_up_never_builds(self) -> None:
         result = self.run_script(self.primary, "prod.sh", "compose", "up", "-d", "api", "ocr")
         self.assertEqual(result.returncode, 0, result.stderr)
         [call] = [call for call in self.calls() if call["argv"][0] == "compose"]
         self.assertEqual(call["argv"][-5:], ["up", "--no-build", "-d", "api", "ocr"])
 
-    def test_up_only_on_a_clean_release(self):
-        for name, prepare, expected in [
+    def test_up_only_on_a_clean_release(self) -> None:
+        refusals: list[tuple[str, Callable[[], object], str]] = [
             ("an untracked file", lambda: (self.primary / "notes.txt").write_text("x"), "uncommitted or untracked"),
             ("a change", lambda: (self.primary / "compose.yaml").write_text("services: {}\n"), "uncommitted"),
             (
@@ -1432,7 +1448,8 @@ class ProdShTest(ScriptsTestCase):
                 f"is not the release v{VERSION}",
             ),
             ("no tag", lambda: self.git(self.primary, "tag", "--delete", f"v{VERSION}"), f"no tag v{VERSION}"),
-        ]:
+        ]
+        for name, prepare, expected in refusals:
             with self.subTest(name):
                 for path in (self.origin, self.primary):
                     shutil.rmtree(path)
@@ -1449,7 +1466,7 @@ class ProdShTest(ScriptsTestCase):
                     result = self.run_script(self.primary, "prod.sh", "compose", command, "api")
                     self.assertEqual(result.returncode, 0, result.stderr)
 
-    def test_production_changes_through_deploy_sh(self):
+    def test_production_changes_through_deploy_sh(self) -> None:
         for args in (
             ["build", "api"],
             ["up", "-d", "--build", "api"],
@@ -1467,7 +1484,7 @@ class ProdShTest(ScriptsTestCase):
 
 
 class E2eTest(ScriptsTestCase):
-    def test_refuses_production_s_port_however_it_is_written(self):
+    def test_refuses_production_s_port_however_it_is_written(self) -> None:
         health = Health(self.api_port)
         self.addCleanup(health.close)
         (self.worktree / ".env").write_text(self.dev_env())
@@ -1498,7 +1515,7 @@ class E2eTest(ScriptsTestCase):
 
 
 class SetupAndVerifyTest(ScriptsTestCase):
-    def test_setup_only_installs_a_new_production(self):
+    def test_setup_only_installs_a_new_production(self) -> None:
         result = self.run_script(self.worktree, "setup.sh")
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("is not production's checkout", result.stderr)
@@ -1510,20 +1527,22 @@ class SetupAndVerifyTest(ScriptsTestCase):
         result = self.run_script(self.primary, "setup.sh")
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("deploy new versions with scripts/deploy.sh", result.stderr)
-        self.assertOnlyReads()
+        self.assert_only_reads()
         # A first installation is a published release too.
         self.git(self.primary, "commit", "--quiet", "--allow-empty", "--message", "x")
         result = self.run_script(self.primary, "setup.sh")
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("install a published release: HEAD", result.stderr)
 
-    def test_verify_sandbox_passes_on_an_isolated_sandbox(self):
+    def test_verify_sandbox_passes_on_an_isolated_sandbox(self) -> None:
         self.rules(sandbox_rules(f"{self.prod}/sandbox", str(self.prod)))
-        result = self.run_script(self.primary, "verify-sandbox.sh", DATA_DIR="/elsewhere", SANDBOX_DIR="/elsewhere")
+        result = self.run_script(
+            self.primary, "verify-sandbox.sh", environment={"DATA_DIR": "/elsewhere", "SANDBOX_DIR": "/elsewhere"}
+        )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("RESULT: all checks passed", result.stdout)
 
-    def test_production_never_falls_back_to_the_fake_ocr(self):
+    def test_production_never_falls_back_to_the_fake_ocr(self) -> None:
         self.rules(sandbox_rules(f"{self.prod}/sandbox", str(self.prod), kind="ocr-fake"))
         result = self.run_script(self.primary, "verify-sandbox.sh")
         self.assertNotEqual(result.returncode, 0)
@@ -1543,7 +1562,7 @@ class CheckTest(ScriptsTestCase):
         return [call["argv"] for call in self.calls() if call["argv"][:1] in (["build"], ["run"])]
 
     @staticmethod
-    def list_areas_checked(gate_run: subprocess.CompletedProcess) -> list[str]:
+    def list_areas_checked(gate_run: subprocess.CompletedProcess[str]) -> list[str]:
         return re.findall(r"Checking (\w+)", gate_run.stdout)
 
     def write_scripts_test(self, body: str) -> None:
@@ -1559,7 +1578,7 @@ class CheckTest(ScriptsTestCase):
         gate_run = self.run_script(self.worktree, "check.sh", "server", "web")
         self.assertEqual(gate_run.returncode, 0, gate_run.stdout + gate_run.stderr)
         self.assertEqual(self.list_areas_checked(gate_run), ["server", "web"])
-        build, server_tests, web_tests = (" ".join(argv) for argv in self.list_checks())
+        build, _, web_tests = (" ".join(argv) for argv in self.list_checks())
         self.assertIn(f"--target test {self.worktree}/server", build)
         self.assertIn("node --test", web_tests)
 
@@ -1592,9 +1611,7 @@ class CheckTest(ScriptsTestCase):
             self.worktree,
             "check.sh",
             "android",
-            GITHUB_ACTIONS="true",
-            RUNNER_TEMP=str(runner_temp),
-            DATA_DIR=str(ci_data_directory),
+            environment={"GITHUB_ACTIONS": "true", "RUNNER_TEMP": str(runner_temp), "DATA_DIR": str(ci_data_directory)},
         )
         self.assertEqual(gate_run.returncode, 0, gate_run.stdout + gate_run.stderr)
         [android_build] = (" ".join(argv) for argv in self.list_checks())
@@ -1602,7 +1619,9 @@ class CheckTest(ScriptsTestCase):
 
     def test_by_default_the_gate_checks_every_area_in_order(self) -> None:
         self.write_scripts_test("pass")
-        gate_run = self.run_script(self.worktree, "check.sh", CI="true", DATA_DIR=str(self.base / "ci"))
+        gate_run = self.run_script(
+            self.worktree, "check.sh", environment={"CI": "true", "DATA_DIR": str(self.base / "ci")}
+        )
         self.assertEqual(gate_run.returncode, 0, gate_run.stdout + gate_run.stderr)
         self.assertEqual(self.list_areas_checked(gate_run), ["scripts", "web", "server", "ocr", "android"])
         self.assertIn("Ran 1 test", gate_run.stderr)
@@ -1610,7 +1629,9 @@ class CheckTest(ScriptsTestCase):
     def test_the_gate_drops_the_git_variables_of_its_caller(self) -> None:
         self.write_scripts_test('self.assertNotIn("GIT_DIR", os.environ)')
         # What `git rebase --exec` exports in a worktree, at a path where no repository can be touched.
-        gate_run = self.run_script(self.worktree, "check.sh", "scripts", GIT_DIR="/nonexistent/caller/.git")
+        gate_run = self.run_script(
+            self.worktree, "check.sh", "scripts", environment={"GIT_DIR": "/nonexistent/caller/.git"}
+        )
         self.assertEqual(gate_run.returncode, 0, gate_run.stdout + gate_run.stderr)
 
     def test_a_failing_build_stops_the_gate(self) -> None:

@@ -37,8 +37,9 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 
 class Api:
@@ -61,12 +62,12 @@ class Api:
         except urllib.error.HTTPError as err:
             return err.code, err.read()
 
-    def json(self, method: str, path: str, payload: dict | None = None) -> tuple[int, dict]:
+    def json(self, method: str, path: str, payload: dict[str, object] | None = None) -> tuple[int, dict[str, Any]]:
         body = json.dumps(payload).encode() if payload is not None else None
         status, data = self.request(method, path, body, "application/json" if body else None)
         return status, (json.loads(data) if data else {})
 
-    def upload(self, doc_id: str, image: Path, fields: dict[str, str]) -> tuple[int, dict]:
+    def upload(self, doc_id: str, image: Path, fields: dict[str, str]) -> tuple[int, dict[str, Any]]:
         boundary = uuid.uuid4().hex
         parts = []
         for name, value in fields.items():
@@ -97,7 +98,7 @@ def read_env(path: Path) -> dict[str, str]:
     return stack.read_env(path) if path.is_file() else {}
 
 
-def production_containers() -> list[dict]:
+def production_containers() -> list[stack.JsonObject]:
     """`docker inspect` of production's containers (empty without Docker: production is then
     described by the .env of ~/Dev/scanmylib and the defaults)."""
     try:
@@ -116,9 +117,10 @@ def production_containers() -> list[dict]:
         ).stdout.split()
         if not ids:
             return []
-        return json.loads(
+        containers: list[stack.JsonObject] = json.loads(
             subprocess.run(["docker", "inspect", *ids], capture_output=True, text=True, check=True).stdout
         )
+        return containers
     except (OSError, subprocess.CalledProcessError, json.JSONDecodeError) as exc:
         print(f"  note  cannot list production's containers ({exc}): production's defaults only", file=sys.stderr)
         return []
@@ -279,7 +281,7 @@ def main() -> int:
                 "page_id": page_id,
                 "session_id": session_id,
                 "seq": str(seq),
-                "captured_at": datetime.now(timezone.utc).isoformat(),
+                "captured_at": datetime.now(UTC).isoformat(),
             }
             status, page = api.upload(doc_id, image, fields)
             check(status == 201, f"upload {image.name} -> {status}", failures)

@@ -30,7 +30,7 @@ import json
 import re
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 _RELEASE = re.compile(r"(0|[1-9][0-9]{0,2})\.(0|[1-9][0-9]?)\.(0|[1-9][0-9]?)")
@@ -38,7 +38,7 @@ _COMMIT = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
 _COUNT = re.compile(r"[0-9]{1,9}")
 
 #: The dev app's versionCode counts the minutes since this time.
-DEV_CODE_EPOCH = datetime(2026, 1, 1, tzinfo=timezone.utc)
+DEV_CODE_EPOCH = datetime(2026, 1, 1, tzinfo=UTC)
 #: The largest versionCode Android accepts.
 MAX_VERSION_CODE = 2_100_000_000
 
@@ -125,7 +125,7 @@ def published_code(metadata: Path) -> int | None:
 
 def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
-    if not (args[:1] == ["release"] and len(args) == 2 or args[:1] == ["dev"] and len(args) in (2, 3)):
+    if not ((args[:1] == ["release"] and len(args) == 2) or (args[:1] == ["dev"] and len(args) in (2, 3))):
         print(__doc__[__doc__.index("Usage:") :].rstrip(), file=sys.stderr)
         return 2
     root = Path(args[1])
@@ -135,7 +135,7 @@ def main(argv: list[str] | None = None) -> int:
             print(format_release(release), release_code(release))
         else:
             published = published_code(Path(args[2])) if len(args) == 3 else None
-            print(dev_version(root, release), dev_code(datetime.now(timezone.utc), published))
+            print(dev_version(root, release), dev_code(datetime.now(UTC), published))
     except (OSError, ValueError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1

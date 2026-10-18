@@ -7,7 +7,7 @@ import fr.scanmylib.model.DocumentKind
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
-class CardLinesTest {
+class CardLineTest {
 
     private fun server(pages: Int = 25, queued: Int = 0, processing: Int = 0, errors: Int = 0) = ServerDocumentState(
         pages = pages,

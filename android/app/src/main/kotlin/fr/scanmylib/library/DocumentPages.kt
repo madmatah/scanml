@@ -12,10 +12,7 @@ import fr.scanmylib.db.UploadState
  *   uploading, refused, or just uploaded.
  * @property server pages known by the server, in the server's order.
  */
-data class DocumentPages(
-    val local: List<PendingPageEntity>,
-    val server: List<ServerPageEntity>,
-) {
+data class DocumentPages(val local: List<PendingPageEntity>, val server: List<ServerPageEntity>) {
     val isEmpty: Boolean get() = local.isEmpty() && server.isEmpty()
 
     companion object {

@@ -1,0 +1,14 @@
+# The build container mounts android/ alone: this file stands on its own.
+root = true
+
+# ktlint reads this section (.claude/rules/kotlin.md): composables are named as nouns in PascalCase, and a multiline
+# list ends with a trailing comma, as the Kotlin coding conventions encourage at declarations, and at call sites too for
+# one style.
+[*.{kt,kts}]
+indent_style = space
+indent_size = 4
+max_line_length = 120
+ktlint_code_style = android_studio
+ktlint_function_naming_ignore_when_annotated_with = Composable
+ij_kotlin_allow_trailing_comma = true
+ij_kotlin_allow_trailing_comma_on_call_site = true

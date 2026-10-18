@@ -98,7 +98,10 @@ fun CameraSheet(
                 val enabled = camera != ScanSource.CAMERA || scan.hasCamera
                 val note = when {
                     !enabled -> R.string.camera_none_on_phone
-                    camera == ScanSource.GOOGLE_SCANNER && scan.googleScannerUnavailable -> R.string.camera_did_not_start
+
+                    camera == ScanSource.GOOGLE_SCANNER && scan.googleScannerUnavailable ->
+                        R.string.camera_did_not_start
+
                     else -> null
                 }
                 ListItem(

@@ -24,11 +24,12 @@ class QueueRunTest {
     private val document = "6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b"
     private val clock = Clock.fixed(Instant.parse("2026-10-12T18:30:00Z"), ZoneId.of("+02:00"))
 
-    private suspend fun run(staging: StagingArea, vararg shots: Pair<String, Instant>): List<StagedPage> =
-        staging.add(
-            document,
-            shots.map { (content, at) -> StagingInput(staging.incomingFile(document).apply { writeText(content) }, at) },
-        )
+    private suspend fun run(staging: StagingArea, vararg shots: Pair<String, Instant>): List<StagedPage> = staging.add(
+        document,
+        shots.map { (content, at) ->
+            StagingInput(staging.incomingFile(document).apply { writeText(content) }, at)
+        },
+    )
 
     @Test
     fun `a run becomes one session, in order, with capture times and page numbers`() = runTest {
@@ -90,7 +91,14 @@ class QueueRunTest {
         val journal = staging.sendJournal(document)
 
         expectFailure<IllegalStateException> {
-            queueRun(document, pages, PageNumbering(1, consecutive = true), ScanFileStore(scansDirectory), clock, journal) {
+            queueRun(
+                document,
+                pages,
+                PageNumbering(1, consecutive = true),
+                ScanFileStore(scansDirectory),
+                clock,
+                journal,
+            ) {
                 throw IllegalStateException("database closed")
             }
         }
@@ -104,7 +112,12 @@ class QueueRunTest {
      * [moved] pages in the scan store, nothing recorded yet.
      */
     private suspend fun interruptedSend(staging: StagingArea, scans: ScanFileStore, moved: Int): List<SentPage> {
-        val pages = run(staging, "p1" to clock.instant(), "p2" to clock.instant().plusSeconds(2), "p3" to clock.instant())
+        val pages = run(
+            staging,
+            "p1" to clock.instant(),
+            "p2" to clock.instant().plusSeconds(2),
+            "p3" to clock.instant(),
+        )
         val sent = pages.map { SentPage(UUID.randomUUID().toString(), it.file.name) }
         writeSendJournal(staging.sendJournal(document), sent)
         pages.zip(sent).take(moved).forEach { (page, entry) -> scans.adopt(entry.pageId, page.file) }

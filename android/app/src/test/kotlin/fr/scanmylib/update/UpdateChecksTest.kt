@@ -42,7 +42,10 @@ class UpdateChecksTest {
     @Test
     fun `a newer APK of this app is offered, downloaded from the paired PC`() {
         val update = offeredUpdate(pc, apk, app, installedVersionCode = 700)
-        assertEquals(AvailableUpdate("0.8.0", 800, sha256, 1234, "http://192.168.1.10:8770/download/scanmylib.apk".toHttpUrl()), update)
+        assertEquals(
+            AvailableUpdate("0.8.0", 800, sha256, 1234, "http://192.168.1.10:8770/download/scanmylib.apk".toHttpUrl()),
+            update,
+        )
     }
 
     @Test
@@ -79,8 +82,12 @@ class UpdateChecksTest {
     private val signers = setOf("cd".repeat(32))
     private val facts = ApkFacts(app, 800, signers)
 
-    private fun check(sha: String = sha256, size: Long = 1234, apk: ApkFacts? = facts, installedSigners: Set<String>? = signers) =
-        checkDownloadedApk(update, sha, size, apk, app, installedVersionCode = 700, installedSigners = installedSigners)
+    private fun check(
+        sha: String = sha256,
+        size: Long = 1234,
+        apk: ApkFacts? = facts,
+        installedSigners: Set<String>? = signers,
+    ) = checkDownloadedApk(update, sha, size, apk, app, installedVersionCode = 700, installedSigners = installedSigners)
 
     @Test
     fun `the downloaded APK is installed only when it is the one announced, for this app, newer, same signer`() {

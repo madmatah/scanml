@@ -30,7 +30,9 @@ data class Health(
 ) {
     /** The APK the PC serves; null if none is published, or if its description cannot be read. */
     val apk: PublishedApk?
-        get() = apkJson?.let { runCatching { ApiJson.decodeFromJsonElement(PublishedApk.serializer(), it) }.getOrNull() }
+        get() = apkJson?.let {
+            runCatching { ApiJson.decodeFromJsonElement(PublishedApk.serializer(), it) }.getOrNull()
+        }
 }
 
 /** The APK published on the PC, as `/api/health` describes it. */
@@ -62,10 +64,7 @@ data class OcrStatus(
 
 /** Pages waiting for OCR on the PC. */
 @Serializable
-data class QueueCounts(
-    val queued: Int = 0,
-    val processing: Int = 0,
-)
+data class QueueCounts(val queued: Int = 0, val processing: Int = 0)
 
 /** `GET /api/documents` */
 @Serializable
@@ -115,12 +114,7 @@ internal data class PageList(val pages: List<Page>)
 
 /** Body of `PUT /api/documents/{id}`. */
 @Serializable
-data class DocumentUpsert(
-    val title: String,
-    val author: String,
-    val kind: DocumentKind,
-    val unwarp: Boolean,
-)
+data class DocumentUpsert(val title: String, val author: String, val kind: DocumentKind, val unwarp: Boolean)
 
 @Serializable
 data class Page(

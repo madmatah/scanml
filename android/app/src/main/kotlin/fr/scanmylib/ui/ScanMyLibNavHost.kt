@@ -123,7 +123,11 @@ fun ScanMyLibNavHost(navController: NavHostController, paired: Boolean, share: L
                         importOnOpen = then == AfterCreate.IMPORT,
                     )
                     navController.navigate(route) {
-                        if (forShare) popUpTo<ShareRoute> { inclusive = true } else popUpTo<NewDocumentRoute> { inclusive = true }
+                        if (forShare) {
+                            popUpTo<ShareRoute> { inclusive = true }
+                        } else {
+                            popUpTo<NewDocumentRoute> { inclusive = true }
+                        }
                     }
                 },
                 onCancel = { navController.navigateUp() },

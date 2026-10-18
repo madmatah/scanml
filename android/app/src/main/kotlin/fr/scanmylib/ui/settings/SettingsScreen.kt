@@ -164,7 +164,8 @@ fun SettingsScreen(
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
             SectionHeader(R.string.settings_default_camera)
             val context = LocalContext.current
-            val hasCamera = remember(context) { context.packageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_ANY) }
+            val hasCamera =
+                remember(context) { context.packageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_ANY) }
             Column(Modifier.selectableGroup()) {
                 ScanSource.CAMERAS.forEach { camera ->
                     val enabled = camera != ScanSource.CAMERA || hasCamera
@@ -219,7 +220,11 @@ fun SettingsScreen(
                         ),
                     )
                 },
-                modifier = Modifier.clickable(enabled = server != null, role = Role.Button, onClick = viewModel::checkForUpdate),
+                modifier = Modifier.clickable(
+                    enabled = server != null,
+                    role = Role.Button,
+                    onClick = viewModel::checkForUpdate,
+                ),
             )
             UpdateBanner(
                 update,

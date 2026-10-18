@@ -191,7 +191,10 @@ fun DocumentScreen(
         },
         floatingActionButton = {
             if (document != null) {
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     // On a narrow screen, or with large text, "Import" keeps its icon only.
                     val density = LocalDensity.current
                     val width = with(density) { LocalWindowInfo.current.containerSize.width.toDp() }
@@ -226,7 +229,9 @@ fun DocumentScreen(
         ) {
             when {
                 state.loading -> Unit
+
                 document == null -> DocumentGone()
+
                 else -> LazyVerticalGrid(
                     columns = GridCells.Adaptive(minSize = 104.dp),
                     contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 88.dp),
@@ -234,11 +239,19 @@ fun DocumentScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.fillMaxSize(),
                 ) {
-                    fullWidthItem("summary") { DocumentSummary(document, onRetryUpload = viewModel::retryDocumentUpload) }
+                    fullWidthItem("summary") {
+                        DocumentSummary(document, onRetryUpload = viewModel::retryDocumentUpload)
+                    }
                     val pages = state.pages
                     if (pages.local.isNotEmpty()) {
                         fullWidthItem("local") {
-                            SectionTitle(pluralStringResource(R.plurals.document_local_pages, pages.local.size, pages.local.size))
+                            SectionTitle(
+                                pluralStringResource(
+                                    R.plurals.document_local_pages,
+                                    pages.local.size,
+                                    pages.local.size,
+                                ),
+                            )
                         }
                         items(pages.local, key = { it.id }) { page ->
                             LocalPageTile(
@@ -250,7 +263,9 @@ fun DocumentScreen(
                         }
                     }
                     fullWidthItem("server") {
-                        SectionTitle(pluralStringResource(R.plurals.document_server_pages, pages.server.size, pages.server.size))
+                        SectionTitle(
+                            pluralStringResource(R.plurals.document_server_pages, pages.server.size, pages.server.size),
+                        )
                     }
                     if (pages.isEmpty) {
                         fullWidthItem("empty") { NoPagesYet() }
@@ -463,21 +478,36 @@ private fun DocumentGone() {
 
 private fun DocumentMessage.text(resources: Resources): String = when (this) {
     DocumentMessage.Unreachable -> resources.getString(R.string.message_pc_unreachable)
+
     DocumentMessage.TokenRefused -> resources.getString(R.string.message_token_refused)
+
     is DocumentMessage.ServerError -> resources.getString(R.string.message_server_error, detail)
+
     is DocumentMessage.PagesQueued -> resources.getQuantityString(R.plurals.message_pages_queued, count, count)
+
     DocumentMessage.ImportFailed -> resources.getString(R.string.message_import_failed)
+
     DocumentMessage.SendFailed -> resources.getString(R.string.message_send_failed)
+
     DocumentMessage.StorageFull -> resources.getString(R.string.message_storage_full)
+
     is DocumentMessage.PhotosSkipped -> listOfNotNull(
-        unsupported.takeIf { it > 0 }?.let { resources.getQuantityString(R.plurals.message_unsupported_photos, it, it) },
+        unsupported.takeIf { it > 0 }?.let {
+            resources.getQuantityString(R.plurals.message_unsupported_photos, it, it)
+        },
         tooLarge.takeIf { it > 0 }?.let { resources.getQuantityString(R.plurals.message_too_large_photos, it, it) },
         unreadable.takeIf { it > 0 }?.let { resources.getQuantityString(R.plurals.message_unreadable_photos, it, it) },
     ).joinToString(" ")
+
     DocumentMessage.AddingInterrupted -> resources.getString(R.string.message_adding_interrupted)
+
     DocumentMessage.SettingNotSaved -> resources.getString(R.string.message_setting_not_saved)
+
     DocumentMessage.ScannerUnavailable -> resources.getString(R.string.message_scanner_unavailable)
+
     DocumentMessage.ScannerFailed -> resources.getString(R.string.message_scanner_failed)
+
     DocumentMessage.PhotoPickerUnavailable -> resources.getString(R.string.message_photo_picker_unavailable)
+
     DocumentMessage.PageBusy -> resources.getString(R.string.message_page_busy)
 }

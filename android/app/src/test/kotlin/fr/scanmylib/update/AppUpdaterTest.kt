@@ -52,8 +52,13 @@ class AppUpdaterTest {
     @get:Rule
     val folder = TemporaryFolder()
 
-    private val update =
-        AvailableUpdate("0.8.0", 800, "ab".repeat(32), 1234, "http://192.168.1.10:8770/download/scanmylib.apk".toHttpUrl())
+    private val update = AvailableUpdate(
+        "0.8.0",
+        800,
+        "ab".repeat(32),
+        1234,
+        "http://192.168.1.10:8770/download/scanmylib.apk".toHttpUrl(),
+    )
     private val installing = UpdateState.Installing(update, sessionId = 7)
 
     @Test
@@ -430,7 +435,9 @@ class AppUpdaterTest {
                 held?.await()
                 if (down) MockResponse.Builder().code(503).build() else MockResponse.Builder().body(health()).build()
             }
+
             "/download/scanmylib.apk" -> MockResponse.Builder().body(Buffer().write(served)).build()
+
             else -> MockResponse.Builder().code(404).build()
         }
 

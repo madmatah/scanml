@@ -12,7 +12,9 @@ class UploadWorker(context: Context, parameters: WorkerParameters) : CoroutineWo
         val uploader = (applicationContext as ScanMyLibApplication).container.uploader
         return when (uploader.uploadPending()) {
             UploadRunResult.DONE, UploadRunResult.NOT_PAIRED -> Result.success()
+
             UploadRunResult.RETRY_LATER -> Result.retry()
+
             // Retrying cannot help until the user pairs again, which restarts the uploads.
             UploadRunResult.UNAUTHORIZED -> Result.failure()
         }

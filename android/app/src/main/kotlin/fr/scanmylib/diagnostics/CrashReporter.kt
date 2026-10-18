@@ -70,7 +70,9 @@ object CrashReporter {
         val app = runCatching { context.packageManager.getPackageInfo(context.packageName, 0) }.getOrNull()
         val playServices = runCatching { GoogleApiAvailabilityLight.getInstance().getApkVersion(context) }.getOrNull()
         appendLine("ScanMyLib ${app?.versionName}")
-        appendLine("Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT}), ${Build.MANUFACTURER} ${Build.MODEL}")
+        appendLine(
+            "Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT}), ${Build.MANUFACTURER} ${Build.MODEL}",
+        )
         appendLine("Google Play services: ${playServices ?: "unknown"}")
         appendLine("Date: ${OffsetDateTime.now()}")
         appendLine("Thread: ${thread.name}")

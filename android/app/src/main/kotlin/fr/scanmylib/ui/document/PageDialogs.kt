@@ -35,11 +35,13 @@ fun LocalPageDialog(page: PendingPageEntity, onRetry: () -> Unit, onDelete: () -
                             stringResource(R.string.local_page_failed, reason),
                             color = MaterialTheme.colorScheme.error,
                         )
+
                         // Retrying cannot help until the phone is paired again.
                         failure == UploadFailure.UNAUTHORIZED -> Text(
                             stringResource(R.string.local_page_needs_pairing),
                             color = MaterialTheme.colorScheme.error,
                         )
+
                         else -> Text(stringResource(R.string.local_page_will_retry, reason))
                     }
                 }

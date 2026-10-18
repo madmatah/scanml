@@ -14,8 +14,10 @@ val Intent.isShare: Boolean get() = action == Intent.ACTION_SEND || action == In
 fun Intent.sharedPhotos(ownPackage: String): List<Uri> {
     val uris = when (action) {
         Intent.ACTION_SEND -> listOfNotNull(IntentCompat.getParcelableExtra(this, Intent.EXTRA_STREAM, Uri::class.java))
+
         Intent.ACTION_SEND_MULTIPLE ->
             IntentCompat.getParcelableArrayListExtra(this, Intent.EXTRA_STREAM, Uri::class.java).orEmpty()
+
         else -> emptyList()
     }
     return uris.filter { isReadableShare(it.scheme, it.authority, ownPackage) }
@@ -29,11 +31,10 @@ fun Intent.sharedPhotos(ownPackage: String): List<Uri> {
  * resolver drops a user part ("0@") before finding the provider, so "0@<this app>" would pass a
  * comparison of the whole authority.
  */
-fun isReadableShare(scheme: String?, authority: String?, ownPackage: String): Boolean =
-    scheme == "content" &&
-        authority != null &&
-        PROVIDER_NAME.matches(authority) &&
-        authority != ownPackage &&
-        !authority.startsWith("$ownPackage.")
+fun isReadableShare(scheme: String?, authority: String?, ownPackage: String): Boolean = scheme == "content" &&
+    authority != null &&
+    PROVIDER_NAME.matches(authority) &&
+    authority != ownPackage &&
+    !authority.startsWith("$ownPackage.")
 
 private val PROVIDER_NAME = Regex("[A-Za-z0-9_-]+(\\.[A-Za-z0-9_-]+)*")

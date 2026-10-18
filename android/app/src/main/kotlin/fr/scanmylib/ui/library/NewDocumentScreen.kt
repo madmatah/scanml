@@ -188,7 +188,11 @@ fun NewDocumentScreen(
                 state.failure?.let { failure ->
                     Text(
                         stringResource(
-                            if (failure == CreateFailure.STORAGE_FULL) R.string.message_storage_full else R.string.new_document_failed,
+                            if (failure == CreateFailure.STORAGE_FULL) {
+                                R.string.message_storage_full
+                            } else {
+                                R.string.new_document_failed
+                            },
                         ),
                         color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodyMedium,
@@ -200,10 +204,20 @@ fun NewDocumentScreen(
                         create(AfterCreate.ADD_SHARED)
                     }
                 } else {
-                    CreateButton(R.string.new_document_create_scan, R.drawable.ic_document_scanner, enabled, filled = true) {
+                    CreateButton(
+                        R.string.new_document_create_scan,
+                        R.drawable.ic_document_scanner,
+                        enabled,
+                        filled = true,
+                    ) {
                         create(AfterCreate.SCAN)
                     }
-                    CreateButton(R.string.new_document_create_import, R.drawable.ic_photo_library, enabled, filled = false) {
+                    CreateButton(
+                        R.string.new_document_create_import,
+                        R.drawable.ic_photo_library,
+                        enabled,
+                        filled = false,
+                    ) {
                         create(AfterCreate.IMPORT)
                     }
                 }

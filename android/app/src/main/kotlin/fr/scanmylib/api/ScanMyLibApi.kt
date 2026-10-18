@@ -22,19 +22,14 @@ import okhttp3.Response
  * Client of the ScanMyLib HTTP API (docs/API.md) for one server. Calls are main-safe and report
  * failures as [ApiException].
  */
-class ScanMyLibApi(
-    private val http: OkHttpClient,
-    server: ServerConfig,
-    private val json: Json = ApiJson,
-) {
+class ScanMyLibApi(private val http: OkHttpClient, server: ServerConfig, private val json: Json = ApiJson) {
     private val requests = ApiRequests(server, json)
 
     suspend fun health(): Health = call(requests.health(), Health.serializer())
 
     suspend fun status(): ServerStatus = call(requests.status(), ServerStatus.serializer())
 
-    suspend fun documents(): List<Document> =
-        call(requests.documents(), DocumentList.serializer()).documents
+    suspend fun documents(): List<Document> = call(requests.documents(), DocumentList.serializer()).documents
 
     suspend fun document(id: String): DocumentDetail = call(requests.document(id)) { body ->
         val element = json.parseToJsonElement(body)

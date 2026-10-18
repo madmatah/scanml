@@ -62,7 +62,12 @@ class SettingsViewModel(
     private val notSavedChannel = Channel<Unit>(Channel.CONFLATED)
 
     val uiState: StateFlow<SettingsUiState> =
-        combine(settings.settings, library.observeKeptCopies(), testing, lastCheck) { settings, copies, testing, check ->
+        combine(
+            settings.settings,
+            library.observeKeptCopies(),
+            testing,
+            lastCheck,
+        ) { settings, copies, testing, check ->
             SettingsUiState(settings, copies, testing, check)
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SettingsUiState())
 

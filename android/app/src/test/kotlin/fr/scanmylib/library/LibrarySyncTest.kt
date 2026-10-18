@@ -66,7 +66,12 @@ class LibrarySyncTest {
         val listedAt = NOW - 1_000
         assertEquals(
             MissingDocumentAction.KEEP,
-            actionForMissing(local("new", needsUpload = true), hasPagesToUpload = false, hasStagedPages = false, listedAt),
+            actionForMissing(
+                local("new", needsUpload = true),
+                hasPagesToUpload = false,
+                hasStagedPages = false,
+                listedAt,
+            ),
         )
         assertEquals(
             MissingDocumentAction.KEEP,

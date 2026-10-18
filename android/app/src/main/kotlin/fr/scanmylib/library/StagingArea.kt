@@ -213,8 +213,7 @@ class StagingArea(
         }
     }
 
-    private suspend fun withPagesLocked(): Set<String> =
-        loadAllLocked().filterValues { it.isNotEmpty() }.keys
+    private suspend fun withPagesLocked(): Set<String> = loadAllLocked().filterValues { it.isNotEmpty() }.keys
 
     /** Reads every run on disk; returns all the runs. */
     private suspend fun loadAllLocked(): Map<String, List<StagedPage>> {

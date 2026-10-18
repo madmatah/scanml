@@ -68,7 +68,7 @@ def assert_safe_markdown(output: str) -> None:
     """Structural invariants of sanitized Markdown."""
     for match in re.finditer(r"<(?=[A-Za-z/!?])", output):
         tag = _SERIALIZED_TAG.match(output, match.start())
-        assert tag, f"unexpected markup at {output[match.start():match.start() + 40]!r}"
+        assert tag, f"unexpected markup at {output[match.start() : match.start() + 40]!r}"
         assert tag[1] in sanitize._ALLOWED_TAGS
     parsed = markup(output)
     assert parsed.other == []
@@ -76,8 +76,20 @@ def assert_safe_markdown(output: str) -> None:
         assert tag in sanitize._ALLOWED_TAGS
         for name, value in attributes:
             assert not name.startswith("on")
-            assert name in {"src", "alt", "width", "height", "colspan", "rowspan", "valign", "span",
-                            "border", "start", "align", "style"}
+            assert name in {
+                "src",
+                "alt",
+                "width",
+                "height",
+                "colspan",
+                "rowspan",
+                "valign",
+                "span",
+                "border",
+                "start",
+                "align",
+                "style",
+            }
             if name == "src":
                 assert value in IMAGES.values()
             if name == "style":
@@ -96,7 +108,20 @@ def assert_safe_html(html: str) -> None:
     parsed = markup(html)
     assert parsed.other == []
     for tag, attributes in parsed.tags:
-        assert tag not in {"script", "style", "iframe", "object", "embed", "svg", "math", "form", "input", "link", "meta", "base"}
+        assert tag not in {
+            "script",
+            "style",
+            "iframe",
+            "object",
+            "embed",
+            "svg",
+            "math",
+            "form",
+            "input",
+            "link",
+            "meta",
+            "base",
+        }
         for name, value in attributes:
             assert not name.startswith("on")
             assert name not in {"style", "srcset", "id"}
@@ -135,8 +160,10 @@ def test_unclosed_script_drops_everything_after_it():
 @pytest.mark.parametrize(
     "payload",
     [
-        "<embed src='evil.swf'>", "<link rel=stylesheet href='https://evil.example/x.css'>",
-        "<meta http-equiv=refresh content='0;url=javascript:alert(1)'>", "<base href='https://evil.example/'>",
+        "<embed src='evil.swf'>",
+        "<link rel=stylesheet href='https://evil.example/x.css'>",
+        "<meta http-equiv=refresh content='0;url=javascript:alert(1)'>",
+        "<base href='https://evil.example/'>",
         "<form action='https://evil.example'><input name=q><button>Send</button></form>",
         "<select><option>1</option></select>",
     ],
@@ -163,8 +190,16 @@ def test_image_names_are_compared_after_entity_decoding():
 
 @pytest.mark.parametrize(
     "src",
-    ["imgs/../a.jpg", "imgs/a.jpg/../../etc/passwd", "../images/K_1.jpg", "/etc/passwd",
-     "http://evil.example/a.jpg", "data:image/png;base64,AAAA", "javascript:alert(1)", "imgs/unknown.jpg"],
+    [
+        "imgs/../a.jpg",
+        "imgs/a.jpg/../../etc/passwd",
+        "../images/K_1.jpg",
+        "/etc/passwd",
+        "http://evil.example/a.jpg",
+        "data:image/png;base64,AAAA",
+        "javascript:alert(1)",
+        "imgs/unknown.jpg",
+    ],
 )
 def test_images_can_only_target_the_page_images(src):
     assert clean(f'<img src="{src}">') == ""
@@ -314,13 +349,73 @@ def test_unsafe_image_names(name):
 # -- fuzzing: random combinations of hostile fragments -------------------------------
 
 _FRAGMENTS = [
-    "<script>", "</script>", "<img", " src=", "imgs/a.jpg", '"', "'", " onerror=alert(1)", ">", "/>", "<",
-    "<!--", "-->", "<svg", "<iframe", "</iframe>", "javascript:", "&#106;", "&lt;", "](", "![x]", "[y]",
-    "(", ")", "]:", "\n", "\n\n", " ", "<div", ' style="text-align:center"', "<a href=", "<style>",
-    "</style>", "<math>", "<table>", "<td colspan=2>", "`", "<!DOCTYPE", "<?", "</", "data:", "\t",
-    "<p", "<b>", "</b>", "<br>", "text ", "<IMG SRC=", "<sCrIpT>", "<img/src=x/onerror=alert(1)>",
-    "<<", "<x>", "</x>", "<!-- -->", "<!-->", "--!>", "img", "svg", "<plaintext>", "<xmp>", "\\",
-    "$", "$$", "5 ", "^{m}", "<span class=math-inline>", "</span>",
+    "<script>",
+    "</script>",
+    "<img",
+    " src=",
+    "imgs/a.jpg",
+    '"',
+    "'",
+    " onerror=alert(1)",
+    ">",
+    "/>",
+    "<",
+    "<!--",
+    "-->",
+    "<svg",
+    "<iframe",
+    "</iframe>",
+    "javascript:",
+    "&#106;",
+    "&lt;",
+    "](",
+    "![x]",
+    "[y]",
+    "(",
+    ")",
+    "]:",
+    "\n",
+    "\n\n",
+    " ",
+    "<div",
+    ' style="text-align:center"',
+    "<a href=",
+    "<style>",
+    "</style>",
+    "<math>",
+    "<table>",
+    "<td colspan=2>",
+    "`",
+    "<!DOCTYPE",
+    "<?",
+    "</",
+    "data:",
+    "\t",
+    "<p",
+    "<b>",
+    "</b>",
+    "<br>",
+    "text ",
+    "<IMG SRC=",
+    "<sCrIpT>",
+    "<img/src=x/onerror=alert(1)>",
+    "<<",
+    "<x>",
+    "</x>",
+    "<!-- -->",
+    "<!-->",
+    "--!>",
+    "img",
+    "svg",
+    "<plaintext>",
+    "<xmp>",
+    "\\",
+    "$",
+    "$$",
+    "5 ",
+    "^{m}",
+    "<span class=math-inline>",
+    "</span>",
 ]
 
 
@@ -372,12 +467,20 @@ def test_oversized_page_previews_are_plain_text():
 def test_document_preview_structure():
     pages = {"k1": "First text", "k2": "Second <b>text</b>", "k3": "No number", "k4": "Spread", "k5": "Preface"}
     sections = [
-        PageSection("k1", "1"), GapSection(2, 4), PageSection("k2", "5"), GapSection(6, 6), PageSection("k4", "7–8"),
-        PageSection("k5", "xii"), UnnumberedHeading(), PageSection("k3", None),
+        PageSection("k1", "1"),
+        GapSection(2, 4),
+        PageSection("k2", "5"),
+        GapSection(6, 6),
+        PageSection("k4", "7–8"),
+        PageSection("k5", "xii"),
+        UnnumberedHeading(),
+        PageSection("k3", None),
     ]
     html = render_document("Title <i>", sections, pages.__getitem__, FILES_URL)
     assert html.startswith("<h1>Title &lt;i&gt;</h1>")
-    assert '<section class="page" data-key="k1"><p class="page-marker" data-label="1">Page 1</p><p>First text</p>' in html
+    assert (
+        '<section class="page" data-key="k1"><p class="page-marker" data-label="1">Page 1</p><p>First text</p>' in html
+    )
     assert '<p class="missing-pages" data-range="2–4">Missing pages: 2–4</p>' in html
     assert '<p class="missing-pages" data-range="6">Missing page: 6</p>' in html
     assert '<p class="page-marker" data-label="7–8">Page 7–8</p>' in html
@@ -459,8 +562,7 @@ def test_a_display_formula_ends_the_paragraph_it_is_in():
     # In bold text, the HTML parser re-opens <strong> inside the formula: its text is still the TeX.
     html = render_markdown("**bold $$x$$ end**", FILES_URL)
     assert html == (
-        '<p><strong>bold </strong></p><div class="math-display"><strong>x</strong></div>'
-        "<p><strong> end</strong></p>\n"
+        '<p><strong>bold </strong></p><div class="math-display"><strong>x</strong></div><p><strong> end</strong></p>\n'
     )
     assert parse_formulas(html).found == [("display", "x")]
 
@@ -501,10 +603,18 @@ def test_tex_reaches_the_web_ui_unchanged():
 @pytest.mark.parametrize(
     "text",
     [
-        "It costs 5 $.", "5 $ and 10 $", "from 5$ to 10$", "the price (5 $) and the cost (10 $)",
-        "$5", "$5 and $10", "$5, $10 or $20", "$ 5 or $ 10", "US$ 30 and US$ 40",
+        "It costs 5 $.",
+        "5 $ and 10 $",
+        "from 5$ to 10$",
+        "the price (5 $) and the cost (10 $)",
+        "$5",
+        "$5 and $10",
+        "$5, $10 or $20",
+        "$ 5 or $ 10",
+        "US$ 30 and US$ 40",
         "A book costs 5 $ and a notebook 10 $; in the café, $5 and $10.",
-        r"\$x\$ and \$y\$", "echo $HOME $PATH",
+        r"\$x\$ and \$y\$",
+        "echo $HOME $PATH",
     ],
 )
 def test_dollars_that_are_not_formulas(text):
@@ -516,7 +626,10 @@ def test_dollars_that_are_not_formulas(text):
     ("markdown", "expected"),
     [
         ("$a\n\nb$", "<p>$a</p>\n<p>b$</p>\n"),
-        ("<table><tr><td>$ a</td><td>b $</td></tr></table>", "<table><tbody><tr><td>$ a</td><td>b $</td></tr></tbody></table>"),
+        (
+            "<table><tr><td>$ a</td><td>b $</td></tr></table>",
+            "<table><tbody><tr><td>$ a</td><td>b $</td></tr></tbody></table>",
+        ),
         ("`$x$` and `a $b` c$", "<p><code>$x$</code> and <code>a $b</code> c$</p>\n"),
         ("```\n$x$ and $$y$$\n```", "<pre><code>$x$ and $$y$$\n</code></pre>\n"),
         ("![figure $x$](../images/K_1.jpg)", f'<p><img src="{FILES_URL}/images/K_1.jpg" alt="figure $x$"></p>\n'),
@@ -529,8 +642,11 @@ def test_formulas_stay_in_a_paragraph_or_cell_and_out_of_code_and_attributes(mar
 @pytest.mark.parametrize(
     "tex",
     [
-        r"\href{javascript:alert(1)}{click}", r"\url{https://evil.example}", r"\htmlClass{evil}{x}",
-        r"\htmlStyle{background:url(https://evil.example)}{x}", r"\includegraphics{https://evil.example/p.png}",
+        r"\href{javascript:alert(1)}{click}",
+        r"\url{https://evil.example}",
+        r"\htmlClass{evil}{x}",
+        r"\htmlStyle{background:url(https://evil.example)}{x}",
+        r"\includegraphics{https://evil.example/p.png}",
     ],
 )
 def test_hostile_tex_is_text(tex):
@@ -586,9 +702,38 @@ def test_formulas_of_a_paddleocr_vl_page():
 
 def test_fuzzed_formulas_are_well_formed():
     fragments = [
-        "$", "$$", "\\(", "\\)", "\\[", "\\]", "\\", "5 ", " ", "x", "^{m}", "\n", "\n\n", "`", "<b>", "</b>",
-        "&lt;", "&amp;", "<table><tr><td>", "</td>", "<img src=imgs/a.jpg alt='$x$'>", "<!--", "-->",
-        "\ufdd0", "\ufdd1", "0", "<p>", "</p>", "<code>", "</code>", "- ", "*",
+        "$",
+        "$$",
+        "\\(",
+        "\\)",
+        "\\[",
+        "\\]",
+        "\\",
+        "5 ",
+        " ",
+        "x",
+        "^{m}",
+        "\n",
+        "\n\n",
+        "`",
+        "<b>",
+        "</b>",
+        "&lt;",
+        "&amp;",
+        "<table><tr><td>",
+        "</td>",
+        "<img src=imgs/a.jpg alt='$x$'>",
+        "<!--",
+        "-->",
+        "\ufdd0",
+        "\ufdd1",
+        "0",
+        "<p>",
+        "</p>",
+        "<code>",
+        "</code>",
+        "- ",
+        "*",
     ]
     rng = random.Random(20261013)
     for _ in range(2000):

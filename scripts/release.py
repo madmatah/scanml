@@ -75,8 +75,10 @@ _TO_FOLD = re.compile(r"(fixup|amend|squash)! ")
 LEVELS = ("major", "minor", "patch")
 #: The kinds of changes, and how the summary counts them.
 KINDS = {
-    "breaking": ("breaking change", "breaking changes"), "feature": ("feature", "features"),
-    "fix": ("fix", "fixes"), "other": ("other change", "other changes"),
+    "breaking": ("breaking change", "breaking changes"),
+    "feature": ("feature", "features"),
+    "fix": ("fix", "fixes"),
+    "other": ("other change", "other changes"),
 }
 #: The sections of the changelog the commits give, in Keep a Changelog's order; Deprecated,
 #: Removed and Security are written by hand.
@@ -90,8 +92,9 @@ CHANGELOG = "CHANGELOG.md"
 TRAILER = "Release-Base"
 _TRAILER_LINE = re.compile(rf"^{TRAILER}: (?P<commit>[0-9a-f]{{40}})$", re.MULTILINE)
 _UNRELEASED = "## [Unreleased]"
-_UNRELEASED_LINK = re.compile(r"^\[unreleased\]: (?P<base>https://\S+)/compare/v(?P<version>\S+)\.\.\.HEAD$",
-                              re.MULTILINE)
+_UNRELEASED_LINK = re.compile(
+    r"^\[unreleased\]: (?P<base>https://\S+)/compare/v(?P<version>\S+)\.\.\.HEAD$", re.MULTILINE
+)
 
 
 class ReleaseError(Exception):
@@ -115,8 +118,7 @@ class Change:
         match = _SUBJECT.fullmatch(subject)
         if not match:
             return cls(commit, subject, None, None, subject, footer)
-        return cls(commit, subject, match["type"], match["scope"], match["summary"],
-                   bool(match["breaking"]) or footer)
+        return cls(commit, subject, match["type"], match["scope"], match["summary"], bool(match["breaking"]) or footer)
 
     @property
     def kind(self) -> str:
@@ -153,8 +155,10 @@ def bump(release: Release, level: str) -> Release:
     major, minor, patch = release
     following = {"major": (major + 1, 0, 0), "minor": (major, minor + 1, 0), "patch": (major, minor, patch + 1)}[level]
     if following[0] > 999 or following[1] > 99 or following[2] > 99:
-        raise ReleaseError(f"{format_release(following)} is past what VERSION allows (minor and patch below 100): "
-                           "choose another increment with --bump")
+        raise ReleaseError(
+            f"{format_release(following)} is past what VERSION allows (minor and patch below 100): "
+            "choose another increment with --bump"
+        )
     return following
 
 
@@ -162,8 +166,9 @@ def notes(changes: list[Change]) -> str:
     """The draft of the release's section of the changelog, without its heading: one subsection per
     section, the commits in order. With nothing to draft, the commits left out go under Changed."""
     if any(change.section for change in changes):
-        sections = {section: [change.entry() for change in changes if change.section == section]
-                    for section in SECTIONS}
+        sections = {
+            section: [change.entry() for change in changes if change.section == section] for section in SECTIONS
+        }
     else:
         sections = {"Changed": [change.entry() for change in changes if not _TO_FOLD.match(change.subject)]}
     lines = []
@@ -191,8 +196,10 @@ def _section_lines(lines: list[str], version: str) -> tuple[int, int]:
     start = next((i for i, line in enumerate(lines) if line == heading or line.startswith(f"{heading} ")), None)
     if start is None:
         raise ReleaseError(f"{CHANGELOG} has no section {heading}")
-    end = next((i for i in range(start + 1, len(lines))
-                if lines[i].startswith("## ") or re.match(r"\[[^\]]+\]: ", lines[i])), len(lines))
+    end = next(
+        (i for i in range(start + 1, len(lines)) if lines[i].startswith("## ") or re.match(r"\[[^\]]+\]: ", lines[i])),
+        len(lines),
+    )
     return start, end
 
 
@@ -204,19 +211,26 @@ def add_release(changelog: str, version: str, previous: str, date: str, body: st
     if any(line == f"## [{version}]" or line.startswith(f"## [{version}] ") for line in lines):
         raise ReleaseError(f"{CHANGELOG} already has a section [{version}]")
     start, end = _section_lines(lines, "Unreleased")
-    if any(line.strip() for line in lines[start + 1:end]):
-        raise ReleaseError(f"{CHANGELOG} has entries under [Unreleased]: the changelog is written at release "
-                           "time, in the release pull request; move them out first")
+    if any(line.strip() for line in lines[start + 1 : end]):
+        raise ReleaseError(
+            f"{CHANGELOG} has entries under [Unreleased]: the changelog is written at release "
+            "time, in the release pull request; move them out first"
+        )
     link = _UNRELEASED_LINK.search(changelog)
     if not link:
         raise ReleaseError(f"{CHANGELOG} has no '[unreleased]: <repository>/compare/vX.Y.Z...HEAD' link")
     if link["version"] != previous:
-        raise ReleaseError(f"the [unreleased] link of {CHANGELOG} compares from v{link['version']}, "
-                           f"not from the last release v{previous}")
-    lines[start + 1:end] = ["", f"## [{version}] - {date}", "", *body.rstrip("\n").split("\n"), ""]
+        raise ReleaseError(
+            f"the [unreleased] link of {CHANGELOG} compares from v{link['version']}, "
+            f"not from the last release v{previous}"
+        )
+    lines[start + 1 : end] = ["", f"## [{version}] - {date}", "", *body.rstrip("\n").split("\n"), ""]
     base = link["base"]
-    return "\n".join(lines).replace(link.group(0), f"[unreleased]: {base}/compare/v{version}...HEAD\n"
-                                                   f"[{version}]: {base}/compare/v{previous}...v{version}", 1)
+    return "\n".join(lines).replace(
+        link.group(0),
+        f"[unreleased]: {base}/compare/v{version}...HEAD\n[{version}]: {base}/compare/v{previous}...v{version}",
+        1,
+    )
 
 
 def write_section(changelog: str, version: str, date: str, body: str) -> str:
@@ -226,7 +240,7 @@ def write_section(changelog: str, version: str, date: str, body: str) -> str:
     entries = body.rstrip("\n").split("\n")
     try:
         start, end = _section_lines(lines, version)
-        lines[start + 1:end] = ["", *entries, ""]
+        lines[start + 1 : end] = ["", *entries, ""]
     except ReleaseError:
         if _UNRELEASED not in lines:
             raise ReleaseError(f"{CHANGELOG} has no '{_UNRELEASED}' heading") from None
@@ -280,8 +294,11 @@ def git(*args: str) -> str:
 def changes_since(base: str, ref: str) -> list[Change]:
     """The commits of `ref` since `base`, oldest first."""
     fields = git("log", "--reverse", "--format=%H%x00%s%x00%b%x00", f"{base}..{ref}").split("\x00")
-    return [Change.parse(commit.strip(), subject, body)
-            for commit, subject, body in zip(fields[0::3], fields[1::3], fields[2::3]) if commit.strip()]
+    return [
+        Change.parse(commit.strip(), subject, body)
+        for commit, subject, body in zip(fields[0::3], fields[1::3], fields[2::3])
+        if commit.strip()
+    ]
 
 
 def release_base(message: str) -> str | None:
@@ -293,14 +310,22 @@ def release_base(message: str) -> str | None:
 def release_commits(version: str, ref: str) -> list[str]:
     """The release commits of `version` in the history of `ref`, newest first."""
     subject = f"chore(release): {version}"
-    return [commit for commit, _, line_subject in
-            (line.partition("\x00") for line in git("log", "--format=%H%x00%s", ref).splitlines())
-            if line_subject == subject]
+    return [
+        commit
+        for commit, _, line_subject in (
+            line.partition("\x00") for line in git("log", "--format=%H%x00%s", ref).splitlines()
+        )
+        if line_subject == subject
+    ]
 
 
 def is_ancestor(ancestor: str, commit: str) -> bool:
-    return subprocess.run(["git", "merge-base", "--is-ancestor", ancestor, commit], capture_output=True,
-                          check=False).returncode == 0
+    return (
+        subprocess.run(
+            ["git", "merge-base", "--is-ancestor", ancestor, commit], capture_output=True, check=False
+        ).returncode
+        == 0
+    )
 
 
 def missed(release_commit: str) -> tuple[str, list[Change]]:
@@ -313,8 +338,9 @@ def missed(release_commit: str) -> tuple[str, list[Change]]:
     if not is_ancestor(base, release_commit):
         raise ReleaseError(f"{base[:12]}, the {TRAILER} of {release_commit[:12]}, is not in its history")
     edits = changelog_only(base, f"{release_commit}~1")
-    return base, [change for change in changes_since(base, f"{release_commit}~1")
-                  if change.section and change.commit not in edits]
+    return base, [
+        change for change in changes_since(base, f"{release_commit}~1") if change.section and change.commit not in edits
+    ]
 
 
 def changelog_only(base: str, ref: str) -> set[str]:
@@ -341,7 +367,7 @@ def section_of(changelog: str, version: str) -> str:
     """The section of `version` in the changelog, without its heading."""
     lines = changelog.split("\n")
     start, end = _section_lines(lines, version)
-    return "\n".join(lines[start + 1:end]).strip("\n") + "\n"
+    return "\n".join(lines[start + 1 : end]).strip("\n") + "\n"
 
 
 @dataclass(frozen=True)
@@ -385,18 +411,30 @@ def publication(version: str, ref: str) -> Publication | None:
         notes = ""
     # Its notes need at least one entry; whatever they miss can be added, but not to nothing.
     if not any(line.strip() and not line.startswith("### ") for line in notes.splitlines()):
-        return Publication(version, release_commit, point, None, notes,
-                           f"the section [{version}] of {CHANGELOG} has no entry, or is missing, at {point[:12]}",
-                           rewrite=True)
+        return Publication(
+            version,
+            release_commit,
+            point,
+            None,
+            notes,
+            f"the section [{version}] of {CHANGELOG} has no entry, or is missing, at {point[:12]}",
+            rewrite=True,
+        )
     try:
         base, missing = missed(release_commit)
     except ReleaseError as error:
         return Publication(version, release_commit, point, None, notes, str(error), rewrite=True)
     if missing:
-        return Publication(version, release_commit, point, base, notes,
-                           f"the notes of the release commit {release_commit[:12]} miss features, fixes or breaking "
-                           f"changes merged after {base[:12]}, the commit they were written on:\n"
-                           + "\n".join(f"  {change.commit[:12]} {change.subject}" for change in missing))
+        return Publication(
+            version,
+            release_commit,
+            point,
+            base,
+            notes,
+            f"the notes of the release commit {release_commit[:12]} miss features, fixes or breaking "
+            f"changes merged after {base[:12]}, the commit they were written on:\n"
+            + "\n".join(f"  {change.commit[:12]} {change.subject}" for change in missing),
+        )
     return Publication(version, release_commit, point, base, notes, None)
 
 
@@ -443,49 +481,78 @@ def plan(ref: str, chosen: str | None, allow_unfolded: bool = False) -> Plan:
         version = format_release(current)
         releases = release_commits(version, commit)
         if not releases:
-            raise ReleaseError(f"VERSION is {version}, but there is no tag {tag} nor a release commit "
-                               f"'chore(release): {version}' in the history of {ref}; or the tags are not fetched "
-                               "(git fetch --tags origin)")
+            raise ReleaseError(
+                f"VERSION is {version}, but there is no tag {tag} nor a release commit "
+                f"'chore(release): {version}' in the history of {ref}; or the tags are not fetched "
+                "(git fetch --tags origin)"
+            )
         last = release_version(f"{releases[-1]}~1")
         if not tagged_commit(f"v{format_release(last)}"):
-            raise ReleaseError(f"no tag v{format_release(last)}, the release before {version} (git fetch --tags origin)")
+            raise ReleaseError(
+                f"no tag v{format_release(last)}, the release before {version} (git fetch --tags origin)"
+            )
         if chosen:
             raise ReleaseError(f"the release {version} is completed, not chosen again: no --bump")
         published = publication(version, commit)
         if not published.problem:
-            raise ReleaseError(f"the release {version} can be published as it is, on {published.point[:12]}: "
-                               ".github/workflows/release.yml publishes it (git fetch --tags origin for its tag, or "
-                               "see its run on GitHub, and run it again if it failed)")
+            raise ReleaseError(
+                f"the release {version} can be published as it is, on {published.point[:12]}: "
+                ".github/workflows/release.yml publishes it (git fetch --tags origin for its tag, or "
+                "see its run on GitHub, and run it again if it failed)"
+            )
         # The notes of the latest release commit cover the commits up to the one they were written on;
         # without notes to add to (or that commit), the section is written again from the last release.
         completing, rewrite = True, published.rewrite
         since = f"v{format_release(last)}" if rewrite else published.base
         notes_edits = changelog_only(since, commit)
-        changes = [change for change in changes_since(since, commit)
-                   if change.subject != f"chore(release): {version}" and change.commit not in notes_edits]
+        changes = [
+            change
+            for change in changes_since(since, commit)
+            if change.subject != f"chore(release): {version}" and change.commit not in notes_edits
+        ]
         if not changes:
-            raise ReleaseError(f"{published.problem}\nNo commit to draft: write the section of {version} by hand, in "
-                               f"a pull request that changes {CHANGELOG} only")
+            raise ReleaseError(
+                f"{published.problem}\nNo commit to draft: write the section of {version} by hand, in "
+                f"a pull request that changes {CHANGELOG} only"
+            )
     to_fold = [change for change in changes if _TO_FOLD.match(change.subject)]
     if to_fold and not allow_unfolded:
-        raise ReleaseError("commits still to fold into the ones they fix (git rebase -i --autosquash):\n"
-                           + "\n".join(f"  {change.commit[:12]} {change.subject}" for change in to_fold)
-                           + "\n(--allow-unfolded if they are on main for good)")
+        raise ReleaseError(
+            "commits still to fold into the ones they fix (git rebase -i --autosquash):\n"
+            + "\n".join(f"  {change.commit[:12]} {change.subject}" for change in to_fold)
+            + "\n(--allow-unfolded if they are on main for good)"
+        )
     warnings += [f"released as it is, not folded: {change.commit[:12]} {change.subject}" for change in to_fold]
-    warnings += [f"not a Conventional Commit, released as a patch: {change.commit[:12]} {change.subject}"
-                 for change in changes if change.type is None and change not in to_fold]
+    warnings += [
+        f"not a Conventional Commit, released as a patch: {change.commit[:12]} {change.subject}"
+        for change in changes
+        if change.type is None and change not in to_fold
+    ]
     if completing:
-        everything = [change for change in changes_since(f"v{format_release(last)}", commit)
-                      if not change.subject.startswith("chore(release): ")]
+        everything = [
+            change
+            for change in changes_since(f"v{format_release(last)}", commit)
+            if not change.subject.startswith("chore(release): ")
+        ]
         expected = bump(last, increment(everything, last))
         if expected > current:
-            warnings.append(f"with the commits added, the release after {format_release(last)} would be "
-                            f"{format_release(expected)}, not {format_release(current)}: a completed release keeps its "
-                            "version")
+            warnings.append(
+                f"with the commits added, the release after {format_release(last)} would be "
+                f"{format_release(expected)}, not {format_release(current)}: a completed release keeps its "
+                "version"
+            )
         return Plan(last, current, None, None, changes, warnings, commit, True, rewrite)
     level = increment(changes, current)
-    return Plan(current, bump(current, chosen or level), level, chosen if chosen != level else None, changes,
-                warnings, commit, False)
+    return Plan(
+        current,
+        bump(current, chosen or level),
+        level,
+        chosen if chosen != level else None,
+        changes,
+        warnings,
+        commit,
+        False,
+    )
 
 
 def to_publish(ref: str) -> tuple[str, str, str] | None:
@@ -503,11 +570,15 @@ def to_publish(ref: str) -> tuple[str, str, str] | None:
         return version, section_of(git("show", f"{tagged}:{CHANGELOG}"), version), tagged
     published = publication(version, commit)
     if published is None:
-        raise ReleaseError(f"VERSION {version} is not released, and no release commit 'chore(release): {version}' "
-                           f"(scripts/release.py --commit) is in the history of {commit[:12]}")
+        raise ReleaseError(
+            f"VERSION {version} is not released, and no release commit 'chore(release): {version}' "
+            f"(scripts/release.py --commit) is in the history of {commit[:12]}"
+        )
     if published.problem:
-        raise ReleaseError(f"{published.problem}\nRun scripts/release.py again on main (.claude/skills/release): it "
-                           f"completes the release {version} in a pull request of its own")
+        raise ReleaseError(
+            f"{published.problem}\nRun scripts/release.py again on main (.claude/skills/release): it "
+            f"completes the release {version} in a pull request of its own"
+        )
     return version, published.notes, published.point
 
 
@@ -522,74 +593,111 @@ def pull_request(ref: str = "HEAD") -> str:
     changelog = git("show", f"{commit}:{CHANGELOG}")
     start, _ = _section_lines(changelog.split("\n"), version)
     heading = changelog.split("\n")[start]
-    if not any(line.strip() and not line.startswith("### ")
-               for line in section_of(changelog, version).splitlines()):
+    if not any(line.strip() and not line.startswith("### ") for line in section_of(changelog, version).splitlines()):
         raise ReleaseError(f"the section [{version}] of {CHANGELOG} has no entry: the release would publish nothing")
     link = re.search(rf"^\[{re.escape(version)}\]: (\S+)$", changelog, re.MULTILINE)
     if link:
-        heading = f"## [{version}]({link[1]}){heading[len(f'## [{version}]'):]}"
-    return (f"Merging this pull request publishes ScanMyLib {version}: `.github/workflows/release.yml` tags "
-            f"`v{version}` and creates the GitHub release with the notes below. Merge nothing else before it.\n\n"
-            f"{heading}\n\n{section_of(changelog, version)}")
+        heading = f"## [{version}]({link[1]}){heading[len(f'## [{version}]') :]}"
+    return (
+        f"Merging this pull request publishes ScanMyLib {version}: `.github/workflows/release.yml` tags "
+        f"`v{version}` and creates the GitHub release with the notes below. Merge nothing else before it.\n\n"
+        f"{heading}\n\n{section_of(changelog, version)}"
+    )
 
 
 def commit_release(release: Plan, section: str, date: str) -> None:
     """Writes VERSION and the changelog in the checkout and commits them (HEAD, not on main)."""
-    branch = subprocess.run(["git", "symbolic-ref", "--quiet", "--short", "HEAD"], capture_output=True, text=True,
-                            check=False).stdout.strip()
+    branch = subprocess.run(
+        ["git", "symbolic-ref", "--quiet", "--short", "HEAD"], capture_output=True, text=True, check=False
+    ).stdout.strip()
     version, last = format_release(release.following), format_release(release.last)
     if not branch or branch == "main":
-        raise ReleaseError(f"prepare the release on its own branch, not on {branch or 'a detached HEAD'} (git "
-                           f"switch -c release/v{version})")
+        raise ReleaseError(
+            f"prepare the release on its own branch, not on {branch or 'a detached HEAD'} (git "
+            f"switch -c release/v{version})"
+        )
     if git("status", "--porcelain", "--untracked-files=no").strip():
         raise ReleaseError("commit or stash the changes of this checkout first (git status)")
     # The commit the notes are written on must stay in main's history: "Rebase and merge" rewrites the
     # commits of the pull request, so the release commit is the only one it may hold.
     head = git("rev-parse", "HEAD").strip()
     if not is_ancestor(head, "refs/remotes/origin/main"):
-        raise ReleaseError(f"HEAD {head[:12]} is not in origin/main: prepare the release on main as on origin, with "
-                           "nothing but its release commit on its branch (git fetch origin)")
+        raise ReleaseError(
+            f"HEAD {head[:12]} is not in origin/main: prepare the release on main as on origin, with "
+            "nothing but its release commit on its branch (git fetch origin)"
+        )
     root = Path(git("rev-parse", "--show-toplevel").strip())
     changelog = (root / CHANGELOG).read_text() if (root / CHANGELOG).is_file() else None
     if changelog is None:
         raise ReleaseError(f"no {CHANGELOG} in {root}")
     if release.rewrite:
         updated = write_section(changelog, version, date, section)
-        body = (f"The release commit of {version} could not be published: its section of {CHANGELOG} has no entry, "
-                f"or its notes cannot be checked. It is written again from the commits since v{last}.")
+        body = (
+            f"The release commit of {version} could not be published: its section of {CHANGELOG} has no entry, "
+            f"or its notes cannot be checked. It is written again from the commits since v{last}."
+        )
     elif release.completing:
         updated = complete_release(changelog, version, section)
-        body = (f"The release commit of {version} could not be published: features, fixes or breaking changes "
-                f"were merged between its notes and it. They are added to its section of {CHANGELOG}.")
+        body = (
+            f"The release commit of {version} could not be published: features, fixes or breaking changes "
+            f"were merged between its notes and it. They are added to its section of {CHANGELOG}."
+        )
     else:
         updated = add_release(changelog, version, last, date, section)
-        increment_text = (f"a {release.chosen} release chosen by hand" if release.chosen
-                          else f"a {release.level} release")
-        body = (f"Release {version} ({increment_text}): {summary(release.changes)} since v{last}. Its notes are its "
-                f"section of {CHANGELOG}.")
+        increment_text = (
+            f"a {release.chosen} release chosen by hand" if release.chosen else f"a {release.level} release"
+        )
+        body = (
+            f"Release {version} ({increment_text}): {summary(release.changes)} since v{last}. Its notes are its "
+            f"section of {CHANGELOG}."
+        )
         (root / "VERSION").write_text(version + "\n")
     (root / CHANGELOG).write_text(updated)
     git("-C", str(root), "add", "VERSION", CHANGELOG)
-    git("-C", str(root), "commit", "--quiet", "--message", f"chore(release): {version}", "--message", body,
-        "--message", f"{TRAILER}: {release.base}")
+    git(
+        "-C",
+        str(root),
+        "commit",
+        "--quiet",
+        "--message",
+        f"chore(release): {version}",
+        "--message",
+        body,
+        "--message",
+        f"{TRAILER}: {release.base}",
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n", 1)[0])
     parser.add_argument("--ref", default="HEAD", help="the commit to release (default: HEAD)")
     parser.add_argument("--bump", choices=LEVELS, help="another increment than the commits give")
-    parser.add_argument("--allow-unfolded", action="store_true",
-                        help="release commits still to fold that reached main anyway, as other changes")
+    parser.add_argument(
+        "--allow-unfolded",
+        action="store_true",
+        help="release commits still to fold that reached main anyway, as other changes",
+    )
     output = parser.add_mutually_exclusive_group()
     output.add_argument("--version-only", action="store_true", help="print the next version only")
-    output.add_argument("--notes-only", action="store_true",
-                        help="print the release's section of the changelog only, without its heading")
-    output.add_argument("--commit", action="store_true",
-                        help="write VERSION and CHANGELOG.md and commit them; prints the pull request's description")
-    output.add_argument("--description", action="store_true",
-                        help="print the description of the release pull request at REF")
-    output.add_argument("--to-publish", metavar="NOTES", type=Path,
-                        help="print the version REF publishes, if any, and write its notes to NOTES")
+    output.add_argument(
+        "--notes-only",
+        action="store_true",
+        help="print the release's section of the changelog only, without its heading",
+    )
+    output.add_argument(
+        "--commit",
+        action="store_true",
+        help="write VERSION and CHANGELOG.md and commit them; prints the pull request's description",
+    )
+    output.add_argument(
+        "--description", action="store_true", help="print the description of the release pull request at REF"
+    )
+    output.add_argument(
+        "--to-publish",
+        metavar="NOTES",
+        type=Path,
+        help="print the version REF publishes, if any, and write its notes to NOTES",
+    )
     args = parser.parse_args(argv)
     if args.description:
         try:

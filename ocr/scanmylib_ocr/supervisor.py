@@ -284,9 +284,7 @@ def _socket_in_use(path: str) -> bool:
 
 
 def main() -> int:
-    logging.basicConfig(
-        level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s", stream=sys.stderr
-    )
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s", stream=sys.stderr)
     try:
         settings = Settings.from_env()
         spec = get_spec(settings.engine)

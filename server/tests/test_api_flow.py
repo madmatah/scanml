@@ -53,14 +53,28 @@ def test_document_lifecycle(client, library_dir):
     assert document["title"] == "Sample Café Guide"
     assert document["slug"] == "sample-cafe-guide"
     assert (document["author"], document["kind"], document["notes"], document["unwarp"]) == ("", "document", "", False)
-    assert document["stats"] == {"pages": 0, "done": 0, "queued": 0, "processing": 0, "error": 0, "excluded": 0, "duplicates": 0}
+    assert document["stats"] == {
+        "pages": 0,
+        "done": 0,
+        "queued": 0,
+        "processing": 0,
+        "error": 0,
+        "excluded": 0,
+        "duplicates": 0,
+    }
     assert document["coverage"]["label"] == "" and document["cover_thumb_url"] is None
     assert document["folder"] == "/home/user/Documents/ScanMyLib/sample-cafe-guide"
     assert (library_dir / "sample-cafe-guide").is_dir()
 
     updated = client.put(
         f"/api/documents/{document_id}",
-        json={"title": "Sample Café Guide, volume 1", "author": "J. Doe", "kind": "book", "notes": "a\r\nb", "unwarp": True},
+        json={
+            "title": "Sample Café Guide, volume 1",
+            "author": "J. Doe",
+            "kind": "book",
+            "notes": "a\r\nb",
+            "unwarp": True,
+        },
         headers=AUTH,
     )
     assert updated.status_code == 200
@@ -98,7 +112,10 @@ def test_document_validation(client):
     assert client.put(f"/api/documents/{new_id().upper()}", json={"title": "x"}, headers=AUTH).status_code == 422
     assert client.put(f"/api/documents/{new_id()}", json={"author": "no title"}, headers=AUTH).status_code == 422
     assert client.put(f"/api/documents/{new_id()}", json={"title": "   "}, headers=AUTH).status_code == 422
-    assert client.put(f"/api/documents/{new_id()}", json={"title": "x", "kind": "magazine"}, headers=AUTH).status_code == 422
+    assert (
+        client.put(f"/api/documents/{new_id()}", json={"title": "x", "kind": "magazine"}, headers=AUTH).status_code
+        == 422
+    )
     assert client.put(f"/api/documents/{new_id()}", json={"title": "x" * 301}, headers=AUTH).status_code == 422
     assert client.patch(f"/api/documents/{new_id()}", json={"title": "x"}, headers=AUTH).status_code == 404
     document_id = create_document(client)
@@ -124,22 +141,54 @@ def test_out_of_order_scanning_across_sessions(client, fake_ocr, library_dir):
     late, early = new_id(), new_id()
     # Session "late" (captured later, uploaded first): pages 3, 4 and 6.
     for seq, number in enumerate((3, 4, 6)):
-        response = upload(client, document_id, page_image(number), session_id=late, seq=seq,
-                          captured_at=f"2026-10-12T21:00:0{seq}+02:00")
+        response = upload(
+            client,
+            document_id,
+            page_image(number),
+            session_id=late,
+            seq=seq,
+            captured_at=f"2026-10-12T21:00:0{seq}+02:00",
+        )
         assert response.status_code == 201, response.text
     # Session "early": pages 1 and 2.
     for seq, number in enumerate((1, 2)):
-        upload(client, document_id, page_image(number), session_id=early, seq=seq,
-               captured_at=f"2026-10-12T20:00:0{seq}+02:00")
+        upload(
+            client,
+            document_id,
+            page_image(number),
+            session_id=early,
+            seq=seq,
+            captured_at=f"2026-10-12T20:00:0{seq}+02:00",
+        )
 
     document = wait_until_processed(client, document_id)
-    assert document["stats"] == {"pages": 5, "done": 5, "queued": 0, "processing": 0, "error": 0, "excluded": 0, "duplicates": 0}
+    assert document["stats"] == {
+        "pages": 5,
+        "done": 5,
+        "queued": 0,
+        "processing": 0,
+        "error": 0,
+        "excluded": 0,
+        "duplicates": 0,
+    }
     assert page_labels(document) == ["1", "2", "3", "4", "6"]
-    assert document["coverage"] == {"ranges": [[1, 4], [6, 6]], "label": "1–4, 6", "gaps": [[5, 5]], "min": 1, "max": 6, "unnumbered": 0}
+    assert document["coverage"] == {
+        "ranges": [[1, 4], [6, 6]],
+        "label": "1–4, 6",
+        "gaps": [[5, 5]],
+        "min": 1,
+        "max": 6,
+        "unnumbered": 0,
+    }
     first = document["pages"][0]
     assert document["cover_thumb_url"] == f"/api/pages/{first['id']}/thumb"
     assert first["key"].startswith("20261012-200000_")
-    assert (first["number_source"], first["detected_numbers"], first["width"], first["height"]) == ("detected", ["1"], 1200, 1001)
+    assert (first["number_source"], first["detected_numbers"], first["width"], first["height"]) == (
+        "detected",
+        ["1"],
+        1200,
+        1001,
+    )
     assert first["ocr"]["engine"] == "fakeocr" and first["ocr"]["images"] == 1 and first["ocr"]["chars"] > 100
 
     folder = library_dir / "sample-cafe-guide"
@@ -225,8 +274,11 @@ def test_same_page_id_uploaded_to_two_documents_at_once(client, library_dir, mon
 
     monkeypatch.setattr(LibraryService, "_store_scan", slow_store_scan)
     statuses = {}
-    thread = threading.Thread(target=lambda: statuses.update(
-        first=upload(client, first, jpeg(1200, 1001, color=(255, 0, 0)), page_id=page_id).status_code))
+    thread = threading.Thread(
+        target=lambda: statuses.update(
+            first=upload(client, first, jpeg(1200, 1001, color=(255, 0, 0)), page_id=page_id).status_code
+        )
+    )
     thread.start()
     wait_for(lambda: stored)
     statuses["second"] = upload(client, second, jpeg(1200, 1002, color=(0, 0, 255)), page_id=page_id).status_code
@@ -245,8 +297,16 @@ def test_same_page_id_uploaded_to_two_documents_at_once(client, library_dir, mon
 def test_upload_metadata(client):
     document_id = create_document(client)
     page_id, session_id = new_id(), new_id()
-    page = upload(client, document_id, jpeg(1600, 1200, orientation=6), page_id=page_id, session_id=session_id,
-                  seq=3, captured_at="2026-10-12T20:15:30.250+02:00", hint=12).json()
+    page = upload(
+        client,
+        document_id,
+        jpeg(1600, 1200, orientation=6),
+        page_id=page_id,
+        session_id=session_id,
+        seq=3,
+        captured_at="2026-10-12T20:15:30.250+02:00",
+        hint=12,
+    ).json()
     assert page["key"] == f"20261012-201530_{page_id.replace('-', '')[:8]}"
     assert page["captured_at"] == "2026-10-12T20:15:30+02:00"
     assert (page["session_id"], page["seq"], page["hint_number"]) == (session_id, 3, 12)
@@ -271,8 +331,12 @@ def test_upload_metadata(client):
 def test_upload_field_validation(client, fields, status):
     document_id = create_document(client)
     data = {"page_id": new_id(), **fields}
-    response = client.post(f"/api/documents/{document_id}/pages", headers=AUTH, data=data,
-                           files={"file": ("p.jpg", page_image(1), "image/jpeg")})
+    response = client.post(
+        f"/api/documents/{document_id}/pages",
+        headers=AUTH,
+        data=data,
+        files={"file": ("p.jpg", page_image(1), "image/jpeg")},
+    )
     assert response.status_code == status, response.text
 
 
@@ -281,8 +345,12 @@ def test_upload_rejections(client):
     assert upload(client, new_id(), page_image(1)).status_code == 404
     missing_file = client.post(f"/api/documents/{document_id}/pages", headers=AUTH, data={"page_id": new_id()})
     assert missing_file.status_code == 422
-    assert client.post(f"/api/documents/{document_id}/pages", headers=AUTH,
-                       files={"file": ("p.jpg", page_image(1), "image/jpeg")}).status_code == 422
+    assert (
+        client.post(
+            f"/api/documents/{document_id}/pages", headers=AUTH, files={"file": ("p.jpg", page_image(1), "image/jpeg")}
+        ).status_code
+        == 422
+    )
     assert upload(client, document_id, b"%PDF-1.7 not an image").status_code == 415
     gif = io.BytesIO()
     Image.new("RGB", (10, 10)).save(gif, "GIF")
@@ -349,8 +417,12 @@ def test_previews_are_rendered_one_at_a_time(client, monkeypatch):
 
     monkeypatch.setattr(Publisher, "page_html", slow_page_html)
     statuses = []
-    requests = [threading.Thread(target=lambda: statuses.append(
-        client.get(f"/api/pages/{page['id']}/html", headers=AUTH).status_code)) for _ in range(4)]
+    requests = [
+        threading.Thread(
+            target=lambda: statuses.append(client.get(f"/api/pages/{page['id']}/html", headers=AUTH).status_code)
+        )
+        for _ in range(4)
+    ]
     for thread in requests:
         thread.start()
     for thread in requests:
@@ -384,8 +456,14 @@ def test_manual_numbers_exclusion_and_duplicates(client):
     document_id = create_document(client)
     session = new_id()
     pages = [
-        upload(client, document_id, page_image(number, variant), session_id=session, seq=seq,
-               captured_at=f"2026-10-12T20:00:0{seq}+02:00").json()
+        upload(
+            client,
+            document_id,
+            page_image(number, variant),
+            session_id=session,
+            seq=seq,
+            captured_at=f"2026-10-12T20:00:0{seq}+02:00",
+        ).json()
         for seq, (number, variant) in enumerate([(10, 0), (0, 4), (12, 0), (12, 0)])
     ]
     document = wait_until_processed(client, document_id)
@@ -503,7 +581,9 @@ def test_export_zip(client):
         f"sample-cafe-guide/images/{page['key']}_1.jpg",
         f"sample-cafe-guide/ocr/{page['key']}.json",
     ]
-    with_scans = zipfile.ZipFile(io.BytesIO(client.get(f"/api/documents/{document_id}/export.zip?scans=1", headers=AUTH).content))
+    with_scans = zipfile.ZipFile(
+        io.BytesIO(client.get(f"/api/documents/{document_id}/export.zip?scans=1", headers=AUTH).content)
+    )
     assert with_scans.testzip() is None
     assert with_scans.read(f"sample-cafe-guide/scans/{page['key']}.jpg") == page_image(9)
     assert "# Sample Café Guide" in with_scans.read("sample-cafe-guide/document.md").decode()

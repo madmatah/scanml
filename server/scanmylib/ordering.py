@@ -59,8 +59,15 @@ _ARABIC = re.compile(r"[0-9]{1,4}")
 # excluding d/m avoids reading words or OCR noise ("mix", "dim") as numbers.
 _ROMAN = re.compile(r"c{0,3}(?:xc|xl|l?x{0,3})(?:ix|iv|v?i{0,3})")
 _ROMAN_VALUES = (
-    (100, "c"), (90, "xc"), (50, "l"), (40, "xl"),
-    (10, "x"), (9, "ix"), (5, "v"), (4, "iv"), (1, "i"),
+    (100, "c"),
+    (90, "xc"),
+    (50, "l"),
+    (40, "xl"),
+    (10, "x"),
+    (9, "ix"),
+    (5, "v"),
+    (4, "iv"),
+    (1, "i"),
 )
 # Decorations printed around page numbers: "- 12 -", "(xii)", "12.", "— 7 —".
 _NUMBER_DECORATION = "-–—_.,;:·•|()[]{}*«»\"'"
@@ -324,9 +331,7 @@ def _infer_session(members: list[_Work]) -> None:
         previous = anchors[before - 1] if before else None
         following = anchors[after] if after < len(anchors) else None
         inferred: PageNumber | None = None
-        if following is not None and (
-            previous is None or (previous[1].front_matter and not following[1].front_matter)
-        ):
+        if following is not None and (previous is None or (previous[1].front_matter and not following[1].front_matter)):
             f_step, f_num = following
             value = f_num.value - (f_step - step)
             # The pages numbered in that system before this one, nearest first.
@@ -604,11 +609,14 @@ class _OrderSearch:
     def layout(self, positions: dict[str, float | None]) -> Layout:
         """Layout of the pages when the pages of `wanted` have these positions."""
         self._budget -= len(self._pages)
-        return compute_layout([
-            page if (position := positions.get(page.id, page.position)) == page.position
-            else dataclasses.replace(page, position=position)
-            for page in self._pages
-        ])
+        return compute_layout(
+            [
+                page
+                if (position := positions.get(page.id, page.position)) == page.position
+                else dataclasses.replace(page, position=position)
+                for page in self._pages
+            ]
+        )
 
     def gives_wanted(self, positions: dict[str, float | None]) -> bool:
         return self.layout(positions).reading_order == self._wanted
@@ -672,8 +680,7 @@ class _OrderSearch:
         anyway: freeing pages does not move the others.
         """
         self._held = {
-            page_id: value for page_id in candidates
-            if (value := reference.placements[page_id].sort_value) is not None
+            page_id: value for page_id in candidates if (value := reference.placements[page_id].sort_value) is not None
         }
 
     def fit(self, free: Set[str], layout: Layout | None = None) -> dict[str, float | None] | None:
@@ -709,7 +716,12 @@ class _OrderSearch:
         return positions if layout.reading_order == self._wanted else None
 
     def by_halves(
-        self, group: list[str], kept: frozenset[str], found: dict[str, float | None], *, tried: bool = False,
+        self,
+        group: list[str],
+        kept: frozenset[str],
+        found: dict[str, float | None],
+        *,
+        tried: bool = False,
     ) -> tuple[frozenset[str], dict[str, float | None]]:
         """Leave the pages of `group` without position where the wanted order allows it.
 
@@ -776,12 +788,19 @@ def positions_for_order(pages: Sequence[PageInput], wanted: Sequence[str]) -> di
     if wanted == layout.reading_order:
         return {page_id: by_id[page_id].position for page_id in wanted}
     numbers = [layout.placements[page_id].number for page_id in wanted]
-    base = dict(zip(wanted, order_positions(
-        [number.natural if number is not None else None for number in numbers],
-        [by_id[page_id].position is not None for page_id in wanted],
-    ), strict=True))
+    base = dict(
+        zip(
+            wanted,
+            order_positions(
+                [number.natural if number is not None else None for number in numbers],
+                [by_id[page_id].position is not None for page_id in wanted],
+            ),
+            strict=True,
+        )
+    )
     loose = [
-        page_id for page_id, number in zip(wanted, numbers, strict=True)
+        page_id
+        for page_id, number in zip(wanted, numbers, strict=True)
         if number is None and by_id[page_id].position is None
     ]
     search = _OrderSearch(pages, wanted, base)

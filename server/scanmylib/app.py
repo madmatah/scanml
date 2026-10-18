@@ -76,7 +76,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.services = Services(settings=settings, library=library, auth=auth, ocr=ocr)
         log.info(
             "ScanMyLib %s: library %s, OCR socket %s, %d interrupted page(s) re-queued",
-            __version__, settings.library_dir, settings.ocr_socket, requeued,
+            __version__,
+            settings.library_dir,
+            settings.ocr_socket,
+            requeued,
         )
         try:
             yield

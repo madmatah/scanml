@@ -104,16 +104,26 @@ def make_v1_database(path: Path) -> None:
     with closing(sqlite3.connect(path, isolation_level=None)) as conn:
         conn.execute("PRAGMA journal_mode = WAL")
         conn.executescript(f"BEGIN IMMEDIATE; {V1_SCHEMA} PRAGMA user_version = 1; COMMIT;")
-        layout = {"stats": {"pages": 4, "done": 4}, "coverage": {"ranges": [[1, 3]], "unnumbered": 1},
-                  "cover_page_id": V1_PAGES[1][0], "pages_in_document": 4}
+        layout = {
+            "stats": {"pages": 4, "done": 4},
+            "coverage": {"ranges": [[1, 3]], "unnumbered": 1},
+            "cover_page_id": V1_PAGES[1][0],
+            "pages_in_document": 4,
+        }
         conn.execute(
             "INSERT INTO documents (id, slug, title, author, kind, notes, unwarp, created_at, updated_at,"
             " updated_ts, layout) VALUES (?, 'sample-cafe-guide', 'Sample Café Guide', 'Jane Doe', 'book',"
             " '', 1, '2026-10-12T20:00:00+02:00', '2026-10-12T20:10:00+02:00', 1792000000.0, ?)",
             (DOCUMENT_ID, json.dumps(layout)),
         )
-        ocr = {"engine": "paddleocr-vl-1.6", "model": "PaddleOCR-VL-1.6", "duration_s": 2.1,
-               "at": "2026-10-12T20:05:00+02:00", "images": 0, "chars": 1200}
+        ocr = {
+            "engine": "paddleocr-vl-1.6",
+            "model": "PaddleOCR-VL-1.6",
+            "duration_s": 2.1,
+            "at": "2026-10-12T20:05:00+02:00",
+            "images": 0,
+            "chars": 1200,
+        }
         for page_id, seq, detected, manual, number, in_document, position in V1_PAGES:
             conn.execute(
                 "INSERT INTO pages (id, document_id, key, scan_ext, session_id, seq, captured_at, captured_ts,"
@@ -121,11 +131,23 @@ def make_v1_database(path: Path) -> None:
                 " number, number_source, page_label, in_document, position)"
                 " VALUES (?, ?, ?, 'jpg', ?, ?, ?, ?, ?, ?, 1200, 1600, 'done', ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
-                    page_id, DOCUMENT_ID, key(seq, page_id), SESSION_ID, seq,
-                    f"2026-10-12T20:00:0{seq}+02:00", 1792000000.0 + seq, "2026-10-12T20:01:00+02:00",
-                    1792000060.0 + seq, manual, json.dumps(detected), json.dumps(ocr), number,
+                    page_id,
+                    DOCUMENT_ID,
+                    key(seq, page_id),
+                    SESSION_ID,
+                    seq,
+                    f"2026-10-12T20:00:0{seq}+02:00",
+                    1792000000.0 + seq,
+                    "2026-10-12T20:01:00+02:00",
+                    1792000060.0 + seq,
+                    manual,
+                    json.dumps(detected),
+                    json.dumps(ocr),
+                    number,
                     None if number is None else ("manual" if manual else "detected"),
-                    None if number is None else str(number), in_document, position,
+                    None if number is None else str(number),
+                    in_document,
+                    position,
                 ),
             )
 
@@ -197,7 +219,12 @@ def test_the_api_runs_on_an_upgraded_database(settings, fake_ocr):
 
         moved = client.put(f"/api/documents/{DOCUMENT_ID}/order", json={"page_ids": [p1, title, p2, p3]}, headers=AUTH)
         assert moved.status_code == 200, moved.text
-        assert [(p["id"], p["position"]) for p in moved.json()["pages"]] == [(p1, None), (title, 1.5), (p2, None), (p3, None)]
+        assert [(p["id"], p["position"]) for p in moved.json()["pages"]] == [
+            (p1, None),
+            (title, 1.5),
+            (p2, None),
+            (p3, None),
+        ]
         markdown = client.get(f"/api/documents/{DOCUMENT_ID}/markdown", headers=AUTH).text
         keys = [key(seq, page_id) for page_id, seq, *_ in V1_PAGES]
         assert re.findall(r"scan (\S+) -->", markdown) == [keys[1], keys[0], keys[2], keys[3]]

@@ -51,8 +51,11 @@ def test_failed_work_is_retried_without_holding_up_the_rest():
 
     run_batch(action, scenario)
     assert calls == [
-        (["a"], False), (["b"], False), ([], True),  # "b" is written although "a" failed
-        (["a"], False), ([], True),  # retried later
+        (["a"], False),
+        (["b"], False),
+        ([], True),  # "b" is written although "a" failed
+        (["a"], False),
+        ([], True),  # retried later
         (["a"], False),
     ]
 

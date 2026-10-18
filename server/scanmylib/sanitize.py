@@ -35,24 +35,91 @@ ImageResolver = Callable[[str], str | None]
 
 _IMAGE_NAME = re.compile(r"[A-Za-z0-9._-]{1,128}")
 
-_ALLOWED_TAGS = frozenset({
-    "p", "br", "hr", "div", "span", "center",
-    "b", "strong", "i", "em", "u", "s", "strike", "del", "ins",
-    "sub", "sup", "small", "mark", "code", "pre", "kbd", "samp", "var",
-    "blockquote", "q", "cite", "abbr",
-    "h1", "h2", "h3", "h4", "h5", "h6",
-    "ul", "ol", "li", "dl", "dt", "dd",
-    "table", "thead", "tbody", "tfoot", "tr", "th", "td", "caption", "colgroup", "col",
-    "img", "figure", "figcaption",
-})
+_ALLOWED_TAGS = frozenset(
+    {
+        "p",
+        "br",
+        "hr",
+        "div",
+        "span",
+        "center",
+        "b",
+        "strong",
+        "i",
+        "em",
+        "u",
+        "s",
+        "strike",
+        "del",
+        "ins",
+        "sub",
+        "sup",
+        "small",
+        "mark",
+        "code",
+        "pre",
+        "kbd",
+        "samp",
+        "var",
+        "blockquote",
+        "q",
+        "cite",
+        "abbr",
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "h5",
+        "h6",
+        "ul",
+        "ol",
+        "li",
+        "dl",
+        "dt",
+        "dd",
+        "table",
+        "thead",
+        "tbody",
+        "tfoot",
+        "tr",
+        "th",
+        "td",
+        "caption",
+        "colgroup",
+        "col",
+        "img",
+        "figure",
+        "figcaption",
+    }
+)
 _VOID_TAGS = frozenset({"br", "hr", "img", "col"})
 # Elements removed together with everything up to their closing tag: their
 # content is code, raw text or foreign markup, never readable page text.
-_DROP_WITH_CONTENT = frozenset({
-    "script", "style", "template", "iframe", "object", "applet", "noscript",
-    "noembed", "noframes", "xmp", "plaintext", "textarea", "title", "select",
-    "svg", "math", "head", "audio", "video", "canvas", "frameset",
-})
+_DROP_WITH_CONTENT = frozenset(
+    {
+        "script",
+        "style",
+        "template",
+        "iframe",
+        "object",
+        "applet",
+        "noscript",
+        "noembed",
+        "noframes",
+        "xmp",
+        "plaintext",
+        "textarea",
+        "title",
+        "select",
+        "svg",
+        "math",
+        "head",
+        "audio",
+        "video",
+        "canvas",
+        "frameset",
+    }
+)
 _ALIGN_VALUES = frozenset({"left", "right", "center", "justify"})
 _VALIGN_VALUES = frozenset({"top", "middle", "bottom", "baseline"})
 _DIGITS = re.compile(r"[0-9]{1,4}")
@@ -67,9 +134,7 @@ _TAG = re.compile(
     rf"(?P<attrs>(?:{_SPACE}+{_ATTRIBUTE_NAME}(?:{_SPACE}*={_SPACE}*(?:{_ATTRIBUTE_VALUE}))?)*)"
     rf"{_SPACE}*/?>"
 )
-_ATTRIBUTE = re.compile(
-    rf"({_ATTRIBUTE_NAME})(?:{_SPACE}*={_SPACE}*(?:\"([^\"]*)\"|'([^']*)'|([^ \t\n\"'=<>`]+)))?"
-)
+_ATTRIBUTE = re.compile(rf"({_ATTRIBUTE_NAME})(?:{_SPACE}*={_SPACE}*(?:\"([^\"]*)\"|'([^']*)'|([^ \t\n\"'=<>`]+)))?")
 # A tag longer than this is not something an OCR engine writes: treat as text.
 _MAX_TAG_LENGTH = 16 * 1024
 
@@ -132,9 +197,7 @@ def _sanitize_html(text: str, resolve_image: ImageResolver) -> str:
             # removed (unknown tag, comment...), the "<" would otherwise be
             # joined to the text after it, e.g. "<<x></x>img onerror=...>".
             following = text[lt + 1 : lt + 2]
-            opens_markup = following != "" and following.isascii() and (
-                following.isalpha() or following in "/!?<"
-            )
+            opens_markup = following != "" and following.isascii() and (following.isalpha() or following in "/!?<")
             out.append("< " if opens_markup else "<")
             pos = lt + 1
             continue

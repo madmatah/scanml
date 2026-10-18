@@ -59,7 +59,9 @@ CORRUPT_PNGS = {
     # Pixel data that is not a zlib stream (OSError while decoding).
     "corrupt-pixels": _PNG_HEADER + _png_chunk(b"IDAT", b"not a zlib stream") + _png_chunk(b"IEND", b""),
     # Pixel data continued in a chunk with an invalid type (SyntaxError while decoding).
-    "invalid-chunk": _PNG_HEADER + _png_chunk(b"IDAT", _PNG_PIXELS[:10]) + b"\x00\x00\x00\x08\x00\x01\x02\x03"
+    "invalid-chunk": _PNG_HEADER
+    + _png_chunk(b"IDAT", _PNG_PIXELS[:10])
+    + b"\x00\x00\x00\x08\x00\x01\x02\x03"
     + _PNG_PIXELS[10:],
 }
 #: An EXIF block that is not TIFF data: Pillow raises when it is read.
@@ -68,8 +70,12 @@ BROKEN_EXIF = b"Exif\x00\x00GARBAGE, NOT TIFF"
 
 def mpo(width: int, height: int) -> bytes:
     """A multi-picture JPEG (phone photo with a depth map or an HDR gain map)."""
-    return encoded(Image.new("RGB", (width, height), (235, 232, 220)), "MPO", save_all=True,
-                   append_images=[Image.new("RGB", (width // 4, height // 4))])
+    return encoded(
+        Image.new("RGB", (width, height), (235, 232, 220)),
+        "MPO",
+        save_all=True,
+        append_images=[Image.new("RGB", (width // 4, height // 4))],
+    )
 
 
 def page_image(number: int, variant: int = 0) -> bytes:

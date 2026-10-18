@@ -147,7 +147,9 @@ class SupervisorTest(unittest.TestCase):
         self.server.server_close()
         self.tmp.cleanup()
 
-    def call(self, method: str, path: str, body: bytes | None = None, content_type: str = "image/jpeg") -> tuple[int, Any]:
+    def call(
+        self, method: str, path: str, body: bytes | None = None, content_type: str = "image/jpeg"
+    ) -> tuple[int, Any]:
         headers = {"Content-Type": content_type} if body is not None else {}
         return request_json(self.socket_path, method, path, body=body, headers=headers, timeout=10)
 
@@ -220,7 +222,9 @@ class ParseTest(SupervisorTest):
         for thread in threads:
             thread.join()
         self.assertEqual(results, {"slow1": 200, "slow2": 200, "slow3": 200})
-        self.assertEqual([e for e in self.events if e.startswith("parse")], ["parse:slow1", "parse:slow2", "parse:slow3"])
+        self.assertEqual(
+            [e for e in self.events if e.startswith("parse")], ["parse:slow1", "parse:slow2", "parse:slow3"]
+        )
 
     def test_health_answers_while_a_page_is_processed(self) -> None:
         worker = threading.Thread(target=self.parse, args=("slow",))

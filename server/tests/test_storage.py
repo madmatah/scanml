@@ -64,9 +64,19 @@ def test_trash_names_never_collide(files):
 @pytest.mark.parametrize(
     "relative",
     [
-        "../book/document.md", "/etc/passwd", "pages/../../../etc/passwd", "pages/..%2f..%2fx.md",
-        "pages/x.txt", "images/.hidden.jpg", "scans/x.gif", "ocr/x.md", "document.md/", "pages/",
-        "images/a/b.jpg", "pages\\x.md", "",
+        "../book/document.md",
+        "/etc/passwd",
+        "pages/../../../etc/passwd",
+        "pages/..%2f..%2fx.md",
+        "pages/x.txt",
+        "images/.hidden.jpg",
+        "scans/x.gif",
+        "ocr/x.md",
+        "document.md/",
+        "pages/",
+        "images/a/b.jpg",
+        "pages\\x.md",
+        "",
     ],
 )
 def test_file_resolution_rejects_anything_unexpected(files, relative):
@@ -91,7 +101,10 @@ def test_file_resolution_and_export_entries(files):
     assert files.resolve_document_file("book", f"images/{KEY}_1.jpg").read_bytes() == b"img"
     names = [name for name, _ in files.export_entries("book", include_scans=False)]
     assert names == [
-        "book/document.md", "book/document.json", f"book/pages/{KEY}.md",
-        f"book/images/{KEY}_1.jpg", f"book/ocr/{KEY}.json",
+        "book/document.md",
+        "book/document.json",
+        f"book/pages/{KEY}.md",
+        f"book/images/{KEY}_1.jpg",
+        f"book/ocr/{KEY}.json",
     ]
     assert f"book/scans/{KEY}.jpg" in [name for name, _ in files.export_entries("book", include_scans=True)]

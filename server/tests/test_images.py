@@ -117,7 +117,9 @@ def test_prepare_for_ocr_rotates_clockwise_and_strips_metadata(tmp_path):
     exif = Image.Exif()
     exif[0x010F] = "PhoneMaker"
     scan = tmp_path / "scan.jpg"
-    scan.write_bytes(encoded(source, "JPEG", quality=100, exif=exif.tobytes(), comment=b"secret", icc_profile=b"x" * 64))
+    scan.write_bytes(
+        encoded(source, "JPEG", quality=100, exif=exif.tobytes(), comment=b"secret", icc_profile=b"x" * 64)
+    )
 
     prepared = open_image(images.prepare_for_ocr(scan, 90, max_side=4096))
     assert prepared.size == (200, 300)

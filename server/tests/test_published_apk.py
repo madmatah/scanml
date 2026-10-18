@@ -85,7 +85,7 @@ def test_metadata_of_another_apk_offers_nothing(tmp_path):
         {**METADATA, "version_name": "1.2.3-dev\n"},
         {**METADATA, "version_name": "0.2.4-dev+g" + "a" * 54},  # 65 characters
         {**METADATA, "version_name": "1.2.3-dév"},
-        {**METADATA, "version_name": "1.2.3-dev\"x"},
+        {**METADATA, "version_name": '1.2.3-dev"x'},
         {**METADATA, "version_name": "1.2.3+"},
         {**METADATA, "application_id": "Fr.Scanmylib"},
         {**METADATA, "application_id": "scanmylib"},

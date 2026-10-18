@@ -81,7 +81,10 @@ class LoadPageImageTest(unittest.TestCase):
 
     def test_absurd_sizes_are_refused_before_decoding(self) -> None:
         Image.new("L", (400, 300)).save(self.path("bomb.png"))
-        with mock.patch.object(images, "MAX_INPUT_PIXELS", 100_000), self.assertRaisesRegex(PageInputError, "too large"):
+        with (
+            mock.patch.object(images, "MAX_INPUT_PIXELS", 100_000),
+            self.assertRaisesRegex(PageInputError, "too large"),
+        ):
             images.load_page_image(self.path("bomb.png"))
 
 

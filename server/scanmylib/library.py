@@ -48,8 +48,15 @@ log = logging.getLogger(__name__)
 MAX_OCR_RETRIES = 3
 
 _LAYOUT_COLUMNS = (
-    "number", "number_end", "front_matter", "number_source",
-    "page_label", "duplicate_of", "in_document", "placement", "rank",
+    "number",
+    "number_end",
+    "front_matter",
+    "number_source",
+    "page_label",
+    "duplicate_of",
+    "in_document",
+    "placement",
+    "rank",
 )
 
 
@@ -78,9 +85,7 @@ class LibraryService:
         self._files.ensure_root()
         self._settings.thumbs_dir.mkdir(parents=True, exist_ok=True)
         with self._db.transaction():
-            requeued = self._db.execute(
-                "UPDATE pages SET status = 'queued' WHERE status = 'processing'"
-            ).rowcount
+            requeued = self._db.execute("UPDATE pages SET status = 'queued' WHERE status = 'processing'").rowcount
             document_ids = [row["id"] for row in self._db.all("SELECT id FROM documents")]
             for document_id in document_ids:
                 self._refresh_layout(document_id)
@@ -212,9 +217,16 @@ class LibraryService:
                     "INSERT INTO documents (id, slug, title, author, kind, notes, unwarp,"
                     " created_at, updated_at, updated_ts) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
-                        document_id, slug, changes.title, changes.author or "",
-                        kind, changes.notes or "", int(unwarp),
-                        clock.iso(moment), clock.iso(moment), moment.timestamp(),
+                        document_id,
+                        slug,
+                        changes.title,
+                        changes.author or "",
+                        kind,
+                        changes.notes or "",
+                        int(unwarp),
+                        clock.iso(moment),
+                        clock.iso(moment),
+                        moment.timestamp(),
                     ),
                 )
                 self._refresh_layout(document_id)
@@ -227,7 +239,9 @@ class LibraryService:
         values: dict[str, object] = {
             name: value
             for name, value in (
-                ("title", changes.title), ("author", changes.author), ("kind", changes.kind),
+                ("title", changes.title),
+                ("author", changes.author),
+                ("kind", changes.kind),
                 ("notes", changes.notes),
                 ("unwarp", None if changes.unwarp is None else int(changes.unwarp)),
             )
@@ -264,10 +278,9 @@ class LibraryService:
     def _free_slug(self, title: str) -> str:
         base = slugify(title)
         candidate, suffix = base, 2
-        while (
-            self._db.one("SELECT 1 FROM documents WHERE slug = ?", (candidate,)) is not None
-            or self._files.folder_exists(candidate)
-        ):
+        while self._db.one(
+            "SELECT 1 FROM documents WHERE slug = ?", (candidate,)
+        ) is not None or self._files.folder_exists(candidate):
             candidate = f"{base}-{suffix}"
             suffix += 1
         return candidate
@@ -316,9 +329,19 @@ class LibraryService:
                         " captured_at, captured_ts, uploaded_at, uploaded_ts, width, height,"
                         " status, hint_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?)",
                         (
-                            upload.page_id, document_id, key, info.ext, upload.session_id, upload.seq,
-                            clock.iso(captured), captured.timestamp(), clock.iso(uploaded),
-                            uploaded.timestamp(), info.width, info.height, upload.hint_number,
+                            upload.page_id,
+                            document_id,
+                            key,
+                            info.ext,
+                            upload.session_id,
+                            upload.seq,
+                            clock.iso(captured),
+                            captured.timestamp(),
+                            clock.iso(uploaded),
+                            uploaded.timestamp(),
+                            info.width,
+                            info.height,
+                            upload.hint_number,
                         ),
                     )
                     self._touch(document_id)
@@ -340,9 +363,7 @@ class LibraryService:
         hex_id = page_id.replace("-", "")
         for length in (8, 12, 16, 32):
             key = f"{clock.compact(captured)}_{hex_id[:length]}"
-            clash = self._db.one(
-                "SELECT 1 FROM pages WHERE document_id = ? AND key = ?", (document_id, key)
-            )
+            clash = self._db.one("SELECT 1 FROM pages WHERE document_id = ? AND key = ?", (document_id, key))
             if clash is None:
                 return key
         raise Conflict("page key already in use")
@@ -401,8 +422,7 @@ class LibraryService:
 
     def _requeue(self, page_id: str) -> None:
         self._db.execute(
-            "UPDATE pages SET status = 'queued', error = NULL, attempts = 0,"
-            " generation = generation + 1 WHERE id = ?",
+            "UPDATE pages SET status = 'queued', error = NULL, attempts = 0, generation = generation + 1 WHERE id = ?",
             (page_id,),
         )
 

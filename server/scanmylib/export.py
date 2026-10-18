@@ -43,9 +43,7 @@ def iter_zip(entries: Sequence[tuple[str, Path]]) -> Iterator[bytes]:
                 source = path.open("rb")
             except FileNotFoundError:
                 continue
-            info.compress_type = (
-                zipfile.ZIP_STORED if path.suffix in _ALREADY_COMPRESSED else zipfile.ZIP_DEFLATED
-            )
+            info.compress_type = zipfile.ZIP_STORED if path.suffix in _ALREADY_COMPRESSED else zipfile.ZIP_DEFLATED
             with source, archive.open(info, "w") as target:
                 while chunk := source.read(_CHUNK):
                     target.write(chunk)

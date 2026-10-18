@@ -246,7 +246,7 @@ def write_sources(testdata: Path, records: list[dict]) -> None:
         "Wikisource (CC BY-SA 4.0, Wikisource contributors).",
         "",
         "Derived files (made by `ocr/bench/make_photo_variants.py`, see `variants.json`): `pages/` =",
-        "clean \"scanner\" version (2480 px wide), `photos/` = simulated phone photos (perspective,",
+        'clean "scanner" version (2480 px wide), `photos/` = simulated phone photos (perspective,',
         "binding curvature, uneven lighting, 90° rotation).",
         "",
         "| Page | Book | Printed page | Content | Image | License | Reference |",

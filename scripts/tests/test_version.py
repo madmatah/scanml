@@ -24,8 +24,14 @@ import version  # noqa: E402
 
 
 def git(repository: Path, *args: str) -> str:
-    return subprocess.run(["git", *args], cwd=repository, env=build_git_environment(os.environ), check=True,
-                          capture_output=True, text=True).stdout.strip()
+    return subprocess.run(
+        ["git", *args],
+        cwd=repository,
+        env=build_git_environment(os.environ),
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
 
 
 class ReleaseTest(unittest.TestCase):
@@ -36,8 +42,19 @@ class ReleaseTest(unittest.TestCase):
         self.assertEqual(version.format_release((12, 0, 99)), "12.0.99")
 
     def test_anything_else_is_refused(self):
-        for text in ("0.2", "0.2.3.4", "v0.2.3", "0.100.0", "0.2.100", "1000.0.0", "0.02.3", "0.2.3-dev",
-                     "١.2.3", "", "0.2.3 0.2.4"):
+        for text in (
+            "0.2",
+            "0.2.3.4",
+            "v0.2.3",
+            "0.100.0",
+            "0.2.100",
+            "1000.0.0",
+            "0.02.3",
+            "0.2.3-dev",
+            "١.2.3",
+            "",
+            "0.2.3 0.2.4",
+        ):
             with self.subTest(text=text), self.assertRaises(ValueError):
                 version.parse_release(text)
 
@@ -100,8 +117,13 @@ class DevVersionTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             version.dev_code(now, version.MAX_VERSION_CODE)
         metadata = self.repository / "scanmylib.json"
-        for text, expected in [('{"version_code": 416760}', 416760), ('{"version_code": "416760"}', None),
-                               ('{"version_code": true}', None), ("[1]", None), ("not json", None)]:
+        for text, expected in [
+            ('{"version_code": 416760}', 416760),
+            ('{"version_code": "416760"}', None),
+            ('{"version_code": true}', None),
+            ("[1]", None),
+            ("not json", None),
+        ]:
             with self.subTest(text=text):
                 metadata.write_text(text)
                 self.assertEqual(version.published_code(metadata), expected)

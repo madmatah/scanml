@@ -15,8 +15,14 @@ UNNUMBERED_HEADING = "## Unnumbered pages"
 
 
 def scan(client, document_id: str, number: int, session: str, seq: int, minute: int = 0, variant: int = 0) -> dict:
-    response = upload(client, document_id, page_image(number, variant), session_id=session, seq=seq,
-                      captured_at=f"2026-10-12T20:{minute:02d}:{seq:02d}+02:00")
+    response = upload(
+        client,
+        document_id,
+        page_image(number, variant),
+        session_id=session,
+        seq=seq,
+        captured_at=f"2026-10-12T20:{minute:02d}:{seq:02d}+02:00",
+    )
     assert response.status_code == 201, response.text
     return response.json()
 
@@ -41,7 +47,9 @@ def markers(client, document_id: str) -> list[str]:
 
 def page_markers(pages: list[dict]) -> list[str]:
     return [
-        f"<!-- page {page['page_label']} · scan {page['key']} -->" if page["page_label"] else f"<!-- scan {page['key']} -->"
+        f"<!-- page {page['page_label']} · scan {page['key']} -->"
+        if page["page_label"]
+        else f"<!-- scan {page['key']} -->"
         for page in pages
     ]
 
@@ -235,7 +243,12 @@ def test_duplicates_are_unaffected_by_positions(client):
     rescan = scan(client, document_id, 3, later, 0, minute=30)  # page 3 photographed again
     document = wait_until_processed(client, document_id)
     old = next(p for p in document["pages"] if p["id"] == p3["id"])
-    assert (old["duplicate_of"], old["in_document"], old["position"], old["placement"]) == (rescan["id"], False, 0.0, None)
+    assert (old["duplicate_of"], old["in_document"], old["position"], old["placement"]) == (
+        rescan["id"],
+        False,
+        0.0,
+        None,
+    )
     assert ids(reading(document)) == ids([p1, p2, rescan])
     assert [p["placement"] for p in reading(document)] == ["number"] * 3
     assert document["stats"]["duplicates"] == 1
@@ -268,8 +281,15 @@ def test_stale_or_invalid_orders_are_refused(client, fake_ocr):
     assert put_order(client, document_id, ids([p3, p1, p2, late])).status_code == 409
     assert put_order(client, document_id, ids([p3, p1, p2])).status_code == 200
 
-    for body in ({}, {"page_ids": None}, {"page_ids": p1["id"]}, {"page_ids": [1]}, {"page_ids": ["p1"]},
-                 {"page_ids": [p1["id"].upper()]}, {"page_ids": [new_id()] * 10_001}):
+    for body in (
+        {},
+        {"page_ids": None},
+        {"page_ids": p1["id"]},
+        {"page_ids": [1]},
+        {"page_ids": ["p1"]},
+        {"page_ids": [p1["id"].upper()]},
+        {"page_ids": [new_id()] * 10_001},
+    ):
         response = client.put(f"/api/documents/{document_id}/order", json=body, headers=AUTH)
         assert response.status_code == 422, body
     for method in ("PUT", "DELETE"):

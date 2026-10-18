@@ -89,11 +89,12 @@ Production runs on this machine, from the main checkout, `~/Dev/scanmylib`, and 
 - **Check a visible change in a browser** before calling it done: load the web UI on the development stack, exercise the
   change, and read the console. The gate cannot see what is drawn.
 - **Commits:** commit as you like while the work is in progress. Before pushing, rewrite the branch into atomic commits
-  that each hold one reason to change, with its tests and documents, and pass `scripts/check.sh`. The header of a
-  message follows Conventional Commits, `<type>(<scope>): <subject>`, with a type among `feat`, `fix`, `refactor`,
-  `perf`, `style`, `test`, `docs`, `build`, `ci` and `chore` (`style` for a change of layout only, such as a
-  formatter's): `fix(android): resume an upload once the phone is back on the network`. A scope that would only repeat
-  the type is left out, as in `ci: pin the checkout action`, and a breaking change adds `!` before the colon:
+  that each hold one reason to change, with its tests and documents, and pass `scripts/check.sh --last-commit`, the
+  areas it touches; the last one passes `scripts/check.sh`. The header of a message follows Conventional Commits,
+  `<type>(<scope>): <subject>`, with a type among `feat`, `fix`, `refactor`, `perf`, `style`, `test`, `docs`, `build`,
+  `ci` and `chore` (`style` for a change of layout only, such as a formatter's):
+  `fix(android): resume uploads once back online`. A scope that would only repeat the type is left out, as in
+  `ci: pin the checkout action`, and a breaking change adds `!` before the colon:
   `feat(scripts)!: deploy only published releases`.
 - **A commit scope names where the change belongs:** the unit, as `docs/foundations.md` > Layers and modules names it,
   `server` for the api, `web` for the web UI, `android` for the app, `ocr` for the OCR sandbox, and `scripts`; or else
@@ -130,9 +131,9 @@ Production runs on this machine, from the main checkout, `~/Dev/scanmylib`, and 
 ## Commands
 
 - `scripts/check.sh [AREA...]`: the gate, in this order: `lint` (Ruff, mypy, zizmor, ShellCheck, shfmt and Biome),
-  `scripts` (the unit tests of the scripts), `web` (the web UI's unit tests), `server` (the api's tests), `ocr` (the
-  sandbox's unit tests, without the models), `android` (the app's unit tests, lint and ktlint) and `integration` (the
-  integration tests of the scripts). Given areas, it checks only those. It must pass on every commit you push.
+  `scripts` (unit tests of the scripts), `web` (the web UI's unit tests), `server` (the api's tests), `ocr` (the
+  sandbox's unit tests, no models), `android` (the app's unit tests, lint and ktlint), `integration` (integration tests
+  of the scripts). Given areas, it checks only those; `--last-commit`, those that read what the last commit changes.
 - `scripts/check.sh --fix`: formats every language and applies the linters' safe fixes: ktlint formats the app in
   place, the other formatters only the files git tracks (`git add` a new file first); read `git diff` before running
   what it changed.
@@ -194,6 +195,5 @@ read the file before you do what its line says.
 - `pull-request`: from a new branch to a merged pull request, and reviewing someone else's.
 - `expert-review`: `/expert-review [<pr#>|<branch>|<range>] [--post] [focus]`, the review of a diff before it
   reaches `main`.
-- `release`: `/release [major|minor|patch]`, the pull request of a new release, which a workflow publishes once the user
-  merges it.
+- `release`: `/release [major|minor|patch]`, the pull request of a new release, which a workflow publishes once merged.
 - `writing-commits`: the message of a commit, from its type and its scope to its body and its footer.

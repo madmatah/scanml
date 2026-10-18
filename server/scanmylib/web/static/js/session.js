@@ -7,7 +7,7 @@
  * first visit the UI then shows the login screen directly instead of probing
  * the API (and logging a 401 in the console).
  */
-import { api, ApiError } from './api.js';
+import { ApiError, api } from './api.js';
 
 const SIGNED_IN_KEY = 'scanmylib.signed-in';
 

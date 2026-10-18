@@ -1,4 +1,4 @@
-import { api, ApiError, NetworkError } from './api.js';
+import { ApiError, api, NetworkError } from './api.js';
 
 const POLL_INTERVAL_MS = 3000;
 

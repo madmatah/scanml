@@ -4,7 +4,7 @@
  */
 import { h } from '../lib/dom.js';
 import { formatPercent, formatRange, formatRanges } from '../lib/format.js';
-import { t, tc, tn, tNodes } from '../lib/i18n.js';
+import { t, tc, tNodes, tn } from '../lib/i18n.js';
 
 /** Minimum distance between two axis labels, as a fraction of the bar width. */
 const MIN_LABEL_SPACING = 0.09;

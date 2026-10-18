@@ -7,7 +7,7 @@ import { toast } from '../components/toast.js';
 import { h, NodeCache, syncChildren } from '../lib/dom.js';
 import { errorMessage, isAbort } from '../lib/errors.js';
 import { formatRanges, formatRelative, quoted } from '../lib/format.js';
-import { t, tn, tNodes } from '../lib/i18n.js';
+import { t, tNodes, tn } from '../lib/i18n.js';
 import { documentKind } from '../lib/labels.js';
 import { randomUuid } from '../lib/uuid.js';
 import { href, navigate, paths } from '../router.js';

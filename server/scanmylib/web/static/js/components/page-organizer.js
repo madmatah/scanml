@@ -560,7 +560,7 @@ export function createPageOrganizer({ save, reset, reload, onDone }) {
     }
     showLatestWhenIdle(); // after a failure: back to the last order known from the server
     renderToolbar();
-    savedWaiters.splice(0).forEach((resolve) => resolve());
+    for (const resolve of savedWaiters.splice(0)) resolve();
   }
 
   function whenSaved() {

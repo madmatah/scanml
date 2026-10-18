@@ -17,7 +17,8 @@ from dataclasses import replace
 from typing import Any
 from unittest import mock
 
-from scanmylib_ocr import protocol, runtime as runtime_module
+from scanmylib_ocr import protocol
+from scanmylib_ocr import runtime as runtime_module
 from scanmylib_ocr.config import Settings
 from scanmylib_ocr.engines.base import EngineSpec, PageEngine
 from scanmylib_ocr.runtime import EngineFailure, EngineRuntime, EngineStartError
@@ -131,8 +132,8 @@ class RuntimeTest(unittest.TestCase):
             self.runtime.stop()
         self.tmp.cleanup()
 
-    def start(self, script: str, **settings: Any) -> EngineRuntime:
-        self.runtime = EngineRuntime(replace(self.settings, **settings), ScriptSpec(script))
+    def start(self, script: str, settings: Settings | None = None) -> EngineRuntime:
+        self.runtime = EngineRuntime(self.settings if settings is None else settings, ScriptSpec(script))
         self.runtime.start()
         return self.runtime
 
@@ -164,7 +165,7 @@ class RuntimeTest(unittest.TestCase):
     def test_start_times_out(self) -> None:
         started = time.monotonic()
         with self.assertRaisesRegex(EngineStartError, "worker not ready"):
-            self.start(NEVER_READY, start_timeout_s=1.0)
+            self.start(NEVER_READY, replace(self.settings, start_timeout_s=1.0))
         self.assertLess(time.monotonic() - started, 15)
 
     def test_silent_worker_times_out(self) -> None:

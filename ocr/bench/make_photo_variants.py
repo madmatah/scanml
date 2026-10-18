@@ -118,7 +118,10 @@ def place_in_photo(page: np.ndarray, rng: np.random.Generator, tilt: float) -> n
     scale = min(photo_w * 0.86 / width, photo_h * 0.86 / height)
     w, h = width * scale, height * scale
     x0, y0 = (photo_w - w) / 2, (photo_h - h) / 2
-    jitter = lambda: rng.uniform(-1, 1) * 0.02 * w  # noqa: E731
+
+    def jitter() -> float:
+        return float(rng.uniform(-1, 1) * 0.02 * w)
+
     shrink = tilt * w  # the far (top) edge looks narrower
     corners = np.float32([
         [x0 + shrink + jitter(), y0 + jitter()],

@@ -13,6 +13,7 @@ import tempfile
 import threading
 import time
 import unittest
+from collections.abc import Callable
 from dataclasses import replace
 from typing import Any
 
@@ -107,6 +108,10 @@ def tagged(tag: str, base: bytes = JPEG) -> bytes:
     return base + tag.encode().ljust(8, b"\x00")
 
 
+def make_queue_check(page_count: int) -> Callable[[dict[str, Any]], bool]:
+    return lambda health: health["queue"] == page_count
+
+
 class SupervisorTest(unittest.TestCase):
     start_error: str | None = None
     idle_unload_s = 60.0
@@ -159,9 +164,10 @@ class SupervisorTest(unittest.TestCase):
     def health(self) -> dict[str, Any]:
         status, body = self.call("GET", "/health")
         self.assertEqual(status, 200)
-        return body
+        health: dict[str, Any] = body
+        return health
 
-    def wait_for(self, predicate, what: str) -> dict[str, Any]:
+    def wait_for(self, predicate: Callable[[dict[str, Any]], bool], what: str) -> dict[str, Any]:
         """Polls /health until ``predicate(health)`` holds."""
         deadline = time.monotonic() + SIGNAL_TIMEOUT_S
         while time.monotonic() < deadline:
@@ -217,7 +223,7 @@ class ParseTest(SupervisorTest):
             if waiting == 0:
                 self.wait_until_a_slow_page_runs()
             else:
-                self.wait_for(lambda health, n=waiting: health["queue"] == n, f"{waiting} queued pages")
+                self.wait_for(make_queue_check(waiting), f"{waiting} queued pages")
         self.signals.release_pages.set()
         for thread in threads:
             thread.join()

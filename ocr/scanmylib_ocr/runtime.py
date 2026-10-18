@@ -308,6 +308,7 @@ class EngineRuntime:
         opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
         try:
             with opener.open(url, timeout=2) as response:
-                return response.status == 200
+                status: int = response.status
+                return status == 200
         except (urllib.error.URLError, OSError):
             return False

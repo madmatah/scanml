@@ -23,28 +23,32 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from run_bench import GpuSampler, request_json  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from run_bench import GpuSampler
+from scanmylib_ocr.client import request_json
 
 
-def compute_processes() -> list[dict]:
+def compute_processes() -> list[dict[str, int | str]]:
     output = subprocess.run(
         ["nvidia-smi", "--query-compute-apps=pid,process_name,used_memory", "--format=csv,noheader,nounits"],
         capture_output=True, text=True, check=True,
     ).stdout  # fmt: skip
-    processes = []
+    processes: list[dict[str, int | str]] = []
     for line in output.strip().splitlines():
         pid, name, used = (field.strip() for field in line.split(","))
         processes.append({"pid": int(pid), "name": name, "used_mb": int(used)})
     return processes
 
 
-def health(socket_path: str) -> dict:
+def health(socket_path: str) -> dict[str, Any]:
     status, body = request_json(socket_path, "GET", "/health", timeout=10)
     if status != 200:
         raise RuntimeError(f"/health answered {status}")
-    return body
+    report: dict[str, Any] = body
+    return report
 
 
 def wait_for_state(socket_path: str, wanted: str, timeout_s: float) -> float:
@@ -59,14 +63,15 @@ def wait_for_state(socket_path: str, wanted: str, timeout_s: float) -> float:
     raise TimeoutError(f"engine not {wanted} after {timeout_s:.0f} s")
 
 
-def parse(socket_path: str, path: Path) -> dict:
+def parse(socket_path: str, path: Path) -> dict[str, Any]:
     status, body = request_json(
         socket_path, "POST", f"/v1/parse?request_id=measure-{path.stem}",
         body=path.read_bytes(), headers={"Content-Type": "image/jpeg"},
     )  # fmt: skip
     if status != 200:
         raise RuntimeError(f"{path.name}: HTTP {status}: {body}")
-    return body
+    page_result: dict[str, Any] = body
+    return page_result
 
 
 def main() -> None:

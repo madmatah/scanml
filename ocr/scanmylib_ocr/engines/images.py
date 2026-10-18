@@ -31,8 +31,8 @@ def load_page_image(path: str) -> Image.Image:
             width, height = image.size
             if width * height > MAX_INPUT_PIXELS:
                 raise PageInputError(f"image too large: {width}x{height} pixels")
-            image = ImageOps.exif_transpose(image)
-            rgb = _flatten_to_rgb(image)
+            upright = ImageOps.exif_transpose(image)
+            rgb = _flatten_to_rgb(upright)
     except PageInputError:
         raise
     except (OSError, ValueError, SyntaxError, Image.DecompressionBombError) as exc:

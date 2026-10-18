@@ -19,7 +19,8 @@ With DATA_DIR the stack's data directory (see .env):
     python3 -I ocr/bench/run_bench.py --run baseline --testdata "$DATA_DIR/testdata" --socket "$DATA_DIR/run/ocr.sock"
     python3 -I ocr/bench/run_bench.py --run unwarp --unwarp 1 --variant curved --variant combined \
         --testdata "$DATA_DIR/testdata" --socket "$DATA_DIR/run/ocr.sock"
-    python3 -I ocr/bench/run_bench.py --run baseline --rescore --testdata "$DATA_DIR/testdata"  # after a ground-truth change
+    python3 -I ocr/bench/run_bench.py --run baseline --rescore \
+        --testdata "$DATA_DIR/testdata"  # after a ground-truth change
 """
 
 from __future__ import annotations
@@ -36,9 +37,10 @@ import threading
 import time
 import unicodedata
 from pathlib import Path
+from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from scanmylib_ocr.client import request_json  # noqa: E402
+from scanmylib_ocr.client import request_json
 
 # -- text comparison -------------------------------------------------------------
 
@@ -143,7 +145,7 @@ class GpuSampler(threading.Thread):
 # -- run ----------------------------------------------------------------------------
 
 
-def save_result(directory: Path, response: dict) -> None:
+def save_result(directory: Path, response: dict[str, Any]) -> None:
     directory.mkdir(parents=True, exist_ok=True)
     (directory / "page.md").write_text(response.get("markdown", ""), encoding="utf-8")
     images = response.get("images", [])
@@ -156,9 +158,11 @@ def save_result(directory: Path, response: dict) -> None:
     (directory / "response.json").write_text(json.dumps(stripped, indent=1, ensure_ascii=False), encoding="utf-8")
 
 
-def score(entry: dict, response: dict, testdata: Path, pages: dict) -> dict:
+def score(
+    entry: dict[str, Any], response: dict[str, Any], testdata: Path, pages: dict[str, dict[str, Any]]
+) -> dict[str, Any]:
     page = pages.get(entry["page"], {})
-    metrics: dict = {
+    metrics: dict[str, Any] = {
         "file": entry["file"],
         "variant": entry["variant"],
         "blocks": len(response.get("blocks", [])),
@@ -178,9 +182,9 @@ def score(entry: dict, response: dict, testdata: Path, pages: dict) -> dict:
     return metrics
 
 
-def summarize(results: list[dict]) -> dict:
+def summarize(results: list[dict[str, Any]]) -> dict[str, Any]:
     ok = [r for r in results if r.get("status") == 200]
-    by_variant: dict[str, list[dict]] = {}
+    by_variant: dict[str, list[dict[str, Any]]] = {}
     for result in ok:
         by_variant.setdefault(result["variant"], []).append(result)
 
@@ -205,12 +209,12 @@ def summarize(results: list[dict]) -> dict:
     }
 
 
-def write_summary(run_dir: Path, summary: dict) -> None:
+def write_summary(run_dir: Path, summary: dict[str, Any]) -> None:
     (run_dir / "summary.json").write_text(json.dumps(summary, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     print(json.dumps({k: v for k, v in summary.items() if k != "results"}, indent=2, ensure_ascii=False))
 
 
-def rescore(run_dir: Path, entries: list[dict], testdata: Path, pages: dict) -> None:
+def rescore(run_dir: Path, entries: list[dict[str, Any]], testdata: Path, pages: dict[str, dict[str, Any]]) -> None:
     """Recompute the scores of a past run from its saved responses (timings are kept)."""
     summary = json.loads((run_dir / "summary.json").read_text(encoding="utf-8"))
     by_file = {entry["file"]: entry for entry in entries}

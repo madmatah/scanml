@@ -23,4 +23,5 @@ def get_spec(name: str) -> EngineSpec:
     except KeyError:
         known = ", ".join(sorted(_ENGINE_MODULES))
         raise ValueError(f"unknown OCR_ENGINE {name!r} (available: {known})") from None
-    return importlib.import_module(module_name).SPEC
+    spec: EngineSpec = importlib.import_module(module_name).SPEC
+    return spec

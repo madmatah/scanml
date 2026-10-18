@@ -80,7 +80,7 @@ class PageEngine(abc.ABC):
     def parse(self, image_path: str, options: PageOptions) -> PageResult:
         """OCR one page. Raise ``PageInputError`` for an undecodable image."""
 
-    def close(self) -> None:
+    def close(self) -> None:  # noqa: B027 (an optional hook: engines that hold no resources keep this no-op)
         """Release resources before the worker exits."""
 
 

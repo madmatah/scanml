@@ -18,8 +18,8 @@ import time
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Any, Protocol
+from datetime import UTC, datetime
+from typing import Any, Protocol, assert_never
 
 from .config import Settings
 from .engines.base import EngineSpec
@@ -87,8 +87,41 @@ class ParseJob:
         return self._reply
 
 
+@dataclass(frozen=True)
+class _Unloading:
+    waiters: list[threading.Event]
+
+
+@dataclass(frozen=True)
+class _Parsing:
+    job: ParseJob
+
+
+@dataclass(frozen=True)
+class _Loading:
+    pass
+
+
+@dataclass(frozen=True)
+class _IdleTimeout:
+    pass
+
+
+@dataclass(frozen=True)
+class _EngineLoss:
+    pass
+
+
+@dataclass(frozen=True)
+class _Closing:
+    pass
+
+
+_Action = _Unloading | _Parsing | _Loading | _IdleTimeout | _EngineLoss
+
+
 def _utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+    return datetime.now(UTC).isoformat(timespec="seconds")
 
 
 class EngineManager:
@@ -175,64 +208,67 @@ class EngineManager:
 
     def _dispatch_forever(self) -> None:
         while True:
-            action, payload = self._next_action()
-            if action == "close":
+            action = self._next_action()
+            if isinstance(action, _Closing):
                 self._close()
                 return
             try:
-                self._perform(action, payload)
+                self._perform(action)
             except Exception:
                 # Never let the only dispatcher thread die: every page would wait forever.
-                log.exception("unexpected error in the engine dispatcher (%s)", action)
-                if action == "parse":
-                    payload.finish(error_reply(500, PROCESSING_FAILED, "internal error in the OCR supervisor"))
+                log.exception("unexpected error in the engine dispatcher (%s)", type(action).__name__)
+                if isinstance(action, _Parsing):
+                    action.job.finish(error_reply(500, PROCESSING_FAILED, "internal error in the OCR supervisor"))
                 time.sleep(1.0)
 
-    def _perform(self, action: str, payload: Any) -> None:
-        if action == "unload":
-            try:
+    def _perform(self, action: _Action) -> None:
+        match action:
+            case _Unloading(waiters):
+                try:
+                    self._stop_engine()
+                finally:
+                    for waiter in waiters:
+                        waiter.set()
+            case _Parsing(job):
+                try:
+                    self._process(job)
+                finally:
+                    with self._cond:
+                        self._busy = False
+                        self._last_activity = time.monotonic()
+            case _Loading():
+                self._ensure_engine()
+            case _IdleTimeout():
+                log.info("no page for %.0f s: unloading the engine", self._settings.idle_unload_s)
                 self._stop_engine()
-            finally:
-                for waiter in payload:
-                    waiter.set()
-        elif action == "parse":
-            try:
-                self._process(payload)
-            finally:
-                with self._cond:
-                    self._busy = False
-                    self._last_activity = time.monotonic()
-        elif action == "load":
-            self._ensure_engine()
-        elif action == "idle":
-            log.info("no page for %.0f s: unloading the engine", self._settings.idle_unload_s)
-            self._stop_engine()
-        elif action == "lost":
-            detail = self._runtime.describe_failure() if self._runtime else "engine stopped"
-            log.error("engine stopped unexpectedly: %s", detail)
-            self._stop_engine(final_state=State.ERROR, error=f"engine stopped unexpectedly: {detail}")
+            case _EngineLoss():
+                detail = self._runtime.describe_failure() if self._runtime else "engine stopped"
+                log.error("engine stopped unexpectedly: %s", detail)
+                self._stop_engine(final_state=State.ERROR, error=f"engine stopped unexpectedly: {detail}")
+            case _:
+                assert_never(action)
 
-    def _next_action(self) -> tuple[str, Any]:
+    def _next_action(self) -> _Action | _Closing:
         with self._cond:
             while True:
                 if self._closing:
-                    return "close", None
+                    return _Closing()
                 if self._unload_waiters:
                     waiters, self._unload_waiters = self._unload_waiters, []
-                    return "unload", waiters
+                    return _Unloading(waiters)
                 if self._jobs:
                     self._busy = True
-                    return "parse", self._jobs.popleft()
+                    return _Parsing(self._jobs.popleft())
                 if self._load_requested:
                     self._load_requested = False
-                    return "load", None
+                    return _Loading()
                 timeout = None
                 if self._runtime is not None:
                     if not self._runtime.alive():
-                        return "lost", None
+                        return _EngineLoss()
                     idle_for = time.monotonic() - self._last_activity
                     if idle_for >= self._settings.idle_unload_s:
-                        return "idle", None
+                        return _IdleTimeout()
                     timeout = min(self._settings.idle_unload_s - idle_for, LIVENESS_CHECK_INTERVAL_S)
                 self._cond.wait(timeout)
 
@@ -262,7 +298,7 @@ class EngineManager:
             self._runtime = runtime  # visible to shutdown(), which may interrupt the start
         try:
             runtime.start()
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 (any failed start fails the waiting pages, not the dispatcher)
             with self._cond:
                 self._runtime = None
                 closing = self._closing

@@ -196,3 +196,4 @@ read the file before you do what its line says.
   reaches `main`.
 - `release`: `/release [major|minor|patch]`, the pull request of a new release, which a workflow publishes once the user
   merges it.
+- `writing-commits`: the message of a commit, from its type and its scope to its body and its footer.

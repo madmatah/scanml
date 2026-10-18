@@ -20,9 +20,7 @@ def query_gpu(timeout_s: float = 5.0) -> dict[str, Any] | None:
     if executable is None:
         return None
     try:
-        completed = subprocess.run(
-            [executable, *QUERY], capture_output=True, text=True, timeout=timeout_s, check=True
-        )
+        completed = subprocess.run([executable, *QUERY], capture_output=True, text=True, timeout=timeout_s, check=True)
         name, used, total = (field.strip() for field in completed.stdout.splitlines()[0].split(","))
         return {"name": name, "memory_used_mb": int(used), "memory_total_mb": int(total)}
     except (OSError, subprocess.SubprocessError, ValueError, IndexError) as exc:

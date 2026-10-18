@@ -48,8 +48,9 @@ class Api:
         self.base = base.rstrip("/")
         self.headers = {"Authorization": f"Bearer {token}", "X-ScanMyLib": "1"}
 
-    def request(self, method: str, path: str, body: bytes | None = None,
-                content_type: str | None = None) -> tuple[int, bytes]:
+    def request(
+        self, method: str, path: str, body: bytes | None = None, content_type: str | None = None
+    ) -> tuple[int, bytes]:
         headers = dict(self.headers)
         if content_type:
             headers["Content-Type"] = content_type
@@ -73,10 +74,14 @@ class Api:
         mime = mimetypes.guess_type(image.name)[0] or "image/jpeg"
         parts.append(
             f'--{boundary}\r\nContent-Disposition: form-data; name="file"; filename="{image.name}"\r\n'
-            f"Content-Type: {mime}\r\n\r\n".encode() + image.read_bytes() + b"\r\n")
+            f"Content-Type: {mime}\r\n\r\n".encode()
+            + image.read_bytes()
+            + b"\r\n"
+        )
         parts.append(f"--{boundary}--\r\n".encode())
-        status, data = self.request("POST", f"/api/documents/{doc_id}/pages", b"".join(parts),
-                                    f"multipart/form-data; boundary={boundary}")
+        status, data = self.request(
+            "POST", f"/api/documents/{doc_id}/pages", b"".join(parts), f"multipart/form-data; boundary={boundary}"
+        )
         return status, (json.loads(data) if data else {})
 
 
@@ -96,13 +101,24 @@ def production_containers() -> list[dict]:
     """`docker inspect` of production's containers (empty without Docker: production is then
     described by the .env of ~/Dev/scanmylib and the defaults)."""
     try:
-        ids = subprocess.run(["docker", "ps", "--all", "--quiet", "--filter",
-                              f"label=com.docker.compose.project={stack.PRODUCTION_PROJECT}"],
-                             capture_output=True, text=True, check=True).stdout.split()
+        ids = subprocess.run(
+            [
+                "docker",
+                "ps",
+                "--all",
+                "--quiet",
+                "--filter",
+                f"label=com.docker.compose.project={stack.PRODUCTION_PROJECT}",
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.split()
         if not ids:
             return []
-        return json.loads(subprocess.run(["docker", "inspect", *ids], capture_output=True, text=True,
-                                         check=True).stdout)
+        return json.loads(
+            subprocess.run(["docker", "inspect", *ids], capture_output=True, text=True, check=True).stdout
+        )
     except (OSError, subprocess.CalledProcessError, json.JSONDecodeError) as exc:
         print(f"  note  cannot list production's containers ({exc}): production's defaults only", file=sys.stderr)
         return []
@@ -124,8 +140,11 @@ class Production:
     def __init__(self) -> None:
         containers = production_containers()
         self.identity = stack.production_identity(stack.production_checkout(containers), containers)
-        libraries = {description: path for description, path in self.identity.paths.items()
-                     if "LIBRARY_DIR" in description or description.startswith("mount /library ")}
+        libraries = {
+            description: path
+            for description, path in self.identity.paths.items()
+            if "LIBRARY_DIR" in description or description.startswith("mount /library ")
+        }
         self.libraries = stack.Production(paths=libraries)
 
     def owns_library(self, library: Path | str) -> bool:
@@ -161,30 +180,49 @@ def main() -> int:
     data_dir = env.get("DATA_DIR")
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("images", nargs="+", type=Path)
-    parser.add_argument("--api", default=f"http://127.0.0.1:{env.get('API_PORT') or 8765}" if env else None,
-                        help="default: http://127.0.0.1:API_PORT")
-    parser.add_argument("--token-file", type=Path, default=Path(data_dir, "state", "token") if data_dir else None,
-                        help="default: DATA_DIR/state/token")
-    parser.add_argument("--library", type=Path, default=Path(env["LIBRARY_DIR"]) if env.get("LIBRARY_DIR") else None,
-                        help="default: LIBRARY_DIR")
+    parser.add_argument(
+        "--api",
+        default=f"http://127.0.0.1:{env.get('API_PORT') or 8765}" if env else None,
+        help="default: http://127.0.0.1:API_PORT",
+    )
+    parser.add_argument(
+        "--token-file",
+        type=Path,
+        default=Path(data_dir, "state", "token") if data_dir else None,
+        help="default: DATA_DIR/state/token",
+    )
+    parser.add_argument(
+        "--library",
+        type=Path,
+        default=Path(env["LIBRARY_DIR"]) if env.get("LIBRARY_DIR") else None,
+        help="default: LIBRARY_DIR",
+    )
     parser.add_argument("--title", default=f"Test E2E {datetime.now():%Y-%m-%d %H:%M:%S}")
     parser.add_argument("--timeout", type=int, default=900, help="seconds to wait for OCR")
-    parser.add_argument("--production", action="store_true",
-                        help="allow a test document in production's library (refused otherwise)")
+    parser.add_argument(
+        "--production", action="store_true", help="allow a test document in production's library (refused otherwise)"
+    )
     args = parser.parse_args()
-    missing = [option for option, value in (("--api", args.api), ("--token-file", args.token_file),
-                                            ("--library", args.library)) if value is None]
+    missing = [
+        option
+        for option, value in (("--api", args.api), ("--token-file", args.token_file), ("--library", args.library))
+        if value is None
+    ]
     if missing:
-        parser.error(f"no active environment in {ROOT / '.env'} (scripts/dev-env.sh in a worktree): "
-                     f"pass {', '.join(missing)}")
+        parser.error(
+            f"no active environment in {ROOT / '.env'} (scripts/dev-env.sh in a worktree): pass {', '.join(missing)}"
+        )
     try:
         production = Production()
     except stack.EnvError as exc:
         sys.exit(f"error: cannot tell what production owns ({exc}): nothing was sent")
     reasons = production.reasons(env, args.api, args.token_file, args.library)
     if reasons and not args.production:
-        sys.exit("error: refusing to write a test document into production:\n  - " + "\n  - ".join(reasons)
-                 + "\nRun it from a worktree's development stack (scripts/dev-env.sh), or pass --production.")
+        sys.exit(
+            "error: refusing to write a test document into production:\n  - "
+            + "\n  - ".join(reasons)
+            + "\nRun it from a worktree's development stack (scripts/dev-env.sh), or pass --production."
+        )
 
     api = Api(args.api, args.token_file.read_text().strip())
     failures: list[str] = []
@@ -214,8 +252,10 @@ def main() -> int:
     status, api_status = api.json("GET", "/api/status")
     reported = api_status.get("library_dir") if status == 200 else None
     if reported and production.owns_library(reported) and not args.production:
-        sys.exit(f"error: the api at {args.api} writes into production's library ({reported}): nothing was sent."
-                 "\nPass --production to test production anyway.")
+        sys.exit(
+            f"error: the api at {args.api} writes into production's library ({reported}): nothing was sent."
+            "\nPass --production to test production anyway."
+        )
     if reported and Path(os.path.realpath(reported)) != Path(os.path.realpath(args.library)):
         print(f"  note  the api reports the library {reported}, the checks read {args.library}")
 
@@ -235,8 +275,12 @@ def main() -> int:
         session_id = str(uuid.uuid4())
         for seq, image in enumerate(session_images):
             page_id = str(uuid.uuid4())
-            fields = {"page_id": page_id, "session_id": session_id, "seq": str(seq),
-                      "captured_at": datetime.now(timezone.utc).isoformat()}
+            fields = {
+                "page_id": page_id,
+                "session_id": session_id,
+                "seq": str(seq),
+                "captured_at": datetime.now(timezone.utc).isoformat(),
+            }
             status, page = api.upload(doc_id, image, fields)
             check(status == 201, f"upload {image.name} -> {status}", failures)
             status_again, _ = api.upload(doc_id, image, fields)
@@ -258,9 +302,11 @@ def main() -> int:
     print("== Pages in reading order")
     for page in doc.get("pages", []):
         ocr = page.get("ocr") or {}
-        print(f"  {page['key']}  label={page.get('page_label')!s:6} source={page.get('number_source')!s:9} "
-              f"status={page['status']:10} images={ocr.get('images')} chars={ocr.get('chars')} "
-              f"t={ocr.get('duration_s')}s {page.get('error') or ''}")
+        print(
+            f"  {page['key']}  label={page.get('page_label')!s:6} source={page.get('number_source')!s:9} "
+            f"status={page['status']:10} images={ocr.get('images')} chars={ocr.get('chars')} "
+            f"t={ocr.get('duration_s')}s {page.get('error') or ''}"
+        )
     print(f"  coverage: {doc.get('coverage')}")
 
     print("== Library on disk")

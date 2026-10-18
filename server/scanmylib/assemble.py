@@ -204,9 +204,7 @@ def _page_metadata(page: PageEntry) -> dict:
             "scan": page.scan_file,
             "markdown": f"pages/{page.key}.md" if done else None,
             "ocr": f"ocr/{page.key}.json" if done else None,
-            "images": [f"images/{page.key}_{n}.jpg" for n in range(1, page.image_count + 1)]
-            if done
-            else [],
+            "images": [f"images/{page.key}_{n}.jpg" for n in range(1, page.image_count + 1)] if done else [],
         },
     }
 

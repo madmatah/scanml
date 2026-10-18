@@ -30,13 +30,29 @@ import sys
 
 #: Global options of docker compose that take a value.
 _COMPOSE_OPTIONS_WITH_VALUE = {
-    "-f", "--file", "-p", "--project-name", "--project-directory", "--env-file", "--profile",
-    "--ansi", "--progress", "--parallel",
+    "-f",
+    "--file",
+    "-p",
+    "--project-name",
+    "--project-directory",
+    "--env-file",
+    "--profile",
+    "--ansi",
+    "--progress",
+    "--parallel",
 }
 #: Variables that would change what the scripts or docker compose do, if they leaked through.
 _WATCHED = (
-    "IMAGE_PREFIX", "DATA_DIR", "LIBRARY_DIR", "SANDBOX_DIR", "SANDBOX_SETUP_DIR", "ANDROID_DIR",
-    "ANDROID_KEYSTORE_DIR", "API_PORT", "APP_VARIANT", "OCR_SERVICE",
+    "IMAGE_PREFIX",
+    "DATA_DIR",
+    "LIBRARY_DIR",
+    "SANDBOX_DIR",
+    "SANDBOX_SETUP_DIR",
+    "ANDROID_DIR",
+    "ANDROID_KEYSTORE_DIR",
+    "API_PORT",
+    "APP_VARIANT",
+    "OCR_SERVICE",
 )
 
 
@@ -54,7 +70,7 @@ def compose_command(argv: list[str]) -> str | None:
 
 
 def image_id(build_argv: list[str]) -> str:
-    arguments = build_argv[build_argv.index("--iidfile") + 2:]
+    arguments = build_argv[build_argv.index("--iidfile") + 2 :]
     return "sha256:" + hashlib.sha256(" ".join(arguments).encode()).hexdigest()
 
 
@@ -68,8 +84,11 @@ def main() -> int:
     with open(sys.argv[1], encoding="utf-8") as file:
         config = json.load(file)
     argv = sys.argv[2:]
-    watched = {name: value for name, value in os.environ.items()
-               if name.startswith(("COMPOSE_", "DOCKER_", "BUILDKIT_")) or name in _WATCHED}
+    watched = {
+        name: value
+        for name, value in os.environ.items()
+        if name.startswith(("COMPOSE_", "DOCKER_", "BUILDKIT_")) or name in _WATCHED
+    }
     with open(config["log"], "a", encoding="utf-8") as log:
         log.write(json.dumps({"argv": argv, "env": watched}) + "\n")
     joined = " ".join(argv)

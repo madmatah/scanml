@@ -125,11 +125,13 @@ def test_labels():
 
 
 def test_precedence_manual_detected_hint():
-    layout = compute_layout([
-        page("a", manual=5, detected=("7",), hint=9),
-        page("b", detected=("7",), hint=9, ts=1),
-        page("c", hint=9, ts=2),
-    ])
+    layout = compute_layout(
+        [
+            page("a", manual=5, detected=("7",), hint=9),
+            page("b", detected=("7",), hint=9, ts=1),
+            page("c", hint=9, ts=2),
+        ]
+    )
     sources = {pid: (p.number.value, p.source) for pid, p in layout.placements.items()}
     assert sources == {"a": (5, "manual"), "b": (7, "detected"), "c": (9, "hint")}
 
@@ -143,21 +145,25 @@ def test_manual_number_replaces_a_detected_spread():
 
 
 def test_inference_forward_from_previous_numbered_page():
-    layout = compute_layout([
-        page("a", seq=0, detected=("10",)),
-        page("b", seq=1, ts=1),
-        page("c", seq=2, ts=2),
-    ])
+    layout = compute_layout(
+        [
+            page("a", seq=0, detected=("10",)),
+            page("b", seq=1, ts=1),
+            page("c", seq=2, ts=2),
+        ]
+    )
     assert labels(layout) == ["10", "11", "12"]
     assert layout.placements["c"].source == "inferred"
 
 
 def test_inference_backward_from_next_numbered_page():
-    layout = compute_layout([
-        page("a", seq=0),
-        page("b", seq=1, ts=1),
-        page("c", seq=2, ts=2, detected=("5",)),
-    ])
+    layout = compute_layout(
+        [
+            page("a", seq=0),
+            page("b", seq=1, ts=1),
+            page("c", seq=2, ts=2, detected=("5",)),
+        ]
+    )
     assert labels(layout, ["a", "b", "c"]) == ["3", "4", "5"]
 
 
@@ -174,11 +180,13 @@ def test_inference_uses_the_distance_in_seq():
 
 def test_inference_does_not_collide_with_the_next_numbered_page():
     # An unnumbered plate between pages 10 and 11 stays unnumbered.
-    layout = compute_layout([
-        page("p10", seq=0, detected=("10",)),
-        page("plate", seq=1, ts=1),
-        page("p11", seq=2, ts=2, detected=("11",)),
-    ])
+    layout = compute_layout(
+        [
+            page("p10", seq=0, detected=("10",)),
+            page("plate", seq=1, ts=1),
+            page("p11", seq=2, ts=2, detected=("11",)),
+        ]
+    )
     assert layout.placements["plate"].number is None
     assert layout.placements["plate"].in_document
     assert layout.placements["p11"].duplicate_of is None
@@ -196,11 +204,13 @@ def test_inference_continues_roman_front_matter():
 
 
 def test_no_inference_across_sessions_or_without_session():
-    layout = compute_layout([
-        page("a", session="s1", seq=0, detected=("10",)),
-        page("b", session="s2", seq=1, ts=1),
-        page("c", session=None, seq=1, ts=2),
-    ])
+    layout = compute_layout(
+        [
+            page("a", session="s1", seq=0, detected=("10",)),
+            page("b", session="s2", seq=1, ts=1),
+            page("c", session=None, seq=1, ts=2),
+        ]
+    )
     assert layout.placements["b"].number is None
     assert layout.placements["c"].number is None
 
@@ -224,8 +234,7 @@ def users_roman_book(manual: dict[int, int] | None = None) -> list[PageInput]:
     detected = {11: ("1X",), 15: ("XV",), 22: ("XXV",), 24: ("$ x_{0} $",), 25: ("3",)}
     manual = manual or {}
     return [
-        page(f"s{seq}", seq=seq, ts=seq, detected=detected.get(seq, ()), manual=manual.get(seq))
-        for seq in range(1, 26)
+        page(f"s{seq}", seq=seq, ts=seq, detected=detected.get(seq, ()), manual=manual.get(seq)) for seq in range(1, 26)
     ]
 
 
@@ -292,7 +301,7 @@ def book_scanned_in_order(rng: random.Random, *, skipping: bool) -> tuple[list[P
     book = [int_to_roman(v) for v in range(1, rng.randint(0, 30) + 1)]
     book += [str(v) for v in range(1, rng.randint(1, 40) + 1)]
     start = rng.randrange(len(book))
-    run = book[start:rng.randint(start + 1, len(book))]
+    run = book[start : rng.randint(start + 1, len(book))]
     real = [label for label in run if not skipping or rng.random() < 0.7] or run[:1]
     found = rng.random()  # share of the numbers the OCR reads
     pages = []
@@ -368,13 +377,23 @@ def random_session(rng: random.Random) -> list[PageInput]:
         seq += rng.choice([1, 1, 1, 2, 3])
         kind = rng.choice(["arabic", "roman", "spread", "none", "none", "none"])
         number = rng.randint(1, 30)
-        detected = {"arabic": (str(number),), "roman": (int_to_roman(number),),
-                    "spread": (str(number), str(number + 1))}.get(kind, ())
-        pages.append(page(
-            f"x{index}", seq=seq, ts=index, detected=detected,
-            manual=rng.choice([None] * 9 + [rng.randint(1, 30)]), hint=rng.choice([None] * 9 + [rng.randint(1, 30)]),
-            excluded=rng.random() < 0.1, status=rng.choice(["done"] * 9 + ["queued"]),
-        ))
+        detected = {
+            "arabic": (str(number),),
+            "roman": (int_to_roman(number),),
+            "spread": (str(number), str(number + 1)),
+        }.get(kind, ())
+        pages.append(
+            page(
+                f"x{index}",
+                seq=seq,
+                ts=index,
+                detected=detected,
+                manual=rng.choice([None] * 9 + [rng.randint(1, 30)]),
+                hint=rng.choice([None] * 9 + [rng.randint(1, 30)]),
+                excluded=rng.random() < 0.1,
+                status=rng.choice(["done"] * 9 + ["queued"]),
+            )
+        )
     return pages
 
 
@@ -411,9 +430,11 @@ def test_inferred_numbers_follow_a_neighbor_without_reaching_a_numbered_page(see
         # Counted on from the previous numbered page, or back from the next one: the latter only
         # without a previous one, or between front matter and the main text.
         forward = previous is not None and number == PageNumber(
-            previous.last + p.seq - before[-1][0], front_matter=previous.front_matter)
+            previous.last + p.seq - before[-1][0], front_matter=previous.front_matter
+        )
         backward = following is not None and number == PageNumber(
-            following.value - (after[0][0] - p.seq), front_matter=following.front_matter)
+            following.value - (after[0][0] - p.seq), front_matter=following.front_matter
+        )
         assert forward or (backward and (previous is None or (previous.front_matter and not following.front_matter)))
 
 
@@ -430,35 +451,41 @@ def test_out_of_order_sessions_are_merged_by_number():
 
 
 def test_roman_front_matter_comes_first_and_is_not_in_the_coverage():
-    layout = compute_layout([
-        page("p2", detected=("2",), ts=1),
-        page("p1", detected=("1",), ts=2),
-        page("pii", detected=("ii",), ts=3),
-        page("pi", detected=("i",), ts=4),
-    ])
+    layout = compute_layout(
+        [
+            page("p2", detected=("2",), ts=1),
+            page("p1", detected=("1",), ts=2),
+            page("pii", detected=("ii",), ts=3),
+            page("pi", detected=("i",), ts=4),
+        ]
+    )
     assert labels(layout) == ["i", "ii", "1", "2"]
     assert layout.coverage.ranges == ((1, 2),)
 
 
 def test_unnumbered_pages_come_last_by_capture_time():
-    layout = compute_layout([
-        page("u2", session=None, ts=50),
-        page("n2", detected=("2",), ts=10),
-        page("u1", session=None, ts=40),
-        page("n1", detected=("1",), ts=20),
-    ])
+    layout = compute_layout(
+        [
+            page("u2", session=None, ts=50),
+            page("n2", detected=("2",), ts=10),
+            page("u1", session=None, ts=40),
+            page("n1", detected=("1",), ts=20),
+        ]
+    )
     assert layout.reading_order == ("n1", "n2", "u1", "u2")
     assert layout.numbered
     assert layout.coverage.unnumbered == 2
 
 
 def test_document_without_numbers_is_ordered_by_session_then_seq():
-    layout = compute_layout([
-        page("x0", session="x", seq=0, ts=50),
-        page("x1", session="x", seq=1, ts=45),  # clock oddity: seq wins inside a session
-        page("y1", session="y", seq=1, ts=12),
-        page("y0", session="y", seq=0, ts=10),
-    ])
+    layout = compute_layout(
+        [
+            page("x0", session="x", seq=0, ts=50),
+            page("x1", session="x", seq=1, ts=45),  # clock oddity: seq wins inside a session
+            page("y1", session="y", seq=1, ts=12),
+            page("y0", session="y", seq=0, ts=10),
+        ]
+    )
     assert not layout.numbered
     assert layout.reading_order == ("y0", "y1", "x0", "x1")
     assert layout.coverage.ranges == ()
@@ -469,21 +496,25 @@ def test_document_without_numbers_is_ordered_by_session_then_seq():
 
 
 def test_the_most_recent_capture_wins():
-    layout = compute_layout([
-        page("old", session="a", detected=("7",), ts=10),
-        page("new", session="b", detected=("7",), ts=20),
-    ])
+    layout = compute_layout(
+        [
+            page("old", session="a", detected=("7",), ts=10),
+            page("new", session="b", detected=("7",), ts=20),
+        ]
+    )
     assert layout.reading_order == ("new",)
     assert layout.placements["old"].duplicate_of == "new"
     assert not layout.placements["old"].in_document
 
 
 def test_excluded_and_unfinished_pages_do_not_compete():
-    layout = compute_layout([
-        page("done", detected=("7",), ts=10),
-        page("excluded", detected=("7",), ts=20, excluded=True),
-        page("queued", hint=7, ts=30, status="queued"),
-    ])
+    layout = compute_layout(
+        [
+            page("done", detected=("7",), ts=10),
+            page("excluded", detected=("7",), ts=20, excluded=True),
+            page("queued", hint=7, ts=30, status="queued"),
+        ]
+    )
     assert layout.reading_order == ("done",)
     assert all(p.duplicate_of is None for p in layout.placements.values())
 
@@ -494,14 +525,16 @@ def test_front_matter_and_body_numbers_do_not_collide():
 
 
 def test_full_order_groups_pages_after_the_reading_order():
-    layout = compute_layout([
-        page("dup", detected=("1",), ts=1),
-        page("ok", detected=("1",), ts=9),
-        page("excl", detected=("2",), ts=2, excluded=True),
-        page("err", ts=4, status="error"),
-        page("queued", ts=3, status="queued"),
-        page("proc", ts=5, status="processing"),
-    ])
+    layout = compute_layout(
+        [
+            page("dup", detected=("1",), ts=1),
+            page("ok", detected=("1",), ts=9),
+            page("excl", detected=("2",), ts=2, excluded=True),
+            page("err", ts=4, status="error"),
+            page("queued", ts=3, status="queued"),
+            page("proc", ts=5, status="processing"),
+        ]
+    )
     assert layout.order == ("ok", "queued", "err", "proc", "excl", "dup")
     assert [layout.placements[i].rank for i in layout.order] == list(range(6))
 
@@ -525,7 +558,12 @@ def test_coverage_of_an_empty_document():
     layout = compute_layout([])
     assert layout.order == ()
     assert layout.coverage.to_json() == {
-        "ranges": [], "label": "", "gaps": [], "min": None, "max": None, "unnumbered": 0,
+        "ranges": [],
+        "label": "",
+        "gaps": [],
+        "min": None,
+        "max": None,
+        "unnumbered": 0,
     }
 
 
@@ -552,11 +590,13 @@ def test_front_matter_scanned_before_page_one_opens_the_document():
 
 
 def test_an_unnumbered_plate_stays_after_the_page_scanned_before_it():
-    layout = compute_layout([
-        page("p13", seq=2, ts=2, detected=("13",)),
-        page("plate", seq=1, ts=1),
-        page("p12", seq=0, ts=0, detected=("12",)),
-    ])
+    layout = compute_layout(
+        [
+            page("p13", seq=2, ts=2, detected=("13",)),
+            page("plate", seq=1, ts=1),
+            page("p12", seq=0, ts=0, detected=("12",)),
+        ]
+    )
     assert layout.reading_order == ("p12", "plate", "p13")
     plate = layout.placements["plate"]
     assert (plate.number, plate.placed_by) == (None, "session")
@@ -565,58 +605,68 @@ def test_an_unnumbered_plate_stays_after_the_page_scanned_before_it():
 
 
 def test_unnumbered_pages_scanned_in_their_own_session_come_last():
-    layout = compute_layout([
-        page("p1", session="book", seq=0, ts=10, detected=("1",)),
-        page("p2", session="book", seq=1, ts=11, detected=("2",)),
-        page("u2", session="loose", seq=1, ts=1),
-        page("u1", session="loose", seq=0, ts=2),  # seq wins inside a session
-    ])
+    layout = compute_layout(
+        [
+            page("p1", session="book", seq=0, ts=10, detected=("1",)),
+            page("p2", session="book", seq=1, ts=11, detected=("2",)),
+            page("u2", session="loose", seq=1, ts=1),
+            page("u1", session="loose", seq=0, ts=2),  # seq wins inside a session
+        ]
+    )
     assert layout.reading_order == ("p1", "p2", "u1", "u2")
     assert placed_by(layout) == ["number", "number", "unplaced", "unplaced"]
     assert layout.placements["u1"].sort_value is None
 
 
 def test_session_steps_without_seq_follow_the_capture_order():
-    layout = compute_layout([
-        page("p5", ts=0, detected=("5",)),
-        page("b", ts=2),
-        page("a", ts=1),
-        page("p6", ts=3, detected=("6",)),
-    ])
+    layout = compute_layout(
+        [
+            page("p5", ts=0, detected=("5",)),
+            page("b", ts=2),
+            page("a", ts=1),
+            page("p6", ts=3, detected=("6",)),
+        ]
+    )
     assert layout.reading_order == ("p5", "a", "b", "p6")
     assert layout.placements["b"].sort_value == pytest.approx(5 + 2 * SESSION_STEP)
 
 
 def test_roman_front_matter_sits_before_page_one_on_the_number_line():
-    layout = compute_layout([
-        page("p1", session="b", seq=0, ts=10, detected=("1",)),
-        page("ii", session="a", seq=0, ts=1, detected=("ii",)),
-        page("plate", session="a", seq=1, ts=2),
-        page("iii", session="a", seq=2, ts=3, detected=("iii",)),
-    ])
+    layout = compute_layout(
+        [
+            page("p1", session="b", seq=0, ts=10, detected=("1",)),
+            page("ii", session="a", seq=0, ts=1, detected=("ii",)),
+            page("plate", session="a", seq=1, ts=2),
+            page("iii", session="a", seq=2, ts=3, detected=("iii",)),
+        ]
+    )
     assert labels(layout) == ["ii", None, "iii", "1"]
     values = [layout.placements[i].sort_value for i in layout.reading_order]
     assert values == pytest.approx([2 - 10_000, 2 - 10_000 + SESSION_STEP, 3 - 10_000, 1])
 
 
 def test_a_spread_is_placed_by_its_first_page():
-    layout = compute_layout([
-        page("spread", seq=0, detected=("42", "43")),
-        page("plate", seq=1, ts=1),
-        page("p44", seq=2, ts=2, detected=("44",)),
-        page("p41", session="other", ts=3, detected=("41",)),
-    ])
+    layout = compute_layout(
+        [
+            page("spread", seq=0, detected=("42", "43")),
+            page("plate", seq=1, ts=1),
+            page("p44", seq=2, ts=2, detected=("44",)),
+            page("p41", session="other", ts=3, detected=("41",)),
+        ]
+    )
     assert labels(layout) == ["41", "42–43", None, "44"]
     assert layout.placements["spread"].sort_value == 42
     assert layout.placements["plate"].sort_value == pytest.approx(42 + SESSION_STEP)
 
 
 def test_a_position_moves_the_page_but_keeps_its_number_and_the_coverage():
-    layout = compute_layout([
-        page("p1", detected=("1",), ts=1),
-        page("p2", detected=("2",), ts=2),
-        page("p3", detected=("3",), ts=3, position=1.5),
-    ])
+    layout = compute_layout(
+        [
+            page("p1", detected=("1",), ts=1),
+            page("p2", detected=("2",), ts=2),
+            page("p3", detected=("3",), ts=3, position=1.5),
+        ]
+    )
     assert layout.reading_order == ("p1", "p3", "p2")
     moved = layout.placements["p3"]
     assert (moved.number, moved.source, moved.placed_by, moved.sort_value) == (PageNumber(3), "detected", "manual", 1.5)
@@ -624,19 +674,23 @@ def test_a_position_moves_the_page_but_keeps_its_number_and_the_coverage():
 
 
 def test_equal_places_are_ordered_by_capture_time():
-    layout = compute_layout([
-        page("late", session="a", detected=("4",), ts=20),
-        page("early", session="b", ts=10, position=4.0),
-    ])
+    layout = compute_layout(
+        [
+            page("late", session="a", detected=("4",), ts=20),
+            page("early", session="b", ts=10, position=4.0),
+        ]
+    )
     assert layout.reading_order == ("early", "late")
 
 
 def test_duplicates_do_not_depend_on_positions():
-    layout = compute_layout([
-        page("old", session="a", detected=("7",), ts=10, position=0.5),
-        page("p6", session="b", seq=0, detected=("6",), ts=19),
-        page("new", session="b", seq=1, detected=("7",), ts=20),
-    ])
+    layout = compute_layout(
+        [
+            page("old", session="a", detected=("7",), ts=10, position=0.5),
+            page("p6", session="b", seq=0, detected=("6",), ts=19),
+            page("new", session="b", seq=1, detected=("7",), ts=20),
+        ]
+    )
     old = layout.placements["old"]
     assert (old.duplicate_of, old.in_document, old.placed_by, old.sort_value) == ("new", False, None, None)
     assert layout.reading_order == ("p6", "new")
@@ -645,25 +699,29 @@ def test_duplicates_do_not_depend_on_positions():
 
 def test_a_rescanned_page_still_anchors_the_pages_scanned_after_it():
     # Page 12 was scanned again later: the plate scanned after the first shot still follows page 12.
-    layout = compute_layout([
-        page("p11", session="a", seq=0, ts=0, detected=("11",)),
-        page("old12", session="a", seq=1, ts=1, detected=("12",)),
-        page("plate", session="a", seq=2, ts=2),
-        page("p13", session="a", seq=3, ts=3, detected=("13",)),
-        page("new12", session="b", seq=0, ts=10, detected=("12",)),
-    ])
+    layout = compute_layout(
+        [
+            page("p11", session="a", seq=0, ts=0, detected=("11",)),
+            page("old12", session="a", seq=1, ts=1, detected=("12",)),
+            page("plate", session="a", seq=2, ts=2),
+            page("p13", session="a", seq=3, ts=3, detected=("13",)),
+            page("new12", session="b", seq=0, ts=10, detected=("12",)),
+        ]
+    )
     assert layout.placements["old12"].duplicate_of == "new12"
     assert layout.reading_order == ("p11", "new12", "plate", "p13")
 
 
 def test_pages_waiting_for_ocr_anchor_their_session_but_excluded_pages_do_not():
     def plate_value(status: str, excluded: bool) -> float:
-        layout = compute_layout([
-            page("p11", seq=0, detected=("11",)),
-            page("p12", seq=1, ts=1, detected=("12",), status=status, excluded=excluded),
-            page("plate", seq=2, ts=2),
-            page("p13", seq=3, ts=3, detected=("13",)),
-        ])
+        layout = compute_layout(
+            [
+                page("p11", seq=0, detected=("11",)),
+                page("p12", seq=1, ts=1, detected=("12",), status=status, excluded=excluded),
+                page("plate", seq=2, ts=2),
+                page("p13", seq=3, ts=3, detected=("13",)),
+            ]
+        )
         return layout.placements["plate"].sort_value
 
     assert plate_value("queued", excluded=False) == pytest.approx(12 + SESSION_STEP)  # e.g. being reprocessed
@@ -671,12 +729,14 @@ def test_pages_waiting_for_ocr_anchor_their_session_but_excluded_pages_do_not():
 
 
 def test_a_page_with_a_position_anchors_the_rest_of_its_session():
-    layout = compute_layout([
-        page("p1", session="a", seq=0, detected=("1",)),
-        page("p2", session="a", seq=1, ts=1, detected=("2",)),
-        page("map", session="b", seq=0, ts=5, position=1.5),
-        page("legend", session="b", seq=1, ts=6),
-    ])
+    layout = compute_layout(
+        [
+            page("p1", session="a", seq=0, detected=("1",)),
+            page("p2", session="a", seq=1, ts=1, detected=("2",)),
+            page("map", session="b", seq=0, ts=5, position=1.5),
+            page("legend", session="b", seq=1, ts=6),
+        ]
+    )
     assert layout.reading_order == ("p1", "map", "legend", "p2")
     assert placed_by(layout) == ["number", "manual", "session", "number"]
 
@@ -775,8 +835,11 @@ def test_any_order_is_reproduced_with_the_fewest_positions(seed):
     for index in range(rng.randint(1, 9)):
         kind = rng.choice(["arabic", "arabic", "roman", "spread", "loose", "plate"])
         number = rng.randint(1, 30)
-        detected = {"arabic": (str(number),), "roman": (int_to_roman(number),),
-                    "spread": (str(number), str(number + 1))}.get(kind, ())
+        detected = {
+            "arabic": (str(number),),
+            "roman": (int_to_roman(number),),
+            "spread": (str(number), str(number + 1)),
+        }.get(kind, ())
         position = rng.choice([None, None, rng.uniform(-5, 35)])
         session = f"s{index}" if kind == "loose" else rng.choice(["a", "b"])
         pages.append(page(f"x{index}", session=session, seq=index, ts=index, detected=detected, position=position))
@@ -792,7 +855,6 @@ def test_any_order_is_reproduced_with_the_fewest_positions(seed):
     kept = [i for i, position in enumerate(positions) if position is None]
     assert (len(kept), sum(not positioned[i] for i in kept)) == _best_kept_score(naturals, positioned)
     assert [layout.placements[i].number for i in wanted] == [compute_layout(moved).placements[i].number for i in wanted]
-
 
 
 # -- only the pages that moved get a position ------------------------------------------------------
@@ -912,8 +974,10 @@ def test_pages_moved_between_two_pages_at_the_same_place_move_one_of_them():
     # a0 and b0, scanned just before a page 1 in two sessions (a1 is a duplicate of b1), share
     # the place 1 − SESSION_STEP: x cannot go between them unless b0 gets a position too.
     pages = [
-        page("a0", session="a", seq=0, ts=0), page("a1", session="a", seq=1, ts=1, detected=("1",)),
-        page("b0", session="b", seq=0, ts=10), page("b1", session="b", seq=1, ts=11, detected=("1",)),
+        page("a0", session="a", seq=0, ts=0),
+        page("a1", session="a", seq=1, ts=1, detected=("1",)),
+        page("b0", session="b", seq=0, ts=10),
+        page("b1", session="b", seq=1, ts=11, detected=("1",)),
         page("x", session="x", seq=0, ts=20),
     ]
     layout = compute_layout(pages)
@@ -968,7 +1032,7 @@ def loose_groups(pages: list[PageInput], wanted: list[str]) -> tuple[set[str], s
         if any(placements[a].rank >= placements[b].rank for a, b in itertools.pairwise(staying)):
             return False
         unplaced = [k for k, i in enumerate(wanted) if i in group and placements[i].sort_value is None]
-        return not unplaced or all(i in group for i in wanted[unplaced[0]:])
+        return not unplaced or all(i in group for i in wanted[unplaced[0] :])
 
     for size in range(len(loose), -1, -1):
         largest = [set(group) for group in itertools.combinations(loose, size) if stays(set(group))]
@@ -983,14 +1047,24 @@ def random_pages(rng: random.Random) -> list[PageInput]:
     for index in range(rng.randint(1, 10)):
         kind = rng.choice(["arabic", "arabic", "roman", "spread", "unnumbered", "unnumbered", "loose", "loose"])
         number = rng.randint(1, 30)
-        detected = {"arabic": (str(number),), "roman": (int_to_roman(number),),
-                    "spread": (str(number), str(number + 1))}.get(kind, ())
+        detected = {
+            "arabic": (str(number),),
+            "roman": (int_to_roman(number),),
+            "spread": (str(number), str(number + 1)),
+        }.get(kind, ())
         session = rng.choice([f"own{index}", "loose"]) if kind == "loose" else rng.choice(["a", "b"])
-        pages.append(page(
-            f"x{index}", session=session, seq=rng.choice([index, index, None]), ts=index, detected=detected,
-            position=rng.choice([None, None, None, rng.uniform(-5, 35)]), excluded=rng.random() < 0.1,
-            status=rng.choice(["done"] * 9 + ["queued"]),
-        ))
+        pages.append(
+            page(
+                f"x{index}",
+                session=session,
+                seq=rng.choice([index, index, None]),
+                ts=index,
+                detected=detected,
+                position=rng.choice([None, None, None, rng.uniform(-5, 35)]),
+                excluded=rng.random() < 0.1,
+                status=rng.choice(["done"] * 9 + ["queued"]),
+            )
+        )
     return pages
 
 
@@ -998,7 +1072,7 @@ def block_moved(rng: random.Random, order: list[str]) -> list[str]:
     """`order` with a run of its pages moved elsewhere, as the page organizer does."""
     size = rng.randint(1, max(1, len(order) // 3))
     start = rng.randrange(len(order) - size + 1)
-    block, rest = order[start:start + size], order[:start] + order[start + size:]
+    block, rest = order[start : start + size], order[:start] + order[start + size :]
     at = rng.randint(0, len(rest))
     return rest[:at] + block + rest[at:]
 

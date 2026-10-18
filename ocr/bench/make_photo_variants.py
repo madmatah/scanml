@@ -162,7 +162,9 @@ def main(testdata: Path) -> None:
     for original in originals:
         page_id = original.stem
         gray = read_gray(original)
-        scan = cv2.resize(gray, (SCAN_WIDTH, round(gray.shape[0] * SCAN_WIDTH / gray.shape[1])), interpolation=cv2.INTER_AREA)
+        scan = cv2.resize(
+            gray, (SCAN_WIDTH, round(gray.shape[0] * SCAN_WIDTH / gray.shape[1])), interpolation=cv2.INTER_AREA
+        )
         scan_path = testdata / "pages" / f"{page_id}.jpg"
         cv2.imwrite(str(scan_path), scan, [cv2.IMWRITE_JPEG_QUALITY, JPEG_QUALITY_SCAN])
         entries.append({"file": f"pages/{scan_path.name}", "page": page_id, "variant": "scan"})

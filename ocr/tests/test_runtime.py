@@ -123,9 +123,7 @@ def process_gone(pid: int) -> bool:
 class RuntimeTest(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
-        self.settings = replace(
-            Settings.from_env({}), backend="native", work_dir=self.tmp.name, start_timeout_s=5.0
-        )
+        self.settings = replace(Settings.from_env({}), backend="native", work_dir=self.tmp.name, start_timeout_s=5.0)
         self.runtime: EngineRuntime | None = None
 
     def tearDown(self) -> None:

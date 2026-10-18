@@ -309,9 +309,7 @@ class EngineManager:
         try:
             with open(image_path, "wb") as image_file:
                 image_file.write(job.image)
-            message = self._runtime.parse(
-                job.job_id, image_path, job.options, timeout_s=self._settings.job_timeout_s
-            )
+            message = self._runtime.parse(job.job_id, image_path, job.options, timeout_s=self._settings.job_timeout_s)
         except EngineFailure as exc:
             with self._cond:
                 closing = self._closing

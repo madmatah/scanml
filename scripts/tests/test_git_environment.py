@@ -14,7 +14,9 @@ from git_environment import build_git_environment
 class GitEnvironmentTest(unittest.TestCase):
     def test_the_tests_git_never_gets_the_git_variables_of_its_caller(self) -> None:
         environment_under_rebase_exec = {
-            "PATH": "/usr/bin", "GIT_DIR": "/home/user/project/.git/worktrees/feature", "GIT_PREFIX": "",
+            "PATH": "/usr/bin",
+            "GIT_DIR": "/home/user/project/.git/worktrees/feature",
+            "GIT_PREFIX": "",
         }
         environment = build_git_environment(environment_under_rebase_exec)
         self.assertNotIn("GIT_DIR", environment)

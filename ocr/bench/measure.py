@@ -99,7 +99,9 @@ def main() -> None:
 
     result = {
         "label": args.label,
-        "settings": {k: v for k, v in health(args.socket)["engine"].items() if k in ("name", "backend", "idle_unload_s")},
+        "settings": {
+            k: v for k, v in health(args.socket)["engine"].items() if k in ("name", "backend", "idle_unload_s")
+        },
         "gpu_baseline_mb": baseline_mb,
         "load_request_status": status,
         "cold_start_s": cold_start_s,

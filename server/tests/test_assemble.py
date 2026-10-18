@@ -142,7 +142,13 @@ def test_document_markdown_format():
         "k2": "![Map](../images/k2_1.jpg)\n",
         "k3": "",
     }
-    sections = [PageSection("k1", "1"), GapSection(2, 44), PageSection("k2", "45"), UnnumberedHeading(), PageSection("k3", None)]
+    sections = [
+        PageSection("k1", "1"),
+        GapSection(2, 44),
+        PageSection("k2", "45"),
+        UnnumberedHeading(),
+        PageSection("k3", None),
+    ]
     coverage = Coverage(ranges=((1, 1), (45, 45)), unnumbered=1)
     markdown = render_document_markdown(
         META, sections, pages.__getitem__, source="ScanMyLib — OCR PaddleOCR-VL-1.6", pages_scanned=3, coverage=coverage
@@ -179,8 +185,9 @@ def test_document_markdown_format():
 
 def test_user_text_cannot_inject_markup_or_break_the_front_matter():
     meta = DocumentMeta(**{**META.__dict__, "title": "<script>x</script>\n---\nkind: evil", "author": 'a"b'})
-    markdown = render_document_markdown(meta, [], lambda key: "", source="ScanMyLib", pages_scanned=0,
-                                        coverage=Coverage((), 0))
+    markdown = render_document_markdown(
+        meta, [], lambda key: "", source="ScanMyLib", pages_scanned=0, coverage=Coverage((), 0)
+    )
     front_matter = markdown.split("---\n")[1]
     assert 'title: "<script>x</script>\\n---\\nkind: evil"' in front_matter
     assert 'author: "a\\"b"' in front_matter
@@ -198,15 +205,22 @@ def test_document_metadata_lists_pages_and_files():
     json.dumps(metadata)  # serializable
     first, second = metadata["pages"]
     assert first["files"] == {
-        "scan": "scans/k1.jpg", "markdown": "pages/k1.md", "ocr": "ocr/k1.json",
+        "scan": "scans/k1.jpg",
+        "markdown": "pages/k1.md",
+        "ocr": "ocr/k1.json",
         "images": ["images/k1_1.jpg", "images/k1_2.jpg"],
     }
     assert first["label"] == "1" and first["in_document"]
     assert (first["position"], first["placement"]) == (None, "number")
     assert second["files"] == {"scan": "scans/k2.jpg", "markdown": None, "ocr": None, "images": []}
     assert (second["position"], second["placement"]) == (None, None)
-    moved = render_document_metadata(META, [entry("k3", None, placement="manual", position=0.5)], source="S",
-                                     pages_scanned=1, coverage=Coverage((), 1))["pages"][0]
+    moved = render_document_metadata(
+        META,
+        [entry("k3", None, placement="manual", position=0.5)],
+        source="S",
+        pages_scanned=1,
+        coverage=Coverage((), 1),
+    )["pages"][0]
     assert (moved["position"], moved["placement"]) == (0.5, "manual")
     assert metadata["coverage"]["label"] == "1"
     assert metadata["notes"] == "Volume 1"
@@ -222,7 +236,9 @@ def test_index_is_sorted_and_escaped():
     entries = [
         IndexEntry(META, 3, Coverage(((1, 1), (45, 45)), 1)),
         IndexEntry(
-            DocumentMeta(**{**META.__dict__, "slug": "a-b", "title": "Élan | [x] <b>", "author": "", "kind": "document"}),
+            DocumentMeta(
+                **{**META.__dict__, "slug": "a-b", "title": "Élan | [x] <b>", "author": "", "kind": "document"}
+            ),
             1,
             Coverage((), 1),
         ),

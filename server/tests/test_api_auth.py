@@ -44,7 +44,12 @@ def test_health_is_public(client):
 
 @pytest.mark.parametrize(("method", "path"), PROTECTED)
 def test_protected_routes_require_a_credential(client, method, path):
-    for headers in ({}, {"Authorization": "Bearer wrong"}, {"Authorization": TOKEN}, {"Cookie": "scanmylib_session=forged"}):
+    for headers in (
+        {},
+        {"Authorization": "Bearer wrong"},
+        {"Authorization": TOKEN},
+        {"Cookie": "scanmylib_session=forged"},
+    ):
         response = client.request(method, path, headers=headers, json={"title": "x"} if method != "GET" else None)
         assert response.status_code == 401, (headers, response.text)
         assert response.json() == {"detail": "unauthorized"}
@@ -69,7 +74,12 @@ def test_web_session_cookie_and_csrf_header(client):
     refused = client.put(f"/api/documents/{document_id}", json={"title": "No header"})
     assert refused.status_code == 403
     assert refused.json() == {"detail": "missing X-ScanMyLib header"}
-    assert client.put(f"/api/documents/{document_id}", json={"title": "With header"}, headers={"X-ScanMyLib": "1"}).status_code == 201
+    assert (
+        client.put(
+            f"/api/documents/{document_id}", json={"title": "With header"}, headers={"X-ScanMyLib": "1"}
+        ).status_code
+        == 201
+    )
 
     assert client.delete("/api/session").status_code == 204
     assert "scanmylib_session" not in client.cookies
@@ -197,8 +207,12 @@ def test_unencodable_json_input_gets_a_validation_error(client):
 
 
 def test_request_bodies_are_limited(client):
-    assert client.post("/api/session", content=b"{" + b" " * (2 * 1024 * 1024) + b"}",
-                       headers={"Content-Type": "application/json"}).status_code == 413
+    assert (
+        client.post(
+            "/api/session", content=b"{" + b" " * (2 * 1024 * 1024) + b"}", headers={"Content-Type": "application/json"}
+        ).status_code
+        == 413
+    )
     document_id = create_document(client)
     response = upload(client, document_id, b"\xff\xd8" + b"\x00" * (MAX_UPLOAD_BYTES + 2 * 1024 * 1024))
     assert response.status_code == 413

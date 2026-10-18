@@ -107,8 +107,22 @@ _IMAGE_PREFIX = re.compile(r"[a-z0-9][a-z0-9-]*")
 
 #: Host directories no stack may use, nor anything inside them.
 SYSTEM_DIRS = (
-    "/bin", "/boot", "/dev", "/etc", "/lib", "/lib32", "/lib64", "/libx32", "/proc", "/root", "/run",
-    "/sbin", "/snap", "/sys", "/usr", "/var",
+    "/bin",
+    "/boot",
+    "/dev",
+    "/etc",
+    "/lib",
+    "/lib32",
+    "/lib64",
+    "/libx32",
+    "/proc",
+    "/root",
+    "/run",
+    "/sbin",
+    "/snap",
+    "/sys",
+    "/usr",
+    "/var",
 )
 #: Host directories that every program shares (SSH agent and X11 sockets...): no stack may use
 #: them or a directory containing them (a directory of its own inside them is fine).
@@ -120,12 +134,38 @@ STACK_IMAGES = ("api", "ocr")
 #: --format json` writes them. Anything else is refused: privileged, cap_add, volumes_from,
 #: use_api_socket, pid, ipc, uts, userns_mode, cgroup, labels, env_file, label_file, sysctls,
 #: secrets... A setting that a change needs is added here, in the same pull request.
-SERVICE_KEYS = frozenset({
-    "build", "cap_drop", "command", "container_name", "depends_on", "devices", "entrypoint", "environment",
-    "healthcheck", "image", "init", "logging", "mem_limit", "network_mode", "networks", "pids_limit", "ports",
-    "profiles", "pull_policy", "read_only", "restart", "security_opt", "shm_size", "stop_grace_period", "tmpfs",
-    "user", "volumes", "working_dir",
-})
+SERVICE_KEYS = frozenset(
+    {
+        "build",
+        "cap_drop",
+        "command",
+        "container_name",
+        "depends_on",
+        "devices",
+        "entrypoint",
+        "environment",
+        "healthcheck",
+        "image",
+        "init",
+        "logging",
+        "mem_limit",
+        "network_mode",
+        "networks",
+        "pids_limit",
+        "ports",
+        "profiles",
+        "pull_policy",
+        "read_only",
+        "restart",
+        "security_opt",
+        "shm_size",
+        "stop_grace_period",
+        "tmpfs",
+        "user",
+        "volumes",
+        "working_dir",
+    }
+)
 #: The build settings allowed (no ssh, secrets, tags, network, entitlements...).
 BUILD_KEYS = frozenset({"context", "dockerfile", "target", "args", "additional_contexts"})
 #: The only device a stack may use: the GPU, through CDI.
@@ -206,13 +246,17 @@ def homes() -> set[str]:
 def production_checkout(containers: list[dict]) -> Path:
     """Production's checkout: the project directory of production's containers (`docker
     inspect`), else ~/Dev/scanmylib."""
-    directories = sorted({
-        str(((container.get("Config") or {}).get("Labels") or {}).get(WORKING_DIR_LABEL) or "")
-        for container in containers
-    } - {""})
+    directories = sorted(
+        {
+            str(((container.get("Config") or {}).get("Labels") or {}).get(WORKING_DIR_LABEL) or "")
+            for container in containers
+        }
+        - {""}
+    )
     if len(directories) > 1:
-        raise EnvError(f"production's containers come from several checkouts ({', '.join(directories)}): "
-                       "fix production first")
+        raise EnvError(
+            f"production's containers come from several checkouts ({', '.join(directories)}): fix production first"
+        )
     if directories:
         return Path(real(directories[0]))
     return Path(real(os.path.join(user_home(), DEFAULT_CHECKOUT)))
@@ -227,10 +271,11 @@ def normalize_image(reference: str) -> str:
     name, _, digest = reference.partition("@")
     tag = ""
     if name.rfind(":") > name.rfind("/"):
-        name, tag = name[: name.rfind(":")], name[name.rfind(":") + 1:]
+        name, tag = name[: name.rfind(":")], name[name.rfind(":") + 1 :]
     first, slash, rest = name.partition("/")
-    if not slash or (not any(character in first for character in ".:") and first != "localhost"
-                     and first.lower() == first):
+    if not slash or (
+        not any(character in first for character in ".:") and first != "localhost" and first.lower() == first
+    ):
         domain, remainder = "docker.io", name
     else:
         domain, remainder = first, rest
@@ -348,9 +393,16 @@ def production_identity(checkout: Path, containers: list[dict]) -> Production:
 # -- isolation ----------------------------------------------------------------
 
 
-def path_problems(what: str, path: str, production: Production, *, inside: str | None = None,
-                  read_only: bool = False, shareable: set[str] = frozenset(),
-                  outside_home: bool = True) -> list[str]:
+def path_problems(
+    what: str,
+    path: str,
+    production: Production,
+    *,
+    inside: str | None = None,
+    read_only: bool = False,
+    shareable: set[str] = frozenset(),
+    outside_home: bool = True,
+) -> list[str]:
     """Why a host path that a stack uses is not its own (an empty list when it is): it must be
     absolute, outside the system directories (and, with `outside_home`, the home directories),
     neither be nor contain /tmp, share nothing with production's paths and, when `inside` is
@@ -404,12 +456,23 @@ def _published(value: object) -> list[int]:
 
 
 def _settings_problems(name: str, service: dict) -> list[str]:
-    return [f"service {name}: {key} is not allowed outside production (scripts/lib/stack.py, SERVICE_KEYS)"
-            for key in sorted(set(service) - SERVICE_KEYS)]
+    return [
+        f"service {name}: {key} is not allowed outside production (scripts/lib/stack.py, SERVICE_KEYS)"
+        for key in sorted(set(service) - SERVICE_KEYS)
+    ]
 
 
-def _service_problems(name: str, service: dict, *, config: dict, project: str, prefix: str,
-                      project_dir: str | None, data_dir: str | None, production: Production) -> list[str]:
+def _service_problems(
+    name: str,
+    service: dict,
+    *,
+    config: dict,
+    project: str,
+    prefix: str,
+    project_dir: str | None,
+    data_dir: str | None,
+    production: Production,
+) -> list[str]:
     what = f"service {name}"
     problems = _settings_problems(name, service)
 
@@ -420,16 +483,19 @@ def _service_problems(name: str, service: dict, *, config: dict, project: str, p
     elif image not in own:
         problems.append(f"{what}: the image {image} is not one of the stack's own ({', '.join(sorted(own))})")
     container_name = service.get("container_name")
-    if container_name and (container_name in production.container_names
-                           or not container_name.startswith(f"{project}-")):
+    if container_name and (
+        container_name in production.container_names or not container_name.startswith(f"{project}-")
+    ):
         problems.append(f"{what}: container_name {container_name} is not in the project {project}")
     # The stack's own networks only: none, another of its services', or those of `networks`
     # (checked below), never the host's, a container's or another project's network by name.
     network_mode = str(service.get("network_mode") or "none")
     other_service = network_mode.removeprefix("service:") if network_mode.startswith("service:") else None
     if network_mode != "none" and other_service not in set(config.get("services") or {}) - {name}:
-        problems.append(f"{what}: network_mode {network_mode} is not allowed (only none, or service:<another "
-                        "service of the stack>; other networks go in networks)")
+        problems.append(
+            f"{what}: network_mode {network_mode} is not allowed (only none, or service:<another "
+            "service of the stack>; other networks go in networks)"
+        )
     for network in service.get("networks") or {}:
         if network not in (config.get("networks") or {}):
             problems.append(f"{what}: the network {network} is not one of the stack's networks")
@@ -445,16 +511,21 @@ def _service_problems(name: str, service: dict, *, config: dict, project: str, p
     build = service.get("build")
     if build is not None:
         build = build if isinstance(build, dict) else {"context": build}
-        problems += [f"{what}: build setting {key} is not allowed (scripts/lib/stack.py, BUILD_KEYS)"
-                     for key in sorted(set(build) - BUILD_KEYS)]
+        problems += [
+            f"{what}: build setting {key} is not allowed (scripts/lib/stack.py, BUILD_KEYS)"
+            for key in sorted(set(build) - BUILD_KEYS)
+        ]
         contexts = {"context": build.get("context")}
-        contexts.update({f"additional context {key}": value
-                         for key, value in (build.get("additional_contexts") or {}).items()})
+        contexts.update(
+            {f"additional context {key}": value for key, value in (build.get("additional_contexts") or {}).items()}
+        )
         for description, context in contexts.items():
             context = str(context or "")
             if not (project_dir and context.startswith("/") and contains(real(project_dir), real(context))):
-                problems.append(f"{what}: build {description} {context or '(none)'} is not inside the "
-                                f"project directory ({project_dir})")
+                problems.append(
+                    f"{what}: build {description} {context or '(none)'} is not inside the "
+                    f"project directory ({project_dir})"
+                )
 
     for port in service.get("ports") or []:
         for number in _published(port.get("published")):
@@ -467,16 +538,26 @@ def _service_problems(name: str, service: dict, *, config: dict, project: str, p
             if not (volume.get("bind") or {}).get("create_host_path") and _missing(source):
                 continue  # docker refuses to start the container: never mounted
             problems += path_problems(
-                f"{what}: bind mount {source} -> {volume.get('target')}", source, production,
-                inside=data_dir, read_only=bool(volume.get("read_only")), shareable=production.sandbox,
+                f"{what}: bind mount {source} -> {volume.get('target')}",
+                source,
+                production,
+                inside=data_dir,
+                read_only=bool(volume.get("read_only")),
+                shareable=production.sandbox,
             )
         elif kind not in ("volume", "tmpfs"):
             problems.append(f"{what}: {kind} mount {source} is not allowed")
     return problems
 
 
-def isolation_problems(env: dict[str, str], config: dict, raw: dict, production: Production,
-                       project_dir: str | None = None, compose_file: str | None = None) -> list[str]:
+def isolation_problems(
+    env: dict[str, str],
+    config: dict,
+    raw: dict,
+    production: Production,
+    project_dir: str | None = None,
+    compose_file: str | None = None,
+) -> list[str]:
     """What the stack (its .env, and what docker compose resolves from `compose_file` with the
     project directory `project_dir`: `config`, and `raw` without interpolation) shares with
     production or uses outside its own DATA_DIR."""
@@ -487,7 +568,9 @@ def isolation_problems(env: dict[str, str], config: dict, raw: dict, production:
     elif project in production.projects:
         problems.append(f"the project is production's: {project}")
     if env.get("COMPOSE_PROJECT_NAME") != project:
-        problems.append(f"docker compose resolves the project {project!r}, .env says {env.get('COMPOSE_PROJECT_NAME')!r}")
+        problems.append(
+            f"docker compose resolves the project {project!r}, .env says {env.get('COMPOSE_PROJECT_NAME')!r}"
+        )
     prefix = env.get("IMAGE_PREFIX") or project
     if not _IMAGE_PREFIX.fullmatch(prefix):
         problems.append(f"IMAGE_PREFIX {prefix!r} may only contain lowercase letters, digits and '-'")
@@ -508,8 +591,16 @@ def isolation_problems(env: dict[str, str], config: dict, raw: dict, production:
     if compose_file and _INCLUDE.search(Path(compose_file).read_text(encoding="utf-8", errors="replace")):
         problems.append(f"{compose_file}: include is not allowed outside production (its env_file reads host files)")
     for name, service in (config.get("services") or {}).items():
-        problems += _service_problems(name, service or {}, config=config, project=project, prefix=prefix,
-                                      project_dir=project_dir, data_dir=data_dir, production=production)
+        problems += _service_problems(
+            name,
+            service or {},
+            config=config,
+            project=project,
+            prefix=prefix,
+            project_dir=project_dir,
+            data_dir=data_dir,
+            production=production,
+        )
     # Interpolated, env_file and label_file are merged into environment and labels, and gone.
     if not (raw.get("services") or {}):
         problems.append("no configuration without interpolation (docker compose config --no-interpolate)")
@@ -524,19 +615,32 @@ def isolation_problems(env: dict[str, str], config: dict, raw: dict, production:
             if kind == "volumes" and (item.get("driver_opts") or item.get("driver") not in (None, "local")):
                 problems.append(f"volume {key}: driver and driver_opts are not allowed (they can mount host paths)")
             if kind == "networks" and (item.get("driver_opts") or item.get("driver") not in (None, "bridge")):
-                problems.append(f"network {key}: driver and driver_opts are not allowed (macvlan or ipvlan reach "
-                                "the LAN directly)")
+                problems.append(
+                    f"network {key}: driver and driver_opts are not allowed (macvlan or ipvlan reach the LAN directly)"
+                )
 
     # The paths the scripts use themselves (state, backups, logs, Android toolchain, APK).
     for key in ("LIBRARY_DIR", "ANDROID_DIR", "SANDBOX_SETUP_DIR"):
         if env.get(key):
             problems += path_problems(f"{key} in .env", env[key], production, inside=data_dir)
     if env.get("SANDBOX_DIR"):
-        problems += path_problems("SANDBOX_DIR in .env", env["SANDBOX_DIR"], production, inside=data_dir,
-                                  read_only=True, shareable=production.sandbox)
+        problems += path_problems(
+            "SANDBOX_DIR in .env",
+            env["SANDBOX_DIR"],
+            production,
+            inside=data_dir,
+            read_only=True,
+            shareable=production.sandbox,
+        )
     if env.get("ANDROID_KEYSTORE_DIR"):
-        problems += path_problems("ANDROID_KEYSTORE_DIR in .env", env["ANDROID_KEYSTORE_DIR"], production,
-                                  inside=data_dir, read_only=True, shareable=production.keystore)
+        problems += path_problems(
+            "ANDROID_KEYSTORE_DIR in .env",
+            env["ANDROID_KEYSTORE_DIR"],
+            production,
+            inside=data_dir,
+            read_only=True,
+            shareable=production.keystore,
+        )
     if env.get("APP_VARIANT", "dev") != "dev":
         problems.append(f"APP_VARIANT={env['APP_VARIANT']}: only production builds the release app")
     if env.get("OCR_SERVICE", "ocr-fake") not in ("ocr", "ocr-fake"):
@@ -550,11 +654,36 @@ def isolation_problems(env: dict[str, str], config: dict, raw: dict, production:
 #: containers, images, networks and volumes. Refused: cp and export (host paths), commit (it
 #: could tag an image with production's name), push, publish and pull (registries), watch, bridge,
 #: scale (it starts services by SERVICE=NUM, both OCR services included).
-COMPOSE_COMMANDS = frozenset({
-    "attach", "build", "config", "create", "down", "events", "exec", "images", "kill", "logs", "ls", "pause",
-    "port", "ps", "restart", "rm", "run", "start", "stats", "stop", "top", "unpause", "up", "version",
-    "volumes", "wait",
-})
+COMPOSE_COMMANDS = frozenset(
+    {
+        "attach",
+        "build",
+        "config",
+        "create",
+        "down",
+        "events",
+        "exec",
+        "images",
+        "kill",
+        "logs",
+        "ls",
+        "pause",
+        "port",
+        "ps",
+        "restart",
+        "rm",
+        "run",
+        "start",
+        "stats",
+        "stop",
+        "top",
+        "unpause",
+        "up",
+        "version",
+        "volumes",
+        "wait",
+    }
+)
 #: What scripts/prod.sh passes on: no build nor one-off container (production changes through
 #: scripts/deploy.sh).
 PRODUCTION_COMPOSE_COMMANDS = COMPOSE_COMMANDS - {"build", "create", "run"}
@@ -566,9 +695,26 @@ PRODUCTION_COMPOSE_COMMANDS = COMPOSE_COMMANDS - {"build", "create", "run"}
 #: "--", service names included.
 COMMAND_OPTIONS = {
     "run": (
-        {"--build", "-d", "--detach", "--dry-run", "-i", "--interactive", "--no-deps", "-q", "--quiet",
-         "--quiet-build", "--quiet-pull", "--remove-orphans", "--rm", "-P", "--service-ports", "-T", "--no-TTY",
-         "--use-aliases"},
+        {
+            "--build",
+            "-d",
+            "--detach",
+            "--dry-run",
+            "-i",
+            "--interactive",
+            "--no-deps",
+            "-q",
+            "--quiet",
+            "--quiet-build",
+            "--quiet-pull",
+            "--remove-orphans",
+            "--rm",
+            "-P",
+            "--service-ports",
+            "-T",
+            "--no-TTY",
+            "--use-aliases",
+        },
         {"--cap-drop", "--entrypoint", "-e", "--env", "--pull", "-u", "--user", "-w", "--workdir"},
     ),
     "exec": (
@@ -580,21 +726,68 @@ COMMAND_OPTIONS = {
         {"--build-arg", "--builder", "-m", "--memory", "--provenance", "--sbom"},
     ),
     "config": (
-        {"--dry-run", "--environment", "--images", "--models", "--networks", "--no-consistency",
-         "--no-env-resolution", "--no-interpolate", "--no-normalize", "--no-path-resolution", "--profiles", "-q",
-         "--quiet", "--services", "--variables", "--volumes"},
+        {
+            "--dry-run",
+            "--environment",
+            "--images",
+            "--models",
+            "--networks",
+            "--no-consistency",
+            "--no-env-resolution",
+            "--no-interpolate",
+            "--no-normalize",
+            "--no-path-resolution",
+            "--profiles",
+            "-q",
+            "--quiet",
+            "--services",
+            "--variables",
+            "--volumes",
+        },
         {"--format", "--hash"},
     ),
     "up": (
-        {"--abort-on-container-exit", "--abort-on-container-failure", "--always-recreate-deps",
-         "--attach-dependencies", "--build", "-d", "--detach", "--dry-run", "--force-recreate", "--menu", "--no-build",
-         "--no-color", "--no-deps", "--no-log-prefix", "--no-recreate", "--no-start", "--quiet-build", "--quiet-pull",
-         "--remove-orphans", "-V", "--renew-anon-volumes", "--timestamps", "--wait", "-y", "--yes"},
+        {
+            "--abort-on-container-exit",
+            "--abort-on-container-failure",
+            "--always-recreate-deps",
+            "--attach-dependencies",
+            "--build",
+            "-d",
+            "--detach",
+            "--dry-run",
+            "--force-recreate",
+            "--menu",
+            "--no-build",
+            "--no-color",
+            "--no-deps",
+            "--no-log-prefix",
+            "--no-recreate",
+            "--no-start",
+            "--quiet-build",
+            "--quiet-pull",
+            "--remove-orphans",
+            "-V",
+            "--renew-anon-volumes",
+            "--timestamps",
+            "--wait",
+            "-y",
+            "--yes",
+        },
         {"--attach", "--exit-code-from", "--no-attach", "--pull", "-t", "--timeout", "--wait-timeout"},
     ),
     "create": (
-        {"--build", "--dry-run", "--force-recreate", "--no-build", "--no-recreate", "--quiet-pull", "--remove-orphans",
-         "-y", "--yes"},
+        {
+            "--build",
+            "--dry-run",
+            "--force-recreate",
+            "--no-build",
+            "--no-recreate",
+            "--quiet-pull",
+            "--remove-orphans",
+            "-y",
+            "--yes",
+        },
         {"--pull"},
     ),
     "start": ({"--dry-run"}, set()),
@@ -612,8 +805,11 @@ def compose_command_problems(argv: list[str], *, production: bool = False) -> li
         return ["expected a docker compose command first (no global option such as -p, -f or --env-file)"]
     command, arguments = argv[0], argv[1:]
     if command not in (PRODUCTION_COMPOSE_COMMANDS if production else COMPOSE_COMMANDS):
-        reason = ("production changes through scripts/deploy.sh" if production and command in COMPOSE_COMMANDS
-                  else "it could reach outside the stack")
+        reason = (
+            "production changes through scripts/deploy.sh"
+            if production and command in COMPOSE_COMMANDS
+            else "it could reach outside the stack"
+        )
         return [f"docker compose {command} is not allowed here: {reason}"]
     problems = []
     if production and any(argument == "--build" or argument.startswith("--build=") for argument in arguments):
@@ -655,8 +851,10 @@ def compose_command_problems(argv: list[str], *, production: bool = False) -> li
         if production and "ocr-fake" in services:
             problems.append(f"{command} ocr-fake: the fake OCR never runs in production")
         if not production and not services:
-            problems.append(f"{command} without service names would start both OCR services, which serve the same "
-                            f"socket: name them (e.g. {command} api ocr-fake, or api ocr)")
+            problems.append(
+                f"{command} without service names would start both OCR services, which serve the same "
+                f"socket: name them (e.g. {command} api ocr-fake, or api ocr)"
+            )
     return problems
 
 
@@ -705,8 +903,11 @@ def main(argv: list[str] | None = None) -> int:
                 # GitHub's runner keeps its temporary directory in its home directory.
                 problems = path_problems("RUNNER_TEMP", args.runner_temp, production, outside_home=False)
                 runner_temp = real(args.runner_temp) if args.runner_temp.startswith("/") else None
-                problems += [f"RUNNER_TEMP: {args.runner_temp} is or contains your home directory ({home})"
-                             for home in sorted(homes()) if runner_temp and contains(runner_temp, home)]
+                problems += [
+                    f"RUNNER_TEMP: {args.runner_temp} is or contains your home directory ({home})"
+                    for home in sorted(homes())
+                    if runner_temp and contains(runner_temp, home)
+                ]
             for item in args.paths:
                 name, _, path = item.partition("=")
                 in_runner_temp = runner_temp is not None and path.startswith("/") and contains(runner_temp, real(path))
@@ -716,8 +917,9 @@ def main(argv: list[str] | None = None) -> int:
             state = json.load(sys.stdin)
             containers = state.get("containers") or []
             production = production_identity(production_checkout(containers), containers)
-            problems = isolation_problems(env, state.get("config") or {}, state.get("raw") or {}, production,
-                                          args.project_dir, args.compose_file)
+            problems = isolation_problems(
+                env, state.get("config") or {}, state.get("raw") or {}, production, args.project_dir, args.compose_file
+            )
     except EnvError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1

@@ -110,6 +110,4 @@ class Authenticator:
             if request.method not in _SAFE_METHODS and request.headers.get(CSRF_HEADER) != "1":
                 raise HTTPException(status.HTTP_403_FORBIDDEN, f"missing {CSRF_HEADER} header")
             return
-        raise HTTPException(
-            status.HTTP_401_UNAUTHORIZED, "unauthorized", headers={"WWW-Authenticate": "Bearer"}
-        )
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "unauthorized", headers={"WWW-Authenticate": "Bearer"})

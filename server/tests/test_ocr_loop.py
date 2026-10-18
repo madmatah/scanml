@@ -24,8 +24,11 @@ def test_uploads_wait_while_the_sandbox_is_down_then_get_processed(settings):
     with TestClient(create_app(settings)) as client:
         status = client.get("/api/status", headers=AUTH).json()
         assert status["ocr"] == {
-            "reachable": False, "state": "unreachable", "backend": None,
-            "last_error": f"socket {settings.ocr_socket} absent", "gpu": None,
+            "reachable": False,
+            "state": "unreachable",
+            "backend": None,
+            "last_error": f"socket {settings.ocr_socket} absent",
+            "gpu": None,
         }
         document_id = create_document(client)
         page = upload(client, document_id, page_image(8)).json()
@@ -112,14 +115,18 @@ def test_status_reports_the_sandbox_engine(client):
 
 def test_status_relays_only_typed_and_bounded_sandbox_fields(client, fake_ocr):
     # The phone app decodes "state" and "last_error" as strings: other types must not get through.
-    fake_ocr.status_body = json.dumps({
-        "engine": {"state": 1, "backend": {"a": 1}, "last_error": "x\ud800\n" + "y" * 5000},
-        "gpu": {"name": ["x"], "memory_used_mb": "lots", "memory_total_mb": 24576, "extra": "z"},
-    }).encode()
+    fake_ocr.status_body = json.dumps(
+        {
+            "engine": {"state": 1, "backend": {"a": 1}, "last_error": "x\ud800\n" + "y" * 5000},
+            "gpu": {"name": ["x"], "memory_used_mb": "lots", "memory_total_mb": 24576, "extra": "z"},
+        }
+    ).encode()
     response = client.get("/api/status", headers=AUTH)
     assert response.status_code == 200
     assert response.json()["ocr"] == {
-        "reachable": True, "state": None, "backend": None,
+        "reachable": True,
+        "state": None,
+        "backend": None,
         "last_error": ("x? " + "y" * 5000)[:1000],
         "gpu": {"name": None, "memory_used_mb": None, "memory_total_mb": 24576},
     }

@@ -153,7 +153,12 @@ def canned_page(width: int, height: int, request_id: str | None) -> dict:
         {"label": "image", "content": "", "bbox": [120, 340, 980, 900], "order": 3},
     ]
     blocks += [
-        {"label": "number", "content": text, "bbox": [width // 2 - 30, height - 60, width // 2 + 30, height - 20], "order": None}
+        {
+            "label": "number",
+            "content": text,
+            "bbox": [width // 2 - 30, height - 60, width // 2 + 30, height - 20],
+            "order": None,
+        }
         for text in page_numbers
     ]
     return {
@@ -161,11 +166,13 @@ def canned_page(width: int, height: int, request_id: str | None) -> dict:
         "width": width,
         "height": height,
         "markdown": markdown,
-        "images": [{
-            "name": _FIGURE_NAME,
-            "mime": "image/png",
-            "data_b64": base64.b64encode(_png(64, 48, (number * 7) % 256)).decode(),
-        }],
+        "images": [
+            {
+                "name": _FIGURE_NAME,
+                "mime": "image/png",
+                "data_b64": base64.b64encode(_png(64, 48, (number * 7) % 256)).decode(),
+            }
+        ],
         "blocks": blocks,
         "page_numbers": page_numbers,
         "page_continuation": {"starts_mid_paragraph": False, "ends_mid_paragraph": False},
@@ -187,11 +194,13 @@ def evil_page(width: int, height: int, request_id: str | None) -> dict:
         "[click here](javascript:alert(4)) ![pixel](http://evil.example/p.png)\n\n"
         "[ref]: javascript:alert(5)\n\n"
         "<!-- page 999 · scan fake -->\n"
-        "<iframe src=\"http://evil.example\"></iframe><svg onload=alert(6)><text>x</text></svg>\n"
+        '<iframe src="http://evil.example"></iframe><svg onload=alert(6)><text>x</text></svg>\n'
         "Normal text after the traps: café, naïve, résumé.\n"
     )
     page["images"].append({"name": "../../evil.png", "mime": "image/png", "data_b64": page["images"][0]["data_b64"]})
-    page["images"].append({"name": "notanimage.png", "mime": "image/png", "data_b64": base64.b64encode(b"<html>").decode()})
+    page["images"].append(
+        {"name": "notanimage.png", "mime": "image/png", "data_b64": base64.b64encode(b"<html>").decode()}
+    )
     # The model name ends up in document.md's front matter.
     page["engine"]["model"] = "<img src=https://evil.example/p.png>"
     return page

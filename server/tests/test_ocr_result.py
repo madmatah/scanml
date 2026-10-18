@@ -133,17 +133,19 @@ def test_corrupt_illustration_drops_only_that_image(corrupt):
 
 def test_untrusted_scalar_fields_are_typed_and_bounded():
     response = canned_page(1200, 1042, None)
-    response.update({
-        "request_id": "<script>" * 100,
-        "width": "1200",
-        "engine": {"name": "x" * 500, "model": 42, "backend": "vllm\u202e"},
-        "timings": {"infer_s": float("nan"), "load_s": True},
-        "blocks": [
-            {"label": "text", "content": "y" * 200_000, "bbox": [1, 2, "3", 4], "order": "1"},
-            "not a block",
-        ],
-        "page_numbers": ["  42  ", 7, None, "x" * 100],
-    })
+    response.update(
+        {
+            "request_id": "<script>" * 100,
+            "width": "1200",
+            "engine": {"name": "x" * 500, "model": 42, "backend": "vllm\u202e"},
+            "timings": {"infer_s": float("nan"), "load_s": True},
+            "blocks": [
+                {"label": "text", "content": "y" * 200_000, "bbox": [1, 2, "3", 4], "order": "1"},
+                "not a block",
+            ],
+            "page_numbers": ["  42  ", 7, None, "x" * 100],
+        }
+    )
     output = build_page_output(response, KEY)
     raw = output.raw
     assert raw["width"] is None

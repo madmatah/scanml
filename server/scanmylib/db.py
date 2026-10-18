@@ -135,9 +135,7 @@ class Database:
             raise RuntimeError(f"unsupported database schema version {version}")
         # DDL is transactional in SQLite: the schema is created or upgraded entirely or not at all.
         try:
-            self._conn.executescript(
-                f"BEGIN IMMEDIATE; {script} PRAGMA user_version = {SCHEMA_VERSION}; COMMIT;"
-            )
+            self._conn.executescript(f"BEGIN IMMEDIATE; {script} PRAGMA user_version = {SCHEMA_VERSION}; COMMIT;")
         except BaseException:
             if self._conn.in_transaction:
                 self._conn.execute("ROLLBACK")
@@ -145,7 +143,9 @@ class Database:
         if backup is not None:
             log.info(
                 "database upgraded from schema version %d to %d, previous version saved as %s",
-                version, SCHEMA_VERSION, backup,
+                version,
+                SCHEMA_VERSION,
+                backup,
             )
 
     def _backup(self, version: int) -> Path:

@@ -72,8 +72,9 @@ def release_code(release: Release) -> int:
 def _git(root: Path, *args: str) -> str | None:
     """The output of git in `root`, or None if git fails or is missing."""
     try:
-        result = subprocess.run(["git", "-C", str(root), *args], capture_output=True, text=True, timeout=60,
-                                check=False)
+        result = subprocess.run(
+            ["git", "-C", str(root), *args], capture_output=True, text=True, timeout=60, check=False
+        )
     except (OSError, subprocess.TimeoutExpired):
         return None
     return result.stdout.strip() if result.returncode == 0 else None
@@ -125,7 +126,7 @@ def published_code(metadata: Path) -> int | None:
 def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
     if not (args[:1] == ["release"] and len(args) == 2 or args[:1] == ["dev"] and len(args) in (2, 3)):
-        print(__doc__[__doc__.index("Usage:"):].rstrip(), file=sys.stderr)
+        print(__doc__[__doc__.index("Usage:") :].rstrip(), file=sys.stderr)
         return 2
     root = Path(args[1])
     try:

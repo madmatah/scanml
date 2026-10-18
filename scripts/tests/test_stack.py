@@ -51,8 +51,9 @@ class ReadEnvTest(unittest.TestCase):
 
     def test_key_value_lines_comments_and_blank_lines(self):
         values = self.read("# comment\n\nA=1\nPUBLIC_URL=http://192.168.1.10:8765\nEMPTY=\nLAST=a/b_c.d@e%f+g,h-i")
-        self.assertEqual(values, {"A": "1", "PUBLIC_URL": "http://192.168.1.10:8765", "EMPTY": "",
-                                  "LAST": "a/b_c.d@e%f+g,h-i"})
+        self.assertEqual(
+            values, {"A": "1", "PUBLIC_URL": "http://192.168.1.10:8765", "EMPTY": "", "LAST": "a/b_c.d@e%f+g,h-i"}
+        )
 
     def test_lines_docker_compose_would_read_differently_are_refused(self):
         # Each of these makes docker compose resolve COMPOSE_PROJECT_NAME=scanmylib while a naive
@@ -80,8 +81,15 @@ class ReadEnvTest(unittest.TestCase):
                 self.read(text)
 
     def test_keys_that_change_what_docker_compose_does_are_refused(self):
-        for key in ("COMPOSE_FILE", "COMPOSE_PROFILES", "COMPOSE_ENV_FILES", "COMPOSE_PATH_SEPARATOR",
-                    "DOCKER_HOST", "DOCKER_CONTEXT", "BUILDKIT_PROGRESS"):
+        for key in (
+            "COMPOSE_FILE",
+            "COMPOSE_PROFILES",
+            "COMPOSE_ENV_FILES",
+            "COMPOSE_PATH_SEPARATOR",
+            "DOCKER_HOST",
+            "DOCKER_CONTEXT",
+            "BUILDKIT_PROGRESS",
+        ):
             with self.subTest(key=key), self.assertRaisesRegex(stack.EnvError, key):
                 self.read(f"{key}=x\n")
 
@@ -124,8 +132,10 @@ class ImageTest(unittest.TestCase):
 
 def fake_home(test: unittest.TestCase, home: Path) -> None:
     """Makes `home` the user's home directory, in the password database and in $HOME."""
-    for patcher in (mock.patch.dict(os.environ, {"HOME": str(home)}),
-                    mock.patch.object(stack, "user_home", return_value=str(home))):
+    for patcher in (
+        mock.patch.dict(os.environ, {"HOME": str(home)}),
+        mock.patch.object(stack, "user_home", return_value=str(home)),
+    ):
         patcher.start()
         test.addCleanup(patcher.stop)
 
@@ -143,8 +153,9 @@ class ProductionCheckoutTest(unittest.TestCase):
 
     def test_the_project_directory_of_production_s_containers(self):
         checkout = self.home / "elsewhere"
-        self.assertEqual(stack.production_checkout([self.container(str(checkout)), self.container(str(checkout))]),
-                         checkout)
+        self.assertEqual(
+            stack.production_checkout([self.container(str(checkout)), self.container(str(checkout))]), checkout
+        )
 
     def test_without_containers_the_default(self):
         self.assertEqual(stack.production_checkout([]), self.home / "Dev" / "scanmylib")
@@ -161,8 +172,10 @@ class ProductionCheckoutTest(unittest.TestCase):
 
     def test_command_line(self):
         output = io.StringIO()
-        with mock.patch("sys.stdin", io.StringIO(json.dumps([self.container(f"{self.home}/prod")]))), \
-                mock.patch("sys.stdout", output):
+        with (
+            mock.patch("sys.stdin", io.StringIO(json.dumps([self.container(f"{self.home}/prod")]))),
+            mock.patch("sys.stdout", output),
+        ):
             self.assertEqual(stack.main(["production-checkout"]), 0)
         self.assertEqual(output.getvalue().strip(), f"{self.home}/prod")
 
@@ -187,8 +200,11 @@ class IsolationTest(unittest.TestCase):
             f"SANDBOX_DIR={self.prod}/sandbox\nANDROID_DIR={self.prod}/android\nLIBRARY_DIR={self.library}\n"
             f"API_PORT=8765\nSANDBOX_SETUP_DIR={self.prod}/sandbox\n"
         )
-        self.env = dict(line.split("=", 1) for line in DEV_ENV.format(dev=self.dev, prod=self.prod).splitlines()
-                        if line and not line.startswith("#"))
+        self.env = dict(
+            line.split("=", 1)
+            for line in DEV_ENV.format(dev=self.dev, prod=self.prod).splitlines()
+            if line and not line.startswith("#")
+        )
 
     def config(self, **changes) -> dict:
         dev, prod, worktree = self.dev, self.prod, self.worktree
@@ -199,10 +215,17 @@ class IsolationTest(unittest.TestCase):
             "x-ocr-env": {"HOME": "/tmp/home"},
             "services": {
                 "api": {
-                    "build": {"context": f"{worktree}/server", "dockerfile": "Dockerfile", "target": "runtime",
-                              "args": {"UID": "1000"}, "additional_contexts": {"project": str(worktree)}},
+                    "build": {
+                        "context": f"{worktree}/server",
+                        "dockerfile": "Dockerfile",
+                        "target": "runtime",
+                        "args": {"UID": "1000"},
+                        "additional_contexts": {"project": str(worktree)},
+                    },
                     "image": "scanmylib-dev-api:latest",
-                    "cap_drop": ["ALL"], "security_opt": ["no-new-privileges:true"], "read_only": True,
+                    "cap_drop": ["ALL"],
+                    "security_opt": ["no-new-privileges:true"],
+                    "read_only": True,
                     "ports": [{"target": 8765, "published": "8770"}],
                     "tmpfs": ["/tmp:size=512m,mode=1777"],
                     "networks": {"default": None},
@@ -210,8 +233,13 @@ class IsolationTest(unittest.TestCase):
                         {"type": "bind", "source": f"{dev}/library", "target": "/library", "bind": created},
                         {"type": "bind", "source": f"{dev}/state", "target": "/state", "bind": created},
                         {"type": "bind", "source": f"{dev}/run", "target": "/run/scanmylib", "bind": created},
-                        {"type": "bind", "source": f"{dev}/app", "target": "/app-dist", "read_only": True,
-                         "bind": created},
+                        {
+                            "type": "bind",
+                            "source": f"{dev}/app",
+                            "target": "/app-dist",
+                            "read_only": True,
+                            "bind": created,
+                        },
                     ],
                 },
                 "ocr": {
@@ -220,19 +248,34 @@ class IsolationTest(unittest.TestCase):
                     "network_mode": "none",
                     "devices": [{"source": "nvidia.com/gpu=all", "target": "nvidia.com/gpu=all", "permissions": "rwm"}],
                     "volumes": [
-                        {"type": "bind", "source": f"{prod}/sandbox", "target": "/opt/sandbox", "read_only": True,
-                         "bind": created},
+                        {
+                            "type": "bind",
+                            "source": f"{prod}/sandbox",
+                            "target": "/opt/sandbox",
+                            "read_only": True,
+                            "bind": created,
+                        },
                         {"type": "bind", "source": f"{dev}/run", "target": "/run/scanmylib", "bind": created},
                         {"type": "bind", "source": f"{dev}/ocr-cache", "target": "/var/cache/ocr", "bind": created},
                     ],
                 },
-                "ocr-fake": {"image": "scanmylib-dev-api:latest", "pull_policy": "never", "profiles": ["fake-ocr"],
-                             "network_mode": "none"},
+                "ocr-fake": {
+                    "image": "scanmylib-dev-api:latest",
+                    "pull_policy": "never",
+                    "profiles": ["fake-ocr"],
+                    "network_mode": "none",
+                },
                 "ocr-setup": {
                     "build": {"context": f"{worktree}/ocr", "dockerfile": "Dockerfile"},
                     "image": "scanmylib-dev-ocr:latest",
-                    "volumes": [{"type": "bind", "source": "/nonexistent/SANDBOX_SETUP_DIR", "target": "/opt/sandbox",
-                                 "bind": {}}],
+                    "volumes": [
+                        {
+                            "type": "bind",
+                            "source": "/nonexistent/SANDBOX_SETUP_DIR",
+                            "target": "/opt/sandbox",
+                            "bind": {},
+                        }
+                    ],
                 },
             },
         }
@@ -243,8 +286,9 @@ class IsolationTest(unittest.TestCase):
         checkout = stack.production_checkout(list(containers))
         production = stack.production_identity(checkout, list(containers))
         config = config or self.config()
-        return stack.isolation_problems(env or self.env, config, raw or config, production, str(self.worktree),
-                                        compose_file)
+        return stack.isolation_problems(
+            env or self.env, config, raw or config, production, str(self.worktree), compose_file
+        )
 
     def assertRefused(self, pattern: str, **kwargs):
         problems = self.problems(**kwargs)
@@ -260,28 +304,50 @@ class IsolationTest(unittest.TestCase):
 
     def test_production_project_images_and_ports(self):
         self.assertRefused("the project is production's", config=self.config(name="scanmylib"))
-        self.assertRefused("the image scanmylib-api:dev is production's", config=self.service(image="scanmylib-api:dev"))
-        self.assertRefused("publishes port 8765", config=self.service(ports=[{"target": 8765, "published": "8760-8770"}]))
+        self.assertRefused(
+            "the image scanmylib-api:dev is production's", config=self.service(image="scanmylib-api:dev")
+        )
+        self.assertRefused(
+            "publishes port 8765", config=self.service(ports=[{"target": 8765, "published": "8760-8770"}])
+        )
 
     def test_image_names_as_docker_reads_them(self):
-        for image in ("docker.io/library/scanmylib-api:latest", "docker.io/scanmylib-api",
-                      "index.docker.io/library/scanmylib-api:latest"):
+        for image in (
+            "docker.io/library/scanmylib-api:latest",
+            "docker.io/scanmylib-api",
+            "index.docker.io/library/scanmylib-api:latest",
+        ):
             with self.subTest(image=image):
                 self.assertRefused(f"the image {image} is production's", config=self.service(image=image))
-        for image in ("scanmylib-dev-api:dev", "scanmylib-dev-other:latest", "docker.io/library/scanmylib-dev-api:latest",
-                      "busybox:latest"):
+        for image in (
+            "scanmylib-dev-api:dev",
+            "scanmylib-dev-other:latest",
+            "docker.io/library/scanmylib-dev-api:latest",
+            "busybox:latest",
+        ):
             with self.subTest(image=image):
                 self.assertRefused("is not one of the stack's own", config=self.service(image=image))
-        for prefix in ("docker.io/library/scanmylib", "docker.io/scanmylib", "index.docker.io/library/scanmylib",
-                       "Scanmylib-dev", "scanmylib.dev"):
+        for prefix in (
+            "docker.io/library/scanmylib",
+            "docker.io/scanmylib",
+            "index.docker.io/library/scanmylib",
+            "Scanmylib-dev",
+            "scanmylib.dev",
+        ):
             with self.subTest(prefix=prefix):
                 self.assertRefused("may only contain lowercase letters", env={**self.env, "IMAGE_PREFIX": prefix})
 
     def bind(self, source: str, read_only: bool = False, service: str = "api", create: bool = True) -> dict:
         config = self.config()
         config["services"][service]["volumes"].append(
-            {"type": "bind", "source": source, "target": "/x", "read_only": read_only,
-             "bind": {"create_host_path": True} if create else {}})
+            {
+                "type": "bind",
+                "source": source,
+                "target": "/x",
+                "read_only": read_only,
+                "bind": {"create_host_path": True} if create else {},
+            }
+        )
         return config
 
     def test_host_paths_of_production(self):
@@ -316,20 +382,31 @@ class IsolationTest(unittest.TestCase):
 
     def test_every_other_path_is_inside_the_stack_s_data_dir(self):
         self.assertRefused("is not inside the stack's DATA_DIR", config=self.bind(f"{self.base}/elsewhere"))
-        self.assertRefused("is not inside the stack's DATA_DIR",
-                           config=self.bind(f"{self.base}/elsewhere", read_only=True))
-        for key, value in [("LIBRARY_DIR", "/tmp"), ("LIBRARY_DIR", f"{self.base}/library2"),
-                           ("ANDROID_DIR", f"{self.base}/android"), ("SANDBOX_SETUP_DIR", f"{self.base}/sandbox"),
-                           ("SANDBOX_DIR", "/tmp"), ("ANDROID_KEYSTORE_DIR", f"{self.base}/keys"),
-                           ("LIBRARY_DIR", f"{self.home}/.ssh")]:
+        self.assertRefused(
+            "is not inside the stack's DATA_DIR", config=self.bind(f"{self.base}/elsewhere", read_only=True)
+        )
+        for key, value in [
+            ("LIBRARY_DIR", "/tmp"),
+            ("LIBRARY_DIR", f"{self.base}/library2"),
+            ("ANDROID_DIR", f"{self.base}/android"),
+            ("SANDBOX_SETUP_DIR", f"{self.base}/sandbox"),
+            ("SANDBOX_DIR", "/tmp"),
+            ("ANDROID_KEYSTORE_DIR", f"{self.base}/keys"),
+            ("LIBRARY_DIR", f"{self.home}/.ssh"),
+        ]:
             with self.subTest(key=key, value=value):
                 self.assertRefused(f"{key} in .env", env={**self.env, key: value})
-        for value, expected in [("/tmp", "is or contains /tmp"), ("/var/tmp/dev", "system directory"),
-                                (f"{self.home}/scanmylib-dev", "is inside your home directory"),
-                                ("relative/dev", "not an absolute path")]:
+        for value, expected in [
+            ("/tmp", "is or contains /tmp"),
+            ("/var/tmp/dev", "system directory"),
+            (f"{self.home}/scanmylib-dev", "is inside your home directory"),
+            ("relative/dev", "not an absolute path"),
+        ]:
             with self.subTest(data_dir=value):
                 self.assertRefused(expected, env={**self.env, "DATA_DIR": value})
-        self.assertRefused("no DATA_DIR in .env", env={key: value for key, value in self.env.items() if key != "DATA_DIR"})
+        self.assertRefused(
+            "no DATA_DIR in .env", env={key: value for key, value in self.env.items() if key != "DATA_DIR"}
+        )
 
     def test_production_sandbox_is_shared_read_only_only(self):
         self.assertEqual(self.problems(config=self.bind(f"{self.prod}/sandbox/models", read_only=True)), [])
@@ -348,14 +425,21 @@ class IsolationTest(unittest.TestCase):
         elsewhere = self.dev / "moved-library"
         container = {
             "Name": "/scanmylib-api-1",
-            "Config": {"Image": "scanmylib-api:latest", "Labels": {"com.docker.compose.project": "scanmylib",
-                                                                  stack.WORKING_DIR_LABEL: str(self.primary)}},
+            "Config": {
+                "Image": "scanmylib-api:latest",
+                "Labels": {"com.docker.compose.project": "scanmylib", stack.WORKING_DIR_LABEL: str(self.primary)},
+            },
             "Mounts": [{"Type": "bind", "Source": str(elsewhere), "Destination": "/library"}],
             "HostConfig": {"PortBindings": {"8765/tcp": [{"HostIp": "", "HostPort": "9999"}]}},
         }
-        self.assertRefused("mount /library of scanmylib-api-1", config=self.bind(str(elsewhere)), containers=[container])
-        self.assertRefused("publishes port 9999", config=self.service(ports=[{"target": 8765, "published": "9999"}]),
-                           containers=[container])
+        self.assertRefused(
+            "mount /library of scanmylib-api-1", config=self.bind(str(elsewhere)), containers=[container]
+        )
+        self.assertRefused(
+            "publishes port 9999",
+            config=self.service(ports=[{"target": 8765, "published": "9999"}]),
+            containers=[container],
+        )
 
     def test_production_checkout_from_its_containers(self):
         # Production runs from another checkout: that one is production's, whatever ~/Dev holds.
@@ -364,8 +448,9 @@ class IsolationTest(unittest.TestCase):
         (moved / ".env").write_text(f"COMPOSE_PROJECT_NAME=scanmylib\nDATA_DIR={self.base}/moved-data\n")
         container = {"Name": "/scanmylib-api-1", "Config": {"Labels": {stack.WORKING_DIR_LABEL: str(moved)}}}
         self.assertRefused("is production's checkout", config=self.bind(str(moved)), containers=[container])
-        self.assertRefused("is production's DATA_DIR", env={**self.env, "DATA_DIR": f"{self.base}/moved-data"},
-                           containers=[container])
+        self.assertRefused(
+            "is production's DATA_DIR", env={**self.env, "DATA_DIR": f"{self.base}/moved-data"}, containers=[container]
+        )
 
     def test_paths_the_scripts_use(self):
         for key, value, expected in [
@@ -429,8 +514,11 @@ class IsolationTest(unittest.TestCase):
 
     def test_include_in_the_compose_file(self):
         compose = self.base / "compose.yaml"
-        for text in ("include:\n  - path: x.yaml\n    env_file: /home/x/.env\n", '{"include": ["x.yaml"]}',
-                     "name: x\n'include' :\n  - x.yaml\n"):
+        for text in (
+            "include:\n  - path: x.yaml\n    env_file: /home/x/.env\n",
+            '{"include": ["x.yaml"]}',
+            "name: x\n'include' :\n  - x.yaml\n",
+        ):
             with self.subTest(text=text):
                 compose.write_text(text)
                 self.assertRefused("include is not allowed", compose_file=str(compose))
@@ -454,18 +542,37 @@ class IsolationTest(unittest.TestCase):
 
     def test_networks_volumes_and_top_level_settings(self):
         self.assertRefused("network default", config=self.config(networks={"default": {"name": "scanmylib_default"}}))
-        self.assertRefused("network default", config=self.config(
-            networks={"default": {"name": "scanmylib-dev_default", "external": True}}))
-        self.assertRefused("driver and driver_opts", config=self.config(volumes={"data": {
-            "name": "scanmylib-dev_data", "driver_opts": {"type": "none", "o": "bind", "device": str(self.home)}}}))
+        self.assertRefused(
+            "network default",
+            config=self.config(networks={"default": {"name": "scanmylib-dev_default", "external": True}}),
+        )
+        self.assertRefused(
+            "driver and driver_opts",
+            config=self.config(
+                volumes={
+                    "data": {
+                        "name": "scanmylib-dev_data",
+                        "driver_opts": {"type": "none", "o": "bind", "device": str(self.home)},
+                    }
+                }
+            ),
+        )
         for network in ({"driver": "macvlan", "driver_opts": {"parent": "eth0"}}, {"driver": "ipvlan"}):
             with self.subTest(network=network):
-                self.assertRefused("network default: driver and driver_opts", config=self.config(
-                    networks={"default": {"name": "scanmylib-dev_default", **network}}))
-        self.assertRefused("volume data (scanmylib_data) is not the stack's own",
-                           config=self.config(volumes={"data": {"name": "scanmylib_data"}}))
-        self.assertRefused("secrets (top level)", config=self.config(secrets={"token": {"file": f"{self.prod}/state/token"}}))
-        self.assertRefused("npipe mount", config=self.service(volumes=[{"type": "npipe", "source": "x", "target": "/x"}]))
+                self.assertRefused(
+                    "network default: driver and driver_opts",
+                    config=self.config(networks={"default": {"name": "scanmylib-dev_default", **network}}),
+                )
+        self.assertRefused(
+            "volume data (scanmylib_data) is not the stack's own",
+            config=self.config(volumes={"data": {"name": "scanmylib_data"}}),
+        )
+        self.assertRefused(
+            "secrets (top level)", config=self.config(secrets={"token": {"file": f"{self.prod}/state/token"}})
+        )
+        self.assertRefused(
+            "npipe mount", config=self.service(volumes=[{"type": "npipe", "source": "x", "target": "/x"}])
+        )
 
     def test_production_env_that_breaks_the_format_is_an_error(self):
         (self.primary / ".env").write_text("DATA_DIR=/data/x # comment\n")
@@ -489,10 +596,15 @@ class IsolationTest(unittest.TestCase):
         self.assertIn("DATA_DIR: ", errors)
         self.assertIn(f"ANDROID_DIR: {self.home}/.config is inside your home directory", errors)
         runner_temp = f"{self.home}/work/_temp"
-        self.assertEqual(self.check_paths("--runner-temp", runner_temp, f"DATA_DIR={runner_temp}/ci",
-                                          f"ANDROID_DIR={runner_temp}/ci/android"), (0, ""))
-        status, errors = self.check_paths("--runner-temp", runner_temp, f"DATA_DIR={runner_temp}/ci",
-                                          f"ANDROID_DIR={self.home}/.config")
+        self.assertEqual(
+            self.check_paths(
+                "--runner-temp", runner_temp, f"DATA_DIR={runner_temp}/ci", f"ANDROID_DIR={runner_temp}/ci/android"
+            ),
+            (0, ""),
+        )
+        status, errors = self.check_paths(
+            "--runner-temp", runner_temp, f"DATA_DIR={runner_temp}/ci", f"ANDROID_DIR={self.home}/.config"
+        )
         self.assertIn(f"ANDROID_DIR: {self.home}/.config is inside your home directory", errors)
         status, errors = self.check_paths("--runner-temp", str(self.home), f"DATA_DIR={self.home}/ci")
         self.assertEqual(status, 1)
@@ -505,14 +617,27 @@ class ComposeCommandTest(unittest.TestCase):
         return stack.compose_command_problems(list(argv), production=production)
 
     def test_allowed(self):
-        for argv in (["ps"], ["up", "-d", "api"], ["exec", "api", "sh"], ["exec", "-T", "-u", "1000", "api", "id"],
-                     ["run", "--rm", "-e", "X=1", "api", "pytest", "-v", "-p", "no:cacheprovider"],
-                     ["run", "-dT", "--entrypoint=sh", "api"], ["run", "-eX=1", "--rm", "api"],
-                     ["build", "--no-cache", "api"], ["build", "api", "--no-cache"], ["logs", "-f", "api"],
-                     ["down", "-v"], ["config"], ["config", "--format", "json", "--no-interpolate"],
-                     ["config", "--hash", "api"], ["up", "-d", "--wait", "--wait-timeout", "60", "api", "ocr-fake"],
-                     ["up", "api", "-d", "--timeout", "5"], ["restart", "-t", "5", "api"], ["start", "ocr"],
-                     ["create", "--no-build", "--", "api"]):
+        for argv in (
+            ["ps"],
+            ["up", "-d", "api"],
+            ["exec", "api", "sh"],
+            ["exec", "-T", "-u", "1000", "api", "id"],
+            ["run", "--rm", "-e", "X=1", "api", "pytest", "-v", "-p", "no:cacheprovider"],
+            ["run", "-dT", "--entrypoint=sh", "api"],
+            ["run", "-eX=1", "--rm", "api"],
+            ["build", "--no-cache", "api"],
+            ["build", "api", "--no-cache"],
+            ["logs", "-f", "api"],
+            ["down", "-v"],
+            ["config"],
+            ["config", "--format", "json", "--no-interpolate"],
+            ["config", "--hash", "api"],
+            ["up", "-d", "--wait", "--wait-timeout", "60", "api", "ocr-fake"],
+            ["up", "api", "-d", "--timeout", "5"],
+            ["restart", "-t", "5", "api"],
+            ["start", "ocr"],
+            ["create", "--no-build", "--", "api"],
+        ):
             with self.subTest(argv=argv):
                 self.assertEqual(self.refused(*argv), [])
 
@@ -557,24 +682,50 @@ class ComposeCommandTest(unittest.TestCase):
                 self.assertTrue(problems and expected in problems[0], problems)
 
     def test_both_ocr_services_never_start_together(self):
-        for argv in (["up", "-d"], ["up", "-d", "--wait"], ["restart"], ["start"], ["create", "--", ]):
+        for argv in (
+            ["up", "-d"],
+            ["up", "-d", "--wait"],
+            ["restart"],
+            ["start"],
+            [
+                "create",
+                "--",
+            ],
+        ):
             with self.subTest(argv=argv):
                 problems = self.refused(*argv)
                 self.assertTrue(problems and "name them" in problems[0], problems)
-        for argv in (["up", "-d", "api", "ocr", "ocr-fake"], ["start", "ocr-fake", "ocr"], ["up", "ocr", "--", "ocr-fake"]):
+        for argv in (
+            ["up", "-d", "api", "ocr", "ocr-fake"],
+            ["start", "ocr-fake", "ocr"],
+            ["up", "ocr", "--", "ocr-fake"],
+        ):
             with self.subTest(argv=argv):
                 problems = self.refused(*argv)
                 self.assertTrue(problems and "never start both" in problems[0], problems)
 
     def test_production(self):
-        for argv in (["ps"], ["logs", "-f", "api", "ocr"], ["restart", "api"], ["up", "-d", "--no-build", "api", "ocr"],
-                     ["up", "-d"], ["restart"], ["stop", "api", "ocr"], ["down"]):
+        for argv in (
+            ["ps"],
+            ["logs", "-f", "api", "ocr"],
+            ["restart", "api"],
+            ["up", "-d", "--no-build", "api", "ocr"],
+            ["up", "-d"],
+            ["restart"],
+            ["stop", "api", "ocr"],
+            ["down"],
+        ):
             with self.subTest(argv=argv):
                 self.assertEqual(self.refused(*argv, production=True), [])
-        for argv, expected in [(["build", "api"], "scripts/deploy.sh"), (["run", "api", "sh"], "scripts/deploy.sh"),
-                               (["up", "-d", "--build"], "--build"), (["exec", "--privileged", "api", "sh"], "--privileged"),
-                               (["cp", "api:/state/token", "."], "not allowed"), (["up", "-d", "ocr-fake"], "fake OCR"),
-                               (["config", "-o", ".env"], "config -o")]:
+        for argv, expected in [
+            (["build", "api"], "scripts/deploy.sh"),
+            (["run", "api", "sh"], "scripts/deploy.sh"),
+            (["up", "-d", "--build"], "--build"),
+            (["exec", "--privileged", "api", "sh"], "--privileged"),
+            (["cp", "api:/state/token", "."], "not allowed"),
+            (["up", "-d", "ocr-fake"], "fake OCR"),
+            (["config", "-o", ".env"], "config -o"),
+        ]:
             with self.subTest(argv=argv):
                 problems = self.refused(*argv, production=True)
                 self.assertTrue(problems and expected in problems[0], problems)

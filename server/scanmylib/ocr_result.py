@@ -107,12 +107,14 @@ def _blocks(value: Any) -> list[dict]:
         text_length += len(text)
         if text_length > MAX_BLOCKS_TEXT:
             raise OcrResultError("blocks too large")
-        blocks.append({
-            "label": _short_text(item.get("label")) or "unknown",
-            "content": text,
-            "bbox": [round(v, 1) for v in coordinates] if None not in coordinates and coordinates else None,
-            "order": order if isinstance(order, int) and not isinstance(order, bool) else None,
-        })
+        blocks.append(
+            {
+                "label": _short_text(item.get("label")) or "unknown",
+                "content": text,
+                "bbox": [round(v, 1) for v in coordinates] if None not in coordinates and coordinates else None,
+                "order": order if isinstance(order, int) and not isinstance(order, bool) else None,
+            }
+        )
     return blocks
 
 
@@ -205,11 +207,14 @@ def build_page_output(response: Any, key: str) -> PageOcrOutput:
         "preprocess": {
             "angle": _finite_number(preprocess.get("angle")),
             "unwarped": preprocess.get("unwarped") is True,
-        } if isinstance(preprocess, dict) else None,
+        }
+        if isinstance(preprocess, dict)
+        else None,
         "page_continuation": {
-            name: continuation.get(name) is True
-            for name in ("starts_mid_paragraph", "ends_mid_paragraph")
-        } if isinstance(continuation, dict) else None,
+            name: continuation.get(name) is True for name in ("starts_mid_paragraph", "ends_mid_paragraph")
+        }
+        if isinstance(continuation, dict)
+        else None,
         "page_numbers": numbers,
         "images": [{"name": name, "file": f"images/{filename}"} for name, filename in files.items()],
         "rejected_images": rejected,

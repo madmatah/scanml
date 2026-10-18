@@ -27,9 +27,7 @@ class OcrPageRejected(Exception):
     """The sandbox refuses this page (bad image, too large...); retrying is pointless."""
 
 
-async def _read_limited(
-    response: httpx.Response, limit: int, error: type[Exception] = OcrPageFailed
-) -> bytes:
+async def _read_limited(response: httpx.Response, limit: int, error: type[Exception] = OcrPageFailed) -> bytes:
     chunks: list[bytes] = []
     size = 0
     async for chunk in response.aiter_bytes():
@@ -56,9 +54,7 @@ class OcrClient:
         self._parse_timeout = httpx.Timeout(parse_timeout_s, connect=5.0)
         # No keep-alive: after a sandbox restart a pooled connection would be stale.
         self._client = httpx.AsyncClient(
-            transport=httpx.AsyncHTTPTransport(
-                uds=str(socket_path), limits=httpx.Limits(max_keepalive_connections=0)
-            ),
+            transport=httpx.AsyncHTTPTransport(uds=str(socket_path), limits=httpx.Limits(max_keepalive_connections=0)),
             base_url="http://ocr",
             timeout=httpx.Timeout(5.0),
         )

@@ -9,7 +9,7 @@ _STATS = ("pages", "done", "queued", "processing", "error", "excluded", "duplica
 _OCR_FIELDS = ("engine", "duration_s", "at", "images", "chars")
 
 
-def document_json(document: DocumentRecord, library: LibraryService) -> dict:
+def document_json(document: DocumentRecord, library: LibraryService) -> dict[str, object]:
     return {
         "id": document.id,
         "slug": document.slug,
@@ -27,7 +27,7 @@ def document_json(document: DocumentRecord, library: LibraryService) -> dict:
     }
 
 
-def page_json(page: PageRecord) -> dict:
+def page_json(page: PageRecord) -> dict[str, object]:
     width, height = page.displayed_size
     done = page.status == "done"
     return {

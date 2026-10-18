@@ -10,11 +10,13 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-from support import AUTH
 
 from scanmylib import db as db_module
 from scanmylib.app import create_app
+from scanmylib.config import Settings
 from scanmylib.db import SCHEMA_VERSION, Database
+from scanmylib.devtools.fake_ocr import FakeOcrServer
+from support import AUTH
 
 # The schema of version 1, as created by the api before manual page order (verbatim).
 V1_SCHEMA = """
@@ -154,10 +156,11 @@ def make_v1_database(path: Path) -> None:
 
 def user_version(path: Path) -> int:
     with closing(sqlite3.connect(path)) as conn:
-        return conn.execute("PRAGMA user_version").fetchone()[0]
+        version: int = conn.execute("PRAGMA user_version").fetchone()[0]
+        return version
 
 
-def schema(path: Path) -> dict:
+def schema(path: Path) -> dict[str, tuple[set[tuple[object, ...]], set[tuple[object, ...]]]]:
     """Columns (without their order) and indexes of every table."""
     with closing(sqlite3.connect(path)) as conn:
         tables = [row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")]
@@ -173,7 +176,7 @@ def schema(path: Path) -> dict:
         }
 
 
-def test_a_version_1_database_is_upgraded_in_place(tmp_path):
+def test_a_version_1_database_is_upgraded_in_place(tmp_path: Path) -> None:
     path = tmp_path / "scanmylib.db"
     make_v1_database(path)
     Database(path).close()
@@ -205,7 +208,7 @@ def test_a_version_1_database_is_upgraded_in_place(tmp_path):
     assert not backup.exists()
 
 
-def test_the_api_runs_on_an_upgraded_database(settings, fake_ocr):
+def test_the_api_runs_on_an_upgraded_database(settings: Settings, fake_ocr: FakeOcrServer) -> None:
     make_v1_database(settings.db_path)
     title, p1, p2, p3 = (page[0] for page in V1_PAGES)
     with TestClient(create_app(settings)) as client:
@@ -231,7 +234,7 @@ def test_the_api_runs_on_an_upgraded_database(settings, fake_ocr):
     assert user_version(settings.db_path) == SCHEMA_VERSION
 
 
-def test_a_failed_upgrade_changes_nothing(tmp_path, monkeypatch):
+def test_a_failed_upgrade_changes_nothing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     path = tmp_path / "scanmylib.db"
     make_v1_database(path)
     monkeypatch.setitem(
@@ -246,7 +249,7 @@ def test_a_failed_upgrade_changes_nothing(tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize("version", [SCHEMA_VERSION + 1, -1])
-def test_unknown_schema_versions_are_refused(tmp_path, version):
+def test_unknown_schema_versions_are_refused(tmp_path: Path, version: int) -> None:
     path = tmp_path / "scanmylib.db"
     with closing(sqlite3.connect(path)) as conn:
         conn.execute(f"PRAGMA user_version = {version}")

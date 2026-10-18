@@ -5,18 +5,19 @@ from __future__ import annotations
 import base64
 import io
 import json
+from collections.abc import Callable
 
 import pytest
 from PIL import Image
-from support import CORRUPT_PNGS
 
-from scanmylib.devtools.fake_ocr import canned_page, evil_page
+from scanmylib.devtools.fake_ocr import ParseResponse, canned_page, evil_page
 from scanmylib.ocr_result import MAX_BLOCK_CONTENT, MAX_BLOCKS_TEXT, MAX_IMAGES, OcrResultError, build_page_output
+from support import CORRUPT_PNGS
 
 KEY = "20261012-201530_1a2b3c4d"
 
 
-def test_canned_page_is_stored_with_renamed_reencoded_images():
+def test_canned_page_is_stored_with_renamed_reencoded_images() -> None:
     output = build_page_output(canned_page(1200, 1042, "req-1"), KEY)
     assert f'src="../images/{KEY}_1.jpg"' in output.markdown
     assert "imgs/" not in output.markdown
@@ -32,22 +33,22 @@ def test_canned_page_is_stored_with_renamed_reencoded_images():
     assert "data_b64" not in repr(raw)
 
 
-def test_spread_and_roman_numbers_are_reported():
+def test_spread_and_roman_numbers_are_reported() -> None:
     assert build_page_output(canned_page(1201, 1042, None), KEY).detected_numbers == ("42", "43")
     assert build_page_output(canned_page(1202, 1012, None), KEY).detected_numbers == ("xii",)
 
 
-def test_number_in_running_header_is_used_as_fallback():
+def test_number_in_running_header_is_used_as_fallback() -> None:
     assert build_page_output(canned_page(1203, 1057, None), KEY).detected_numbers == ("57",)
 
 
-def test_numbers_come_from_number_blocks_when_page_numbers_is_absent():
+def test_numbers_come_from_number_blocks_when_page_numbers_is_absent() -> None:
     response = canned_page(1200, 1042, None)
     del response["page_numbers"]
     assert build_page_output(response, KEY).detected_numbers == ("42",)
 
 
-def test_hostile_response_is_neutralized():
+def test_hostile_response_is_neutralized() -> None:
     output = build_page_output(evil_page(1200, 1042, None), KEY)
     markdown = output.markdown
     for forbidden in ("<script", "onerror", "onload", "<iframe", "<svg", "](javascript", "](http", "<!--", "passwd"):
@@ -68,13 +69,13 @@ def test_hostile_response_is_neutralized():
         ("<>", "OCR"),  # nothing left: the generic name
     ],
 )
-def test_engine_names_are_reduced_to_identifiers(model, expected):
+def test_engine_names_are_reduced_to_identifiers(model: str, expected: str) -> None:
     response = canned_page(1200, 1042, None)
     response["engine"] = {"name": None, "model": model}
     assert build_page_output(response, KEY).engine == expected
 
 
-def test_duplicate_image_names_keep_the_first():
+def test_duplicate_image_names_keep_the_first() -> None:
     response = canned_page(1200, 1042, None)
     response["images"].append(dict(response["images"][0]))
     output = build_page_output(response, KEY)
@@ -92,14 +93,14 @@ def test_duplicate_image_names_keep_the_first():
         lambda r: r.update({"images": r["images"] * (MAX_IMAGES + 1)}),
     ],
 )
-def test_malformed_responses_are_refused(mutate):
+def test_malformed_responses_are_refused(mutate: Callable[[ParseResponse], object]) -> None:
     response = canned_page(1200, 1042, None)
     mutate(response)
     with pytest.raises(OcrResultError):
         build_page_output(response, KEY)
 
 
-def test_oversized_block_text_is_refused():
+def test_oversized_block_text_is_refused() -> None:
     response = canned_page(1200, 1042, None)
     count = MAX_BLOCKS_TEXT // MAX_BLOCK_CONTENT + 1
     response["blocks"] = [{"label": "text", "content": "Z" * MAX_BLOCK_CONTENT}] * count
@@ -107,12 +108,12 @@ def test_oversized_block_text_is_refused():
         build_page_output(response, KEY)
 
 
-def test_non_object_response_is_refused():
+def test_non_object_response_is_refused() -> None:
     with pytest.raises(OcrResultError):
         build_page_output(["markdown"], KEY)
 
 
-def test_invalid_base64_drops_only_that_image():
+def test_invalid_base64_drops_only_that_image() -> None:
     response = canned_page(1200, 1042, None)
     response["images"][0]["data_b64"] = "@@not base64@@"
     output = build_page_output(response, KEY)
@@ -121,7 +122,7 @@ def test_invalid_base64_drops_only_that_image():
 
 
 @pytest.mark.parametrize("corrupt", CORRUPT_PNGS.values(), ids=CORRUPT_PNGS.keys())
-def test_corrupt_illustration_drops_only_that_image(corrupt):
+def test_corrupt_illustration_drops_only_that_image(corrupt: bytes) -> None:
     # Formerly a SyntaxError/ValueError escaped and the whole page failed (and was re-OCRed).
     response = canned_page(1200, 1042, None)
     response["images"][0]["data_b64"] = base64.b64encode(corrupt).decode()
@@ -131,7 +132,7 @@ def test_corrupt_illustration_drops_only_that_image(corrupt):
     assert output.raw["rejected_images"][0]["name"] == response["images"][0]["name"]
 
 
-def test_untrusted_scalar_fields_are_typed_and_bounded():
+def test_untrusted_scalar_fields_are_typed_and_bounded() -> None:
     response = canned_page(1200, 1042, None)
     response.update(
         {
@@ -149,7 +150,7 @@ def test_untrusted_scalar_fields_are_typed_and_bounded():
     output = build_page_output(response, KEY)
     raw = output.raw
     assert raw["width"] is None
-    assert len(raw["engine"]["name"]) == 64 and raw["engine"]["model"] is None
+    assert raw["engine"]["name"] is not None and len(raw["engine"]["name"]) == 64 and raw["engine"]["model"] is None
     assert raw["engine"]["backend"] == "vllm"
     assert output.engine == "x" * 64
     assert raw["timings"] == {"queue_s": None, "load_s": None, "infer_s": None}
@@ -158,7 +159,7 @@ def test_untrusted_scalar_fields_are_typed_and_bounded():
     assert output.detected_numbers == ("42", "x" * 32)
 
 
-def test_lone_surrogates_do_not_reach_the_files():
+def test_lone_surrogates_do_not_reach_the_files() -> None:
     # Valid in JSON, not in the UTF-8 files: writing ocr/<key>.json used to fail
     # and the page was OCRed four times, then marked as failed.
     response = canned_page(1200, 1042, None)
@@ -166,11 +167,11 @@ def test_lone_surrogates_do_not_reach_the_files():
     response["page_numbers"] = ["4\udc002"]
     output = build_page_output(response, KEY)
     encoded = json.dumps(output.raw, ensure_ascii=False).encode("utf-8")
-    assert "text ? read".encode() in encoded
+    assert b"text ? read" in encoded
     assert output.detected_numbers == ("4?2",)
 
 
-def test_image_payload_size_is_checked_before_decoding():
+def test_image_payload_size_is_checked_before_decoding() -> None:
     response = canned_page(1200, 1042, None)
     response["images"][0]["data_b64"] = base64.b64encode(b"\x00" * 10).decode() * 3_000_000
     output = build_page_output(response, KEY)

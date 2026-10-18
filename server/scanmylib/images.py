@@ -101,14 +101,15 @@ def _exif_orientation(image: Image.Image) -> int | None:
     """EXIF orientation of a decoded image; an unreadable EXIF block counts as none."""
     try:
         orientation = image.getexif().get(_EXIF_ORIENTATION)
-    except Exception:  # broken metadata: the pixels are still good
+    except Exception:  # noqa: BLE001 (broken metadata raises assorted types: the pixels are still good)
         return None
     return orientation if isinstance(orientation, int) else None
 
 
 def _oriented(image: Image.Image, rotation: int) -> Image.Image:
     """Apply the EXIF orientation, then the user's clockwise rotation."""
-    if (upright := _EXIF_TRANSPOSE.get(_exif_orientation(image))) is not None:
+    orientation = _exif_orientation(image)
+    if orientation is not None and (upright := _EXIF_TRANSPOSE.get(orientation)) is not None:
         image = image.transpose(upright)
     if rotation in _TRANSPOSE:
         image = image.transpose(_TRANSPOSE[rotation])

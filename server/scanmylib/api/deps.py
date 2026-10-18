@@ -28,7 +28,8 @@ class Services:
 # Dependencies are coroutines so that they run on the event loop thread, the
 # only one allowed to use the database connection (sync ones run in a pool).
 async def get_services(request: Request) -> Services:
-    return request.app.state.services
+    services: Services = request.app.state.services
+    return services
 
 
 async def require_auth(request: Request) -> None:

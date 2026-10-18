@@ -3,18 +3,25 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
+from typing import Any
 
+import httpx2
 import pytest
-from support import AUTH, TOKEN, create_document, new_id, page_image, upload, wait_until_processed
+from fastapi.testclient import TestClient
 
+from scanmylib.devtools.fake_ocr import FakeOcrServer
 from scanmylib.ordering import int_to_roman
+from support import AUTH, TOKEN, create_document, new_id, page_image, upload, wait_until_processed
 
 NO_NUMBER = 0  # page_image(0): the fake OCR finds no page number
 ROMAN = 2  # page_image(n, ROMAN): the fake OCR finds n in roman numerals (front matter)
 UNNUMBERED_HEADING = "## Unnumbered pages"
 
 
-def scan(client, document_id: str, number: int, session: str, seq: int, minute: int = 0, variant: int = 0) -> dict:
+def scan(
+    client: TestClient, document_id: str, number: int, session: str, seq: int, minute: int = 0, variant: int = 0
+) -> dict[str, Any]:
     response = upload(
         client,
         document_id,
@@ -24,28 +31,29 @@ def scan(client, document_id: str, number: int, session: str, seq: int, minute: 
         captured_at=f"2026-10-12T20:{minute:02d}:{seq:02d}+02:00",
     )
     assert response.status_code == 201, response.text
-    return response.json()
+    page: dict[str, Any] = response.json()
+    return page
 
 
-def ids(pages: list[dict]) -> list[str]:
+def ids(pages: list[dict[str, Any]]) -> list[str]:
     return [page["id"] for page in pages]
 
 
-def reading(document: dict) -> list[dict]:
+def reading(document: dict[str, Any]) -> list[dict[str, Any]]:
     return [page for page in document["pages"] if page["in_document"]]
 
 
-def put_order(client, document_id: str, page_ids: list[str]):
+def put_order(client: TestClient, document_id: str, page_ids: list[str]) -> httpx2.Response:
     return client.put(f"/api/documents/{document_id}/order", json={"page_ids": page_ids}, headers=AUTH)
 
 
-def markers(client, document_id: str) -> list[str]:
+def markers(client: TestClient, document_id: str) -> list[str]:
     """Page and gap markers of document.md, and its unnumbered heading, in order."""
     markdown = client.get(f"/api/documents/{document_id}/markdown", headers=AUTH).text
     return [line for line in markdown.splitlines() if line.startswith("<!-- ") or line == UNNUMBERED_HEADING]
 
 
-def page_markers(pages: list[dict]) -> list[str]:
+def page_markers(pages: list[dict[str, Any]]) -> list[str]:
     return [
         f"<!-- page {page['page_label']} · scan {page['key']} -->"
         if page["page_label"]
@@ -54,7 +62,7 @@ def page_markers(pages: list[dict]) -> list[str]:
     ]
 
 
-def test_front_matter_scanned_before_page_one_opens_the_document(client):
+def test_front_matter_scanned_before_page_one_opens_the_document(client: TestClient) -> None:
     document_id = create_document(client, kind="book")
     session = new_id()
     front = [scan(client, document_id, NO_NUMBER, session, seq) for seq in range(20)]
@@ -70,7 +78,7 @@ def test_front_matter_scanned_before_page_one_opens_the_document(client):
     assert markers(client, document_id) == page_markers(reading(document))  # no unnumbered heading
 
 
-def test_roman_front_matter_then_the_main_text_in_one_session(client):
+def test_roman_front_matter_then_the_main_text_in_one_session(client: TestClient) -> None:
     # The user's book, 25 pages in one session: cover and unnumbered pages, front matter in roman
     # numerals, then the main text. The OCR found XV, XXV and 3, and no number it could read on the
     # other pages ("1X", garbage instead of the 2...): the two pages before page 3 are pages 1 and 2.
@@ -98,7 +106,7 @@ def test_roman_front_matter_then_the_main_text_in_one_session(client):
     assert (cleared["page_label"], cleared["number_source"]) == ("1", "inferred")
 
 
-def test_pages_moved_before_page_one_then_more_pages_scanned(client, library_dir):
+def test_pages_moved_before_page_one_then_more_pages_scanned(client: TestClient, library_dir: Path) -> None:
     document_id = create_document(client, kind="book")
     book, loose = new_id(), new_id()
     body = [scan(client, document_id, n, book, n - 1) for n in range(1, 6)]
@@ -128,7 +136,7 @@ def test_pages_moved_before_page_one_then_more_pages_scanned(client, library_dir
     # Page 6, scanned later, slots in after page 5.
     p6 = scan(client, document_id, 6, new_id(), 0, minute=20)
     document = wait_until_processed(client, document_id)
-    assert ids(reading(document)) == ids(front + body) + [p6["id"]]
+    assert ids(reading(document)) == [*ids(front + body), p6["id"]]
     assert reading(document)[-1]["placement"] == "number"
     assert markers(client, document_id) == page_markers(reading(document))
 
@@ -136,7 +144,7 @@ def test_pages_moved_before_page_one_then_more_pages_scanned(client, library_dir
     response = client.delete(f"/api/documents/{document_id}/order", headers=AUTH)
     assert response.status_code == 200, response.text
     document = response.json()
-    assert ids(reading(document)) == ids(body) + [p6["id"]] + ids(front)
+    assert ids(reading(document)) == [*ids(body), p6["id"], *ids(front)]
     assert all(p["position"] is None for p in document["pages"])
     assert [p["placement"] for p in reading(document)] == ["number"] * 6 + ["unplaced"] * 20
     pages = reading(document)
@@ -146,7 +154,7 @@ def test_pages_moved_before_page_one_then_more_pages_scanned(client, library_dir
     assert client.delete(f"/api/documents/{document_id}/order", headers=AUTH).json() == document
 
 
-def test_moving_one_page_sets_one_position(client):
+def test_moving_one_page_sets_one_position(client: TestClient) -> None:
     document_id = create_document(client)
     session = new_id()
     pages = [scan(client, document_id, n, session, n) for n in range(1, 7)]
@@ -169,15 +177,15 @@ def test_moving_one_page_sets_one_position(client):
     assert all(p["position"] is None for p in document["pages"])
 
 
-def placements(document: dict) -> list[str]:
+def placements(document: dict[str, Any]) -> list[str]:
     return [page["placement"] for page in reading(document)]
 
 
-def positions(document: dict) -> dict[str, float]:
+def positions(document: dict[str, Any]) -> dict[str, float]:
     return {page["id"]: page["position"] for page in document["pages"] if page["position"] is not None}
 
 
-def test_moving_loose_pages_into_a_book_leaves_the_other_pages_in_place(client):
+def test_moving_loose_pages_into_a_book_leaves_the_other_pages_in_place(client: TestClient) -> None:
     # 20 unnumbered pages (title, preface...), pages 1–10 and a plate after page 5 scanned in one
     # session; 3 more pages scanned on their own later: they are unplaced, at the end.
     document_id = create_document(client, kind="book")
@@ -215,7 +223,7 @@ def test_moving_loose_pages_into_a_book_leaves_the_other_pages_in_place(client):
     assert positions(document) == {}
 
 
-def test_moving_an_unnumbered_page_sets_one_position(client):
+def test_moving_an_unnumbered_page_sets_one_position(client: TestClient) -> None:
     document_id = create_document(client, kind="book")
     session = new_id()
     title = scan(client, document_id, NO_NUMBER, session, 0)
@@ -233,7 +241,7 @@ def test_moving_an_unnumbered_page_sets_one_position(client):
     assert markers(client, document_id) == page_markers(reading(document))
 
 
-def test_duplicates_are_unaffected_by_positions(client):
+def test_duplicates_are_unaffected_by_positions(client: TestClient) -> None:
     document_id = create_document(client)
     first, later = new_id(), new_id()
     p1, p2, p3 = (scan(client, document_id, n, first, n) for n in (1, 2, 3))
@@ -254,7 +262,7 @@ def test_duplicates_are_unaffected_by_positions(client):
     assert document["stats"]["duplicates"] == 1
 
 
-def test_stale_or_invalid_orders_are_refused(client, fake_ocr):
+def test_stale_or_invalid_orders_are_refused(client: TestClient, fake_ocr: FakeOcrServer) -> None:
     document_id = create_document(client)
     session = new_id()
     p1, p2, p3, excluded = (scan(client, document_id, n, session, n) for n in (1, 2, 3, 4))
@@ -300,7 +308,7 @@ def test_stale_or_invalid_orders_are_refused(client, fake_ocr):
     assert ids(reading(document)) == ids([p3, p1, p2])  # the refused requests changed nothing
 
 
-def test_reordering_a_document_without_page_numbers(client):
+def test_reordering_a_document_without_page_numbers(client: TestClient) -> None:
     document_id = create_document(client, "Letter")
     a, b, c = (scan(client, document_id, NO_NUMBER, new_id(), 0, minute=m) for m in (1, 2, 3))
     document = wait_until_processed(client, document_id)
@@ -316,7 +324,7 @@ def test_reordering_a_document_without_page_numbers(client):
 
 
 @pytest.mark.parametrize("method", ["PUT", "DELETE"])
-def test_order_routes_need_the_csrf_header_with_a_cookie(client, method):
+def test_order_routes_need_the_csrf_header_with_a_cookie(client: TestClient, method: str) -> None:
     document_id = create_document(client)
     assert client.post("/api/session", json={"token": TOKEN}).status_code == 204
     path = f"/api/documents/{document_id}/order"

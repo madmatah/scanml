@@ -10,6 +10,8 @@ import zlib
 from collections.abc import Callable
 from typing import Any
 
+import httpx2
+from fastapi.testclient import TestClient
 from PIL import Image
 
 TOKEN = "test-token-0123456789abcdefghijklmnopqrstuvwxyz"
@@ -20,7 +22,13 @@ def new_id() -> str:
     return str(uuid.uuid4())
 
 
-def jpeg(width: int = 1200, height: int = 1042, *, orientation: int | None = None, color=(235, 232, 220)) -> bytes:
+def jpeg(
+    width: int = 1200,
+    height: int = 1042,
+    *,
+    orientation: int | None = None,
+    color: tuple[int, int, int] = (235, 232, 220),
+) -> bytes:
     """A JPEG; with the fake OCR, its height mod 1000 is the page number (see fake_ocr)."""
     image = Image.new("RGB", (width, height), color)
     buffer = io.BytesIO()
@@ -39,7 +47,7 @@ def png(width: int, height: int, mode: str = "RGB") -> bytes:
     return buffer.getvalue()
 
 
-def encoded(image: Image.Image, fmt: str, **options) -> bytes:
+def encoded(image: Image.Image, fmt: str, **options: object) -> bytes:
     buffer = io.BytesIO()
     image.save(buffer, fmt, **options)
     return buffer.getvalue()
@@ -83,7 +91,7 @@ def page_image(number: int, variant: int = 0) -> bytes:
     return jpeg(1200 + variant, 1000 + number)
 
 
-def create_document(client, title: str = "Sample Café Guide", **fields: Any) -> str:
+def create_document(client: TestClient, title: str = "Sample Café Guide", **fields: object) -> str:
     document_id = new_id()
     response = client.put(f"/api/documents/{document_id}", json={"title": title, **fields}, headers=AUTH)
     assert response.status_code == 201, response.text
@@ -91,7 +99,7 @@ def create_document(client, title: str = "Sample Café Guide", **fields: Any) ->
 
 
 def upload(
-    client,
+    client: TestClient,
     document_id: str,
     image: bytes,
     *,
@@ -100,8 +108,8 @@ def upload(
     seq: int | None = None,
     captured_at: str | None = None,
     hint: int | None = None,
-    headers: dict | None = None,
-):
+    headers: dict[str, str] | None = None,
+) -> httpx2.Response:
     data = {"page_id": page_id or new_id()}
     if session_id is not None:
         data["session_id"] = session_id
@@ -119,7 +127,9 @@ def upload(
     )
 
 
-def wait_for(condition: Callable[[], Any], timeout: float = 20.0, interval: float = 0.05) -> Any:
+def wait_for[Outcome](
+    condition: Callable[[], Outcome | None], timeout: float = 20.0, interval: float = 0.05
+) -> Outcome:
     """Poll until `condition()` is truthy; return its value."""
     deadline = time.monotonic() + timeout
     while True:
@@ -131,11 +141,11 @@ def wait_for(condition: Callable[[], Any], timeout: float = 20.0, interval: floa
         time.sleep(interval)
 
 
-def wait_until_processed(client, document_id: str, timeout: float = 20.0) -> dict:
+def wait_until_processed(client: TestClient, document_id: str, timeout: float = 20.0) -> dict[str, Any]:
     """Wait until no page of the document is queued or processing; return the document."""
 
-    def settled():
-        document = client.get(f"/api/documents/{document_id}", headers=AUTH).json()
+    def settled() -> dict[str, Any] | None:
+        document: dict[str, Any] = client.get(f"/api/documents/{document_id}", headers=AUTH).json()
         stats = document["stats"]
         return document if stats["queued"] == 0 and stats["processing"] == 0 else None
 

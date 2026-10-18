@@ -173,7 +173,8 @@ class Database:
         return self._conn.execute(sql, params)
 
     def one(self, sql: str, params: Sequence[Any] = ()) -> sqlite3.Row | None:
-        return self._conn.execute(sql, params).fetchone()
+        row: sqlite3.Row | None = self._conn.execute(sql, params).fetchone()
+        return row
 
     def all(self, sql: str, params: Sequence[Any] = ()) -> list[sqlite3.Row]:
         return self._conn.execute(sql, params).fetchall()

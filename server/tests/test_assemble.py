@@ -8,8 +8,10 @@ from scanmylib.assemble import (
     DocumentMeta,
     GapSection,
     IndexEntry,
+    IndexMetadata,
     PageEntry,
     PageSection,
+    Section,
     UnnumberedHeading,
     document_relative,
     document_sections,
@@ -65,7 +67,7 @@ def entry(
     )
 
 
-def test_sections_mark_gaps_and_unnumbered_pages():
+def test_sections_mark_gaps_and_unnumbered_pages() -> None:
     reading = [
         entry("r", PageNumber(1, front_matter=True)),
         entry("a", PageNumber(1)),
@@ -88,14 +90,14 @@ def test_sections_mark_gaps_and_unnumbered_pages():
     assert (GapSection(9, 9).label, GapSection(9, 9).description) == ("9", "Missing page: 9")
 
 
-def test_documents_without_numbers_have_no_unnumbered_heading():
+def test_documents_without_numbers_have_no_unnumbered_heading() -> None:
     assert document_sections([entry("a", None), entry("b", None)], numbered=False) == [
         PageSection("a", None),
         PageSection("b", None),
     ]
 
 
-def test_only_pages_that_could_not_be_placed_go_under_the_unnumbered_heading():
+def test_only_pages_that_could_not_be_placed_go_under_the_unnumbered_heading() -> None:
     reading = [
         entry("title", None, placement="session"),  # scanned just before page 1
         entry("a", PageNumber(1)),
@@ -115,7 +117,7 @@ def test_only_pages_that_could_not_be_placed_go_under_the_unnumbered_heading():
     ]
 
 
-def test_gaps_are_marked_before_the_page_that_follows_them_in_any_order():
+def test_gaps_are_marked_before_the_page_that_follows_them_in_any_order() -> None:
     # Page 7 was moved by hand before page 2: pages 2–6 are not missing, page 5 is.
     reading = [
         entry("p1", PageNumber(1)),
@@ -136,13 +138,13 @@ def test_gaps_are_marked_before_the_page_that_follows_them_in_any_order():
     ]
 
 
-def test_document_markdown_format():
+def test_document_markdown_format() -> None:
     pages = {
         "k1": 'Text.\n\n<div style="text-align: center;"><img src="../images/k1_1.jpg" alt="Image" /></div>\n',
         "k2": "![Map](../images/k2_1.jpg)\n",
         "k3": "",
     }
-    sections = [
+    sections: list[Section] = [
         PageSection("k1", "1"),
         GapSection(2, 44),
         PageSection("k2", "45"),
@@ -183,7 +185,7 @@ def test_document_markdown_format():
     )
 
 
-def test_user_text_cannot_inject_markup_or_break_the_front_matter():
+def test_user_text_cannot_inject_markup_or_break_the_front_matter() -> None:
     meta = DocumentMeta(**{**META.__dict__, "title": "<script>x</script>\n---\nkind: evil", "author": 'a"b'})
     markdown = render_document_markdown(
         meta, [], lambda key: "", source="ScanMyLib", pages_scanned=0, coverage=Coverage((), 0)
@@ -194,12 +196,12 @@ def test_user_text_cannot_inject_markup_or_break_the_front_matter():
     assert "# &lt;script>x&lt;/script>" in markdown
 
 
-def test_document_relative_only_touches_image_references():
+def test_document_relative_only_touches_image_references() -> None:
     text = 'see ../images/ here ![x](../images/k_1.jpg) <img src="../images/k_2.jpg" />'
     assert document_relative(text) == 'see ../images/ here ![x](images/k_1.jpg) <img src="images/k_2.jpg" />'
 
 
-def test_document_metadata_lists_pages_and_files():
+def test_document_metadata_lists_pages_and_files() -> None:
     pages = [entry("k1", PageNumber(1), images=2), entry("k2", None, status="queued", in_document=False)]
     metadata = render_document_metadata(META, pages, source="S", pages_scanned=1, coverage=Coverage(((1, 1),), 0))
     json.dumps(metadata)  # serializable
@@ -226,13 +228,13 @@ def test_document_metadata_lists_pages_and_files():
     assert metadata["notes"] == "Volume 1"
 
 
-def test_source_label():
+def test_source_label() -> None:
     assert source_label(["PaddleOCR-VL-1.6", "PaddleOCR-VL-1.6"]) == "ScanMyLib — OCR PaddleOCR-VL-1.6"
     assert source_label(["B", "A"]) == "ScanMyLib — OCR A, B"
     assert source_label([]) == "ScanMyLib"
 
 
-def test_index_is_sorted_and_escaped():
+def test_index_is_sorted_and_escaped() -> None:
     entries = [
         IndexEntry(META, 3, Coverage(((1, 1), (45, 45)), 1)),
         IndexEntry(
@@ -256,7 +258,8 @@ def test_index_is_sorted_and_escaped():
     assert metadata["documents"][1]["markdown"] == "sample-cafe-guide/document.md"
 
 
-def test_empty_index():
+def test_empty_index() -> None:
     assert "_No documents yet._" in render_index_markdown([], "now")
     assert "0 documents — index updated now." in render_index_markdown([], "now")
-    assert render_index_metadata([], "now") == {"generated_at": "now", "documents": []}
+    empty: IndexMetadata = {"generated_at": "now", "documents": []}
+    assert render_index_metadata([], "now") == empty

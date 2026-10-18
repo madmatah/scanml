@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+from typing import TypedDict
+
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import FileResponse
 from starlette.datastructures import FormData, UploadFile
@@ -14,6 +17,14 @@ from .schemas import PagePatchBody
 from .serializers import page_json
 
 router = APIRouter(dependencies=[Depends(require_auth)])
+
+
+class _UploadFields(TypedDict):
+    page_id: str
+    session_id: str | None
+    seq: int | None
+    captured_at: datetime | None
+    hint_number: int | None
 
 
 def _optional_int(value: str | None, field: str, low: int, high: int) -> int | None:
@@ -34,7 +45,7 @@ def _upload_fields(
     seq: str | None,
     captured_at: str | None,
     page_number_hint: str | None,
-) -> dict:
+) -> _UploadFields:
     session_id = (session_id or "").strip() or None
     if session_id is not None and not is_uuid(session_id):
         raise HTTPException(422, "session_id must be a lowercase hyphenated UUID")
@@ -59,7 +70,9 @@ def _form_text(form: FormData, name: str) -> str | None:
 
 
 @router.post("/api/documents/{document_id}/pages", status_code=201)
-async def upload_page(document_id: str, request: Request, response: Response, services: ServicesDep) -> dict:
+async def upload_page(
+    document_id: str, request: Request, response: Response, services: ServicesDep
+) -> dict[str, object]:
     # The multipart body (up to 40 MiB) is read here, once require_auth has
     # accepted the request: File()/Form() parameters would make FastAPI read
     # and spool it before checking the credentials, for anyone on the LAN.
@@ -84,24 +97,24 @@ async def upload_page(document_id: str, request: Request, response: Response, se
 
 
 @router.get("/api/pages/{page_id}")
-async def get_page(page_id: str, services: ServicesDep) -> dict:
+async def get_page(page_id: str, services: ServicesDep) -> dict[str, object]:
     page = services.library.require_page(page_id)
     return {**page_json(page), "markdown": await services.library.page_markdown(page)}
 
 
 @router.get("/api/pages/{page_id}/html")
-async def page_html(page_id: str, services: ServicesDep) -> dict:
+async def page_html(page_id: str, services: ServicesDep) -> dict[str, object]:
     page = services.library.require_page(page_id)
     return {"html": await services.library.page_html(page)}
 
 
 @router.patch("/api/pages/{page_id}")
-async def patch_page(page_id: str, body: PagePatchBody, services: ServicesDep) -> dict:
+async def patch_page(page_id: str, body: PagePatchBody, services: ServicesDep) -> dict[str, object]:
     return page_json(await services.library.patch_page(page_id, body.changes()))
 
 
 @router.post("/api/pages/{page_id}/reprocess", status_code=202)
-async def reprocess_page(page_id: str, services: ServicesDep) -> dict:
+async def reprocess_page(page_id: str, services: ServicesDep) -> dict[str, object]:
     return page_json(services.library.reprocess_page(page_id))
 
 

@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 import io
+from pathlib import Path
+from typing import cast
 
 import pytest
 from PIL import Image
-from support import BROKEN_EXIF, CORRUPT_PNGS, encoded, jpeg, mpo, png
 
 from scanmylib import images
 from scanmylib.images import ImageRejected, ImageTooLarge
+from support import BROKEN_EXIF, CORRUPT_PNGS, encoded, jpeg, mpo, png
 
 
 def open_image(data: bytes) -> Image.Image:
@@ -20,7 +22,7 @@ def truncated(data: bytes) -> bytes:
     return data[: len(data) // 2]
 
 
-def test_ingest_scan_reports_format_size_and_thumbnail():
+def test_ingest_scan_reports_format_size_and_thumbnail() -> None:
     info, thumbnail = images.ingest_scan(jpeg(2000, 1500))
     assert (info.ext, info.width, info.height) == ("jpg", 2000, 1500)
     thumb = open_image(thumbnail)
@@ -28,7 +30,7 @@ def test_ingest_scan_reports_format_size_and_thumbnail():
     assert max(thumb.size) == images.THUMB_MAX_SIDE
 
 
-def test_exif_orientation_is_applied():
+def test_exif_orientation_is_applied() -> None:
     # Stored 1600×1200 with "rotate 90° clockwise" in EXIF: displayed portrait.
     info, thumbnail = images.ingest_scan(jpeg(1600, 1200, orientation=6))
     assert (info.width, info.height) == (1200, 1600)
@@ -47,7 +49,7 @@ def test_exif_orientation_is_applied():
         (png(300, 200, mode="I;16"), "png"),
     ],
 )
-def test_supported_formats_and_modes(data, ext):
+def test_supported_formats_and_modes(data: bytes, ext: str) -> None:
     info, thumbnail = images.ingest_scan(data)
     assert info.ext == ext
     assert open_image(thumbnail).mode == "RGB"
@@ -66,12 +68,12 @@ def test_supported_formats_and_modes(data, ext):
         *(pytest.param(data, id=name) for name, data in CORRUPT_PNGS.items()),
     ],
 )
-def test_other_files_are_rejected(data):
+def test_other_files_are_rejected(data: bytes) -> None:
     with pytest.raises(ImageRejected):
         images.ingest_scan(data)
 
 
-def test_multi_picture_jpegs_are_accepted_as_jpeg(tmp_path):
+def test_multi_picture_jpegs_are_accepted_as_jpeg(tmp_path: Path) -> None:
     # Phone photos carrying a depth map or an HDR gain map: Pillow names them "MPO".
     data = mpo(640, 480)
     assert open_image(data).format == "MPO"
@@ -94,7 +96,7 @@ def test_multi_picture_jpegs_are_accepted_as_jpeg(tmp_path):
     ],
     ids=["jpeg", "webp", "png"],
 )
-def test_unreadable_exif_is_ignored(data, tmp_path):
+def test_unreadable_exif_is_ignored(data: bytes, tmp_path: Path) -> None:
     info, thumbnail = images.ingest_scan(data)
     assert (info.width, info.height) == (300, 200)
     assert open_image(thumbnail).size == (300, 200)
@@ -104,14 +106,14 @@ def test_unreadable_exif_is_ignored(data, tmp_path):
     assert open_image(images.prepare_for_ocr(scan, 0, max_side=4096)).size == (300, 200)
 
 
-def test_decompression_bombs_are_rejected_before_decoding():
+def test_decompression_bombs_are_rejected_before_decoding() -> None:
     bomb = png(11_000, 11_000, mode="1")  # a few KB on disk, 121 million pixels
     assert len(bomb) < 100_000
     with pytest.raises(ImageTooLarge):
         images.ingest_scan(bomb)
 
 
-def test_prepare_for_ocr_rotates_clockwise_and_strips_metadata(tmp_path):
+def test_prepare_for_ocr_rotates_clockwise_and_strips_metadata(tmp_path: Path) -> None:
     source = Image.new("RGB", (300, 200), "white")
     source.paste((255, 0, 0), (0, 0, 20, 20))  # red square in the top-left corner
     exif = Image.Exif()
@@ -123,25 +125,25 @@ def test_prepare_for_ocr_rotates_clockwise_and_strips_metadata(tmp_path):
 
     prepared = open_image(images.prepare_for_ocr(scan, 90, max_side=4096))
     assert prepared.size == (200, 300)
-    red, green, _ = prepared.getpixel((190, 10))  # top-left went to the top-right corner
+    red, green, _ = cast(tuple[int, int, int], prepared.getpixel((190, 10)))  # top-left went to the top-right corner
     assert red > 200 and green < 80
     assert dict(prepared.getexif()) == {}
     assert not {"icc_profile", "comment", "exif"} & set(prepared.info)
 
 
-def test_prepare_for_ocr_downscales_large_scans(tmp_path):
+def test_prepare_for_ocr_downscales_large_scans(tmp_path: Path) -> None:
     scan = tmp_path / "scan.jpg"
     scan.write_bytes(jpeg(5000, 3000))
     assert open_image(images.prepare_for_ocr(scan, 0, max_side=1000)).size == (1000, 600)
 
 
-def test_thumbnail_follows_the_rotation(tmp_path):
+def test_thumbnail_follows_the_rotation(tmp_path: Path) -> None:
     scan = tmp_path / "scan.jpg"
     scan.write_bytes(jpeg(1000, 500))
     assert open_image(images.make_thumbnail(scan, 270)).size == (240, 480)
 
 
-def test_sandbox_illustrations_are_reencoded_as_plain_jpeg():
+def test_sandbox_illustrations_are_reencoded_as_plain_jpeg() -> None:
     data = encoded(Image.new("RGBA", (64, 48), (10, 20, 30, 128)), "PNG")
     output = open_image(images.reencode_ocr_image(data))
     assert output.format == "JPEG" and output.mode == "RGB" and output.size == (64, 48)
@@ -158,6 +160,6 @@ def test_sandbox_illustrations_are_reencoded_as_plain_jpeg():
         *(pytest.param(data, ImageRejected, id=name) for name, data in CORRUPT_PNGS.items()),
     ],
 )
-def test_bad_sandbox_illustrations_are_rejected(data, error):
+def test_bad_sandbox_illustrations_are_rejected(data: bytes, error: type[ImageRejected]) -> None:
     with pytest.raises(error):
         images.reencode_ocr_image(data)

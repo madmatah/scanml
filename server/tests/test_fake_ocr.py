@@ -5,17 +5,18 @@ from __future__ import annotations
 import io
 import socket
 import sys
+from pathlib import Path
 
 import httpx
 import pytest
 from PIL import Image
-from support import jpeg
 
 from scanmylib.devtools.fake_ocr import FakeOcrServer, canned_page, check_health, image_size
 from scanmylib.devtools.fake_ocr import main as fake_ocr_main
+from support import jpeg
 
 
-def encoded(fmt: str, size=(321, 123), **options) -> bytes:
+def encoded(fmt: str, size: tuple[int, int] = (321, 123), **options: object) -> bytes:
     buffer = io.BytesIO()
     Image.new("RGBA" if fmt == "PNG" else "RGB", size).save(buffer, fmt, **options)
     return buffer.getvalue()
@@ -32,11 +33,11 @@ def encoded(fmt: str, size=(321, 123), **options) -> bytes:
         encoded("WEBP", exif=b"Exif\x00\x00MM\x00*\x00\x00\x00\x08\x00\x00"),
     ],
 )
-def test_image_size_from_headers(data):
+def test_image_size_from_headers(data: bytes) -> None:
     assert image_size(data) == (321, 123)
 
 
-def test_image_size_of_garbage():
+def test_image_size_of_garbage() -> None:
     assert image_size(b"not an image") is None
     assert image_size(b"\xff\xd8\x00") is None
 
@@ -52,13 +53,13 @@ def test_image_size_of_garbage():
         ((1200, 2000), []),
     ],
 )
-def test_page_number_conventions(size, numbers):
+def test_page_number_conventions(size: tuple[int, int], numbers: list[str]) -> None:
     page = canned_page(*size, "r")
     assert page["page_numbers"] == numbers
     assert page["markdown"].count("imgs/") == 1
 
 
-def test_protocol_over_the_unix_socket(fake_ocr):
+def test_protocol_over_the_unix_socket(fake_ocr: FakeOcrServer) -> None:
     transport = httpx.HTTPTransport(uds=str(fake_ocr.socket_path))
     with httpx.Client(transport=transport, base_url="http://ocr") as sandbox:
         health = sandbox.get("/health").json()
@@ -77,14 +78,14 @@ def test_protocol_over_the_unix_socket(fake_ocr):
         assert sandbox.post("/v1/unload").json() == {"state": "idle"}
 
 
-def test_health_probe(fake_ocr, socket_dir):
+def test_health_probe(fake_ocr: FakeOcrServer, socket_dir: Path) -> None:
     assert check_health(fake_ocr.socket_path)
     assert not check_health(socket_dir / "missing.sock")
     fake_ocr.stop()
     assert not check_health(fake_ocr.socket_path)
 
 
-def test_never_replaces_a_socket_that_answers(fake_ocr):
+def test_never_replaces_a_socket_that_answers(fake_ocr: FakeOcrServer) -> None:
     intruder = FakeOcrServer(fake_ocr.socket_path)
     with pytest.raises(RuntimeError, match="served by another process"):
         intruder.start()
@@ -92,7 +93,7 @@ def test_never_replaces_a_socket_that_answers(fake_ocr):
     assert check_health(fake_ocr.socket_path)
 
 
-def test_replaces_a_stale_socket(socket_dir):
+def test_replaces_a_stale_socket(socket_dir: Path) -> None:
     path = socket_dir / "ocr.sock"
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as stale:
         stale.bind(str(path))  # the file stays after close, with nobody listening
@@ -105,7 +106,7 @@ def test_replaces_a_stale_socket(socket_dir):
     assert not path.exists()
 
 
-def test_never_replaces_a_file_that_is_not_a_socket(socket_dir):
+def test_never_replaces_a_file_that_is_not_a_socket(socket_dir: Path) -> None:
     path = socket_dir / "ocr.sock"
     path.write_text("not a socket")
     with pytest.raises(RuntimeError, match="not a socket"):
@@ -113,7 +114,7 @@ def test_never_replaces_a_file_that_is_not_a_socket(socket_dir):
     assert path.read_text() == "not a socket"
 
 
-def run_command_line(monkeypatch, socket_path, project):
+def run_command_line(monkeypatch: pytest.MonkeyPatch, socket_path: Path, project: str) -> str | int | None:
     monkeypatch.setenv("SCANMYLIB_PROJECT", project)
     monkeypatch.setattr(sys, "argv", ["fake_ocr", "--socket", str(socket_path)])
     with pytest.raises(SystemExit) as exit_info:
@@ -121,11 +122,11 @@ def run_command_line(monkeypatch, socket_path, project):
     return exit_info.value.code
 
 
-def test_never_runs_in_the_production_stack(monkeypatch, socket_dir):
+def test_never_runs_in_the_production_stack(monkeypatch: pytest.MonkeyPatch, socket_dir: Path) -> None:
     assert run_command_line(monkeypatch, socket_dir / "ocr.sock", "scanmylib") == 1
     assert not (socket_dir / "ocr.sock").exists()
 
 
-def test_command_line_leaves_a_sandbox_that_answers(monkeypatch, fake_ocr):
+def test_command_line_leaves_a_sandbox_that_answers(monkeypatch: pytest.MonkeyPatch, fake_ocr: FakeOcrServer) -> None:
     assert run_command_line(monkeypatch, fake_ocr.socket_path, "scanmylib-dev") == 1
     assert check_health(fake_ocr.socket_path)

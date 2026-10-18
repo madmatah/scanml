@@ -5,16 +5,21 @@ from __future__ import annotations
 import dataclasses
 import errno
 import os
+from pathlib import Path
+from typing import Never, Self
 
 import pytest
 from fastapi.testclient import TestClient
+from starlette.datastructures import FormData
 from starlette.formparsers import MultiPartParser
-from support import AUTH, TOKEN, create_document, jpeg, new_id, upload
 
 from scanmylib import __version__
 from scanmylib.app import create_app
 from scanmylib.auth import load_or_create_token
+from scanmylib.config import Settings
+from scanmylib.devtools.fake_ocr import FakeOcrServer
 from scanmylib.images import MAX_UPLOAD_BYTES
+from support import AUTH, TOKEN, create_document, jpeg, new_id, upload
 
 PROTECTED = [
     ("GET", "/api/status"),
@@ -36,14 +41,14 @@ PROTECTED = [
 ]
 
 
-def test_health_is_public(client):
+def test_health_is_public(client: TestClient) -> None:
     response = client.get("/api/health")
     assert response.status_code == 200
     assert response.json() == {"name": "ScanMyLib", "version": __version__, "api": 1, "apk": None}
 
 
 @pytest.mark.parametrize(("method", "path"), PROTECTED)
-def test_protected_routes_require_a_credential(client, method, path):
+def test_protected_routes_require_a_credential(client: TestClient, method: str, path: str) -> None:
     for headers in (
         {},
         {"Authorization": "Bearer wrong"},
@@ -55,11 +60,11 @@ def test_protected_routes_require_a_credential(client, method, path):
         assert response.json() == {"detail": "unauthorized"}
 
 
-def test_bearer_token_grants_access(client):
+def test_bearer_token_grants_access(client: TestClient) -> None:
     assert client.get("/api/documents", headers=AUTH).json() == {"documents": []}
 
 
-def test_web_session_cookie_and_csrf_header(client):
+def test_web_session_cookie_and_csrf_header(client: TestClient) -> None:
     assert client.post("/api/session", json={"token": "wrong"}).status_code == 401
     response = client.post("/api/session", json={"token": TOKEN})
     assert response.status_code == 204
@@ -88,11 +93,11 @@ def test_web_session_cookie_and_csrf_header(client):
     assert client.get("/api/documents", headers={"Cookie": f"scanmylib_session={session_id}"}).status_code == 401
 
 
-def test_phone_requests_with_bearer_need_no_csrf_header(client):
+def test_phone_requests_with_bearer_need_no_csrf_header(client: TestClient) -> None:
     assert client.put(f"/api/documents/{new_id()}", json={"title": "From the phone"}, headers=AUTH).status_code == 201
 
 
-def test_sessions_end_when_the_token_is_regenerated(settings, fake_ocr):
+def test_sessions_end_when_the_token_is_regenerated(settings: Settings, fake_ocr: FakeOcrServer) -> None:
     with TestClient(create_app(settings)) as first:
         assert first.post("/api/session", json={"token": TOKEN}).status_code == 204
         cookie = first.cookies["scanmylib_session"]
@@ -100,7 +105,7 @@ def test_sessions_end_when_the_token_is_regenerated(settings, fake_ocr):
         assert second.get("/api/documents", headers={"Cookie": f"scanmylib_session={cookie}"}).status_code == 401
 
 
-def test_token_is_generated_once_and_kept(settings, fake_ocr):
+def test_token_is_generated_once_and_kept(settings: Settings, fake_ocr: FakeOcrServer) -> None:
     generated = dataclasses.replace(settings, token=None)
     with TestClient(create_app(generated)) as client:
         token = generated.token_path.read_text().strip()
@@ -112,7 +117,7 @@ def test_token_is_generated_once_and_kept(settings, fake_ocr):
 
 
 @pytest.mark.parametrize("content", ["", "\n", "  \n"])
-def test_an_empty_token_file_gets_a_new_token(settings, fake_ocr, content):
+def test_an_empty_token_file_gets_a_new_token(settings: Settings, fake_ocr: FakeOcrServer, content: str) -> None:
     # E.g. left by a crash or a full disk during the first start: it used to
     # become the token, and an empty login opened a session for anyone.
     generated = dataclasses.replace(settings, token=None)
@@ -127,21 +132,21 @@ def test_an_empty_token_file_gets_a_new_token(settings, fake_ocr, content):
     assert oct(generated.token_path.stat().st_mode & 0o777) == "0o600"
 
 
-def test_a_failed_token_write_leaves_no_token_file(tmp_path, monkeypatch):
+def test_a_failed_token_write_leaves_no_token_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     path = tmp_path / "state" / "token"
     fdopen = os.fdopen
 
     class FullDisk:
-        def __init__(self, fd, *args, **kwargs):
-            self._stream = fdopen(fd, *args, **kwargs)
+        def __init__(self, fd: int, mode: str, encoding: str) -> None:
+            self._stream = fdopen(fd, mode, encoding=encoding)
 
-        def __enter__(self):
+        def __enter__(self) -> Self:
             return self
 
-        def __exit__(self, *exc_info):
+        def __exit__(self, *exc_info: object) -> None:
             self._stream.close()
 
-        def write(self, data):
+        def write(self, data: str) -> Never:
             raise OSError(errno.ENOSPC, "No space left on device")
 
     monkeypatch.setattr(os, "fdopen", FullDisk)
@@ -153,7 +158,7 @@ def test_a_failed_token_write_leaves_no_token_file(tmp_path, monkeypatch):
     assert len(token) >= 43 and path.read_text().strip() == token
 
 
-def test_security_headers(client):
+def test_security_headers(client: TestClient) -> None:
     for path in ("/", "/api/health", "/api/documents"):
         headers = client.get(path, headers=AUTH).headers
         assert headers["content-security-policy"].startswith("default-src 'self'")
@@ -164,16 +169,16 @@ def test_security_headers(client):
     assert client.get("/api/documents", headers=AUTH).headers["cache-control"] == "no-store"
 
 
-def test_api_documentation_is_not_exposed(client):
+def test_api_documentation_is_not_exposed(client: TestClient) -> None:
     for path in ("/docs", "/redoc", "/openapi.json"):
         assert client.get(path).status_code == 404
 
 
-def test_upload_bodies_are_not_read_before_authentication(client, monkeypatch):
-    parsed = []
+def test_upload_bodies_are_not_read_before_authentication(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    parsed: list[MultiPartParser] = []
     parse = MultiPartParser.parse
 
-    async def recording_parse(self):
+    async def recording_parse(self: MultiPartParser) -> FormData:
         parsed.append(self)
         return await parse(self)
 
@@ -188,7 +193,7 @@ def test_upload_bodies_are_not_read_before_authentication(client, monkeypatch):
     assert len(parsed) == 1
 
 
-def test_unencodable_json_input_gets_a_validation_error(client):
+def test_unencodable_json_input_gets_a_validation_error(client: TestClient) -> None:
     # The 422 response used to echo the invalid input, which failed to encode (500).
     json_type = {"Content-Type": "application/json"}
     login = client.post("/api/session", content=b'{"token": "\\ud800"}', headers=json_type)
@@ -206,7 +211,7 @@ def test_unencodable_json_input_gets_a_validation_error(client):
     assert client.post("/api/session", content='{"token": "é"}'.encode(), headers=json_type).status_code == 401
 
 
-def test_request_bodies_are_limited(client):
+def test_request_bodies_are_limited(client: TestClient) -> None:
     assert (
         client.post(
             "/api/session", content=b"{" + b" " * (2 * 1024 * 1024) + b"}", headers={"Content-Type": "application/json"}
@@ -219,7 +224,7 @@ def test_request_bodies_are_limited(client):
     assert response.headers["content-security-policy"]
 
 
-def test_web_ui_placeholder_then_files(client, settings):
+def test_web_ui_placeholder_then_files(client: TestClient, settings: Settings) -> None:
     placeholder = client.get("/")
     assert placeholder.status_code == 200 and "the web UI is not installed" in placeholder.text
     static = settings.web_dir / "static"
@@ -233,7 +238,7 @@ def test_web_ui_placeholder_then_files(client, settings):
     assert client.get("/static/%2e%2e/index.html").status_code == 404
 
 
-def test_apk_download_and_pairing(client, settings):
+def test_apk_download_and_pairing(client: TestClient, settings: Settings) -> None:
     assert client.get("/download/scanmylib.apk").status_code == 404
     pairing = client.get("/api/pairing", headers=AUTH).json()
     assert pairing == {

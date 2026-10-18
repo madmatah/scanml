@@ -8,6 +8,7 @@ import sqlite3
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import TypedDict
 
 from .ordering import Coverage, PageInput, PageNumber
 
@@ -37,7 +38,7 @@ class DocumentRecord:
     unwarp: bool
     created_at: str
     updated_at: str
-    stats: dict
+    stats: dict[str, int]
     coverage: Coverage
     cover_page_id: str | None
     pages_in_document: int
@@ -66,6 +67,15 @@ class DocumentRecord:
         )
 
 
+class OcrSummary(TypedDict):
+    engine: str
+    model: str
+    duration_s: float
+    at: str
+    images: int
+    chars: int
+
+
 @dataclass(frozen=True)
 class PageRecord:
     id: str
@@ -88,7 +98,7 @@ class PageRecord:
     hint_number: int | None
     manual_number: int | None
     detected_numbers: tuple[str, ...]
-    ocr: dict | None
+    ocr: OcrSummary | None
     #: Place on the number line chosen by the user (PUT /api/documents/{id}/order).
     position: float | None
     number: PageNumber | None

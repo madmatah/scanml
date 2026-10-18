@@ -28,7 +28,7 @@ def _document(services: Services, document_id: str) -> DocumentRecord:
     return services.library.require_document(document_id)
 
 
-def _document_with_pages(services: Services, document: DocumentRecord) -> dict:
+def _document_with_pages(services: Services, document: DocumentRecord) -> dict[str, object]:
     return {
         **document_json(document, services.library),
         "pages": [page_json(page) for page in services.library.list_pages(document.id)],
@@ -36,13 +36,15 @@ def _document_with_pages(services: Services, document: DocumentRecord) -> dict:
 
 
 @router.get("")
-async def list_documents(services: ServicesDep) -> dict:
+async def list_documents(services: ServicesDep) -> dict[str, object]:
     library = services.library
     return {"documents": [document_json(d, library) for d in library.list_documents()]}
 
 
 @router.put("/{document_id}")
-async def put_document(document_id: str, body: DocumentBody, response: Response, services: ServicesDep) -> dict:
+async def put_document(
+    document_id: str, body: DocumentBody, response: Response, services: ServicesDep
+) -> dict[str, object]:
     require_uuid(document_id, "document id")
     document, created = await services.library.put_document(document_id, body.changes())
     response.status_code = 201 if created else 200
@@ -50,12 +52,12 @@ async def put_document(document_id: str, body: DocumentBody, response: Response,
 
 
 @router.get("/{document_id}")
-async def get_document(document_id: str, services: ServicesDep) -> dict:
+async def get_document(document_id: str, services: ServicesDep) -> dict[str, object]:
     return _document_with_pages(services, _document(services, document_id))
 
 
 @router.patch("/{document_id}")
-async def patch_document(document_id: str, body: DocumentBody, services: ServicesDep) -> dict:
+async def patch_document(document_id: str, body: DocumentBody, services: ServicesDep) -> dict[str, object]:
     document = services.library.update_document(document_id, body.changes())
     return document_json(document, services.library)
 
@@ -68,13 +70,13 @@ async def delete_document(document_id: str, services: ServicesDep) -> Response:
 
 
 @router.put("/{document_id}/order")
-async def put_page_order(document_id: str, body: PageOrderBody, services: ServicesDep) -> dict:
+async def put_page_order(document_id: str, body: PageOrderBody, services: ServicesDep) -> dict[str, object]:
     """Reading order chosen by the user; 409 if `page_ids` is not exactly the current reading order."""
     return _document_with_pages(services, services.library.reorder_pages(document_id, body.page_ids))
 
 
 @router.delete("/{document_id}/order")
-async def delete_page_order(document_id: str, services: ServicesDep) -> dict:
+async def delete_page_order(document_id: str, services: ServicesDep) -> dict[str, object]:
     """Back to the automatic order (page numbers, scanning sessions)."""
     return _document_with_pages(services, services.library.clear_page_order(document_id))
 
@@ -87,7 +89,7 @@ async def document_markdown(document_id: str, services: ServicesDep) -> Response
 
 
 @router.get("/{document_id}/html")
-async def document_html(document_id: str, services: ServicesDep) -> dict:
+async def document_html(document_id: str, services: ServicesDep) -> dict[str, object]:
     document = _document(services, document_id)
     return {"html": await services.library.document_html(document)}
 

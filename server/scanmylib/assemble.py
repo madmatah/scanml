@@ -16,8 +16,9 @@ import re
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from itertools import pairwise
+from typing import TypedDict
 
-from .ordering import PLACEMENT_UNPLACED, Coverage, PageNumber, format_range
+from .ordering import PLACEMENT_UNPLACED, Coverage, CoverageJson, PageNumber, format_range
 from .text import collation_key
 
 # Image references in a page file (pages/<key>.md) are relative to pages/.
@@ -60,6 +61,69 @@ class PageEntry:
     @property
     def label(self) -> str | None:
         return self.number.label if self.number else None
+
+
+class PageFilesMetadata(TypedDict):
+    scan: str
+    markdown: str | None
+    ocr: str | None
+    images: list[str]
+
+
+class PageMetadata(TypedDict):
+    id: str
+    key: str
+    label: str | None
+    number: int | None
+    number_end: int | None
+    front_matter: bool
+    number_source: str | None
+    status: str
+    in_document: bool
+    position: float | None
+    placement: str | None
+    excluded: bool
+    duplicate_of: str | None
+    session_id: str | None
+    seq: int | None
+    captured_at: str
+    ocr_engine: str | None
+    files: PageFilesMetadata
+
+
+class DocumentMetadata(TypedDict):
+    id: str
+    slug: str
+    title: str
+    author: str
+    kind: str
+    notes: str
+    created_at: str
+    updated_at: str
+    source: str
+    pages_scanned: int
+    coverage: CoverageJson
+    markdown: str
+    pages: list[PageMetadata]
+
+
+class IndexEntryMetadata(TypedDict):
+    id: str
+    slug: str
+    title: str
+    author: str
+    kind: str
+    notes: str
+    created_at: str
+    updated_at: str
+    markdown: str
+    pages_scanned: int
+    coverage: CoverageJson
+
+
+class IndexMetadata(TypedDict):
+    generated_at: str
+    documents: list[IndexEntryMetadata]
 
 
 @dataclass(frozen=True)
@@ -180,7 +244,7 @@ def render_document_markdown(
     return "\n".join(lines).rstrip("\n") + "\n"
 
 
-def _page_metadata(page: PageEntry) -> dict:
+def _page_metadata(page: PageEntry) -> PageMetadata:
     done = page.status == "done"
     return {
         "id": page.id,
@@ -216,7 +280,7 @@ def render_document_metadata(
     source: str,
     pages_scanned: int,
     coverage: Coverage,
-) -> dict:
+) -> DocumentMetadata:
     """Content of document.json. `pages`: every page, in the API's page order."""
     return {
         "id": meta.id,
@@ -288,7 +352,7 @@ def render_index_markdown(entries: Sequence[IndexEntry], generated_at: str) -> s
     return "\n".join(lines) + "\n"
 
 
-def render_index_metadata(entries: Sequence[IndexEntry], generated_at: str) -> dict:
+def render_index_metadata(entries: Sequence[IndexEntry], generated_at: str) -> IndexMetadata:
     """Content of library.json."""
     return {
         "generated_at": generated_at,

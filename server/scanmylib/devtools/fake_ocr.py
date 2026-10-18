@@ -48,6 +48,7 @@ import zlib
 from datetime import UTC, datetime
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
+from typing import Any, TypedDict
 from urllib.parse import parse_qs, urlsplit
 
 log = logging.getLogger("fake_ocr")
@@ -58,6 +59,16 @@ PRODUCTION_PROJECT = "scanmylib"
 _ACCEPTED_TYPES = {"image/jpeg", "image/png", "image/webp"}
 _FIGURE_NAME = "img_in_image_box_120_340_980_900.png"
 _ROMAN = ((100, "c"), (90, "xc"), (50, "l"), (40, "xl"), (10, "x"), (9, "ix"), (5, "v"), (4, "iv"), (1, "i"))
+
+# A parse response is decoded JSON for the api, which takes nothing in it for granted: tests reshape it at will into
+# malformed and hostile responses.
+ParseResponse = dict[str, Any]
+
+
+class ParseRequest(TypedDict):
+    width: int
+    height: int
+    params: dict[str, str]
 
 
 def image_size(data: bytes) -> tuple[int, int] | None:
@@ -122,7 +133,7 @@ def _now() -> str:
     return datetime.now(UTC).isoformat(timespec="seconds")
 
 
-def canned_page(width: int, height: int, request_id: str | None) -> dict:
+def canned_page(width: int, height: int, request_id: str | None) -> ParseResponse:
     """The parse response for an image of the given size (see the module docstring)."""
     number = height % 1000
     variant = width % 10
@@ -182,7 +193,7 @@ def canned_page(width: int, height: int, request_id: str | None) -> dict:
     }
 
 
-def evil_page(width: int, height: int, request_id: str | None) -> dict:
+def evil_page(width: int, height: int, request_id: str | None) -> ParseResponse:
     """A hostile response: markup injection, bad image names, a non-image payload."""
     page = canned_page(width, height, request_id)
     page["markdown"] = (
@@ -217,7 +228,7 @@ class FakeOcrServer:
         self.evil = False
         #: Raw body of every /health and /v1/load answer when set (hostile sandbox tests).
         self.status_body: bytes | None = None
-        self.requests: list[dict] = []  # one entry per /v1/parse call
+        self.requests: list[ParseRequest] = []  # one entry per /v1/parse call
         self.load_requests = 0
         self._failures: list[int] = []
         self._state = "idle"
@@ -252,7 +263,7 @@ class FakeOcrServer:
         time.sleep(self.load_delay)
         self._set_state("ready")
 
-    def health(self) -> dict:
+    def health(self) -> dict[str, object]:
         with self._state_lock:
             return {
                 "status": "ok",
@@ -270,7 +281,7 @@ class FakeOcrServer:
                 "gpu": None,
             }
 
-    def load(self) -> tuple[int, dict]:
+    def load(self) -> tuple[int, dict[str, object]]:
         with self._state_lock:
             self.load_requests += 1
         if self.unavailable:
@@ -280,12 +291,12 @@ class FakeOcrServer:
         threading.Thread(target=self._ensure_loaded, daemon=True).start()
         return 202, {"state": "starting"}
 
-    def unload(self) -> tuple[int, dict]:
+    def unload(self) -> tuple[int, dict[str, object]]:
         with self._work_lock:
             self._set_state("idle")
         return 200, {"state": "idle"}
 
-    def parse(self, body: bytes, content_type: str, params: dict[str, str]) -> tuple[int, dict]:
+    def parse(self, body: bytes, content_type: str, params: dict[str, str]) -> tuple[int, dict[str, object]]:
         if content_type not in _ACCEPTED_TYPES:
             return 415, {"error": "unsupported_type", "detail": content_type}
         size = image_size(body)
@@ -328,9 +339,8 @@ class FakeOcrServer:
             if socket_in_use(self.socket_path):
                 raise RuntimeError(f"{self.socket_path} is served by another process (the OCR sandbox?)")
             self.socket_path.unlink()  # stale socket of a previous run
-        server = _UnixHTTPServer(str(self.socket_path), _Handler)
+        server = _UnixHTTPServer(str(self.socket_path), self)
         self._bound = True
-        server.fake = self  # type: ignore[attr-defined]
         os.chmod(self.socket_path, 0o660)
         return server
 
@@ -369,22 +379,27 @@ class FakeOcrServer:
 class _UnixHTTPServer(socketserver.ThreadingUnixStreamServer):
     daemon_threads = True
 
+    def __init__(self, socket_path: str, fake: FakeOcrServer) -> None:
+        super().__init__(socket_path, _Handler)
+        self.fake = fake
+
 
 class _Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
     server_version = "FakeOCR/1"
+    server: _UnixHTTPServer
 
     @property
     def fake(self) -> FakeOcrServer:
-        return self.server.fake  # type: ignore[attr-defined]
+        return self.server.fake
 
     def address_string(self) -> str:  # Unix sockets have no client address
         return "unix"
 
-    def log_message(self, format: str, *args: object) -> None:
+    def log_message(self, format: str, *args: object) -> None:  # noqa: A002 (stdlib signature)
         log.debug("%s %s", self.address_string(), format % args)
 
-    def _reply(self, status: int, payload: dict) -> None:
+    def _reply(self, status: int, payload: dict[str, object]) -> None:
         self._reply_raw(status, json.dumps(payload).encode())
 
     def _reply_raw(self, status: int, body: bytes) -> None:

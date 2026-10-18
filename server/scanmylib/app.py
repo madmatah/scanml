@@ -6,7 +6,6 @@ import json
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.encoders import jsonable_encoder
@@ -47,7 +46,7 @@ _ERROR_STATUS: dict[type[Exception], int] = {
 class _AsciiJSONResponse(JSONResponse):
     """JSON with non-ASCII characters escaped: lone surrogates cannot be encoded in UTF-8."""
 
-    def render(self, content: Any) -> bytes:
+    def render(self, content: object) -> bytes:
         return json.dumps(content, allow_nan=False, separators=(",", ":")).encode("ascii")
 
 

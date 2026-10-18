@@ -6,12 +6,13 @@ import random
 import re
 import time
 from html.parser import HTMLParser
+from typing import ClassVar, override
 
 import pytest
 from markdown_it import MarkdownIt
 
 from scanmylib import sanitize
-from scanmylib.assemble import GapSection, PageSection, UnnumberedHeading
+from scanmylib.assemble import GapSection, PageSection, Section, UnnumberedHeading
 from scanmylib.preview import MAX_RENDERED_LENGTH, render_document, render_markdown
 from scanmylib.sanitize import MarkdownTooLarge, is_safe_image_name, sanitize_markdown
 
@@ -28,6 +29,12 @@ def clean(text: str) -> str:
     return sanitize_markdown(text, resolve)
 
 
+class AnyLinkMarkdownIt(MarkdownIt):
+    @override
+    def validateLink(self, url: str) -> bool:
+        return True
+
+
 class Markup(HTMLParser):
     """Collects what a browser would see as markup."""
 
@@ -36,21 +43,21 @@ class Markup(HTMLParser):
         self.tags: list[tuple[str, list[tuple[str, str | None]]]] = []
         self.other: list[str] = []
 
-    def handle_starttag(self, tag, attrs):
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         self.tags.append((tag, attrs))
 
     handle_startendtag = handle_starttag
 
-    def handle_comment(self, data):
+    def handle_comment(self, data: str) -> None:
         self.other.append(f"comment:{data}")
 
-    def handle_decl(self, decl):
+    def handle_decl(self, decl: str) -> None:
         self.other.append(f"decl:{decl}")
 
-    def handle_pi(self, data):
+    def handle_pi(self, data: str) -> None:
         self.other.append(f"pi:{data}")
 
-    def unknown_decl(self, data):
+    def unknown_decl(self, data: str) -> None:
         self.other.append(f"unknown:{data}")
 
 
@@ -67,9 +74,9 @@ _SERIALIZED_TAG = re.compile(r'</?([a-z0-9]+)(?: [a-z]+="[^"<>]*")*(?: /)?>')
 def assert_safe_markdown(output: str) -> None:
     """Structural invariants of sanitized Markdown."""
     for match in re.finditer(r"<(?=[A-Za-z/!?])", output):
-        tag = _SERIALIZED_TAG.match(output, match.start())
-        assert tag, f"unexpected markup at {output[match.start() : match.start() + 40]!r}"
-        assert tag[1] in sanitize._ALLOWED_TAGS
+        serialized_tag = _SERIALIZED_TAG.match(output, match.start())
+        assert serialized_tag, f"unexpected markup at {output[match.start() : match.start() + 40]!r}"
+        assert serialized_tag[1] in sanitize._ALLOWED_TAGS
     parsed = markup(output)
     assert parsed.other == []
     for tag, attributes in parsed.tags:
@@ -93,11 +100,10 @@ def assert_safe_markdown(output: str) -> None:
             if name == "src":
                 assert value in IMAGES.values()
             if name == "style":
-                assert re.fullmatch(r"text-align: (left|right|center|justify);", value)
+                assert value is not None and re.fullmatch(r"text-align: (left|right|center|justify);", value)
     # Markdown links/images only to page images, whatever the renderer's URL policy.
-    lenient = MarkdownIt("commonmark")
-    lenient.validateLink = lambda url: True
-    rendered = markup(lenient.render(output))
+    renderer = AnyLinkMarkdownIt("commonmark")
+    rendered = markup(renderer.render(output))
     for tag, attributes in rendered.tags:
         for name, value in attributes:
             if name in ("href", "src"):
@@ -128,7 +134,7 @@ def assert_safe_html(html: str) -> None:
             if name == "class":  # only the marks of formulas, typeset by the web UI
                 assert (tag, value) in {("div", "math-display"), ("span", "math-inline")}, (tag, value)
             if name in ("src", "href"):
-                assert value.startswith(f"{FILES_URL}/images/"), value
+                assert value is not None and value.startswith(f"{FILES_URL}/images/"), value
 
 
 # -- removal of dangerous markup ------------------------------------------------------
@@ -149,11 +155,11 @@ def assert_safe_html(html: str) -> None:
         "a<noscript><img src=x onerror=alert(1)></noscript>b",
     ],
 )
-def test_script_like_elements_are_dropped_with_their_content(payload):
+def test_script_like_elements_are_dropped_with_their_content(payload: str) -> None:
     assert clean(payload) == "ab"
 
 
-def test_unclosed_script_drops_everything_after_it():
+def test_unclosed_script_drops_everything_after_it() -> None:
     assert clean("before<script>alert(1) and the rest") == "before"
 
 
@@ -168,23 +174,23 @@ def test_unclosed_script_drops_everything_after_it():
         "<select><option>1</option></select>",
     ],
 )
-def test_forms_and_document_level_tags_are_removed(payload):
+def test_forms_and_document_level_tags_are_removed(payload: str) -> None:
     output = clean(payload)
     assert "<" not in output.replace("< ", "")
     assert_safe_markdown(output)
 
 
-def test_event_handlers_and_unknown_images_are_removed():
+def test_event_handlers_and_unknown_images_are_removed() -> None:
     assert clean('<img src=x onerror="alert(1)">') == ""
     assert clean('<p onclick="alert(1)" id="x" class="y">Text</p>') == "<p>Text</p>"
 
 
-def test_page_images_are_rewritten_and_cleaned():
+def test_page_images_are_rewritten_and_cleaned() -> None:
     output = clean('<img src="imgs/a.jpg" onerror="alert(1)" alt="Figure" width="61%" srcset="x 2x" />')
     assert output == '<img src="../images/K_1.jpg" alt="Figure" width="61%" />'
 
 
-def test_image_names_are_compared_after_entity_decoding():
+def test_image_names_are_compared_after_entity_decoding() -> None:
     assert clean('<img src="imgs/a&#46;jpg">') == '<img src="../images/K_1.jpg" />'
 
 
@@ -201,14 +207,14 @@ def test_image_names_are_compared_after_entity_decoding():
         "imgs/unknown.jpg",
     ],
 )
-def test_images_can_only_target_the_page_images(src):
+def test_images_can_only_target_the_page_images(src: str) -> None:
     assert clean(f'<img src="{src}">') == ""
     output = clean(f"![x]({src})")
     assert output.startswith("![x]\\(")
     assert_safe_markdown(output)
 
 
-def test_styles_keep_only_text_alignment():
+def test_styles_keep_only_text_alignment() -> None:
     assert clean('<div style="text-align: center; background: url(javascript:alert(1))">x</div>') == (
         '<div style="text-align: center;">x</div>'
     )
@@ -216,14 +222,14 @@ def test_styles_keep_only_text_alignment():
     assert clean('<div style="background:url(x);text-align:right">x</div>') == '<div style="text-align: right;">x</div>'
 
 
-def test_links_are_unwrapped_and_markdown_links_neutralized():
+def test_links_are_unwrapped_and_markdown_links_neutralized() -> None:
     assert clean('<a href="javascript:alert(1)">click</a>') == "click"
     output = clean("[click](javascript:alert(1)) [web](https://evil.example)")
     assert "](" not in output
     assert_safe_markdown(output)
 
 
-def test_markdown_page_images_are_rewritten():
+def test_markdown_page_images_are_rewritten() -> None:
     assert clean("![Figure 1](imgs/a.jpg)") == "![Figure 1](../images/K_1.jpg)"
     assert clean('![Figure](imgs/fig.png "title")') == '![Figure](../images/K_2.jpg "title")'
     assert clean("![Figure](<imgs/fig.png>)") == "![Figure]\\(< imgs/fig.png>)"  # unusual form: text
@@ -238,13 +244,13 @@ def test_markdown_page_images_are_rewritten():
         "<<</b>svg onload=alert(1)>",
     ],
 )
-def test_removed_markup_cannot_join_a_bare_angle_bracket_to_a_tag(payload):
+def test_removed_markup_cannot_join_a_bare_angle_bracket_to_a_tag(payload: str) -> None:
     output = clean(payload)
     assert "<img" not in output and "<svg" not in output
     assert_safe_markdown(output)
 
 
-def test_reference_definitions_are_neutralized():
+def test_reference_definitions_are_neutralized() -> None:
     output = clean("[x][a]\n\n[a]: javascript:alert(1)\n")
     assert "]\\:" in output
     assert_safe_markdown(output)
@@ -260,13 +266,13 @@ def test_reference_definitions_are_neutralized():
         "## Title\n[a]: https://evil.example/p.png 'title'\n![x][a]",
     ],
 )
-def test_reference_definitions_inside_other_blocks_are_neutralized(payload):
+def test_reference_definitions_inside_other_blocks_are_neutralized(payload: str) -> None:
     output = clean(payload)
     assert "]\\:" in output
     assert_safe_markdown(output)
 
 
-def test_hostile_markdown_is_sanitized_quickly():
+def test_hostile_markdown_is_sanitized_quickly() -> None:
     # Finding reference definitions used to parse inline syntax too: a minute for this.
     payload = "[" * (sanitize.MAX_MARKDOWN_BYTES - 1)
     started = time.monotonic()
@@ -274,12 +280,12 @@ def test_hostile_markdown_is_sanitized_quickly():
     assert time.monotonic() - started < 10
 
 
-def test_entity_encoded_javascript_links_are_neutralized():
+def test_entity_encoded_javascript_links_are_neutralized() -> None:
     output = clean("[x](&#106;avascript:alert(1)) [y](jav&#x09;ascript:alert(1))")
     assert_safe_markdown(output)
 
 
-def test_comments_are_removed_so_page_markers_cannot_be_faked():
+def test_comments_are_removed_so_page_markers_cannot_be_faked() -> None:
     assert clean("a<!-- page 3 · scan 20261012-000000_deadbeef -->b") == "ab"
     assert clean("a<!-- never closed") == "a"
 
@@ -296,53 +302,55 @@ def test_comments_are_removed_so_page_markers_cannot_be_faked():
         ("<svg:script>alert(1)</svg:script>", "< svg:script>alert(1)< /svg:script>"),
     ],
 )
-def test_broken_or_exotic_markup_becomes_text(payload, expected):
+def test_broken_or_exotic_markup_becomes_text(payload: str, expected: str) -> None:
     output = clean(payload)
     assert output == expected
     assert_safe_markdown(output)
 
 
-def test_plain_text_and_math_keep_their_meaning():
+def test_plain_text_and_math_keep_their_meaning() -> None:
     assert clean("a < b and c > d") == "a < b and c > d"
     assert clean("$x<y$ and $0<\\epsilon$") == "$x< y$ and $0<\\epsilon$"
 
 
-def test_control_characters_and_line_endings_are_normalized():
+def test_control_characters_and_line_endings_are_normalized() -> None:
     assert clean("a\x00b\x1bc\r\nd\re\u2028f") == "abc\nd\nef"
 
 
-def test_legitimate_ocr_markup_is_preserved():
+def test_legitimate_ocr_markup_is_preserved() -> None:
     source = (
         "## Chapter 1\n\nAccented text: “a naïve café résumé”, a façade, a phœnix.\n\n"
         '<div style="text-align: center;"><img src="imgs/fig.png" alt="Image" width="40%" /></div>\n\n'
-        "<table border=1><tr><td colspan=2>Wood</td></tr><tr><td>Oak</td><td>H<sub>2</sub>O<br>x<sup>2</sup></td></tr></table>\n"
+        "<table border=1><tr><td colspan=2>Wood</td></tr>"
+        "<tr><td>Oak</td><td>H<sub>2</sub>O<br>x<sup>2</sup></td></tr></table>\n"
     )
     expected = (
         "## Chapter 1\n\nAccented text: “a naïve café résumé”, a façade, a phœnix.\n\n"
         '<div style="text-align: center;"><img src="../images/K_2.jpg" alt="Image" width="40%" /></div>\n\n'
-        '<table border="1"><tr><td colspan="2">Wood</td></tr><tr><td>Oak</td><td>H<sub>2</sub>O<br />x<sup>2</sup></td></tr></table>\n'
+        '<table border="1"><tr><td colspan="2">Wood</td></tr>'
+        "<tr><td>Oak</td><td>H<sub>2</sub>O<br />x<sup>2</sup></td></tr></table>\n"
     )
     assert clean(source) == expected
 
 
-def test_oversized_markdown_is_refused():
+def test_oversized_markdown_is_refused() -> None:
     with pytest.raises(MarkdownTooLarge):
         clean("x" * (sanitize.MAX_MARKDOWN_BYTES + 1))
 
 
-def test_very_long_tags_are_treated_as_text():
+def test_very_long_tags_are_treated_as_text() -> None:
     output = clean("<div " + "a=b " * 10_000 + ">end")
     assert output.startswith("< div")
     assert_safe_markdown(output)
 
 
 @pytest.mark.parametrize("name", ["img_in_image_box_93_1129_1104_1716.jpg", "a.png", "A-b_c.9"])
-def test_safe_image_names(name):
+def test_safe_image_names(name: str) -> None:
     assert is_safe_image_name(name)
 
 
 @pytest.mark.parametrize("name", ["", "..", "../x.jpg", "a/b.jpg", "a\\b.jpg", "x" * 129, "é.jpg", "a b.jpg", "a..jpg"])
-def test_unsafe_image_names(name):
+def test_unsafe_image_names(name: str) -> None:
     assert not is_safe_image_name(name)
 
 
@@ -419,7 +427,7 @@ _FRAGMENTS = [
 ]
 
 
-def test_fuzzed_hostile_markdown_is_always_safe():
+def test_fuzzed_hostile_markdown_is_always_safe() -> None:
     rng = random.Random(20261012)
     for _ in range(3000):
         payload = "".join(rng.choice(_FRAGMENTS) for _ in range(rng.randint(1, 30)))
@@ -431,7 +439,7 @@ def test_fuzzed_hostile_markdown_is_always_safe():
 # -- previews (preview.py) -----------------------------------------------------------
 
 
-def test_preview_points_images_to_the_files_endpoint():
+def test_preview_points_images_to_the_files_endpoint() -> None:
     html = render_markdown('![Figure](../images/K_1.jpg)\n\n<img src="images/K_2.jpg" alt="x" />', FILES_URL)
     assert f'src="{FILES_URL}/images/K_1.jpg"' in html
     assert f'src="{FILES_URL}/images/K_2.jpg"' in html
@@ -449,11 +457,11 @@ def test_preview_points_images_to_the_files_endpoint():
         "[x](../../../../etc/passwd)",
     ],
 )
-def test_preview_cleans_hand_edited_page_files(edited):
+def test_preview_cleans_hand_edited_page_files(edited: str) -> None:
     assert_safe_html(render_markdown(edited, FILES_URL))
 
 
-def test_oversized_page_previews_are_plain_text():
+def test_oversized_page_previews_are_plain_text() -> None:
     # markdown-it needed over a minute for 2 MiB of this; no OCR page is that long.
     markdown = "&#x" * (2 * 1024 * 1024 // 3) + "<script>alert(1)</script>"
     started = time.monotonic()
@@ -464,9 +472,9 @@ def test_oversized_page_previews_are_plain_text():
     assert render_markdown("x" * MAX_RENDERED_LENGTH, FILES_URL) == "<p>" + "x" * MAX_RENDERED_LENGTH + "</p>\n"
 
 
-def test_document_preview_structure():
+def test_document_preview_structure() -> None:
     pages = {"k1": "First text", "k2": "Second <b>text</b>", "k3": "No number", "k4": "Spread", "k5": "Preface"}
-    sections = [
+    sections: list[Section] = [
         PageSection("k1", "1"),
         GapSection(2, 4),
         PageSection("k2", "5"),
@@ -495,7 +503,10 @@ def test_document_preview_structure():
 class Formulas(HTMLParser):
     """Formulas marked in preview HTML, as ("display" or "inline", text), and the tags inside them."""
 
-    KINDS = {("div", "math-display"): "display", ("span", "math-inline"): "inline"}
+    KINDS: ClassVar[dict[tuple[str, str | None], str]] = {
+        ("div", "math-display"): "display",
+        ("span", "math-inline"): "inline",
+    }
 
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
@@ -504,21 +515,21 @@ class Formulas(HTMLParser):
         self.current: list[str] | None = None
         self.depth = 0
 
-    def handle_starttag(self, tag, attrs):
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         if self.current is not None:
             self.inner_tags.append(tag)
             self.depth += tag not in {"br", "hr", "img", "col"}
         elif kind := self.KINDS.get((tag, dict(attrs).get("class"))):
             self.current = [kind, ""]
 
-    def handle_endtag(self, tag):
+    def handle_endtag(self, tag: str) -> None:
         if self.current is not None and self.depth:
             self.depth -= 1
         elif self.current is not None:
             self.found.append((self.current[0], self.current[1]))
             self.current = None
 
-    def handle_data(self, data):
+    def handle_data(self, data: str) -> None:
         if self.current is not None:
             self.current[1] += data
 
@@ -543,7 +554,7 @@ def preview(markdown: str) -> str:
     return html
 
 
-def test_display_formulas_are_blocks():
+def test_display_formulas_are_blocks() -> None:
     assert preview(r"$$\frac{a}{b}=\sqrt{x^2+1}$$") == r'<div class="math-display">\frac{a}{b}=\sqrt{x^2+1}</div>'
     # As PaddleOCR-VL writes them: spaces inside the dollars.
     html = preview(r" $$ \begin{array}{c|c}{X=1}&{X=2,5}\\ {Y=7,5&{Y=8} \end{array} $$ " + "\n\nNext.")
@@ -553,7 +564,7 @@ def test_display_formulas_are_blocks():
     )
 
 
-def test_a_display_formula_ends_the_paragraph_it_is_in():
+def test_a_display_formula_ends_the_paragraph_it_is_in() -> None:
     assert preview("before $$x$$ after") == '<p>before </p><div class="math-display">x</div><p> after</p>\n'
     assert preview(r"\( x_1 \) and \[ y^2 \]") == (
         '<p><span class="math-inline">x_1</span> and </p><div class="math-display">y^2</div>'
@@ -567,7 +578,7 @@ def test_a_display_formula_ends_the_paragraph_it_is_in():
     assert parse_formulas(html).found == [("display", "x")]
 
 
-def test_multi_line_formulas_are_not_read_as_markdown():
+def test_multi_line_formulas_are_not_read_as_markdown() -> None:
     tex = "\\begin{aligned}\na &= b * c \\\\\n- d &= e_1 * f_2\n\\end{aligned}"
     html = preview(f"Let\n$$\n{tex}\n$$\nso *done*.")
     assert formulas(html) == [("display", tex)]
@@ -589,11 +600,11 @@ def test_multi_line_formulas_are_not_read_as_markdown():
         ),
     ],
 )
-def test_inline_formulas(markdown, expected):
+def test_inline_formulas(markdown: str, expected: str) -> None:
     assert preview(markdown) == expected
 
 
-def test_tex_reaches_the_web_ui_unchanged():
+def test_tex_reaches_the_web_ui_unchanged() -> None:
     tex = r"a_1 * b_2 = c_{n}^{*} \\ \{x\} \& \$ x & y \_ < 3"
     assert formulas(preview(f"${tex}$ and $${tex}$$")) == [("inline", tex), ("display", tex)]
     # The text of HTML table cells is escaped (PaddleOCR-VL's too): the TeX is what a browser reads.
@@ -617,7 +628,7 @@ def test_tex_reaches_the_web_ui_unchanged():
         "echo $HOME $PATH",
     ],
 )
-def test_dollars_that_are_not_formulas(text):
+def test_dollars_that_are_not_formulas(text: str) -> None:
     html = preview(text)
     assert formulas(html) == [] and html.count("$") == text.count("$")
 
@@ -635,7 +646,7 @@ def test_dollars_that_are_not_formulas(text):
         ("![figure $x$](../images/K_1.jpg)", f'<p><img src="{FILES_URL}/images/K_1.jpg" alt="figure $x$"></p>\n'),
     ],
 )
-def test_formulas_stay_in_a_paragraph_or_cell_and_out_of_code_and_attributes(markdown, expected):
+def test_formulas_stay_in_a_paragraph_or_cell_and_out_of_code_and_attributes(markdown: str, expected: str) -> None:
     assert preview(markdown) == expected
 
 
@@ -649,14 +660,14 @@ def test_formulas_stay_in_a_paragraph_or_cell_and_out_of_code_and_attributes(mar
         r"\includegraphics{https://evil.example/p.png}",
     ],
 )
-def test_hostile_tex_is_text(tex):
+def test_hostile_tex_is_text(tex: str) -> None:
     # Typeset by KaTeX with trust: false (web UI): no link, class, style or image comes of it.
     html = preview(f"Formula: ${tex}$")
     assert formulas(html) == [("inline", tex)]
     assert [tag for tag, _ in markup(html).tags] == ["p", "span"]
 
 
-def test_markup_in_a_formula_stays_text():
+def test_markup_in_a_formula_stays_text() -> None:
     payload = "</span><script>alert(1)</script><span>"
     html = preview("$" + payload.replace("<", "&lt;").replace(">", "&gt;") + "$")
     assert formulas(html) == [("inline", payload)]
@@ -667,7 +678,7 @@ def test_markup_in_a_formula_stays_text():
         assert formulas(html) == [] and "script" not in html
 
 
-def test_placeholders_of_formulas_cannot_be_forged():
+def test_placeholders_of_formulas_cannot_be_forged() -> None:
     assert preview("\ufdd00\ufdd1 and $y$ \ufdd1") == '<p>0 and <span class="math-inline">y</span></p>\n'
 
 
@@ -684,11 +695,11 @@ def test_placeholders_of_formulas_cannot_be_forged():
         ('<table><tr><td class="math-inline">x</td></tr></table>', "<table><tbody><tr><td>x</td></tr></tbody></table>"),
     ],
 )
-def test_previews_keep_no_class_but_the_marks_of_formulas(markdown, expected):
+def test_previews_keep_no_class_but_the_marks_of_formulas(markdown: str, expected: str) -> None:
     assert preview(markdown) == expected
 
 
-def test_formulas_of_a_paddleocr_vl_page():
+def test_formulas_of_a_paddleocr_vl_page() -> None:
     # Synthetic text shaped like a real PaddleOCR-VL result on an old printed page: units written as
     # superscripts after numbers, spaces inside the dollars, a table whose cells carry inline styles.
     page = (
@@ -700,7 +711,7 @@ def test_formulas_of_a_paddleocr_vl_page():
     assert formulas(preview(clean(page))) == [("inline", "^{th}"), ("inline", "^{m}"), ("inline", "42mq.17")]
 
 
-def test_fuzzed_formulas_are_well_formed():
+def test_fuzzed_formulas_are_well_formed() -> None:
     fragments = [
         "$",
         "$$",
@@ -748,7 +759,7 @@ def test_fuzzed_formulas_are_well_formed():
             assert set(inner_tags) <= {"a", "b", "code", "em", "i", "s", "small", "strike", "strong", "u"}, html
 
 
-def test_hostile_dollars_are_marked_quickly():
+def test_hostile_dollars_are_marked_quickly() -> None:
     for payload in ("\\[", "\\(", "$ a ", "5 $ ", "$$ a <b> ", "<code>$x$", "<a", "` $", "$x$ "):
         started = time.monotonic()
         render_markdown(payload * (MAX_RENDERED_LENGTH // len(payload)), FILES_URL)

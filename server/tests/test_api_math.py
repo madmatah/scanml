@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
-from support import AUTH, create_document, page_image, upload, wait_until_processed
+from pathlib import Path
+
+import pytest
+from fastapi.testclient import TestClient
 
 from scanmylib.devtools import fake_ocr
+from support import AUTH, create_document, page_image, upload, wait_until_processed
 
 DISPLAY = r"$$\frac{a}{b}=\sqrt{x^2+1}$$"
 # As PaddleOCR-VL writes a table read as a formula, with a missing brace (KaTeX cannot parse it).
@@ -12,10 +16,12 @@ BROKEN = r"$$ \begin{array}{c|c}{X=1}&{X=2,5}\\ {Y=7,5&{Y=8} \end{array} $$"
 MARKDOWN = f"## Formulas\n\n{DISPLAY}\n\nRésumé: $E=mc^2$. Prices: 5 $ and 10 $.\n\n{BROKEN}\n"
 
 
-def test_formulas_are_latex_in_the_library_and_marked_in_previews(client, library_dir, monkeypatch):
+def test_formulas_are_latex_in_the_library_and_marked_in_previews(
+    client: TestClient, library_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     canned_page = fake_ocr.canned_page
 
-    def page_with_formulas(width: int, height: int, request_id: str | None) -> dict:
+    def page_with_formulas(width: int, height: int, request_id: str | None) -> fake_ocr.ParseResponse:
         return {**canned_page(width, height, request_id), "markdown": MARKDOWN}
 
     monkeypatch.setattr(fake_ocr, "canned_page", page_with_formulas)

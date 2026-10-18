@@ -80,7 +80,9 @@ Each statement has one home, so that it never drifts from a copy.
 
 ## Skills
 
-- **A skill holds one procedure,** in `.claude/skills/<name>/SKILL.md`, and its `description` says when to use it.
+- **A skill holds one procedure,** in `.claude/skills/<name>/SKILL.md`. Its `description` is what Claude reads to decide
+  when to use the skill: in the third person, it says what the skill is for and when to use it, in the words a user
+  would say, and never lists its steps, which belong in the body.
 - **It cites the rules it applies** by file and heading, and does not restate them.
 
 ## Pull request template

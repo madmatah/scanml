@@ -150,12 +150,15 @@ fix_everything() {
 diff, fix the error, then run --fix again; first check the pinned image of a formatter that made a link or hid a change"
 }
 
+# The tests of the scripts spend their time starting processes, so they run in one process per core. The runner's own
+# tests run first through unittest itself: a runner that let every test pass would also let its own tests pass.
 check_scripts() {
-    python3 -m unittest discover -s "$ROOT/scripts/tests"
+    (cd -- "$ROOT/scripts/tests" && python3 -m unittest test_parallel_tests)
+    python3 "$ROOT/scripts/lib/parallel_tests.py" "$ROOT/scripts/tests"
 }
 
 check_integration() {
-    python3 -m unittest discover -s "$ROOT/scripts/integration_tests"
+    python3 "$ROOT/scripts/lib/parallel_tests.py" "$ROOT/scripts/integration_tests"
 }
 
 check_web() {

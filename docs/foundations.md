@@ -166,7 +166,7 @@ The modules as they are, and the layer each one belongs to, whose directory the 
 | OCR sandbox | `protocol`, `engines/base` | Messages between supervisor and worker, the interface of an engine | Application |
 | OCR sandbox | `manager`, `runtime`, `config`, `gpu`, `client` | Engine lifecycle and page queue, engine processes, settings, GPU readings, a client of the socket | Application and adapters |
 | OCR sandbox | `engines/paddleocr_vl`, `engines/images` | PaddleOCR-VL-1.6, and its image handling | Adapters |
-| scripts | `lib/stack.py`, `lib/version.py`, `lib/formatting.py`, `lib/common.sh` | The `.env` format, production's checkout and the isolation of a stack; the version of a build; what the gate hands to its formatters and linters, and what comes back; shared shell functions | Tools |
+| scripts | `lib/stack.py`, `lib/version.py`, `lib/formatting.py`, `lib/parallel_tests.py`, `lib/common.sh` | The `.env` format, production's checkout and the isolation of a stack; the version of a build; what the gate hands to its formatters and linters, and what comes back; the gate's parallel run of the tests of the scripts; shared shell functions | Tools |
 | scripts | `setup.sh`, `dev-env.sh`, `dev.sh`, `build-apk.sh`, `check.sh`, `deploy.sh`, `prod.sh`, `release.py`, `e2e_test.py`, `verify-sandbox.sh`, `vendor-katex.sh` | Install, develop, build the app, check, deploy, operate, release, test end to end, verify the sandbox, vendor KaTeX | Tools |
 
 ## Repository layout

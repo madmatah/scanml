@@ -1,0 +1,5 @@
+# The scripts source their libraries by paths relative to their own directory.
+source-path=SCRIPTDIR
+external-sources=true
+# .claude/rules/bash.md asks for [[ … ]], which ShellCheck checks only when asked.
+enable=require-double-brackets

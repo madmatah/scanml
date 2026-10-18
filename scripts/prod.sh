@@ -56,5 +56,6 @@ esac
 [[ $1 == up ]] && set -- up --no-build "${@:2}"
 
 # Production's services only: never the fake OCR next to the sandbox.
+# shellcheck disable=SC2034  # read by compose() of scripts/lib/common.sh
 COMPOSE_PROFILE_ARGS=()
 compose "$@"

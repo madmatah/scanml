@@ -1,0 +1,9 @@
+root = true
+
+# shfmt reads this section (.claude/rules/bash.md).
+[*.sh]
+indent_style = space
+indent_size = 4
+switch_case_indent = true
+binary_next_line = true
+space_redirects = true

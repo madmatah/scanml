@@ -30,7 +30,10 @@ ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 source "$ROOT/scripts/lib/common.sh"
 
 ENV_FILE=$ROOT/.env
-usage() { sed -n '/^# Usage:/,/^set /{/^set /d;s/^# \{0,1\}//;p}' "${BASH_SOURCE[0]}" >&2; exit 2; }
+usage() {
+    sed -n '/^# Usage:/,/^set /{/^set /d;s/^# \{0,1\}//;p}' "${BASH_SOURCE[0]}" >&2
+    exit 2
+}
 
 command=${1:-}
 (($#)) && shift
@@ -129,10 +132,19 @@ status() {
 
 case $command in
     up) up "$@" ;;
-    down) (($# == 0)) || usage; compose down ;;
-    status) (($# == 0)) || usage; status ;;
+    down)
+        (($# == 0)) || usage
+        compose down
+        ;;
+    status)
+        (($# == 0)) || usage
+        status
+        ;;
     logs) compose logs --follow --tail 200 "$@" ;;
-    build) make_directories; build "$@" ;;
+    build)
+        make_directories
+        build "$@"
+        ;;
     compose)
         # A docker compose command first (options before it would be compose's global options,
         # -p, -f, --env-file..., which could point it at another stack), and only the commands and

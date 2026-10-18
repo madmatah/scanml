@@ -70,7 +70,10 @@ lan_ip=$(ip -4 route get 1.1.1.1 2> /dev/null | awk '{for (i = 1; i < NF; i++) i
 say "Development environment"
 managed=(COMPOSE_PROJECT_NAME IMAGE_PREFIX SCANMYLIB_UID SCANMYLIB_GID DATA_DIR SANDBOX_DIR ANDROID_DIR
     ANDROID_KEYSTORE_DIR LIBRARY_DIR API_PORT PUBLIC_URL OCR_SERVICE APP_VARIANT)
-managed_pattern="^($(IFS='|'; echo "${managed[*]}"))="
+managed_pattern="^($(
+    IFS='|'
+    echo "${managed[*]}"
+))="
 kept=()
 while IFS= read -r line; do
     [[ -n $line && ! $line =~ $managed_pattern ]] && kept+=("$line")

@@ -28,7 +28,10 @@ BUILD_APK=1
 case ${1:-} in
     --no-apk) BUILD_APK=0 ;;
     "") ;;
-    *) sed -n 's/^# Usage: //p' "${BASH_SOURCE[0]}" >&2; exit 2 ;;
+    *)
+        sed -n 's/^# Usage: //p' "${BASH_SOURCE[0]}" >&2
+        exit 2
+        ;;
 esac
 
 CHECKOUT=$(production_checkout) || die "cannot tell production's checkout (see above)"

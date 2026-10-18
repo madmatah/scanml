@@ -28,7 +28,10 @@ IMAGE_ID_FILE=$(mktemp)
 readonly IMAGE_ID_FILE
 trap 'rm -f -- "$IMAGE_ID_FILE"' EXIT
 
-usage() { sed -n '2,/^set /{/^set /d;s/^# \{0,1\}//;p}' "${BASH_SOURCE[0]}" >&2; exit 2; }
+usage() {
+    sed -n '2,/^set /{/^set /d;s/^# \{0,1\}//;p}' "${BASH_SOURCE[0]}" >&2
+    exit 2
+}
 
 # Each image is run by the id its build wrote, never by a tag: the gate of another worktree may
 # build the same tag in between. The file is emptied first, and a failed build returns at once:

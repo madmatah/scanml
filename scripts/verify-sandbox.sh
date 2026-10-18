@@ -22,53 +22,53 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=lib/common.sh
 source "$ROOT/scripts/lib/common.sh"
 if [[ ! -f "$ROOT/.env" ]]; then
-  echo "FAIL: no $ROOT/.env (scripts/dev-env.sh in a worktree, scripts/setup.sh in production)"
-  exit 1
+    echo "FAIL: no $ROOT/.env (scripts/dev-env.sh in a worktree, scripts/setup.sh in production)"
+    exit 1
 fi
 load_env "$ROOT/.env" STACK
 production=0
 [[ "${STACK[COMPOSE_PROJECT_NAME]:-}" == "$PRODUCTION_PROJECT" ]] && production=1
 
-running() { [[ -n "$1" && "$(docker inspect -f '{{.State.Running}}' "$1" 2>/dev/null)" == true ]]; }
-compose_ps() { compose ps -q "$1" 2>/dev/null || true; }
+running() { [[ -n "$1" && "$(docker inspect -f '{{.State.Running}}' "$1" 2> /dev/null)" == true ]]; }
+compose_ps() { compose ps -q "$1" 2> /dev/null || true; }
 container="${1:-}"
 if [[ -z "$container" ]]; then
-  container="$(compose_ps ocr)"
-  # Only a development stack may run the fake OCR instead of the sandbox.
-  if ! running "$container" && ((!production)); then container="$(compose_ps ocr-fake)"; fi
+    container="$(compose_ps ocr)"
+    # Only a development stack may run the fake OCR instead of the sandbox.
+    if ! running "$container" && ((! production)); then container="$(compose_ps ocr-fake)"; fi
 fi
 if ! running "$container"; then
-  if ((production)); then
-    echo "FAIL: production's OCR sandbox (ocr) is not running"
-  else
-    echo "FAIL: no OCR container is running (scripts/dev.sh up)"
-  fi
-  exit 1
+    if ((production)); then
+        echo "FAIL: production's OCR sandbox (ocr) is not running"
+    else
+        echo "FAIL: no OCR container is running (scripts/dev.sh up)"
+    fi
+    exit 1
 fi
 # The fake OCR (api image, development) has no sandbox directory, no GPU and no "ocr" user.
 kind=sandbox
 [[ "$(docker inspect -f '{{index .Config.Labels "com.docker.compose.service"}}' "$container")" == ocr-fake ]] && kind=fake
 if [[ $kind == fake ]] && ((production)); then
-  echo "FAIL: $container is the fake OCR: production must run the OCR sandbox"
-  exit 1
+    echo "FAIL: $container is the fake OCR: production must run the OCR sandbox"
+    exit 1
 fi
 
 # The LAN address the phone uses to reach this PC (PUBLIC_URL in .env).
 public_url="${STACK[PUBLIC_URL]:-}"
 api_port="${STACK[API_PORT]:-}"
-lan_ip="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for (i = 1; i < NF; i++) if ($i == "src") print $(i + 1)}')"
-lan_target="$(sed -E 's#^[a-z]+://([^/]+).*#\1#' <<<"${public_url:-http://${lan_ip:-192.168.1.10}:${api_port:-8765}}")"
+lan_ip="$(ip -4 route get 1.1.1.1 2> /dev/null | awk '{for (i = 1; i < NF; i++) if ($i == "src") print $(i + 1)}')"
+lan_target="$(sed -E 's#^[a-z]+://([^/]+).*#\1#' <<< "${public_url:-http://${lan_ip:-192.168.1.10}:${api_port:-8765}}")"
 data_dir="${STACK[DATA_DIR]:-}"
 sandbox_dir="${STACK[SANDBOX_DIR]:-}"
 
 failures=0
-check() {  # check <description> <expected> <actual>
-  if [[ "$2" == "$3" ]]; then
-    echo "PASS: $1"
-  else
-    echo "FAIL: $1 (expected '$2', got '$3')"
-    failures=$((failures + 1))
-  fi
+check() { # check <description> <expected> <actual>
+    if [[ "$2" == "$3" ]]; then
+        echo "PASS: $1"
+    else
+        echo "FAIL: $1 (expected '$2', got '$3')"
+        failures=$((failures + 1))
+    fi
 }
 
 echo "== container configuration (docker inspect $(docker inspect -f '{{.Name}}' "$container" | tr -d /))"
@@ -81,41 +81,41 @@ check "all capabilities dropped" '["ALL"]' "$(inspect '{{json .HostConfig.CapDro
 check "no capability added" "null" "$(inspect '{{json .HostConfig.CapAdd}}')"
 check "no-new-privileges set" "yes" "$(inspect '{{json .HostConfig.SecurityOpt}}' | grep -q 'no-new-privileges' && echo yes || echo no)"
 check "no seccomp, AppArmor or SELinux exemption" "" \
-  "$(inspect '{{json .HostConfig.SecurityOpt}}' | grep -oE '[a-z]+[=:]unconfined|label[=:]disable' | tr '\n' ' ' || true)"
+    "$(inspect '{{json .HostConfig.SecurityOpt}}' | grep -oE '[a-z]+[=:]unconfined|label[=:]disable' | tr '\n' ' ' || true)"
 check "/proc paths masked and read-only (no systempaths=unconfined)" "yes" \
-  "$(inspect '{{len .HostConfig.MaskedPaths}} {{json .HostConfig.ReadonlyPaths}}' | grep -qE '^[1-9][0-9]* .*"/proc/sys"' && echo yes || echo no)"
+    "$(inspect '{{len .HostConfig.MaskedPaths}} {{json .HostConfig.ReadonlyPaths}}' | grep -qE '^[1-9][0-9]* .*"/proc/sys"' && echo yes || echo no)"
 check "own PID namespace" "" "$(inspect '{{.HostConfig.PidMode}}')"
 ipc_mode="$(inspect '{{.HostConfig.IpcMode}}')"
 check "own IPC namespace (not the host's or another container's)" "yes" \
-  "$([[ $ipc_mode =~ ^(private|shareable|none)$ ]] && echo yes || echo "no ($ipc_mode)")"
+    "$([[ $ipc_mode =~ ^(private|shareable|none)$ ]] && echo yes || echo "no ($ipc_mode)")"
 check "own UTS namespace" "" "$(inspect '{{.HostConfig.UTSMode}}')"
 check "own cgroup namespace" "private" "$(inspect '{{.HostConfig.CgroupnsMode}}')"
 devices="$(inspect '{{json .HostConfig.Devices}}')"
 check "no host device passed (the GPU comes through CDI)" "yes" \
-  "$([[ $devices == null || $devices == "[]" ]] && echo yes || echo "no ($devices)")"
+    "$([[ $devices == null || $devices == "[]" ]] && echo yes || echo "no ($devices)")"
 cgroup_rules="$(inspect '{{json .HostConfig.DeviceCgroupRules}}')"
 check "no extra device cgroup rule" "yes" \
-  "$([[ $cgroup_rules == null || $cgroup_rules == "[]" ]] && echo yes || echo "no ($cgroup_rules)")"
+    "$([[ $cgroup_rules == null || $cgroup_rules == "[]" ]] && echo yes || echo "no ($cgroup_rules)")"
 echo "INFO: device requests: $(inspect '{{range .HostConfig.DeviceRequests}}{{.Driver}}:{{join .DeviceIDs ","}} {{end}}')"
 
 # Every Docker mount, compared with the three the sandbox needs.
 mounts="$(inspect '{{range .Mounts}}{{.Type}}|{{.Source}}|{{.Destination}}|{{if .RW}}rw{{else}}ro{{end}}{{"\n"}}{{end}}' | sed '/^$/d')"
-echo "INFO: mounts: $(tr '\n' ' ' <<<"$mounts")"
-check "no host bind mount from /home" "" "$(cut -d'|' -f2 <<<"$mounts" | grep '^/home' || true)"
+echo "INFO: mounts: $(tr '\n' ' ' <<< "$mounts")"
+check "no host bind mount from /home" "" "$(cut -d'|' -f2 <<< "$mounts" | grep '^/home' || true)"
 actual="$(while IFS='|' read -r type source destination mode; do
-  if [[ -n "$type" ]]; then echo "$type|$(realpath -m "${source:-/}")|$destination|$mode"; fi
-done <<<"$mounts" | sort)"
+    if [[ -n "$type" ]]; then echo "$type|$(realpath -m "${source:-/}")|$destination|$mode"; fi
+done <<< "$mounts" | sort)"
 if [[ $kind == fake && -n "$data_dir" ]]; then
-  check "mounts are exactly DATA_DIR/run" "bind|$(realpath -m "$data_dir/run")|/run/scanmylib|rw " \
-    "$(tr '\n' ' ' <<<"$actual")"
+    check "mounts are exactly DATA_DIR/run" "bind|$(realpath -m "$data_dir/run")|/run/scanmylib|rw " \
+        "$(tr '\n' ' ' <<< "$actual")"
 elif [[ $kind == sandbox && -n "$data_dir" && -n "$sandbox_dir" ]]; then
-  expected="$(printf '%s\n' "bind|$(realpath -m "$sandbox_dir")|/opt/sandbox|ro" \
-    "bind|$(realpath -m "$data_dir/run")|/run/scanmylib|rw" \
-    "bind|$(realpath -m "$data_dir/ocr-cache")|/var/cache/ocr|rw" | sort)"
-  check "mounts are exactly SANDBOX_DIR (ro), DATA_DIR/run and DATA_DIR/ocr-cache" \
-    "$(tr '\n' ' ' <<<"$expected")" "$(tr '\n' ' ' <<<"$actual")"
+    expected="$(printf '%s\n' "bind|$(realpath -m "$sandbox_dir")|/opt/sandbox|ro" \
+        "bind|$(realpath -m "$data_dir/run")|/run/scanmylib|rw" \
+        "bind|$(realpath -m "$data_dir/ocr-cache")|/var/cache/ocr|rw" | sort)"
+    check "mounts are exactly SANDBOX_DIR (ro), DATA_DIR/run and DATA_DIR/ocr-cache" \
+        "$(tr '\n' ' ' <<< "$expected")" "$(tr '\n' ' ' <<< "$actual")"
 else
-  check "DATA_DIR and SANDBOX_DIR set in .env" "yes" "no"
+    check "DATA_DIR and SANDBOX_DIR set in .env" "yes" "no"
 fi
 
 pids_limit="$(inspect '{{if .HostConfig.PidsLimit}}{{.HostConfig.PidsLimit}}{{end}}')"
@@ -125,11 +125,11 @@ check "memory limited (mem_limit)" "yes" "$([[ $memory_limit =~ ^[1-9][0-9]*$ ]]
 log_driver="$(inspect '{{.HostConfig.LogConfig.Type}}')"
 log_max_size="$(inspect '{{index .HostConfig.LogConfig.Config "max-size"}}')"
 check "container log size bounded (logging max-size)" "yes" \
-  "$([[ $log_driver != json-file || -n $log_max_size ]] && echo yes || echo "no ($log_driver without max-size)")"
+    "$([[ $log_driver != json-file || -n $log_max_size ]] && echo yes || echo "no ($log_driver without max-size)")"
 
 echo "== inside the sandbox (docker exec, as the sandbox user)"
 set +e
-docker exec -i -e LAN_TARGET="$lan_target" -e HOST_HOME="$(getent passwd "$(id -u)" | cut -d: -f6)" -e SANDBOX_KIND="$kind" "$container" python3 - <<'PY'
+docker exec -i -e LAN_TARGET="$lan_target" -e HOST_HOME="$(getent passwd "$(id -u)" | cut -d: -f6)" -e SANDBOX_KIND="$kind" "$container" python3 - << 'PY'
 import errno
 import os
 import re
@@ -333,8 +333,8 @@ PY
 inside=$?
 set -e
 
-if (( failures > 0 || inside != 0 )); then
-  echo "RESULT: FAIL"
-  exit 1
+if ((failures > 0 || inside != 0)); then
+    echo "RESULT: FAIL"
+    exit 1
 fi
 echo "RESULT: all checks passed"

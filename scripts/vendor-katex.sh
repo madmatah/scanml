@@ -21,14 +21,14 @@ trap 'rm -rf "$WORK"' EXIT
 curl -fsSL "$TARBALL_URL" -o "$WORK/katex.tgz"
 actual="sha512-$(openssl dgst -sha512 -binary "$WORK/katex.tgz" | base64 -w0)"
 if [[ "$actual" != "$INTEGRITY" ]]; then
-  echo "KaTeX tarball integrity mismatch: $actual" >&2
-  exit 1
+    echo "KaTeX tarball integrity mismatch: $actual" >&2
+    exit 1
 fi
 
 mkdir "$WORK/x"
 tar -xzf "$WORK/katex.tgz" -C "$WORK/x" --no-same-owner --no-same-permissions \
-  package/LICENSE package/dist/katex.min.js package/dist/katex.min.css \
-  --wildcards 'package/dist/fonts/*.woff2'
+    package/LICENSE package/dist/katex.min.js package/dist/katex.min.css \
+    --wildcards 'package/dist/fonts/*.woff2'
 
 rm -rf "$DEST"
 mkdir -p "$DEST/fonts"

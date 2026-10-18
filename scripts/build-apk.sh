@@ -117,13 +117,16 @@ build_main() {
 }
 
 log() { printf '\n>> %s\n' "$*"; }
-die() { printf 'error: %s\n' "$*" >&2; exit 1; }
+die() {
+    printf 'error: %s\n' "$*" >&2
+    exit 1
+}
 
 # Prints "<file name> <sha1> <size>" of the Linux archive of an SDK package, read from Google's
 # repository XML with the JDK's own XML parser (the image has no Python or xmllint).
 sdk_archive_info() {
     local repository_xml=$1 package=$2 tool=/tmp/SdkArchive.java
-    cat > "$tool" <<'JAVA'
+    cat > "$tool" << 'JAVA'
 import java.io.File;
 import javax.xml.XMLConstants;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -169,7 +172,7 @@ install_command_line_tools() {
     [[ $(stat -c %s "$work/$name") == "$size" ]] || die "$name: size differs from the repository XML"
     echo "$sha1  $work/$name" | sha1sum --check --strict --quiet - || die "$name: SHA-1 mismatch"
     echo "$name: size and SHA-1 match Google's repository XML"
-    (cd "$work" && jar xf "$name")  # the image has no unzip; jar drops the exec bits
+    (cd "$work" && jar xf "$name") # the image has no unzip; jar drops the exec bits
     chmod +x "$work"/cmdline-tools/bin/*
     mkdir -p "$ANDROID_HOME/cmdline-tools"
     rm -rf "$ANDROID_HOME/cmdline-tools/latest"
@@ -281,15 +284,15 @@ checked against their pinned SHA-256)"
 # Writes the metadata of an APK to FILE, published as scanmylib.json next to it: the api serves
 # it in /api/health, and the app offers the update when its versionCode is higher. Every value is
 # checked first: the file is written without a JSON tool.
-write_apk_metadata() {  # write_apk_metadata FILE PACKAGE VERSION_NAME VERSION_CODE SHA256 SIZE
+write_apk_metadata() { # write_apk_metadata FILE PACKAGE VERSION_NAME VERSION_CODE SHA256 SIZE
     local file=$1 package=$2 name=$3 code=$4 sha256=$5 size=$6
     # ASCII classes whatever the locale (en_US.UTF-8 in the signing container): there, [0-9A-Za-z]
     # also matches digits and letters of other scripts, which the api and the app refuse.
     local LC_ALL=C
     # The version: a release (MAJOR.MINOR.PATCH) or a development build (scripts/lib/version.py).
-    [[ $package =~ ^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$ && ${#name} -le 64 \
-        && $name =~ ^[0-9]{1,3}\.[0-9]{1,2}\.[0-9]{1,3}(-[0-9A-Za-z.]+)?(\+[0-9A-Za-z.]+)?$ \
-        && $code =~ ^[1-9][0-9]{0,9}$ && $sha256 =~ ^[0-9a-f]{64}$ && $size =~ ^[1-9][0-9]{0,11}$ ]] \
+    [[ $package =~ ^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$ && ${#name} -le 64 &&
+        $name =~ ^[0-9]{1,3}\.[0-9]{1,2}\.[0-9]{1,3}(-[0-9A-Za-z.]+)?(\+[0-9A-Za-z.]+)?$ &&
+        $code =~ ^[1-9][0-9]{0,9}$ && $sha256 =~ ^[0-9a-f]{64}$ && $size =~ ^[1-9][0-9]{0,11}$ ]] \
         || die "unexpected APK metadata: '$package' '$name' '$code' '$sha256' '$size'"
     printf '{"application_id": "%s", "version_name": "%s", "version_code": %s, "sha256": "%s", "size": %s}\n' \
         "$package" "$name" "$code" "$sha256" "$size" > "$file"
@@ -297,9 +300,9 @@ write_apk_metadata() {  # write_apk_metadata FILE PACKAGE VERSION_NAME VERSION_C
 
 # Prints "<package name> <versionCode>" of an APK, read from its binary AndroidManifest.xml by the
 # manifest parser of apksigner.jar (com.android.apksig, the one apksigner itself uses).
-apk_identity() {  # apk_identity APKSIGNER_JAR APK
+apk_identity() { # apk_identity APKSIGNER_JAR APK
     local tool=/tmp/ApkIdentity.java
-    cat > "$tool" <<'JAVA'
+    cat > "$tool" << 'JAVA'
 import com.android.apksig.apk.ApkUtils;
 import com.android.apksig.util.DataSources;
 import java.io.RandomAccessFile;
@@ -347,7 +350,7 @@ assembles_variant() {
 }
 
 # The release app is production's: production's checkout and .env, a published release, clean.
-assert_production_release() {  # assert_production_release PROJECT
+assert_production_release() { # assert_production_release PROJECT
     local checkout stray hidden release_error
     checkout=$(production_checkout) || die "cannot tell production's checkout (see above)"
     is_production_checkout "$ROOT" "$checkout" || die "the release app is only built in production's checkout \
@@ -388,7 +391,7 @@ main() {
             dev)
                 [[ $project != "$PRODUCTION_PROJECT" ]] \
                     || die "APP_VARIANT=dev in production's .env: production publishes the release app"
-                ((!create_key)) || die "--create-signing-key: only production creates the signing key"
+                ((! create_key)) || die "--create-signing-key: only production creates the signing key"
                 assert_isolated_from_production "$env_file"
                 ;;
             *) die "APP_VARIANT must be release or dev, not '$variant'" ;;
@@ -403,7 +406,7 @@ main() {
         android_dir=${CI_ANDROID_DIR:-$data_dir/android}
         variant=${CI_APP_VARIANT:-dev}
         [[ $variant == release || $variant == dev ]] || die "APP_VARIANT must be release or dev, not '$variant'"
-        ((!create_key)) || die "--create-signing-key needs production's .env"
+        ((! create_key)) || die "--create-signing-key needs production's .env"
         # The build runs with network access and writes there: never production's directories,
         # nor your home directory but GitHub's RUNNER_TEMP.
         local runner_temp=()
@@ -421,7 +424,7 @@ main() {
     ((${#gradle_args[@]})) || gradle_args=(test "assemble${variant^}" lint)
     local assembles=0 publication="not published (no assemble${variant^})"
     assembles_variant "$variant" "${gradle_args[@]}" && assembles=1
-    if ((assembles && !signs)); then
+    if ((assembles && ! signs)); then
         publication="built unsigned, never published (no .env: CI)"
     elif ((assembles)); then
         publication="published as $data_dir/app/scanmylib.apk"

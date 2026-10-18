@@ -1013,7 +1013,7 @@ def test_sending_the_current_order_again_changes_nothing() -> None:
 
 @pytest.mark.parametrize("wanted", [["p1", "p2"], ["p1", "p2", "p3", "p3"], ["p1", "p2", "p3", "p4"], []])
 def test_positions_for_order_needs_exactly_the_pages_of_the_reading_order(wanted: list[str]) -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="not the pages of the reading order"):
         positions_for_order(numbered_pages(1, 2, 3), wanted)
 
 

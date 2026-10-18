@@ -150,7 +150,7 @@ def test_a_failed_token_write_leaves_no_token_file(tmp_path: Path, monkeypatch: 
             raise OSError(errno.ENOSPC, "No space left on device")
 
     monkeypatch.setattr(os, "fdopen", FullDisk)
-    with pytest.raises(OSError):
+    with pytest.raises(OSError, match="No space left on device"):
         load_or_create_token(path)
     monkeypatch.undo()
     assert list(path.parent.iterdir()) == []  # no empty token file, no temporary file

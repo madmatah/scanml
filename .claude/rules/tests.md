@@ -7,6 +7,7 @@ paths:
   - "ocr/bench/**"
   - "android/app/src/test/**"
   - "scripts/tests/**"
+  - "scripts/integration_tests/**"
   - "scripts/e2e_test.py"
   - "scripts/verify-sandbox.sh"
   - "server/pyproject.toml"
@@ -130,8 +131,13 @@ rule applies to it. The older files move to the structure area by area, each are
   the tests that need an engine's environment skip without it.
 - **Unit tests of the app:** `android/app/src/test/`, with JUnit on the JVM: view models, the upload queue and the
   client of the PC, against fakes and a mock web server.
-- **Tests of the scripts:** `scripts/tests/`, with `unittest` and the host's `python3`, against throwaway repositories
-  and a docker stand-in (`scripts/tests/docker_shim.py`) that never reaches the Docker daemon.
+- **Unit tests of the scripts:** `scripts/tests/`, with `unittest` and the host's `python3`, on the modules of
+  `scripts/lib/` and on `scripts/release.py`, against throwaway repositories where git is needed.
+- **Integration tests of the scripts:** `scripts/integration_tests/`, with `unittest` and the host's `python3`, which
+  run the scripts themselves, such as `deploy.sh`, `dev.sh`, `build-apk.sh`, `prod.sh` and `check.sh`, against
+  throwaway repositories and a docker stand-in (`scripts/integration_tests/docker_shim.py`) that never reaches the
+  Docker daemon. Each one runs a script whole, with the processes it starts, so that they take most of the gate's time,
+  and they have an area of their own in it, `integration`.
 - **End to end:** `scripts/e2e_test.py`, which acts like the phone against a running stack, the development stack by
   default.
 - **Isolation of the sandbox:** `scripts/verify-sandbox.sh`, against the running `ocr` service.
@@ -207,7 +213,8 @@ class TestTheOrdering:
 
 ## unittest
 
-The tests of the OCR sandbox, in `ocr/tests/`, and of the scripts, in `scripts/tests/`, run on `unittest`: the gate runs
+The tests of the OCR sandbox, in `ocr/tests/`, and of the scripts, in `scripts/tests/` and `scripts/integration_tests/`,
+run on `unittest`: the gate runs
 them with the standard library only, the `python3` of the sandbox's image and the host's.
 
 - **Its words:** the loader collects only the `TestCase` classes at a module's top level, never one nested in another

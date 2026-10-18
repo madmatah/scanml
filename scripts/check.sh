@@ -6,11 +6,13 @@
 #   lint        the formatters and linters, without network, on read-only sources: Ruff (format and lint) and
 #               mypy --strict for the Python, zizmor for the workflows, ShellCheck and shfmt for the shell scripts,
 #               Biome for the web UI (ktlint, for the app, runs in the android area)
-#   scripts     the tests of scripts/, on the host's python3 (standard library, a docker stand-in)
+#   scripts     the unit tests of the scripts' modules (scripts/tests/), on the host's python3
 #   web         the unit tests of the web UI (node --test, in a container without network)
 #   server      the api's tests, in its test image, without network, read-only
 #   ocr         the sandbox's unit tests, in its image, without network or models
 #   android     the app's unit tests, lint and ktlint (scripts/build-apk.sh, never signed)
+#   integration the integration tests of the scripts (scripts/integration_tests/): the scripts themselves, on the
+#               host's python3, against throwaway repositories and a docker stand-in that builds and starts nothing
 #
 # --fix formats the code and applies the linters' safe fixes instead of checking. ktlint formats android/ in place.
 # The other formatters work on a copy of the tracked files they format in server/, ocr/ and scripts/ (git add a new
@@ -23,7 +25,7 @@
 #        scripts/check.sh server web      those areas only
 set -euo pipefail
 
-readonly AREAS=(lint scripts web server ocr android)
+readonly AREAS=(lint scripts web server ocr android integration)
 readonly SHELLCHECK_DIGEST=sha256:61862eba1fcf09a484ebcc6feea46f1782532571a34ed51fedf90dd25f925a8d
 readonly SHELLCHECK_IMAGE=koalaman/shellcheck:v0.11.0@$SHELLCHECK_DIGEST
 readonly SHFMT_DIGEST=sha256:8c06884a35683d8763fba6c0d9484d11a61a96da65f8d497d6f625825a6043f2
@@ -104,8 +106,8 @@ check_lint() {
         scanmylib tests
     run_python_tool "$python_tools" CHECKED_SOURCES ocr env MYPYPATH=bench mypy --config-file ../mypy.ini \
         scanmylib_ocr tests bench
-    run_python_tool "$python_tools" CHECKED_SOURCES scripts env MYPYPATH=lib:tests mypy --config-file ../mypy.ini \
-        lib release.py e2e_test.py tests
+    run_python_tool "$python_tools" CHECKED_SOURCES scripts env MYPYPATH=lib:tests:integration_tests mypy \
+        --config-file ../mypy.ini lib release.py e2e_test.py tests integration_tests
     run_python_tool "$python_tools" CHECKED_SOURCES . zizmor --offline --no-progress .github/workflows
     mapfile -d '' -t shell_scripts < <(python3 "$ROOT/scripts/lib/formatting.py" shell-scripts "$ROOT")
     wait "$!" || die "cannot list the shell scripts: see git's error above"
@@ -152,6 +154,10 @@ check_scripts() {
     python3 -m unittest discover -s "$ROOT/scripts/tests"
 }
 
+check_integration() {
+    python3 -m unittest discover -s "$ROOT/scripts/integration_tests"
+}
+
 check_web() {
     run_tool -v "$ROOT/server/scanmylib/web:/web:ro" node:22-bookworm-slim node --test '/web/tests/*.test.js'
 }
@@ -189,6 +195,7 @@ check_area() {
         server) check_server ;;
         ocr) check_ocr ;;
         android) check_android ;;
+        integration) check_integration ;;
         *) die "no check for the area '$area'" ;;
     esac
 }

@@ -220,7 +220,7 @@ Each row names a rule, the rules file that states it, and what enforces it.
 | Rule | Enforced by |
 |---|---|
 | The `ocr` service stays isolated (`.claude/rules/sandbox.md` > The OCR sandbox) | `scripts/verify-sandbox.sh`, after every deployment |
-| Every stack but production's is checked before docker compose runs it (`.claude/rules/sandbox.md` > Development stacks and production) | `scripts/lib/stack.py`, through `scripts/dev.sh`, `scripts/dev-env.sh`, `scripts/deploy.sh`'s rehearsal and `scripts/build-apk.sh`, and its tests in `scripts/tests/` |
+| Every stack but production's is checked before docker compose runs it (`.claude/rules/sandbox.md` > Development stacks and production) | `scripts/lib/stack.py`, through `scripts/dev.sh`, `scripts/dev-env.sh`, `scripts/deploy.sh`'s rehearsal and `scripts/build-apk.sh`, its unit tests in `scripts/tests/`, and the integration tests of those scripts in `scripts/integration_tests/` |
 | Production is operated by hand only through `scripts/prod.sh compose` (`.claude/rules/sandbox.md` > Development stacks and production) | `scripts/lib/stack.py check-compose-command --production`, through `scripts/prod.sh` |
 | The dev app keeps its own application id (`.claude/rules/sandbox.md` > Development stacks and production) | The signing container of `scripts/build-apk.sh` |
 | Production runs published releases only (`.claude/rules/releases.md`) | `scripts/deploy.sh`, `scripts/setup.sh`, `scripts/prod.sh` and `scripts/build-apk.sh` |
@@ -309,11 +309,14 @@ says, and that file says how tests are written.
 
 ### Test levels
 
-- **The unit tests run in the gate,** in containers without network, so that they are fast, need no GPU and can never
-  reach production. The api's tests use a fake sandbox that speaks the real protocol on a real Unix socket, so that the
-  client and its limits are tested as they run.
-- **The tests of the scripts use a stand-in for docker,** because the guards they test must refuse what production owns
-  without any container being built or started.
+- **The unit tests run in the gate,** so that they are fast, need no GPU and can never reach production: those of the
+  api, the web UI and the sandbox in containers without network, those of the scripts' modules on the host's `python3`,
+  with the standard library only. The api's tests use a fake sandbox that speaks the real protocol on a real Unix
+  socket, so that the client and its limits are tested as they run.
+- **The integration tests of the scripts run the scripts themselves against a stand-in for docker,** because the guards
+  they test must refuse what production owns without any container being built or started. They run apart from the
+  unit tests of the scripts' modules, in an area of the gate of their own, since a whole script and the processes it
+  starts cost far more than a call to a module.
 - **The end-to-end test and the isolation check need a running stack,** so they run against the development stack, or
   production after a deployment, outside the gate.
 - **The benchmarks need the real engine and the GPU,** so they run by hand, outside the gate.

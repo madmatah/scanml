@@ -3,7 +3,8 @@ target-version = "py312"
 include = ["server/**/*.py", "ocr/**/*.py", "scripts/**/*.py"]
 # Where the code imports its own modules from: their imports then come after the third-party ones
 # (.claude/rules/python.md).
-src = ["server", "server/tests", "ocr", "ocr/bench", "scripts", "scripts/lib", "scripts/tests"]
+src = ["server", "server/tests", "ocr", "ocr/bench", "scripts", "scripts/lib", "scripts/tests",
+       "scripts/integration_tests"]
 
 [lint]
 select = [

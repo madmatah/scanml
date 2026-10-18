@@ -1,4 +1,5 @@
-"""The scripts against a throwaway repository and a docker stand-in (docker_shim.py).
+"""The integration tests of the scripts: the scripts themselves, against a throwaway repository and a docker stand-in
+(docker_shim.py).
 
 Each test builds, in a temporary directory: a bare "origin", production's checkout (at
 ~/Dev/scanmylib of a temporary home directory, with a production .env whose paths are all
@@ -10,7 +11,7 @@ unless a test says otherwise) were started from that checkout: without them, the
 take the real ~/Dev/scanmylib of the password database for production's checkout.
 
 Needs git, bash, curl, flock and the docker CLI with its compose plugin. Standard library only:
-    python3 -m unittest discover -s scripts/tests
+    python3 -m unittest discover -s scripts/integration_tests
 """
 
 from __future__ import annotations
@@ -1655,10 +1656,10 @@ class CheckTest(ScriptsTestCase):
     def list_areas_checked(gate_run: subprocess.CompletedProcess[str]) -> list[str]:
         return re.findall(r"Checking (\w+)", gate_run.stdout)
 
-    def write_scripts_test(self, body: str) -> None:
-        # The fixture holds no tests of scripts/: the scripts area runs this one instead.
-        tests = self.worktree / "scripts" / "tests"
-        tests.mkdir(parents=True)
+    def write_scripts_test(self, body: str, directory: str = "tests") -> None:
+        # The fixture holds no tests of scripts/: the scripts and integration areas run this one instead.
+        tests = self.worktree / "scripts" / directory
+        tests.mkdir(parents=True, exist_ok=True)
         (tests / "test_placeholder.py").write_text(
             "import os\nimport unittest\n\n\nclass Placeholder(unittest.TestCase):\n"
             f"    def test_placeholder(self) -> None:\n        {body}\n"
@@ -1762,7 +1763,7 @@ class CheckTest(ScriptsTestCase):
             "ruff check .",
             "mypy --config-file ../mypy.ini scanmylib tests",
             "mypy --config-file ../mypy.ini scanmylib_ocr tests bench",
-            "mypy --config-file ../mypy.ini lib release.py e2e_test.py tests",
+            "mypy --config-file ../mypy.ini lib release.py e2e_test.py tests integration_tests",
             "zizmor --offline",
             "koalaman/shellcheck:",
             "-d -- ",
@@ -2013,13 +2014,18 @@ class CheckTest(ScriptsTestCase):
         self.assertEqual(self.calls(), [])
 
     def test_by_default_the_gate_checks_every_area_in_order(self) -> None:
-        self.write_scripts_test("pass")
+        # Each placeholder leaves its mark, so that each area shows it ran its own directory.
+        self.write_scripts_test('open(os.environ["SCRIPTS_MARK"], "w").close()')
+        self.write_scripts_test('open(os.environ["INTEGRATION_MARK"], "w").close()', directory="integration_tests")
+        marks = {"SCRIPTS_MARK": str(self.base / "scripts-ran"), "INTEGRATION_MARK": str(self.base / "integration-ran")}
         gate_run = self.run_script(
-            self.worktree, "check.sh", environment={"CI": "true", "DATA_DIR": str(self.base / "ci")}
+            self.worktree, "check.sh", environment={"CI": "true", "DATA_DIR": str(self.base / "ci"), **marks}
         )
         self.assertEqual(gate_run.returncode, 0, gate_run.stdout + gate_run.stderr)
-        self.assertEqual(self.list_areas_checked(gate_run), ["lint", "scripts", "web", "server", "ocr", "android"])
-        self.assertIn("Ran 1 test", gate_run.stderr)
+        self.assertEqual(
+            self.list_areas_checked(gate_run), ["lint", "scripts", "web", "server", "ocr", "android", "integration"]
+        )
+        self.assertEqual([Path(mark).exists() for mark in marks.values()], [True, True])
 
     def test_the_gate_drops_the_git_variables_of_its_caller(self) -> None:
         self.write_scripts_test('self.assertNotIn("GIT_DIR", os.environ)')

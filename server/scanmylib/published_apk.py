@@ -35,7 +35,7 @@ def _count(value: object, maximum: int) -> int | None:
     return value
 
 
-def published_apk(apk_path: Path) -> dict | None:
+def published_apk(apk_path: Path) -> dict[str, object] | None:
     """The published APK's application id, version, versionCode, SHA-256, size and download path,
     or None when there is no APK, or no metadata that holds up (missing, unreadable, malformed, or
     of another APK: not the size of the one published, e.g. left by a build that published no

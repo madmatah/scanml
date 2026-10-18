@@ -4,23 +4,26 @@ from __future__ import annotations
 
 import asyncio
 import json
+from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-from support import AUTH, create_document, page_image, upload, wait_for, wait_until_processed
 
 from scanmylib import __version__
 from scanmylib.app import create_app
+from scanmylib.config import Settings
 from scanmylib.devtools.fake_ocr import FakeOcrServer
 from scanmylib.library import MAX_OCR_RETRIES
 from scanmylib.ocr_client import OcrClient, OcrUnavailable
+from support import AUTH, create_document, page_image, upload, wait_for, wait_until_processed
 
 
-def page_status(client, page_id: str) -> dict:
-    return client.get(f"/api/pages/{page_id}", headers=AUTH).json()
+def page_status(client: TestClient, page_id: str) -> dict[str, Any]:
+    page: dict[str, Any] = client.get(f"/api/pages/{page_id}", headers=AUTH).json()
+    return page
 
 
-def test_uploads_wait_while_the_sandbox_is_down_then_get_processed(settings):
+def test_uploads_wait_while_the_sandbox_is_down_then_get_processed(settings: Settings) -> None:
     with TestClient(create_app(settings)) as client:
         status = client.get("/api/status", headers=AUTH).json()
         assert status["ocr"] == {
@@ -44,7 +47,7 @@ def test_uploads_wait_while_the_sandbox_is_down_then_get_processed(settings):
             sandbox.stop()
 
 
-def test_engine_unavailable_is_retried_without_counting_failures(client, fake_ocr):
+def test_engine_unavailable_is_retried_without_counting_failures(client: TestClient, fake_ocr: FakeOcrServer) -> None:
     fake_ocr.fail_next(503, MAX_OCR_RETRIES + 3)
     document_id = create_document(client)
     page = upload(client, document_id, page_image(5)).json()
@@ -53,7 +56,7 @@ def test_engine_unavailable_is_retried_without_counting_failures(client, fake_oc
     assert len(fake_ocr.requests) == MAX_OCR_RETRIES + 4
 
 
-def test_processing_errors_are_retried_then_reported(client, fake_ocr):
+def test_processing_errors_are_retried_then_reported(client: TestClient, fake_ocr: FakeOcrServer) -> None:
     fake_ocr.fail_next(500, MAX_OCR_RETRIES + 1)
     document_id = create_document(client)
     page = upload(client, document_id, page_image(5)).json()
@@ -70,7 +73,7 @@ def test_processing_errors_are_retried_then_reported(client, fake_ocr):
     assert (recovered["status"], recovered["error"]) == ("done", None)
 
 
-def test_a_transient_failure_is_retried(client, fake_ocr):
+def test_a_transient_failure_is_retried(client: TestClient, fake_ocr: FakeOcrServer) -> None:
     fake_ocr.fail_next(500, 2)
     document_id = create_document(client)
     upload(client, document_id, page_image(6))
@@ -78,7 +81,7 @@ def test_a_transient_failure_is_retried(client, fake_ocr):
     assert len(fake_ocr.requests) == 3
 
 
-def test_pages_are_processed_in_upload_order(client, fake_ocr):
+def test_pages_are_processed_in_upload_order(client: TestClient, fake_ocr: FakeOcrServer) -> None:
     document_id = create_document(client)
     for number in (30, 10, 20):
         upload(client, document_id, page_image(number))
@@ -86,7 +89,7 @@ def test_pages_are_processed_in_upload_order(client, fake_ocr):
     assert [request["height"] - 1000 for request in fake_ocr.requests] == [30, 10, 20]
 
 
-def test_interrupted_processing_is_requeued_on_restart(settings, fake_ocr):
+def test_interrupted_processing_is_requeued_on_restart(settings: Settings, fake_ocr: FakeOcrServer) -> None:
     fake_ocr.delay = 3.0
     with TestClient(create_app(settings)) as client:
         document_id = create_document(client)
@@ -99,7 +102,7 @@ def test_interrupted_processing_is_requeued_on_restart(settings, fake_ocr):
         assert document["pages"][0]["status"] == "done"
 
 
-def test_new_work_prewarms_the_engine(client, fake_ocr):
+def test_new_work_prewarms_the_engine(client: TestClient, fake_ocr: FakeOcrServer) -> None:
     document_id = create_document(client)
     assert fake_ocr.load_requests == 0
     upload(client, document_id, page_image(1))
@@ -107,13 +110,13 @@ def test_new_work_prewarms_the_engine(client, fake_ocr):
     wait_until_processed(client, document_id)
 
 
-def test_status_reports_the_sandbox_engine(client):
+def test_status_reports_the_sandbox_engine(client: TestClient) -> None:
     status = client.get("/api/status", headers=AUTH).json()
     assert status["ocr"] == {"reachable": True, "state": "idle", "backend": "fake", "last_error": None, "gpu": None}
     assert status["version"] == __version__
 
 
-def test_status_relays_only_typed_and_bounded_sandbox_fields(client, fake_ocr):
+def test_status_relays_only_typed_and_bounded_sandbox_fields(client: TestClient, fake_ocr: FakeOcrServer) -> None:
     # The phone app decodes "state" and "last_error" as strings: other types must not get through.
     fake_ocr.status_body = json.dumps(
         {
@@ -137,7 +140,7 @@ def test_status_relays_only_typed_and_bounded_sandbox_fields(client, fake_ocr):
     [b"[" * 50_000, b'{"engine": {"state": "error", "last_error": "' + b"A" * (1024 * 1024) + b'"}}'],
     ids=["deeply-nested", "oversized"],
 )
-def test_unusable_health_answers_mean_unreachable(client, fake_ocr, body):
+def test_unusable_health_answers_mean_unreachable(client: TestClient, fake_ocr: FakeOcrServer, body: bytes) -> None:
     fake_ocr.status_body = body
     response = client.get("/api/status", headers=AUTH)
     assert response.status_code == 200
@@ -146,7 +149,7 @@ def test_unusable_health_answers_mean_unreachable(client, fake_ocr, body):
     assert len(ocr["last_error"]) <= 300
 
 
-def test_oversized_load_answer_is_refused_without_buffering(fake_ocr):
+def test_oversized_load_answer_is_refused_without_buffering(fake_ocr: FakeOcrServer) -> None:
     fake_ocr.status_body = b"x" * (1024 * 1024)
 
     async def load() -> None:

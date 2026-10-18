@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 import pytest
 
@@ -12,14 +13,14 @@ KEY = "20261012-201530_1a2b3c4d"
 
 
 @pytest.fixture
-def files(tmp_path) -> LibraryFiles:
+def files(tmp_path: Path) -> LibraryFiles:
     library = LibraryFiles(tmp_path / "library")
     library.ensure_root()
     library.ensure_document_dir("book")
     return library
 
 
-def test_atomic_write_replaces_without_leftovers(tmp_path):
+def test_atomic_write_replaces_without_leftovers(tmp_path: Path) -> None:
     target = tmp_path / "a" / "b.txt"
     atomic_write(target, b"one")
     atomic_write(target, b"two")
@@ -28,7 +29,7 @@ def test_atomic_write_replaces_without_leftovers(tmp_path):
     assert oct(target.stat().st_mode & 0o777) == "0o644"
 
 
-def test_new_ocr_output_moves_the_previous_one_to_the_trash(files):
+def test_new_ocr_output_moves_the_previous_one_to_the_trash(files: LibraryFiles) -> None:
     files.write_page_outputs("book", KEY, "v1", [(f"{KEY}_1.jpg", b"i1"), (f"{KEY}_2.jpg", b"i2")], {"v": 1})
     files.write_page_outputs("book", KEY, "v2", [(f"{KEY}_1.jpg", b"j1")], {"v": 2})
     folder = files.document_dir("book")
@@ -40,24 +41,27 @@ def test_new_ocr_output_moves_the_previous_one_to_the_trash(files):
     assert sorted(p.name for p in (trashed / "images").iterdir()) == [f"{KEY}_1.jpg", f"{KEY}_2.jpg"]
 
 
-def test_trash_page_and_document(files):
+def test_trash_page_and_document(files: LibraryFiles) -> None:
     files.write_scan("book", KEY, "jpg", b"scan")
     files.write_page_outputs("book", KEY, "text", [], {})
     page_trash = files.trash_page("book", KEY, "jpg")
+    assert page_trash is not None
     assert (page_trash / "scans" / f"{KEY}.jpg").read_bytes() == b"scan"
     assert (page_trash / "pages" / f"{KEY}.md").is_file()
     assert not files.scan_path("book", KEY, "jpg").exists()
 
     document_trash = files.trash_document("book")
+    assert document_trash is not None
     assert document_trash.parent == files.trash
     assert not files.folder_exists("book")
     assert files.trash_document("book") is None
 
 
-def test_trash_names_never_collide(files):
+def test_trash_names_never_collide(files: LibraryFiles) -> None:
     first = files.trash_document("book")
     files.ensure_document_dir("book")
     second = files.trash_document("book")
+    assert first is not None and second is not None
     assert first != second and first.exists() and second.exists()
 
 
@@ -79,13 +83,13 @@ def test_trash_names_never_collide(files):
         "",
     ],
 )
-def test_file_resolution_rejects_anything_unexpected(files, relative):
+def test_file_resolution_rejects_anything_unexpected(files: LibraryFiles, relative: str) -> None:
     (files.document_dir("book") / "pages").mkdir(exist_ok=True)
     (files.document_dir("book") / "pages" / "x.txt").write_text("x")
     assert files.resolve_document_file("book", relative) is None
 
 
-def test_file_resolution_rejects_symlinks_leaving_the_folder(files, tmp_path):
+def test_file_resolution_rejects_symlinks_leaving_the_folder(files: LibraryFiles, tmp_path: Path) -> None:
     secret = tmp_path / "secret.md"
     secret.write_text("secret")
     pages = files.document_dir("book") / "pages"
@@ -94,11 +98,13 @@ def test_file_resolution_rejects_symlinks_leaving_the_folder(files, tmp_path):
     assert files.resolve_document_file("book", "pages/evil.md") is None
 
 
-def test_file_resolution_and_export_entries(files):
+def test_file_resolution_and_export_entries(files: LibraryFiles) -> None:
     files.write_scan("book", KEY, "jpg", b"scan")
     files.write_page_outputs("book", KEY, "text", [(f"{KEY}_1.jpg", b"img")], {})
     files.write_document("book", "# Book\n", {"title": "Book"})
-    assert files.resolve_document_file("book", f"images/{KEY}_1.jpg").read_bytes() == b"img"
+    image = files.resolve_document_file("book", f"images/{KEY}_1.jpg")
+    assert image is not None
+    assert image.read_bytes() == b"img"
     names = [name for name, _ in files.export_entries("book", include_scans=False)]
     assert names == [
         "book/document.md",

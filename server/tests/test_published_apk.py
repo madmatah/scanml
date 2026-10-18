@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
+from fastapi.testclient import TestClient
 
+from scanmylib.config import Settings
 from scanmylib.published_apk import metadata_path, published_apk
 
 SHA256 = "0123456789abcdef" * 4
@@ -19,14 +22,14 @@ METADATA = {
 }
 
 
-def publish(apk_path, metadata) -> None:
+def publish(apk_path: Path, metadata: dict[str, object] | str) -> None:
     apk_path.parent.mkdir(parents=True, exist_ok=True)
     apk_path.write_bytes(APK)
     text = metadata if isinstance(metadata, str) else json.dumps(metadata)
     metadata_path(apk_path).write_text(text, encoding="utf-8")
 
 
-def test_health_offers_the_published_apk(client, settings):
+def test_health_offers_the_published_apk(client: TestClient, settings: Settings) -> None:
     assert client.get("/api/health").json()["apk"] is None
     publish(settings.apk_path, METADATA)
     assert client.get("/api/health").json()["apk"] == {
@@ -44,13 +47,15 @@ def test_health_offers_the_published_apk(client, settings):
     # The last one, 64 characters, the longest accepted.
     ["0.3.0", "0.2.4-dev.27+g1a2b3c4d5e6f", "0.2.4-dev+g1a2b3c4d5e6f.dirty", "0.2.4-dev", "0.2.4-dev+g" + "a" * 53],
 )
-def test_releases_and_development_builds_are_offered(tmp_path, version):
+def test_releases_and_development_builds_are_offered(tmp_path: Path, version: str) -> None:
     apk = tmp_path / "app" / "scanmylib.apk"
     publish(apk, {**METADATA, "version_name": version})
-    assert published_apk(apk)["version"] == version
+    offered = published_apk(apk)
+    assert offered is not None
+    assert offered["version"] == version
 
 
-def test_no_apk_or_no_metadata_offers_nothing(tmp_path):
+def test_no_apk_or_no_metadata_offers_nothing(tmp_path: Path) -> None:
     apk = tmp_path / "app" / "scanmylib.apk"
     assert published_apk(apk) is None
     publish(apk, METADATA)
@@ -61,7 +66,7 @@ def test_no_apk_or_no_metadata_offers_nothing(tmp_path):
     assert published_apk(apk) is None
 
 
-def test_metadata_of_another_apk_offers_nothing(tmp_path):
+def test_metadata_of_another_apk_offers_nothing(tmp_path: Path) -> None:
     # An APK published without its metadata (a build from before it, or cut short) leaves the
     # previous APK's: the app would download a file that fails its check.
     apk = tmp_path / "app" / "scanmylib.apk"
@@ -97,7 +102,7 @@ def test_metadata_of_another_apk_offers_nothing(tmp_path):
         "[" * 2000 + "]" * 2000,
     ],
 )
-def test_metadata_that_does_not_hold_up_offers_nothing(tmp_path, metadata):
+def test_metadata_that_does_not_hold_up_offers_nothing(tmp_path: Path, metadata: dict[str, object] | str) -> None:
     apk = tmp_path / "app" / "scanmylib.apk"
     if metadata == "\udcff":
         apk.parent.mkdir(parents=True)

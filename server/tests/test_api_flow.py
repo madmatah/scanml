@@ -9,10 +9,20 @@ import re
 import threading
 import time
 import zipfile
+from collections.abc import Mapping
+from pathlib import Path
+from typing import Any, cast
 
 import pytest
+from fastapi.testclient import TestClient
 from markdown_it import MarkdownIt
 from PIL import Image
+
+from scanmylib.devtools.fake_ocr import FakeOcrServer
+from scanmylib.library import LibraryService
+from scanmylib.publisher import Publisher
+from scanmylib.records import DocumentRecord, PageRecord
+from scanmylib.storage import LibraryFiles
 from support import (
     AUTH,
     BROKEN_EXIF,
@@ -27,25 +37,22 @@ from support import (
     wait_until_processed,
 )
 
-from scanmylib.library import LibraryService
-from scanmylib.publisher import Publisher
-from scanmylib.storage import LibraryFiles
 
-
-def get_document(client, document_id: str) -> dict:
+def get_document(client: TestClient, document_id: str) -> dict[str, Any]:
     response = client.get(f"/api/documents/{document_id}", headers=AUTH)
     assert response.status_code == 200, response.text
-    return response.json()
+    document: dict[str, Any] = response.json()
+    return document
 
 
-def page_labels(document: dict) -> list:
+def page_labels(document: dict[str, Any]) -> list[str | None]:
     return [page["page_label"] for page in document["pages"] if page["in_document"]]
 
 
 # -- documents --------------------------------------------------------------------------
 
 
-def test_document_lifecycle(client, library_dir):
+def test_document_lifecycle(client: TestClient, library_dir: Path) -> None:
     document_id = new_id()
     created = client.put(f"/api/documents/{document_id}", json={"title": "  Sample Café\tGuide  "}, headers=AUTH)
     assert created.status_code == 201
@@ -96,7 +103,7 @@ def test_document_lifecycle(client, library_dir):
     assert (trashed / "document.md").is_file()
 
 
-def test_new_books_default_to_unwarping(client):
+def test_new_books_default_to_unwarping(client: TestClient) -> None:
     book = client.put(f"/api/documents/{new_id()}", json={"title": "Book", "kind": "book"}, headers=AUTH).json()
     assert book["unwarp"] is True
     flat = client.put(
@@ -107,7 +114,7 @@ def test_new_books_default_to_unwarping(client):
     assert letter["unwarp"] is False
 
 
-def test_document_validation(client):
+def test_document_validation(client: TestClient) -> None:
     assert client.put("/api/documents/not-a-uuid", json={"title": "x"}, headers=AUTH).status_code == 422
     assert client.put(f"/api/documents/{new_id().upper()}", json={"title": "x"}, headers=AUTH).status_code == 422
     assert client.put(f"/api/documents/{new_id()}", json={"author": "no title"}, headers=AUTH).status_code == 422
@@ -122,7 +129,7 @@ def test_document_validation(client):
     assert client.patch(f"/api/documents/{document_id}", json={"title": ""}, headers=AUTH).status_code == 422
 
 
-def test_slugs_are_unique_and_documents_sorted_by_activity(client):
+def test_slugs_are_unique_and_documents_sorted_by_activity(client: TestClient) -> None:
     first = create_document(client, "Letters")
     second = create_document(client, "Letters")
     third = create_document(client, "Complete Phœnix Résumés")
@@ -136,7 +143,7 @@ def test_slugs_are_unique_and_documents_sorted_by_activity(client):
 # -- scanning ---------------------------------------------------------------------------
 
 
-def test_out_of_order_scanning_across_sessions(client, fake_ocr, library_dir):
+def test_out_of_order_scanning_across_sessions(client: TestClient, fake_ocr: FakeOcrServer, library_dir: Path) -> None:
     document_id = create_document(client, "Sample Café Guide", author="Jane Doe", kind="book")
     late, early = new_id(), new_id()
     # Session "late" (captured later, uploaded first): pages 3, 4 and 6.
@@ -220,7 +227,7 @@ def test_out_of_order_scanning_across_sessions(client, fake_ocr, library_dir):
     assert status["library_dir"] == "/home/user/Documents/ScanMyLib"
 
 
-def test_page_views(client):
+def test_page_views(client: TestClient) -> None:
     document_id = create_document(client)
     page = upload(client, document_id, page_image(42)).json()
     wait_until_processed(client, document_id)
@@ -243,7 +250,7 @@ def test_page_views(client):
     assert max(Image.open(io.BytesIO(thumb.content)).size) == 480
 
 
-def test_upload_is_idempotent(client, fake_ocr, library_dir):
+def test_upload_is_idempotent(client: TestClient, fake_ocr: FakeOcrServer, library_dir: Path) -> None:
     document_id = create_document(client)
     page_id = new_id()
     first = upload(client, document_id, page_image(7), page_id=page_id)
@@ -259,21 +266,25 @@ def test_upload_is_idempotent(client, fake_ocr, library_dir):
     assert upload(client, other, page_image(7), page_id=page_id).status_code == 409
 
 
-def test_same_page_id_uploaded_to_two_documents_at_once(client, library_dir, monkeypatch):
+def test_same_page_id_uploaded_to_two_documents_at_once(
+    client: TestClient, library_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     first, second = create_document(client, "Alpha"), create_document(client, "Beta")
     page_id = new_id()
     second_answered = threading.Event()
-    stored: list[tuple] = []
+    stored: list[tuple[str, str, str, bytes, str, bytes]] = []
     store_scan = LibraryService._store_scan
 
-    def slow_store_scan(self, *args):
-        stored.append(args)
+    def slow_store_scan(
+        self: LibraryService, slug: str, key: str, ext: str, data: bytes, scan_page_id: str, thumbnail: bytes
+    ) -> None:
+        stored.append((slug, key, ext, data, scan_page_id, thumbnail))
         if len(stored) == 1:  # keep the first upload between its checks and its insert
             second_answered.wait(10)
-        store_scan(self, *args)
+        store_scan(self, slug, key, ext, data, scan_page_id, thumbnail)
 
     monkeypatch.setattr(LibraryService, "_store_scan", slow_store_scan)
-    statuses = {}
+    statuses: dict[str, int] = {}
     thread = threading.Thread(
         target=lambda: statuses.update(
             first=upload(client, first, jpeg(1200, 1001, color=(255, 0, 0)), page_id=page_id).status_code
@@ -290,11 +301,12 @@ def test_same_page_id_uploaded_to_two_documents_at_once(client, library_dir, mon
     assert [p.parent.parent.name for p in library_dir.glob("*/scans/*")] == ["alpha"]
     page = client.get(f"/api/pages/{page_id}", headers=AUTH).json()
     assert page["document_id"] == first
-    red, _, blue = Image.open(io.BytesIO(client.get(page["thumb_url"], headers=AUTH).content)).getpixel((5, 5))
+    thumbnail = Image.open(io.BytesIO(client.get(page["thumb_url"], headers=AUTH).content))
+    red, _, blue = cast(tuple[int, int, int], thumbnail.getpixel((5, 5)))
     assert red > 200 and blue < 50  # the thumbnail is the first document's photo
 
 
-def test_upload_metadata(client):
+def test_upload_metadata(client: TestClient) -> None:
     document_id = create_document(client)
     page_id, session_id = new_id(), new_id()
     page = upload(
@@ -328,7 +340,7 @@ def test_upload_metadata(client):
         ({"page_number_hint": "0"}, 422),
     ],
 )
-def test_upload_field_validation(client, fields, status):
+def test_upload_field_validation(client: TestClient, fields: dict[str, str], status: int) -> None:
     document_id = create_document(client)
     data = {"page_id": new_id(), **fields}
     response = client.post(
@@ -340,7 +352,7 @@ def test_upload_field_validation(client, fields, status):
     assert response.status_code == status, response.text
 
 
-def test_upload_rejections(client):
+def test_upload_rejections(client: TestClient) -> None:
     document_id = create_document(client)
     assert upload(client, new_id(), page_image(1)).status_code == 404
     missing_file = client.post(f"/api/documents/{document_id}/pages", headers=AUTH, data={"page_id": new_id()})
@@ -363,7 +375,7 @@ def test_upload_rejections(client):
     assert get_document(client, document_id)["stats"]["pages"] == 0
 
 
-def test_camera_photos_with_extra_pictures_or_broken_exif_are_accepted(client):
+def test_camera_photos_with_extra_pictures_or_broken_exif_are_accepted(client: TestClient) -> None:
     document_id = create_document(client)
     multi_picture = upload(client, document_id, mpo(1200, 1042))
     assert multi_picture.status_code == 201, multi_picture.text
@@ -389,7 +401,7 @@ def test_camera_photos_with_extra_pictures_or_broken_exif_are_accepted(client):
         "pages/x.txt",
     ],
 )
-def test_file_access_is_confined_to_the_document_folder(client, library_dir, path):
+def test_file_access_is_confined_to_the_document_folder(client: TestClient, library_dir: Path, path: str) -> None:
     document_id = create_document(client)
     (library_dir / "secret.md").write_text("secret")
     response = client.get(f"/api/documents/{document_id}/files/{path}", headers=AUTH)
@@ -397,7 +409,7 @@ def test_file_access_is_confined_to_the_document_folder(client, library_dir, pat
     assert b"secret" not in response.content
 
 
-def test_previews_are_rendered_one_at_a_time(client, monkeypatch):
+def test_previews_are_rendered_one_at_a_time(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     # Rendering is CPU-bound: parallel renders of a hostile page used to take
     # every worker thread, stalling uploads and thumbnails for minutes.
     document_id = create_document(client)
@@ -406,14 +418,14 @@ def test_previews_are_rendered_one_at_a_time(client, monkeypatch):
     counter_lock, active, peak = threading.Lock(), [0], [0]
     page_html = Publisher.page_html
 
-    def slow_page_html(self, *args):
+    def slow_page_html(self: Publisher, document: DocumentRecord, page: PageRecord) -> str:
         with counter_lock:
             active[0] += 1
             peak[0] = max(peak[0], active[0])
         time.sleep(0.2)
         with counter_lock:
             active[0] -= 1
-        return page_html(self, *args)
+        return page_html(self, document, page)
 
     monkeypatch.setattr(Publisher, "page_html", slow_page_html)
     statuses = []
@@ -431,7 +443,7 @@ def test_previews_are_rendered_one_at_a_time(client, monkeypatch):
     assert peak[0] == 1
 
 
-def test_document_files_are_served_with_their_type(client):
+def test_document_files_are_served_with_their_type(client: TestClient) -> None:
     document_id = create_document(client)
     page = upload(client, document_id, page_image(5)).json()
     wait_until_processed(client, document_id)
@@ -452,7 +464,7 @@ def test_document_files_are_served_with_their_type(client):
 # -- corrections --------------------------------------------------------------------------
 
 
-def test_manual_numbers_exclusion_and_duplicates(client):
+def test_manual_numbers_exclusion_and_duplicates(client: TestClient) -> None:
     document_id = create_document(client)
     session = new_id()
     pages = [
@@ -491,7 +503,7 @@ def test_manual_numbers_exclusion_and_duplicates(client):
     assert client.patch(f"/api/pages/{new_id()}", json={"excluded": True}, headers=AUTH).status_code == 404
 
 
-def test_rotation_requeues_with_the_rotated_image(client, fake_ocr):
+def test_rotation_requeues_with_the_rotated_image(client: TestClient, fake_ocr: FakeOcrServer) -> None:
     document_id = create_document(client)
     # 1204×1500: the fake engine finds no number (variant 4); rotated: 1500×1204, page 204.
     page = upload(client, document_id, jpeg(1204, 1500)).json()
@@ -510,7 +522,9 @@ def test_rotation_requeues_with_the_rotated_image(client, fake_ocr):
     assert thumb_after == thumb_before[::-1]
 
 
-def test_reprocess_keeps_the_previous_result_in_the_trash(client, fake_ocr, library_dir):
+def test_reprocess_keeps_the_previous_result_in_the_trash(
+    client: TestClient, fake_ocr: FakeOcrServer, library_dir: Path
+) -> None:
     document_id = create_document(client)
     page = upload(client, document_id, page_image(3)).json()
     wait_until_processed(client, document_id)
@@ -524,7 +538,7 @@ def test_reprocess_keeps_the_previous_result_in_the_trash(client, fake_ocr, libr
     assert client.post(f"/api/pages/{new_id()}/reprocess", headers=AUTH).status_code == 404
 
 
-def test_deleting_a_page_moves_its_files_to_the_trash(client, library_dir):
+def test_deleting_a_page_moves_its_files_to_the_trash(client: TestClient, library_dir: Path) -> None:
     document_id = create_document(client)
     keep = upload(client, document_id, page_image(1)).json()
     gone = upload(client, document_id, page_image(2)).json()
@@ -541,7 +555,9 @@ def test_deleting_a_page_moves_its_files_to_the_trash(client, library_dir):
     assert gone["key"] not in client.get(f"/api/documents/{document_id}/markdown", headers=AUTH).text
 
 
-def test_library_files_catch_up_after_a_failed_write(client, library_dir, monkeypatch):
+def test_library_files_catch_up_after_a_failed_write(
+    client: TestClient, library_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     document_id = create_document(client)
     keep = upload(client, document_id, page_image(1)).json()
     gone = upload(client, document_id, page_image(2)).json()
@@ -552,11 +568,11 @@ def test_library_files_catch_up_after_a_failed_write(client, library_dir, monkey
     write_document = LibraryFiles.write_document
     failures: list[str] = []
 
-    def full_disk_once(self, *args):
+    def full_disk_once(self: LibraryFiles, slug: str, markdown: str, metadata: Mapping[str, object]) -> None:
         if not failures:
             failures.append("ENOSPC")
             raise OSError(errno.ENOSPC, "No space left on device")
-        write_document(self, *args)
+        write_document(self, slug, markdown, metadata)
 
     monkeypatch.setattr(LibraryFiles, "write_document", full_disk_once)
     assert client.delete(f"/api/pages/{gone['id']}", headers=AUTH).status_code == 204
@@ -566,7 +582,7 @@ def test_library_files_catch_up_after_a_failed_write(client, library_dir, monkey
     assert keep["key"] in document_md.read_text()
 
 
-def test_export_zip(client):
+def test_export_zip(client: TestClient) -> None:
     document_id = create_document(client)
     page = upload(client, document_id, page_image(9)).json()
     wait_until_processed(client, document_id)
@@ -589,7 +605,9 @@ def test_export_zip(client):
     assert "# Sample Café Guide" in with_scans.read("sample-cafe-guide/document.md").decode()
 
 
-def test_hostile_ocr_output_is_sanitized_end_to_end(client, fake_ocr, library_dir):
+def test_hostile_ocr_output_is_sanitized_end_to_end(
+    client: TestClient, fake_ocr: FakeOcrServer, library_dir: Path
+) -> None:
     fake_ocr.evil = True
     document_id = create_document(client)
     page = upload(client, document_id, page_image(4)).json()
@@ -610,7 +628,7 @@ def test_hostile_ocr_output_is_sanitized_end_to_end(client, fake_ocr, library_di
     assert f'src="images/{page["key"]}_1.jpg"' in rendered
 
 
-def test_document_options_reach_the_sandbox(client, fake_ocr):
+def test_document_options_reach_the_sandbox(client: TestClient, fake_ocr: FakeOcrServer) -> None:
     document_id = create_document(client, unwarp=True)
     upload(client, document_id, page_image(1))
     wait_until_processed(client, document_id)

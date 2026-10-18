@@ -12,7 +12,7 @@ import json
 import os
 import re
 import tempfile
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 
 from . import clock
@@ -106,7 +106,7 @@ class LibraryFiles:
         key: str,
         markdown: str,
         images: Sequence[tuple[str, bytes]],
-        raw: dict,
+        raw: Mapping[str, object],
     ) -> None:
         """Store an OCR result; a previous result of the same page goes to the trash.
 
@@ -142,12 +142,12 @@ class LibraryFiles:
         os.rename(folder, target)
         return target
 
-    def write_document(self, slug: str, markdown: str, metadata: dict) -> None:
+    def write_document(self, slug: str, markdown: str, metadata: Mapping[str, object]) -> None:
         folder = self.document_dir(slug)
         atomic_write(folder / DOCUMENT_METADATA, _json_bytes(metadata))
         atomic_write(folder / DOCUMENT_MARKDOWN, markdown.encode("utf-8"))
 
-    def write_index(self, markdown: str, metadata: dict) -> None:
+    def write_index(self, markdown: str, metadata: Mapping[str, object]) -> None:
         self.root.mkdir(parents=True, exist_ok=True)
         atomic_write(self.root / INDEX_METADATA, _json_bytes(metadata))
         atomic_write(self.root / INDEX_MARKDOWN, markdown.encode("utf-8"))

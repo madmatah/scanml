@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Awaitable, Callable
 
-from scanmylib.debounce import DebouncedBatch
+from scanmylib.debounce import BatchAction, DebouncedBatch
 
 
-def run_batch(action, scenario) -> None:
+def run_batch(action: BatchAction, scenario: Callable[[DebouncedBatch], Awaitable[None]]) -> None:
     async def main() -> None:
         batch = DebouncedBatch(action, delay=0.01, max_delay=0.02)
         batch.start()
@@ -17,13 +18,13 @@ def run_batch(action, scenario) -> None:
     asyncio.run(main())
 
 
-def test_changes_are_batched():
-    calls = []
+def test_changes_are_batched() -> None:
+    calls: list[tuple[list[str], bool]] = []
 
-    async def action(keys, index):
+    async def action(keys: set[str], index: bool) -> None:
         calls.append((sorted(keys), index))
 
-    async def scenario(batch):
+    async def scenario(batch: DebouncedBatch) -> None:
         batch.schedule("a")
         batch.schedule("b")
         batch.schedule("a")
@@ -33,18 +34,18 @@ def test_changes_are_batched():
     assert calls == [(["a"], False), (["b"], False), ([], True)]
 
 
-def test_failed_work_is_retried_without_holding_up_the_rest():
-    calls = []
+def test_failed_work_is_retried_without_holding_up_the_rest() -> None:
+    calls: list[tuple[list[str], bool]] = []
     failures = {"a": 2, "index": 1}  # e.g. a full disk: "a" fails twice, the index once
 
-    async def action(keys, index):
+    async def action(keys: set[str], index: bool) -> None:
         calls.append((sorted(keys), index))
         for name in [*keys, *(["index"] if index else [])]:
             if failures.get(name):
                 failures[name] -= 1
                 raise OSError(28, "No space left on device")
 
-    async def scenario(batch):
+    async def scenario(batch: DebouncedBatch) -> None:
         batch.schedule("a")
         batch.schedule("b")
         await asyncio.sleep(0.5)
@@ -60,17 +61,17 @@ def test_failed_work_is_retried_without_holding_up_the_rest():
     ]
 
 
-def test_flush_failure_is_retried_in_the_background():
-    calls = []
+def test_flush_failure_is_retried_in_the_background() -> None:
+    calls: list[tuple[list[str], bool]] = []
     failures = [1]
 
-    async def action(keys, index):
+    async def action(keys: set[str], index: bool) -> None:
         calls.append((sorted(keys), index))
         if failures[0]:
             failures[0] -= 1
             raise OSError(28, "No space left on device")
 
-    async def scenario(batch):
+    async def scenario(batch: DebouncedBatch) -> None:
         batch.schedule("a")
         await batch.flush("a")  # e.g. GET /markdown: fails, the document stays pending
         await asyncio.sleep(0.3)

@@ -24,6 +24,7 @@ from __future__ import annotations
 import html
 import re
 from collections.abc import Callable
+from typing import override
 
 from markdown_it import MarkdownIt
 
@@ -143,12 +144,18 @@ _CONTROL_CHARACTERS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f\u2028\u2
 # "<imgs/…>" form never gets here: the HTML pass has already broken it.)
 _IMAGE_DESTINATION = re.compile(r"[ \t]*(imgs/[A-Za-z0-9._-]{1,128})(?=[ \t\n)])")
 
+
+class _AnyLinkMarkdownIt(MarkdownIt):
+    @override
+    def validateLink(self, url: str) -> bool:
+        return True
+
+
 # Parser used only to find reference definitions, whatever their URL
 # (markdown-it ignores definitions with "unsafe" URLs, other renderers may not).
 # Definitions are blocks: inline parsing, superlinear on some hostile input
 # (2 MiB of "[" took a minute), is not needed to find them.
-_reference_parser = MarkdownIt("commonmark")
-_reference_parser.validateLink = lambda url: True  # type: ignore[method-assign]
+_reference_parser = _AnyLinkMarkdownIt("commonmark")
 _reference_parser.disable("inline")
 
 
@@ -301,7 +308,7 @@ def _neutralize_reference_definitions(text: str) -> str:
     OCR output has no legitimate use for them, so as soon as one exists every
     ``]:`` is escaped, which a definition cannot survive.
     """
-    env: dict = {}
+    env: dict[str, object] = {}
     _reference_parser.parse(text, env)
     if not env.get("references"):
         return text

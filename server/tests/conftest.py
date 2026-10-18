@@ -4,19 +4,20 @@ from __future__ import annotations
 
 import shutil
 import tempfile
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-from support import TOKEN
 
 from scanmylib.app import create_app
 from scanmylib.config import Settings
 from scanmylib.devtools.fake_ocr import FakeOcrServer
+from support import TOKEN
 
 
 @pytest.fixture
-def socket_dir():
+def socket_dir() -> Iterator[Path]:
     # Unix socket paths are limited to ~107 bytes: pytest's tmp_path can be longer.
     path = Path(tempfile.mkdtemp(prefix="sml-", dir="/tmp"))
     yield path
@@ -24,7 +25,7 @@ def socket_dir():
 
 
 @pytest.fixture
-def fake_ocr(socket_dir):
+def fake_ocr(socket_dir: Path) -> Iterator[FakeOcrServer]:
     server = FakeOcrServer(socket_dir / "ocr.sock")
     server.start()
     yield server
@@ -32,7 +33,7 @@ def fake_ocr(socket_dir):
 
 
 @pytest.fixture
-def settings(tmp_path, socket_dir) -> Settings:
+def settings(tmp_path: Path, socket_dir: Path) -> Settings:
     return Settings(
         library_dir=tmp_path / "library",
         library_host_path="/home/user/Documents/ScanMyLib",
@@ -48,11 +49,11 @@ def settings(tmp_path, socket_dir) -> Settings:
 
 
 @pytest.fixture
-def client(settings, fake_ocr):
+def client(settings: Settings, fake_ocr: FakeOcrServer) -> Iterator[TestClient]:
     with TestClient(create_app(settings)) as test_client:
         yield test_client
 
 
 @pytest.fixture
-def library_dir(settings) -> Path:
+def library_dir(settings: Settings) -> Path:
     return settings.library_dir

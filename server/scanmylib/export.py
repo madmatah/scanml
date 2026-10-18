@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import io
 import zipfile
-from collections.abc import Iterator, Sequence
+from collections.abc import Buffer, Iterator, Sequence
 from pathlib import Path
 
 _ALREADY_COMPRESSED = {".jpg", ".png", ".webp"}
@@ -20,9 +20,10 @@ class _Sink(io.RawIOBase):
     def writable(self) -> bool:
         return True
 
-    def write(self, data: bytes) -> int:  # type: ignore[override]
-        self._chunks.append(bytes(data))
-        return len(data)
+    def write(self, data: Buffer) -> int:
+        chunk = bytes(data)
+        self._chunks.append(chunk)
+        return len(chunk)
 
     def take(self) -> bytes:
         data = b"".join(self._chunks)

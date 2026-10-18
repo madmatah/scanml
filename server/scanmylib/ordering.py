@@ -30,6 +30,7 @@ from collections import defaultdict
 from collections.abc import Iterable, Sequence, Set
 from dataclasses import dataclass
 from itertools import pairwise
+from typing import TypedDict
 
 DONE = "done"
 
@@ -186,6 +187,15 @@ class Placement:
     rank: int
 
 
+class CoverageJson(TypedDict):
+    ranges: list[list[int]]
+    label: str
+    gaps: list[list[int]]
+    min: int | None
+    max: int | None
+    unnumbered: int
+
+
 @dataclass(frozen=True)
 class Coverage:
     """Arabic page numbers present in the document, as ranges, and the gaps between."""
@@ -213,7 +223,7 @@ class Coverage:
     def missing_label(self) -> str:
         return format_ranges(self.gaps)
 
-    def to_json(self) -> dict:
+    def to_json(self) -> CoverageJson:
         return {
             "ranges": [list(r) for r in self.ranges],
             "label": self.label,
@@ -646,15 +656,15 @@ class _OrderSearch:
         # loose pages placed between them, in increasing order.
         gap: list[str] = []
         low = -1
-        for page_id in (*self._wanted[: len(self._wanted) - len(tail)], None):
-            if page_id is None or self._base[page_id] is None:
-                high = len(placements) if page_id is None else placements[page_id].rank
+        for wanted_id in (*self._wanted[: len(self._wanted) - len(tail)], None):
+            if wanted_id is None or self._base[wanted_id] is None:
+                high = len(placements) if wanted_id is None else placements[wanted_id].rank
                 inside = [gap_id for gap_id in gap if low < placements[gap_id].rank < high]
                 increasing = _longest_increasing([placements[gap_id].rank for gap_id in inside])
                 chosen.update(inside[index] for index in increasing)
                 gap, low = [], high
-            elif page_id in loose_set and placements[page_id].sort_value is not None:
-                gap.append(page_id)
+            elif wanted_id in loose_set and placements[wanted_id].sort_value is not None:
+                gap.append(wanted_id)
         while tie := self._tie(chosen, placements):
             chosen.discard(tie)
         return [page_id for page_id in self._wanted if page_id in chosen]

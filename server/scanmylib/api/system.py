@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from typing import Any
+from typing import TypedDict
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
@@ -21,9 +21,17 @@ public = APIRouter()
 protected = APIRouter(dependencies=[Depends(require_auth)])
 
 
+class _Pairing(TypedDict):
+    url: str
+    token: str
+    pair_uri: str
+    apk_available: bool
+    apk_url: str
+
+
 # Not async: it reads the APK's metadata file (FastAPI runs it in its thread pool).
 @public.get("/api/health")
-def health(services: ServicesDep) -> dict:
+def health(services: ServicesDep) -> dict[str, object]:
     # The published APK: the app offers it as an update when its version code is higher.
     return {
         "name": "ScanMyLib",
@@ -61,20 +69,20 @@ async def close_session(request: Request, services: ServicesDep) -> Response:
     return response
 
 
-def _sandbox_text(value: Any, limit: int) -> str | None:
+def _sandbox_text(value: object, limit: int) -> str | None:
     """A string of the sandbox's /health (untrusted): one printable line, bounded."""
     if not isinstance(value, str):
         return None
     return single_line(value.encode("utf-8", "replace").decode("utf-8"))[:limit] or None
 
 
-def _sandbox_number(value: Any) -> int | float | None:
+def _sandbox_number(value: object) -> int | float | None:
     if isinstance(value, bool) or not isinstance(value, int | float):
         return None
     return value if math.isfinite(value) else None
 
 
-def _sandbox_gpu(value: Any) -> dict | None:
+def _sandbox_gpu(value: object) -> dict[str, object] | None:
     if not isinstance(value, dict):
         return None
     return {
@@ -85,14 +93,15 @@ def _sandbox_gpu(value: Any) -> dict | None:
 
 
 @protected.get("/api/status")
-async def status(services: ServicesDep) -> dict:
+async def status(services: ServicesDep) -> dict[str, object]:
     try:
         health = await services.ocr.health()
     except OcrUnavailable as exc:
         ocr = {"reachable": False, "state": "unreachable", "backend": None, "last_error": str(exc), "gpu": None}
     else:
         # Relayed to the web UI and the phone: only the documented fields, typed and bounded.
-        engine = health.get("engine") if isinstance(health.get("engine"), dict) else {}
+        engine_value = health.get("engine")
+        engine = engine_value if isinstance(engine_value, dict) else {}
         ocr = {
             "reachable": True,
             "state": _sandbox_text(engine.get("state"), 32),
@@ -108,7 +117,7 @@ async def status(services: ServicesDep) -> dict:
     }
 
 
-def _pairing(services: Services, request: Request) -> dict:
+def _pairing(services: Services, request: Request) -> _Pairing:
     url = public_url(services, request)
     token = services.auth.token
     return {
@@ -121,7 +130,7 @@ def _pairing(services: Services, request: Request) -> dict:
 
 
 @protected.get("/api/pairing")
-async def pairing(request: Request, services: ServicesDep) -> dict:
+async def pairing(request: Request, services: ServicesDep) -> _Pairing:
     return _pairing(services, request)
 
 

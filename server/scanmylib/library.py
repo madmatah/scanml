@@ -34,6 +34,7 @@ from .records import (
     DocumentRecord,
     InvalidRequest,
     NotFound,
+    OcrSummary,
     PageChanges,
     PageClaim,
     PageRecord,
@@ -253,7 +254,7 @@ class LibraryService:
             with self._db.transaction():
                 assignments = ", ".join(f"{name} = ?" for name in values)
                 self._db.execute(
-                    f"UPDATE documents SET {assignments} WHERE id = ?",
+                    f"UPDATE documents SET {assignments} WHERE id = ?",  # noqa: S608 (column names from the code, values as ? parameters)
                     (*values.values(), document_id),
                 )
                 self._touch(document_id)
@@ -390,7 +391,10 @@ class LibraryService:
             with self._db.transaction():
                 page = self.require_page(page_id)
                 assignments = ", ".join(f"{name} = ?" for name in values)
-                self._db.execute(f"UPDATE pages SET {assignments} WHERE id = ?", (*values.values(), page_id))
+                self._db.execute(
+                    f"UPDATE pages SET {assignments} WHERE id = ?",  # noqa: S608 (column names from the code, values as ? parameters)
+                    (*values.values(), page_id),
+                )
                 if rotate:
                     self._requeue(page_id)
                 self._touch(page.document_id)
@@ -559,7 +563,7 @@ class LibraryService:
                 [(image.filename, image.data) for image in output.images],
                 output.raw,
             )
-            ocr = {
+            ocr: OcrSummary = {
                 "engine": output.engine.lower(),
                 "model": output.engine,
                 "duration_s": round(duration_s, 2),
@@ -608,7 +612,10 @@ class LibraryService:
             )
             if values != tuple(row[column] for column in _LAYOUT_COLUMNS):
                 assignments = ", ".join(f"{column} = ?" for column in _LAYOUT_COLUMNS)
-                self._db.execute(f"UPDATE pages SET {assignments} WHERE id = ?", (*values, row["id"]))
+                self._db.execute(
+                    f"UPDATE pages SET {assignments} WHERE id = ?",  # noqa: S608 (column names from the code, values as ? parameters)
+                    (*values, row["id"]),
+                )
         stats = {
             "pages": len(pages),
             **{status: sum(p.status == status for p in pages) for status in ("done", "queued", "processing", "error")},

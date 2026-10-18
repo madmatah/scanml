@@ -81,7 +81,7 @@ class BodySizeLimitMiddleware:
         await self.app(scope, limited_receive, send)
 
 
-async def _send_json(send: Send, status: int, payload: dict) -> None:
+async def _send_json(send: Send, status: int, payload: dict[str, object]) -> None:
     body = json.dumps(payload).encode()
     await send(
         {

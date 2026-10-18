@@ -85,7 +85,7 @@ class OcrClient:
         if response.status_code >= 400:
             raise OcrUnavailable(_error_message(response.status_code, body))
 
-    async def parse(self, image: bytes, *, request_id: str, unwarp: bool, orientation: bool) -> Any:
+    async def parse(self, image: bytes, *, request_id: str, unwarp: bool, orientation: bool) -> object:
         """OCR one page image (JPEG). Returns the decoded JSON response (untrusted)."""
         params = {
             "request_id": request_id,

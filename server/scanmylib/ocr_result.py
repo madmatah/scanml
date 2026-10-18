@@ -14,7 +14,7 @@ import logging
 import math
 import re
 from dataclasses import dataclass
-from typing import Any
+from typing import TypedDict
 
 from .images import MAX_OCR_IMAGE_BYTES, ImageRejected, reencode_ocr_image
 from .sanitize import MarkdownTooLarge, is_safe_image_name, sanitize_markdown
@@ -39,6 +39,43 @@ class OcrResultError(ValueError):
     """The sandbox response is not acceptable."""
 
 
+class _Block(TypedDict):
+    label: str
+    content: str
+    bbox: list[float] | None
+    order: int | None
+
+
+class _ImageFile(TypedDict):
+    name: str
+    file: str
+
+
+class _RejectedImage(TypedDict):
+    name: str | None
+    reason: str
+
+
+class _Preprocessing(TypedDict):
+    angle: float | None
+    unwarped: bool
+
+
+class RawOcrResult(TypedDict):
+    key: str
+    request_id: str | None
+    width: int | None
+    height: int | None
+    engine: dict[str, str | None]
+    timings: dict[str, float | None]
+    preprocess: _Preprocessing | None
+    page_continuation: dict[str, bool] | None
+    page_numbers: list[str]
+    images: list[_ImageFile]
+    rejected_images: list[_RejectedImage]
+    blocks: list[_Block]
+
+
 @dataclass(frozen=True)
 class OutputImage:
     filename: str  # "<key>_<n>.jpg", stored under images/
@@ -54,7 +91,7 @@ class PageOcrOutput:
     detected_numbers: tuple[str, ...]
     engine: str  # e.g. "PaddleOCR-VL-1.6"
     duration_s: float | None
-    raw: dict  # content of ocr/<key>.json
+    raw: RawOcrResult  # content of ocr/<key>.json
 
 
 def _valid_text(value: str) -> str:
@@ -62,7 +99,7 @@ def _valid_text(value: str) -> str:
     return value.encode("utf-8", "replace").decode("utf-8")
 
 
-def _short_text(value: Any, limit: int = 64) -> str | None:
+def _short_text(value: object, limit: int = 64) -> str | None:
     """A short printable string (engine names, labels...), or None."""
     if not isinstance(value, str):
         return None
@@ -70,7 +107,7 @@ def _short_text(value: Any, limit: int = 64) -> str | None:
     return cleaned or None
 
 
-def _identifier(value: Any, limit: int = 64) -> str | None:
+def _identifier(value: object, limit: int = 64) -> str | None:
     """An engine or model name, or None. It is written into document.md (front
     matter ``source``), where markup or a URL must not get through."""
     if not isinstance(value, str):
@@ -79,28 +116,29 @@ def _identifier(value: Any, limit: int = 64) -> str | None:
     return cleaned or None
 
 
-def _finite_number(value: Any) -> float | None:
+def _finite_number(value: object) -> float | None:
     if isinstance(value, bool) or not isinstance(value, int | float):
         return None
     return float(value) if math.isfinite(value) else None
 
 
-def _dimension(value: Any) -> int | None:
+def _dimension(value: object) -> int | None:
     return value if isinstance(value, int) and not isinstance(value, bool) and 0 < value <= 100_000 else None
 
 
-def _blocks(value: Any) -> list[dict]:
+def _blocks(value: object) -> list[_Block]:
     if value is None:
         return []
     if not isinstance(value, list) or len(value) > MAX_BLOCKS:
         raise OcrResultError("invalid blocks")
-    blocks = []
+    blocks: list[_Block] = []
     text_length = 0
     for item in value:
         if not isinstance(item, dict):
             continue
         bbox = item.get("bbox")
         coordinates = [_finite_number(v) for v in bbox] if isinstance(bbox, list) and len(bbox) == 4 else []
+        finite_coordinates = [coordinate for coordinate in coordinates if coordinate is not None]
         order = item.get("order")
         content = item.get("content")
         text = _valid_text(content[:MAX_BLOCK_CONTENT]) if isinstance(content, str) else ""
@@ -111,14 +149,16 @@ def _blocks(value: Any) -> list[dict]:
             {
                 "label": _short_text(item.get("label")) or "unknown",
                 "content": text,
-                "bbox": [round(v, 1) for v in coordinates] if None not in coordinates and coordinates else None,
+                "bbox": [round(coordinate, 1) for coordinate in finite_coordinates]
+                if len(finite_coordinates) == 4
+                else None,
                 "order": order if isinstance(order, int) and not isinstance(order, bool) else None,
             }
         )
     return blocks
 
 
-def _page_number_strings(response: dict, blocks: list[dict]) -> list[str]:
+def _page_number_strings(response: dict[str, object], blocks: list[_Block]) -> list[str]:
     """Contents of page-number blocks, falling back to numbers starting or ending a header/footer."""
     reported = response.get("page_numbers")
     if isinstance(reported, list):
@@ -135,7 +175,7 @@ def _page_number_strings(response: dict, blocks: list[dict]) -> list[str]:
     return numbers[:MAX_NUMBER_STRINGS]
 
 
-def _decode_images(value: Any, key: str) -> tuple[list[OutputImage], dict[str, str], list[dict]]:
+def _decode_images(value: object, key: str) -> tuple[list[OutputImage], dict[str, str], list[_RejectedImage]]:
     """Re-encode the illustrations; return them, the name → file mapping and the rejects."""
     if value is None:
         value = []
@@ -145,7 +185,7 @@ def _decode_images(value: Any, key: str) -> tuple[list[OutputImage], dict[str, s
         raise OcrResultError(f"more than {MAX_IMAGES} images")
     outputs: list[OutputImage] = []
     files: dict[str, str] = {}
-    rejected: list[dict] = []
+    rejected: list[_RejectedImage] = []
     for item in value:
         name = item.get("name") if isinstance(item, dict) else None
         if not isinstance(name, str) or not is_safe_image_name(name) or name in files:
@@ -167,7 +207,7 @@ def _decode_images(value: Any, key: str) -> tuple[list[OutputImage], dict[str, s
     return outputs, files, rejected
 
 
-def build_page_output(response: Any, key: str) -> PageOcrOutput:
+def build_page_output(response: object, key: str) -> PageOcrOutput:
     """Validate a parse response for the page `key` and prepare its files."""
     if not isinstance(response, dict):
         raise OcrResultError("response is not a JSON object")
@@ -190,14 +230,16 @@ def build_page_output(response: Any, key: str) -> PageOcrOutput:
 
     blocks = _blocks(response.get("blocks"))
     numbers = _page_number_strings(response, blocks)
-    engine_info = response.get("engine") if isinstance(response.get("engine"), dict) else {}
+    engine_value = response.get("engine")
+    engine_info = engine_value if isinstance(engine_value, dict) else {}
     engine = {k: _identifier(engine_info.get(k)) for k in ("name", "pipeline_version", "model", "backend")}
-    timings_info = response.get("timings") if isinstance(response.get("timings"), dict) else {}
+    timings_value = response.get("timings")
+    timings_info = timings_value if isinstance(timings_value, dict) else {}
     timings = {k: _finite_number(timings_info.get(k)) for k in ("queue_s", "load_s", "infer_s")}
     continuation = response.get("page_continuation")
     preprocess = response.get("preprocess")
 
-    raw = {
+    raw: RawOcrResult = {
         "key": key,
         "request_id": _short_text(response.get("request_id"), 128),
         "width": _dimension(response.get("width")),

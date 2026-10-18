@@ -67,7 +67,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
-from version import Release, format_release, parse_release  # noqa: E402
+from version import Release, format_release, parse_release
 
 _SUBJECT = re.compile(r"(?P<type>[a-z]+)(?:\((?P<scope>[a-z0-9-]+)\))?(?P<breaking>!)?: (?P<summary>\S.*)")
 _BREAKING_FOOTER = re.compile(r"^BREAKING[ -]CHANGE: ", re.MULTILINE)
@@ -253,7 +253,7 @@ def complete_release(changelog: str, version: str, body: str) -> str:
     """The changelog with the entries of `body` added to the section of `version`, each at the end
     of its subsection (created in Keep a Changelog's order if missing)."""
     lines = changelog.split("\n")
-    added = {}
+    added: dict[str, list[str]] = {}
     for line in body.split("\n"):
         if line.startswith("### "):
             heading = line
@@ -296,7 +296,7 @@ def changes_since(base: str, ref: str) -> list[Change]:
     fields = git("log", "--reverse", "--format=%H%x00%s%x00%b%x00", f"{base}..{ref}").split("\x00")
     return [
         Change.parse(commit.strip(), subject, body)
-        for commit, subject, body in zip(fields[0::3], fields[1::3], fields[2::3])
+        for commit, subject, body in zip(fields[0::3], fields[1::3], fields[2::3], strict=False)
         if commit.strip()
     ]
 
@@ -494,6 +494,7 @@ def plan(ref: str, chosen: str | None, allow_unfolded: bool = False) -> Plan:
         if chosen:
             raise ReleaseError(f"the release {version} is completed, not chosen again: no --bump")
         published = publication(version, commit)
+        assert published is not None, "release_commits found its release commit above"
         if not published.problem:
             raise ReleaseError(
                 f"the release {version} can be published as it is, on {published.point[:12]}: "
@@ -503,7 +504,7 @@ def plan(ref: str, chosen: str | None, allow_unfolded: bool = False) -> Plan:
         # The notes of the latest release commit cover the commits up to the one they were written on;
         # without notes to add to (or that commit), the section is written again from the last release.
         completing, rewrite = True, published.rewrite
-        since = f"v{format_release(last)}" if rewrite else published.base
+        since = f"v{format_release(last)}" if rewrite or published.base is None else published.base
         notes_edits = changelog_only(since, commit)
         changes = [
             change
@@ -718,7 +719,7 @@ def main(argv: list[str] | None = None) -> int:
             args.to_publish.write_text(published[1])
             print(published[0], published[2])
         return 0
-    date = datetime.datetime.now(datetime.timezone.utc).date().isoformat()
+    date = datetime.datetime.now(datetime.UTC).date().isoformat()
     try:
         if args.commit and args.ref != "HEAD":
             raise ReleaseError("--commit prepares HEAD: no --ref")
@@ -751,6 +752,7 @@ def main(argv: list[str] | None = None) -> int:
         print()
         print(section, end="")
     else:
+        assert release.level is not None, "only a release to complete has no level"
         why = {"major": "breaking changes", "minor": "new features", "patch": "fixes and other changes"}[release.level]
         if release.level == "minor" and any(change.breaking for change in release.changes):
             why = "breaking changes, before 1.0"

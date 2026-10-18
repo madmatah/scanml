@@ -48,9 +48,9 @@ the first merges them into the settings) together with the .env of the stack, an
   pid, ipc, uts, userns_mode, cgroup, labels, env_file, label_file...), devices other than the
   GPU (CDI nvidia.com/gpu=...), security options other than no-new-privileges, any network_mode
   but none (or another service of the stack), networks other than the stack's own
-  (<project>_...) or with a driver other than bridge, build settings outside BUILD_KEYS, build contexts outside the project
-  directory, and `include` in the compose file (its env_file feeds host files into the
-  interpolation of what it includes);
+  (<project>_...) or with a driver other than bridge, build settings outside BUILD_KEYS, build
+  contexts outside the project directory, and `include` in the compose file (its env_file feeds
+  host files into the interpolation of what it includes);
 * host paths. The stack's DATA_DIR must be absolute, outside the system directories and your home
   directory (and $HOME), and must neither be nor contain /tmp; every other host path the stack
   uses (bind mounts, LIBRARY_DIR, ANDROID_DIR...) must be inside its DATA_DIR. No path may be,
@@ -90,8 +90,13 @@ import os
 import pwd
 import re
 import sys
+from collections.abc import Collection
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
+
+#: What docker prints as JSON (`docker inspect`, `docker compose config`): untyped, read with defaults for every key.
+JsonObject = dict[str, Any]
 
 #: The production stack's project name (scripts/lib/common.sh, compose.yaml's COMPOSE_PROJECT_NAME).
 PRODUCTION_PROJECT = "scanmylib"
@@ -182,7 +187,7 @@ class EnvError(ValueError):
     """A .env file that breaks the strict format, or a production that cannot be described."""
 
 
-def read_env(path: str | os.PathLike) -> dict[str, str]:
+def read_env(path: str | os.PathLike[str]) -> dict[str, str]:
     """The KEY=VALUE pairs of a .env file in the strict format (see the module docstring)."""
     try:
         data = Path(path).read_bytes()
@@ -243,7 +248,7 @@ def homes() -> set[str]:
     return found
 
 
-def production_checkout(containers: list[dict]) -> Path:
+def production_checkout(containers: list[JsonObject]) -> Path:
     """Production's checkout: the project directory of production's containers (`docker
     inspect`), else ~/Dev/scanmylib."""
     directories = sorted(
@@ -325,7 +330,7 @@ class Production:
         return relations
 
 
-def production_identity(checkout: Path, containers: list[dict]) -> Production:
+def production_identity(checkout: Path, containers: list[JsonObject]) -> Production:
     """Production as described by the .env of its checkout, the defaults of .env.example, and
     its containers (`docker inspect`)."""
     env_file = checkout / ".env"
@@ -400,7 +405,7 @@ def path_problems(
     *,
     inside: str | None = None,
     read_only: bool = False,
-    shareable: set[str] = frozenset(),
+    shareable: Collection[str] = frozenset(),
     outside_home: bool = True,
 ) -> list[str]:
     """Why a host path that a stack uses is not its own (an empty list when it is): it must be
@@ -455,7 +460,7 @@ def _published(value: object) -> list[int]:
     return []
 
 
-def _settings_problems(name: str, service: dict) -> list[str]:
+def _settings_problems(name: str, service: JsonObject) -> list[str]:
     return [
         f"service {name}: {key} is not allowed outside production (scripts/lib/stack.py, SERVICE_KEYS)"
         for key in sorted(set(service) - SERVICE_KEYS)
@@ -464,9 +469,9 @@ def _settings_problems(name: str, service: dict) -> list[str]:
 
 def _service_problems(
     name: str,
-    service: dict,
+    service: JsonObject,
     *,
-    config: dict,
+    config: JsonObject,
     project: str,
     prefix: str,
     project_dir: str | None,
@@ -552,8 +557,8 @@ def _service_problems(
 
 def isolation_problems(
     env: dict[str, str],
-    config: dict,
-    raw: dict,
+    config: JsonObject,
+    raw: JsonObject,
     production: Production,
     project_dir: str | None = None,
     compose_file: str | None = None,
@@ -861,7 +866,7 @@ def compose_command_problems(argv: list[str], *, production: bool = False) -> li
 # -- command line -------------------------------------------------------------
 
 
-def _read_containers() -> list[dict]:
+def _read_containers() -> list[JsonObject]:
     text = sys.stdin.read()
     return json.loads(text) if text.strip() else []
 

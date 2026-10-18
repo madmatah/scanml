@@ -11,12 +11,13 @@ import os
 import sys
 import tempfile
 import unittest
+from collections.abc import Sequence
 from contextlib import redirect_stderr
 from pathlib import Path
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
-import stack  # noqa: E402
+import stack
 
 DEV_ENV = """\
 # A development stack.
@@ -36,11 +37,11 @@ APP_VARIANT=dev
 
 
 class ReadEnvTest(unittest.TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         self.directory = tempfile.TemporaryDirectory()
         self.path = Path(self.directory.name) / ".env"
 
-    def tearDown(self):
+    def tearDown(self) -> None:
         self.directory.cleanup()
 
     def read(self, text: str | bytes) -> dict[str, str]:
@@ -49,13 +50,13 @@ class ReadEnvTest(unittest.TestCase):
         self.path.write_bytes(text)
         return stack.read_env(self.path)
 
-    def test_key_value_lines_comments_and_blank_lines(self):
+    def test_key_value_lines_comments_and_blank_lines(self) -> None:
         values = self.read("# comment\n\nA=1\nPUBLIC_URL=http://192.168.1.10:8765\nEMPTY=\nLAST=a/b_c.d@e%f+g,h-i")
         self.assertEqual(
             values, {"A": "1", "PUBLIC_URL": "http://192.168.1.10:8765", "EMPTY": "", "LAST": "a/b_c.d@e%f+g,h-i"}
         )
 
-    def test_lines_docker_compose_would_read_differently_are_refused(self):
+    def test_lines_docker_compose_would_read_differently_are_refused(self) -> None:
         # Each of these makes docker compose resolve COMPOSE_PROJECT_NAME=scanmylib while a naive
         # parser (sed 's/^KEY=//') reads something else.
         for text in [
@@ -80,7 +81,7 @@ class ReadEnvTest(unittest.TestCase):
             with self.subTest(text=text), self.assertRaises(stack.EnvError):
                 self.read(text)
 
-    def test_keys_that_change_what_docker_compose_does_are_refused(self):
+    def test_keys_that_change_what_docker_compose_does_are_refused(self) -> None:
         for key in (
             "COMPOSE_FILE",
             "COMPOSE_PROFILES",
@@ -93,21 +94,21 @@ class ReadEnvTest(unittest.TestCase):
             with self.subTest(key=key), self.assertRaisesRegex(stack.EnvError, key):
                 self.read(f"{key}=x\n")
 
-    def test_errors_name_the_line(self):
+    def test_errors_name_the_line(self) -> None:
         with self.assertRaisesRegex(stack.EnvError, "line 3"):
             self.read("A=1\n# ok\nB=two words\n")
 
-    def test_not_utf8(self):
+    def test_not_utf8(self) -> None:
         with self.assertRaisesRegex(stack.EnvError, "UTF-8"):
             self.read(b"A=\xff\n")
 
-    def test_missing_file(self):
+    def test_missing_file(self) -> None:
         with self.assertRaises(stack.EnvError):
             stack.read_env(Path(self.directory.name) / "missing")
 
 
 class ImageTest(unittest.TestCase):
-    def test_normalize_image(self):
+    def test_normalize_image(self) -> None:
         for reference, expected in [
             ("scanmylib-api", "docker.io/library/scanmylib-api:latest"),
             ("scanmylib-api:latest", "docker.io/library/scanmylib-api:latest"),
@@ -123,7 +124,7 @@ class ImageTest(unittest.TestCase):
             with self.subTest(reference=reference):
                 self.assertEqual(stack.normalize_image(reference), expected)
 
-    def test_repository(self):
+    def test_repository(self) -> None:
         self.assertEqual(stack.repository("scanmylib-api:latest"), "docker.io/library/scanmylib-api")
         self.assertEqual(stack.repository("index.docker.io/library/scanmylib-api"), "docker.io/library/scanmylib-api")
         self.assertEqual(stack.repository("registry:5000/scanmylib-api"), "registry:5000/scanmylib-api")
@@ -141,36 +142,36 @@ def fake_home(test: unittest.TestCase, home: Path) -> None:
 
 
 class ProductionCheckoutTest(unittest.TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
         self.home = Path(os.path.realpath(directory.name))
         fake_home(self, self.home)
 
     @staticmethod
-    def container(working_dir: str) -> dict:
+    def container(working_dir: str) -> stack.JsonObject:
         return {"Name": "/scanmylib-api-1", "Config": {"Labels": {stack.WORKING_DIR_LABEL: working_dir}}}
 
-    def test_the_project_directory_of_production_s_containers(self):
+    def test_the_project_directory_of_production_s_containers(self) -> None:
         checkout = self.home / "elsewhere"
         self.assertEqual(
             stack.production_checkout([self.container(str(checkout)), self.container(str(checkout))]), checkout
         )
 
-    def test_without_containers_the_default(self):
+    def test_without_containers_the_default(self) -> None:
         self.assertEqual(stack.production_checkout([]), self.home / "Dev" / "scanmylib")
 
-    def test_the_home_directory_comes_from_the_password_database(self):
+    def test_the_home_directory_comes_from_the_password_database(self) -> None:
         # $HOME pointing elsewhere moves neither production's checkout nor the home barrier.
         with mock.patch.dict(os.environ, {"HOME": "/elsewhere"}):
             self.assertEqual(stack.production_checkout([]), self.home / "Dev" / "scanmylib")
             self.assertEqual(stack.homes(), {str(self.home), "/elsewhere"})
 
-    def test_containers_from_several_checkouts_are_an_error(self):
+    def test_containers_from_several_checkouts_are_an_error(self) -> None:
         with self.assertRaisesRegex(stack.EnvError, "several checkouts"):
             stack.production_checkout([self.container("/a"), self.container("/b")])
 
-    def test_command_line(self):
+    def test_command_line(self) -> None:
         output = io.StringIO()
         with (
             mock.patch("sys.stdin", io.StringIO(json.dumps([self.container(f"{self.home}/prod")]))),
@@ -183,7 +184,7 @@ class ProductionCheckoutTest(unittest.TestCase):
 class IsolationTest(unittest.TestCase):
     """isolation_problems() on configurations shaped like `docker compose config --format json`."""
 
-    def setUp(self):
+    def setUp(self) -> None:
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
         self.base = Path(os.path.realpath(directory.name))
@@ -206,10 +207,10 @@ class IsolationTest(unittest.TestCase):
             if line and not line.startswith("#")
         )
 
-    def config(self, **changes) -> dict:
+    def config(self, **changes: object) -> stack.JsonObject:
         dev, prod, worktree = self.dev, self.prod, self.worktree
         created = {"create_host_path": True}
-        config = {
+        config: stack.JsonObject = {
             "name": "scanmylib-dev",
             "networks": {"default": {"name": "scanmylib-dev_default", "ipam": {}}},
             "x-ocr-env": {"HOME": "/tmp/home"},
@@ -282,7 +283,14 @@ class IsolationTest(unittest.TestCase):
         config.update(changes)
         return config
 
-    def problems(self, config=None, env=None, containers=(), raw=None, compose_file=None) -> list[str]:
+    def problems(
+        self,
+        config: stack.JsonObject | None = None,
+        env: dict[str, str] | None = None,
+        containers: Sequence[stack.JsonObject] = (),
+        raw: stack.JsonObject | None = None,
+        compose_file: str | None = None,
+    ) -> list[str]:
         checkout = stack.production_checkout(list(containers))
         production = stack.production_identity(checkout, list(containers))
         config = config or self.config()
@@ -290,35 +298,44 @@ class IsolationTest(unittest.TestCase):
             env or self.env, config, raw or config, production, str(self.worktree), compose_file
         )
 
-    def assertRefused(self, pattern: str, **kwargs):
-        problems = self.problems(**kwargs)
+    def assert_refused(
+        self,
+        pattern: str,
+        *,
+        config: stack.JsonObject | None = None,
+        env: dict[str, str] | None = None,
+        containers: Sequence[stack.JsonObject] = (),
+        raw: stack.JsonObject | None = None,
+        compose_file: str | None = None,
+    ) -> None:
+        problems = self.problems(config, env, containers, raw, compose_file)
         self.assertTrue(any(pattern in problem for problem in problems), problems)
 
-    def service(self, name: str = "api", **settings) -> dict:
+    def service(self, name: str = "api", **settings: object) -> stack.JsonObject:
         config = self.config()
         config["services"][name].update(settings)
         return config
 
-    def test_the_development_stack_shares_nothing(self):
+    def test_the_development_stack_shares_nothing(self) -> None:
         self.assertEqual(self.problems(), [])
 
-    def test_production_project_images_and_ports(self):
-        self.assertRefused("the project is production's", config=self.config(name="scanmylib"))
-        self.assertRefused(
+    def test_production_project_images_and_ports(self) -> None:
+        self.assert_refused("the project is production's", config=self.config(name="scanmylib"))
+        self.assert_refused(
             "the image scanmylib-api:dev is production's", config=self.service(image="scanmylib-api:dev")
         )
-        self.assertRefused(
+        self.assert_refused(
             "publishes port 8765", config=self.service(ports=[{"target": 8765, "published": "8760-8770"}])
         )
 
-    def test_image_names_as_docker_reads_them(self):
+    def test_image_names_as_docker_reads_them(self) -> None:
         for image in (
             "docker.io/library/scanmylib-api:latest",
             "docker.io/scanmylib-api",
             "index.docker.io/library/scanmylib-api:latest",
         ):
             with self.subTest(image=image):
-                self.assertRefused(f"the image {image} is production's", config=self.service(image=image))
+                self.assert_refused(f"the image {image} is production's", config=self.service(image=image))
         for image in (
             "scanmylib-dev-api:dev",
             "scanmylib-dev-other:latest",
@@ -326,7 +343,7 @@ class IsolationTest(unittest.TestCase):
             "busybox:latest",
         ):
             with self.subTest(image=image):
-                self.assertRefused("is not one of the stack's own", config=self.service(image=image))
+                self.assert_refused("is not one of the stack's own", config=self.service(image=image))
         for prefix in (
             "docker.io/library/scanmylib",
             "docker.io/scanmylib",
@@ -335,9 +352,9 @@ class IsolationTest(unittest.TestCase):
             "scanmylib.dev",
         ):
             with self.subTest(prefix=prefix):
-                self.assertRefused("may only contain lowercase letters", env={**self.env, "IMAGE_PREFIX": prefix})
+                self.assert_refused("may only contain lowercase letters", env={**self.env, "IMAGE_PREFIX": prefix})
 
-    def bind(self, source: str, read_only: bool = False, service: str = "api", create: bool = True) -> dict:
+    def bind(self, source: str, read_only: bool = False, service: str = "api", create: bool = True) -> stack.JsonObject:
         config = self.config()
         config["services"][service]["volumes"].append(
             {
@@ -350,7 +367,7 @@ class IsolationTest(unittest.TestCase):
         )
         return config
 
-    def test_host_paths_of_production(self):
+    def test_host_paths_of_production(self) -> None:
         cases = [
             (str(self.prod), "is production's DATA_DIR"),
             (f"{self.prod}/state", "is inside production's DATA_DIR"),
@@ -370,19 +387,19 @@ class IsolationTest(unittest.TestCase):
         ]
         for source, expected in cases:
             with self.subTest(source=source):
-                self.assertRefused(expected, config=self.bind(source))
+                self.assert_refused(expected, config=self.bind(source))
 
-    def test_home_from_the_password_database_and_home_variable(self):
+    def test_home_from_the_password_database_and_home_variable(self) -> None:
         # $HOME points elsewhere: both home directories are refused.
         elsewhere = self.base / "elsewhere-home"
         with mock.patch.dict(os.environ, {"HOME": str(elsewhere)}):
             for data_dir in (f"{self.home}/dev", f"{elsewhere}/dev"):
                 with self.subTest(data_dir=data_dir):
-                    self.assertRefused("is inside your home directory", env={**self.env, "DATA_DIR": data_dir})
+                    self.assert_refused("is inside your home directory", env={**self.env, "DATA_DIR": data_dir})
 
-    def test_every_other_path_is_inside_the_stack_s_data_dir(self):
-        self.assertRefused("is not inside the stack's DATA_DIR", config=self.bind(f"{self.base}/elsewhere"))
-        self.assertRefused(
+    def test_every_other_path_is_inside_the_stack_s_data_dir(self) -> None:
+        self.assert_refused("is not inside the stack's DATA_DIR", config=self.bind(f"{self.base}/elsewhere"))
+        self.assert_refused(
             "is not inside the stack's DATA_DIR", config=self.bind(f"{self.base}/elsewhere", read_only=True)
         )
         for key, value in [
@@ -395,7 +412,7 @@ class IsolationTest(unittest.TestCase):
             ("LIBRARY_DIR", f"{self.home}/.ssh"),
         ]:
             with self.subTest(key=key, value=value):
-                self.assertRefused(f"{key} in .env", env={**self.env, key: value})
+                self.assert_refused(f"{key} in .env", env={**self.env, key: value})
         for value, expected in [
             ("/tmp", "is or contains /tmp"),
             ("/var/tmp/dev", "system directory"),
@@ -403,25 +420,25 @@ class IsolationTest(unittest.TestCase):
             ("relative/dev", "not an absolute path"),
         ]:
             with self.subTest(data_dir=value):
-                self.assertRefused(expected, env={**self.env, "DATA_DIR": value})
-        self.assertRefused(
+                self.assert_refused(expected, env={**self.env, "DATA_DIR": value})
+        self.assert_refused(
             "no DATA_DIR in .env", env={key: value for key, value in self.env.items() if key != "DATA_DIR"}
         )
 
-    def test_production_sandbox_is_shared_read_only_only(self):
+    def test_production_sandbox_is_shared_read_only_only(self) -> None:
         self.assertEqual(self.problems(config=self.bind(f"{self.prod}/sandbox/models", read_only=True)), [])
-        self.assertRefused("is production's DATA_DIR", config=self.bind(str(self.prod), read_only=True))
-        self.assertRefused("contains production's SANDBOX_DIR", config=self.bind(str(self.prod), read_only=True))
+        self.assert_refused("is production's DATA_DIR", config=self.bind(str(self.prod), read_only=True))
+        self.assert_refused("contains production's SANDBOX_DIR", config=self.bind(str(self.prod), read_only=True))
 
-    def test_a_bind_mount_docker_would_never_create(self):
+    def test_a_bind_mount_docker_would_never_create(self) -> None:
         # The placeholder of ocr-setup: no such path, and docker compose does not create it.
         self.assertEqual(self.problems(config=self.bind("/nonexistent/x", create=False)), [])
-        self.assertRefused("is not inside the stack's DATA_DIR", config=self.bind(f"{self.base}/missing", create=True))
+        self.assert_refused("is not inside the stack's DATA_DIR", config=self.bind(f"{self.base}/missing", create=True))
         # A path this user cannot see may exist for the Docker daemon.
         if os.getuid() != 0 and not os.access("/root", os.X_OK):
-            self.assertRefused("system directory", config=self.bind("/root/.ssh", create=False))
+            self.assert_refused("system directory", config=self.bind("/root/.ssh", create=False))
 
-    def test_paths_from_the_running_production_containers(self):
+    def test_paths_from_the_running_production_containers(self) -> None:
         elsewhere = self.dev / "moved-library"
         container = {
             "Name": "/scanmylib-api-1",
@@ -432,27 +449,27 @@ class IsolationTest(unittest.TestCase):
             "Mounts": [{"Type": "bind", "Source": str(elsewhere), "Destination": "/library"}],
             "HostConfig": {"PortBindings": {"8765/tcp": [{"HostIp": "", "HostPort": "9999"}]}},
         }
-        self.assertRefused(
+        self.assert_refused(
             "mount /library of scanmylib-api-1", config=self.bind(str(elsewhere)), containers=[container]
         )
-        self.assertRefused(
+        self.assert_refused(
             "publishes port 9999",
             config=self.service(ports=[{"target": 8765, "published": "9999"}]),
             containers=[container],
         )
 
-    def test_production_checkout_from_its_containers(self):
+    def test_production_checkout_from_its_containers(self) -> None:
         # Production runs from another checkout: that one is production's, whatever ~/Dev holds.
         moved = self.base / "moved-checkout"
         moved.mkdir()
         (moved / ".env").write_text(f"COMPOSE_PROJECT_NAME=scanmylib\nDATA_DIR={self.base}/moved-data\n")
         container = {"Name": "/scanmylib-api-1", "Config": {"Labels": {stack.WORKING_DIR_LABEL: str(moved)}}}
-        self.assertRefused("is production's checkout", config=self.bind(str(moved)), containers=[container])
-        self.assertRefused(
+        self.assert_refused("is production's checkout", config=self.bind(str(moved)), containers=[container])
+        self.assert_refused(
             "is production's DATA_DIR", env={**self.env, "DATA_DIR": f"{self.base}/moved-data"}, containers=[container]
         )
 
-    def test_paths_the_scripts_use(self):
+    def test_paths_the_scripts_use(self) -> None:
         for key, value, expected in [
             ("DATA_DIR", str(self.prod), "DATA_DIR in .env"),
             ("ANDROID_DIR", f"{self.prod}/android", "ANDROID_DIR in .env"),
@@ -462,15 +479,15 @@ class IsolationTest(unittest.TestCase):
             ("LIBRARY_DIR", "relative/library", "not an absolute path"),
         ]:
             with self.subTest(key=key):
-                self.assertRefused(expected, env={**self.env, key: value})
+                self.assert_refused(expected, env={**self.env, key: value})
 
-    def test_variants_and_services(self):
-        self.assertRefused("only production builds the release app", env={**self.env, "APP_VARIANT": "release"})
-        self.assertRefused("expected ocr or ocr-fake", env={**self.env, "OCR_SERVICE": "other"})
-        self.assertRefused(".env says 'scanmylib-dev2'", env={**self.env, "COMPOSE_PROJECT_NAME": "scanmylib-dev2"})
+    def test_variants_and_services(self) -> None:
+        self.assert_refused("only production builds the release app", env={**self.env, "APP_VARIANT": "release"})
+        self.assert_refused("expected ocr or ocr-fake", env={**self.env, "OCR_SERVICE": "other"})
+        self.assert_refused(".env says 'scanmylib-dev2'", env={**self.env, "COMPOSE_PROJECT_NAME": "scanmylib-dev2"})
 
-    def test_settings_outside_the_allowlist(self):
-        for settings, expected in [
+    def test_settings_outside_the_allowlist(self) -> None:
+        refused_settings: list[tuple[stack.JsonObject, str]] = [
             ({"privileged": True}, "privileged is not allowed"),
             ({"cap_add": ["SYS_ADMIN"]}, "cap_add is not allowed"),
             ({"volumes_from": ["container:scanmylib-api-1"]}, "volumes_from is not allowed"),
@@ -495,24 +512,25 @@ class IsolationTest(unittest.TestCase):
             ({"devices": [{"source": "/dev/sda", "target": "/dev/sda", "permissions": "rwm"}]}, "device /dev/sda"),
             ({"devices": [{"source": "nvidia.com/gpu=all", "target": "/dev/x"}]}, "device nvidia.com/gpu=all"),
             ({"container_name": "scanmylib-api-1"}, "container_name scanmylib-api-1"),
-        ]:
+        ]
+        for settings, expected in refused_settings:
             with self.subTest(settings=settings):
-                self.assertRefused(expected, config=self.service(**settings))
+                self.assert_refused(expected, config=self.service(**settings))
 
-    def test_network_mode_of_the_stack(self):
+    def test_network_mode_of_the_stack(self) -> None:
         for network_mode in ("none", "service:ocr"):
             with self.subTest(network_mode=network_mode):
                 self.assertEqual(self.problems(config=self.service(network_mode=network_mode)), [])
 
-    def test_settings_that_only_the_configuration_without_interpolation_shows(self):
+    def test_settings_that_only_the_configuration_without_interpolation_shows(self) -> None:
         # docker compose config merges env_file into environment: only the raw configuration
         # (--no-interpolate) still has it.
         raw = self.config()
         raw["services"]["api"]["env_file"] = [{"path": f"{self.home}/.aws/credentials", "required": True}]
-        self.assertRefused("service api: env_file is not allowed", raw=raw)
-        self.assertRefused("no configuration without interpolation", raw={"services": {}})
+        self.assert_refused("service api: env_file is not allowed", raw=raw)
+        self.assert_refused("no configuration without interpolation", raw={"services": {}})
 
-    def test_include_in_the_compose_file(self):
+    def test_include_in_the_compose_file(self) -> None:
         compose = self.base / "compose.yaml"
         for text in (
             "include:\n  - path: x.yaml\n    env_file: /home/x/.env\n",
@@ -521,11 +539,11 @@ class IsolationTest(unittest.TestCase):
         ):
             with self.subTest(text=text):
                 compose.write_text(text)
-                self.assertRefused("include is not allowed", compose_file=str(compose))
+                self.assert_refused("include is not allowed", compose_file=str(compose))
         compose.write_text("# include: a comment\nservices:\n  api:\n    command: [sh, -c, 'echo include']\n")
         self.assertEqual(self.problems(compose_file=str(compose)), [])
 
-    def test_build_settings(self):
+    def test_build_settings(self) -> None:
         server = f"{self.worktree}/server"
         for build, expected in [
             ({"context": "/home/someone"}, "build context /home/someone is not inside the project directory"),
@@ -538,15 +556,15 @@ class IsolationTest(unittest.TestCase):
             ({"context": server, "network": "host"}, "build setting network"),
         ]:
             with self.subTest(build=build):
-                self.assertRefused(expected, config=self.service(build=build))
+                self.assert_refused(expected, config=self.service(build=build))
 
-    def test_networks_volumes_and_top_level_settings(self):
-        self.assertRefused("network default", config=self.config(networks={"default": {"name": "scanmylib_default"}}))
-        self.assertRefused(
+    def test_networks_volumes_and_top_level_settings(self) -> None:
+        self.assert_refused("network default", config=self.config(networks={"default": {"name": "scanmylib_default"}}))
+        self.assert_refused(
             "network default",
             config=self.config(networks={"default": {"name": "scanmylib-dev_default", "external": True}}),
         )
-        self.assertRefused(
+        self.assert_refused(
             "driver and driver_opts",
             config=self.config(
                 volumes={
@@ -559,22 +577,22 @@ class IsolationTest(unittest.TestCase):
         )
         for network in ({"driver": "macvlan", "driver_opts": {"parent": "eth0"}}, {"driver": "ipvlan"}):
             with self.subTest(network=network):
-                self.assertRefused(
+                self.assert_refused(
                     "network default: driver and driver_opts",
                     config=self.config(networks={"default": {"name": "scanmylib-dev_default", **network}}),
                 )
-        self.assertRefused(
+        self.assert_refused(
             "volume data (scanmylib_data) is not the stack's own",
             config=self.config(volumes={"data": {"name": "scanmylib_data"}}),
         )
-        self.assertRefused(
+        self.assert_refused(
             "secrets (top level)", config=self.config(secrets={"token": {"file": f"{self.prod}/state/token"}})
         )
-        self.assertRefused(
+        self.assert_refused(
             "npipe mount", config=self.service(volumes=[{"type": "npipe", "source": "x", "target": "/x"}])
         )
 
-    def test_production_env_that_breaks_the_format_is_an_error(self):
+    def test_production_env_that_breaks_the_format_is_an_error(self) -> None:
         (self.primary / ".env").write_text("DATA_DIR=/data/x # comment\n")
         with self.assertRaisesRegex(stack.EnvError, "production's .env"):
             self.problems()
@@ -584,7 +602,7 @@ class IsolationTest(unittest.TestCase):
         with mock.patch("sys.stdin", io.StringIO("[]")), redirect_stderr(errors):
             return stack.main(["check-paths", *args]), errors.getvalue()
 
-    def test_check_paths_command(self):
+    def test_check_paths_command(self) -> None:
         # build-apk.sh without .env (CI): production's paths and the home directory are refused,
         # except inside GitHub's RUNNER_TEMP, which the runner keeps in its home directory.
         self.assertEqual(self.check_paths(f"DATA_DIR={self.base}/ci", f"ANDROID_DIR={self.base}/ci/a"), (0, ""))
@@ -616,7 +634,7 @@ class ComposeCommandTest(unittest.TestCase):
     def refused(*argv: str, production: bool = False) -> list[str]:
         return stack.compose_command_problems(list(argv), production=production)
 
-    def test_allowed(self):
+    def test_allowed(self) -> None:
         for argv in (
             ["ps"],
             ["up", "-d", "api"],
@@ -641,7 +659,7 @@ class ComposeCommandTest(unittest.TestCase):
             with self.subTest(argv=argv):
                 self.assertEqual(self.refused(*argv), [])
 
-    def test_global_options_and_commands_outside_the_stack(self):
+    def test_global_options_and_commands_outside_the_stack(self) -> None:
         for argv in (["-p", "scanmylib", "down"], ["--project-name=scanmylib", "down"], ["--file", "x.yaml", "ps"], []):
             with self.subTest(argv=argv):
                 self.assertIn("no global option", self.refused(*argv)[0])
@@ -649,7 +667,7 @@ class ComposeCommandTest(unittest.TestCase):
             with self.subTest(command=command):
                 self.assertIn(f"docker compose {command} is not allowed", self.refused(command, "api")[0])
 
-    def test_options_that_give_a_container_more(self):
+    def test_options_that_give_a_container_more(self) -> None:
         for argv, expected in [
             (["run", "-v", "/:/host", "api"], "run -v"),
             (["run", "--volume=/home:/h", "api"], "run --volume"),
@@ -681,7 +699,7 @@ class ComposeCommandTest(unittest.TestCase):
                 problems = self.refused(*argv)
                 self.assertTrue(problems and expected in problems[0], problems)
 
-    def test_both_ocr_services_never_start_together(self):
+    def test_both_ocr_services_never_start_together(self) -> None:
         for argv in (
             ["up", "-d"],
             ["up", "-d", "--wait"],
@@ -704,7 +722,7 @@ class ComposeCommandTest(unittest.TestCase):
                 problems = self.refused(*argv)
                 self.assertTrue(problems and "never start both" in problems[0], problems)
 
-    def test_production(self):
+    def test_production(self) -> None:
         for argv in (
             ["ps"],
             ["logs", "-f", "api", "ocr"],

@@ -13,14 +13,14 @@ import sys
 import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest import mock
 
 from git_environment import build_git_environment
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
-import version  # noqa: E402
+import version
 
 
 def git(repository: Path, *args: str) -> str:
@@ -35,13 +35,13 @@ def git(repository: Path, *args: str) -> str:
 
 
 class ReleaseTest(unittest.TestCase):
-    def test_a_release_and_its_version_code(self):
+    def test_a_release_and_its_version_code(self) -> None:
         self.assertEqual(version.parse_release("0.2.3\n"), (0, 2, 3))
         self.assertEqual(version.release_code((0, 2, 3)), 203)
         self.assertEqual(version.release_code((1, 10, 0)), 11000)
         self.assertEqual(version.format_release((12, 0, 99)), "12.0.99")
 
-    def test_anything_else_is_refused(self):
+    def test_anything_else_is_refused(self) -> None:
         for text in (
             "0.2",
             "0.2.3.4",
@@ -77,39 +77,39 @@ class DevVersionTest(unittest.TestCase):
         git(self.repository, "commit", "--quiet", "--allow-empty", "--message", message)
         return git(self.repository, "rev-parse", "HEAD")
 
-    def test_the_next_patch_then_the_commit(self):
+    def test_the_next_patch_then_the_commit(self) -> None:
         head = git(self.repository, "rev-parse", "HEAD")
         self.assertEqual(version.dev_version(self.repository, (0, 2, 3)), f"0.2.4-dev+g{head[:12]}")
 
-    def test_the_commits_since_the_release_s_tag(self):
+    def test_the_commits_since_the_release_s_tag(self) -> None:
         git(self.repository, "tag", "--annotate", "v0.2.3", "--message", "ScanMyLib 0.2.3")
         self.assertRegex(version.dev_version(self.repository, (0, 2, 3)), r"^0\.2\.4-dev\.0\+g[0-9a-f]{12}$")
         self.commit("feat: one")
         head = self.commit("fix: two")
         self.assertEqual(version.dev_version(self.repository, (0, 2, 3)), f"0.2.4-dev.2+g{head[:12]}")
 
-    def test_uncommitted_changes_are_dirty(self):
+    def test_uncommitted_changes_are_dirty(self) -> None:
         (self.repository / "untracked.txt").write_text("not part of the build's version\n")
         self.assertNotIn("dirty", version.dev_version(self.repository, (0, 2, 3)))
         (self.repository / "VERSION").write_text("0.2.3\n\n")
         self.assertRegex(version.dev_version(self.repository, (0, 2, 3)), r"^0\.2\.4-dev\+g[0-9a-f]{12}\.dirty$")
 
-    def test_outside_a_checkout_only_the_next_patch(self):
+    def test_outside_a_checkout_only_the_next_patch(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             self.assertEqual(version.dev_version(Path(directory), (0, 2, 3)), "0.2.4-dev")
 
-    def test_the_version_code_is_the_time_of_the_build(self):
+    def test_the_version_code_is_the_time_of_the_build(self) -> None:
         start = version.DEV_CODE_EPOCH
         self.assertEqual(version.dev_code(start + timedelta(minutes=1, seconds=59)), 1)
-        self.assertEqual(version.dev_code(datetime(2026, 10, 17, tzinfo=timezone.utc)), 416160)
-        later = version.dev_code(datetime(2027, 1, 1, tzinfo=timezone.utc))
-        self.assertGreater(later, version.dev_code(datetime(2026, 12, 31, 23, 59, tzinfo=timezone.utc)))
+        self.assertEqual(version.dev_code(datetime(2026, 10, 17, tzinfo=UTC)), 416160)
+        later = version.dev_code(datetime(2027, 1, 1, tzinfo=UTC))
+        self.assertGreater(later, version.dev_code(datetime(2026, 12, 31, 23, 59, tzinfo=UTC)))
         for wrong in (start, start - timedelta(days=1), start + timedelta(minutes=version.MAX_VERSION_CODE + 1)):
             with self.subTest(clock=wrong), self.assertRaises(ValueError):
                 version.dev_code(wrong)
 
-    def test_the_version_code_stays_above_the_published_one(self):
-        now = datetime(2026, 10, 17, 10, 0, 50, tzinfo=timezone.utc)
+    def test_the_version_code_stays_above_the_published_one(self) -> None:
+        now = datetime(2026, 10, 17, 10, 0, 50, tzinfo=UTC)
         minutes = version.dev_code(now)
         self.assertEqual(version.dev_code(now, minutes - 5), minutes)
         self.assertEqual(version.dev_code(now, minutes), minutes + 1, "a second build in the same minute")
@@ -129,7 +129,7 @@ class DevVersionTest(unittest.TestCase):
                 self.assertEqual(version.published_code(metadata), expected)
         self.assertIsNone(version.published_code(self.repository / "missing.json"))
 
-    def test_command_line(self):
+    def test_command_line(self) -> None:
         output, errors = io.StringIO(), io.StringIO()
         with redirect_stdout(output):
             self.assertEqual(version.main(["release", str(self.repository)]), 0)

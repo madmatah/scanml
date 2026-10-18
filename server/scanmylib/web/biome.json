@@ -14,5 +14,36 @@
       "quoteProperties": "preserve",
       "semicolons": "always"
     }
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "style": {
+        "useConst": "error",
+        "noDefaultExport": "error",
+        "noDescendingSpecificity": "off"
+      },
+      "suspicious": {
+        "noVar": "error",
+        "noDoubleEquals": "error"
+      }
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["static/js/locales/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noDefaultExport": "off"
+          }
+        }
+      }
+    }
+  ],
+  "css": {
+    "linter": {
+      "enabled": true
+    }
   }
 }

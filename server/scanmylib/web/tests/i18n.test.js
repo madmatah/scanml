@@ -13,7 +13,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { describe, test } from 'node:test';
 
 import { formatBytes, formatNumber, formatPercent, formatSeconds, quoted } from '../static/js/lib/format.js';
-import { currentLanguage, currentLocale, negotiate, setLocale, t, tc, tn, tNodes } from '../static/js/lib/i18n.js';
+import { currentLanguage, currentLocale, negotiate, setLocale, t, tc, tNodes, tn } from '../static/js/lib/i18n.js';
 import FRENCH from '../static/js/locales/fr.js';
 
 const WEB = new URL('../', import.meta.url);
@@ -31,7 +31,7 @@ const NBSP = '\u00a0';
 const ESCAPES = { n: '\n', t: '\t', r: '\r', b: '\b', f: '\f', v: '\v', 0: '\0' };
 
 /** Value of the escape sequence at `source[index]` (after the backslash), and its length. */
-function unescape(source, index) {
+function readEscape(source, index) {
   const char = source[index];
   if (char === 'u' && source[index + 1] === '{') {
     const end = source.indexOf('}', index);
@@ -120,7 +120,7 @@ function lex(source) {
         advance(1);
         while (index < source.length && source[index] !== char) {
           if (source[index] === '\\') {
-            const [text, length] = unescape(source, index + 1);
+            const [text, length] = readEscape(source, index + 1);
             value += text;
             advance(length + 1);
           } else {
@@ -137,7 +137,7 @@ function lex(source) {
         advance(1);
         while (index < source.length && source[index] !== '`') {
           if (source[index] === '\\') {
-            const [text, length] = unescape(source, index + 1);
+            const [text, length] = readEscape(source, index + 1);
             value += text;
             advance(length + 1);
           } else if (source.startsWith('${', index)) {

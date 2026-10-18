@@ -184,6 +184,7 @@ code {
 }
 
 [hidden] {
+  /* biome-ignore lint/complexity/noImportantStyles: hidden wins over every display a component sets */
   display: none !important;
 }
 
@@ -229,6 +230,7 @@ legend {
   padding: var(--space-2) var(--gutter);
   padding-top: max(var(--space-2), env(safe-area-inset-top));
   background: var(--surface);
+  /* biome-ignore lint/suspicious/noDuplicateProperties: the first is the fallback of browsers without color-mix() */
   background: color-mix(in srgb, var(--surface) 90%, transparent);
   backdrop-filter: saturate(1.4) blur(10px);
   border-bottom: 1px solid var(--border);
@@ -1880,6 +1882,7 @@ textarea.input {
 
 .is-dragging-pages,
 .is-dragging-pages * {
+  /* biome-ignore lint/complexity/noImportantStyles: the drag's cursor wins over every element under it */
   cursor: grabbing !important;
   user-select: none;
   -webkit-user-select: none;
@@ -2704,8 +2707,11 @@ textarea.input {
   *,
   *::before,
   *::after {
+    /* biome-ignore lint/complexity/noImportantStyles: reduced motion wins over every animation */
     animation-duration: 0.001ms !important;
+    /* biome-ignore lint/complexity/noImportantStyles: reduced motion wins over every animation */
     animation-iteration-count: 1 !important;
+    /* biome-ignore lint/complexity/noImportantStyles: reduced motion wins over every transition */
     transition-duration: 0.001ms !important;
   }
 }

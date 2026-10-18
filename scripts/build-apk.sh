@@ -117,6 +117,7 @@ build_main() {
 }
 
 log() { printf '\n>> %s\n' "$*"; }
+# shellcheck disable=SC2329  # run in the build and signing containers, through declare -f
 die() {
     printf 'error: %s\n' "$*" >&2
     exit 1
@@ -239,6 +240,7 @@ verify_gradle_wrapper() {
 
 # --- Signing container steps (no network) -----------------------------------------------------
 
+# shellcheck disable=SC2153  # EXPECTED_* are set in the environment of the signing container
 sign_main() {
     set -euo pipefail
     local keystore=/keystore/$KEYSTORE_FILE password_file=/keystore/$KEY_PASSWORD_FILE tools=/tmp/signing-tools
@@ -474,7 +476,7 @@ with scripts/build-apk.sh --create-signing-key in production's checkout (scripts
         --rm --init
         --user "$(id -u):$(id -g)"
         --cap-drop ALL --security-opt no-new-privileges:true
-        --read-only --tmpfs /tmp:rw,exec,nosuid,nodev,size=6g
+        --read-only --tmpfs '/tmp:rw,exec,nosuid,nodev,size=6g'
         --memory 10g --pids-limit 4096
         --env HOME=/tmp/home
         # Java takes user.home from /etc/passwd, not from HOME.
@@ -505,7 +507,10 @@ with scripts/build-apk.sh --create-signing-key in production's checkout (scripts
     mkdir -p "$data_dir/app"
 
     if ((create_key)); then
-        [[ -d $keystore_dir ]] || mkdir -p -m 700 "$keystore_dir"
+        if [[ ! -d $keystore_dir ]]; then
+            mkdir -p -- "$(dirname -- "$keystore_dir")"
+            mkdir -m 700 -- "$keystore_dir"
+        fi
         docker run "${common[@]}" --name "$key_container" \
             --network none \
             --env KEYSTORE_FILE="$KEYSTORE_FILE" \

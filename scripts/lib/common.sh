@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # Shared by the scripts of scripts/ (sourced, not run).
 #
 # A stack is described by the .env of the checkout it runs from: production is production's
@@ -143,7 +144,8 @@ assert_isolated_from_production() { # assert_isolated_from_production [ENV_FILE]
     [[ -f $env_file ]] || die "no $env_file: run scripts/dev-env.sh first"
     python3 "$SCRIPTS_LIB/stack.py" env "$env_file" > /dev/null || exit 1
     config=$(STACK_ENV_FILE=$env_file compose --profile '*' config --format json) \
-        && raw=$(STACK_ENV_FILE=$env_file compose --profile '*' config --no-interpolate --format json) \
+        || die "docker compose cannot resolve the stack of $env_file (see above)"
+    raw=$(STACK_ENV_FILE=$env_file compose --profile '*' config --no-interpolate --format json) \
         || die "docker compose cannot resolve the stack of $env_file (see above)"
     containers=$(production_containers) || die "cannot list production's containers: is Docker running?"
     printf '{"config": %s, "raw": %s, "containers": %s}' "$config" "$raw" "$containers" \

@@ -107,6 +107,7 @@ EXPORT=$(mktemp -d "${TMPDIR:-/tmp}/scanmylib-deploy.XXXXXX")
 trap 'rm -rf -- "$EXPORT"' EXIT
 chmod 755 "$EXPORT"
 git archive --format=tar "$head_commit" | tar --extract --file - -C "$EXPORT"
+# shellcheck disable=SC2034  # read by compose() of scripts/lib/common.sh
 STACK_COMPOSE_FILE=$EXPORT/compose.yaml
 
 # origin is only read for a production deploy that passes the local checks.
@@ -191,6 +192,7 @@ if ((env_read)); then
         pass "the rehearsal stack $PROJECT shares nothing with production"
     else
         fail "the rehearsal stack is not isolated from production:"
+        # shellcheck disable=SC2001  # indents every line of a multi-line message
         sed 's/^/        /' <<< "$isolation"
     fi
     [[ $OCR_SERVICE == ocr || $OCR_SERVICE == ocr-fake ]] || fail "OCR_SERVICE must be ocr or ocr-fake, not '$OCR_SERVICE'"
@@ -303,7 +305,7 @@ fi
 # --- Steps --------------------------------------------------------------------------------------
 
 STAMP=$(date +%Y%m%d-%H%M%S)
-STEP=preconditions BACKUP= previous_version= tee_pid=
+STEP=preconditions BACKUP='' previous_version='' tee_pid=''
 # The images that can be put back: those production runs, tagged :deployed.
 deployed_images=()
 # How the failure messages name the stack and docker compose: production through scripts/prod.sh
@@ -365,7 +367,7 @@ rollback_help() {
 on_exit() {
     local status=$?
     if [[ -n $EXPORT ]]; then rm -rf -- "$EXPORT"; fi
-    if ((status)) && [[ $STEP != done ]]; then
+    if ((status)) && [[ $STEP != 'done' ]]; then
         printf '\nDEPLOY FAILED during the step "%s" (exit %s).\n' "$STEP" "$status"
         case $STEP in
             preconditions) ;;
@@ -585,7 +587,7 @@ else
     echo "  skipped (no --apk)"
 fi
 
-STEP=done
+STEP='done'
 if ((DRY_RUN)); then
     if ((${#problems[@]})); then
         printf '\nDry run: a real run would refuse to deploy:\n'

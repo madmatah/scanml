@@ -23,7 +23,8 @@ Each commit holds one reason to change ("Commits"), so that a reader can review 
 
 - **A subject that needs an "and"** usually holds two commits. Two unrelated fixes made the same afternoon are two
   commits.
-- **The test that pins a fix** goes in the commit of the fix, since every commit passes the gate on its own.
+- **The test that pins a fix** goes in the commit of the fix, since every commit passes the checks of the areas it
+  touches on its own (`CLAUDE.md` > Workflow, "Commits").
 - **A correction to an earlier commit of the branch** is folded into it, as `.claude/skills/pull-request/SKILL.md` >
   Shape the history shows. The history describes the change that ships, not the path that found it.
 
@@ -158,5 +159,7 @@ Before committing, read the message against the rules:
 5. **Nothing private:** the message is published, and a pushed commit cannot be taken back, so it holds no secret and
    nothing that `.claude/rules/repository.md` > What belongs in the repository, > No real document names or > No
    personal information forbids, from a pasted log or a command's output as much as from your own words.
-6. **The gate:** `scripts/check.sh` passes at this commit, with the areas the commit changes. When you rewrite a branch,
-   `.claude/skills/pull-request/SKILL.md` > Shape the history checks every commit at once.
+
+Once committed, the commit passes what "Commits" asks of it: `scripts/check.sh --last-commit`, which checks what the
+last commit changes. When you rewrite a branch, `.claude/skills/pull-request/SKILL.md` > Shape the history checks every
+commit at once, and the last one on every area.

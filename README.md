@@ -300,8 +300,9 @@ the unit and integration tests of the scripts, on the host's `python3`, and, in 
 UI, the server and the OCR sandbox, and the Android tests and lint (`scripts/check.sh server web` checks those areas
 only). `scripts/check.sh --fix` formats the code and applies the linters' safe fixes: ktlint to the app in place, the
 other formatters to the files git tracks in `server/`, `ocr/` and `scripts/`; read `git diff` before running what it
-changed. Every commit pushed passes the gate, and every pull request runs it in the continuous integration
-(`.github/workflows/ci.yml`, one job per area). Pull requests are merged when it is green.
+changed. Each commit of a pull request passes the areas that read what it changes (`scripts/check.sh --last-commit`),
+its last commit the whole gate, and every pull request runs it in the continuous
+integration (`.github/workflows/ci.yml`, one job per area). Pull requests are merged when it is green.
 
 The tools of the gate are pinned. `scripts/lint/requirements.lock`, the Python tools with their hashes, is regenerated
 from `scripts/lint/requirements.in` in a container, and the web UI's `server/scanmylib/web/package-lock.json` the same

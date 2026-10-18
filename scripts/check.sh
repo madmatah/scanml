@@ -19,10 +19,15 @@
 # file first), and only their changes to those files come back (scripts/lib/formatting.py): read git diff before running
 # what they changed. Every tool runs even after one that leaves findings, and the script then fails.
 #
+# --last-commit checks only the areas that read what the last commit changes (scripts/lib/commit_areas.py), none for
+# documents and agent guidance; CLAUDE.md > Workflow, "Commits" says when each mode runs.
+#
 # Usage: scripts/check.sh [AREA...]
+#        scripts/check.sh --last-commit
 #        scripts/check.sh --fix
 #   e.g. scripts/check.sh                 every area, in the order above
 #        scripts/check.sh server web      those areas only
+#        git rebase --exec 'scripts/check.sh --last-commit' origin/main   each commit of a branch
 set -euo pipefail
 
 readonly AREAS=(lint scripts web server ocr android integration)
@@ -211,6 +216,13 @@ is_area() {
     return 1
 }
 
+check_area_names() {
+    local area
+    for area in "$@"; do
+        is_area "$area" || die "unknown area '$area': the areas are ${AREAS[*]}"
+    done
+}
+
 [[ ${1:-} == -h || ${1:-} == --help ]] && usage
 fixing=0
 if [[ ${1:-} == --fix ]]; then
@@ -218,16 +230,31 @@ if [[ ${1:-} == --fix ]]; then
     fixing=1
     shift
 fi
-areas=("$@")
-((${#areas[@]})) || areas=("${AREAS[@]}")
-for area in "${areas[@]}"; do
-    is_area "$area" || die "unknown area '$area': the areas are ${AREAS[*]}"
-done
+checks_last_commit=0
+if [[ ${1:-} == --last-commit ]]; then
+    (($# == 1)) || die "--last-commit takes no area: it checks those the last commit touches"
+    checks_last_commit=1
+    areas=()
+else
+    areas=("$@")
+    ((${#areas[@]})) || areas=("${AREAS[@]}")
+    check_area_names "${areas[@]}"
+fi
 
 checkout=$(production_checkout) || die "cannot tell production's checkout (see above)"
 if is_production_checkout "$ROOT" "$checkout"; then
     die "$ROOT is production's checkout, which holds production's release: check a worktree \
 (see CLAUDE.md > Production)"
+fi
+
+if ((checks_last_commit)); then
+    mapfile -t areas < <(python3 "$ROOT/scripts/lib/commit_areas.py" "$ROOT")
+    wait "$!" || die "cannot tell the areas the last commit touches: see git's error above"
+    if ((${#areas[@]} == 0)); then
+        say "Nothing to check: no area reads what the last commit changes"
+        exit 0
+    fi
+    check_area_names "${areas[@]}"
 fi
 
 if ((fixing)); then

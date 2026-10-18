@@ -49,6 +49,7 @@ COPIED = [
     ".gitignore",
     "VERSION",
     "scripts/lib/common.sh",
+    "scripts/lib/commit_areas.py",
     "scripts/lib/formatting.py",
     "scripts/lib/parallel_tests.py",
     "scripts/tests/test_parallel_tests.py",
@@ -1667,6 +1668,38 @@ class CheckTest(ScriptsTestCase):
             f"    def test_placeholder(self) -> None:\n        {body}\n"
         )
 
+    def commit_in_worktree(self, path: str, text: str) -> None:
+        (self.worktree / path).parent.mkdir(parents=True, exist_ok=True)
+        (self.worktree / path).write_text(text)
+        self.git(self.worktree, "add", path)
+        self.git(self.worktree, "commit", "--quiet", "--message", f"Change {path}")
+
+    def test_a_commit_is_checked_on_the_areas_its_files_reach(self) -> None:
+        self.commit_in_worktree("server/scanmylib/notes.py", "NOTES = 1\n")
+        gate_run = self.run_script(self.worktree, "check.sh", "--last-commit")
+        self.assertEqual(gate_run.returncode, 0, gate_run.stdout + gate_run.stderr)
+        self.assertEqual(self.list_areas_checked(gate_run), ["lint", "server"])
+
+    def test_a_commit_of_documents_only_is_checked_on_no_area(self) -> None:
+        self.commit_in_worktree("docs/guide.md", "# Guide\n")
+        gate_run = self.run_script(self.worktree, "check.sh", "--last-commit")
+        self.assertEqual(gate_run.returncode, 0, gate_run.stdout + gate_run.stderr)
+        self.assertIn("Nothing to check: no area reads what the last commit changes", gate_run.stdout)
+        self.assertEqual(self.list_checks(), [])
+
+    def test_a_commit_whose_areas_cannot_be_told_fails_its_check(self) -> None:
+        self.commit_in_worktree("server/scanmylib/notes.py", "NOTES = 1\n")
+        (self.worktree / "scripts" / "lib" / "commit_areas.py").write_text("import sys\n\nsys.exit(1)\n")
+        gate_run = self.run_script(self.worktree, "check.sh", "--last-commit")
+        self.assertNotEqual(gate_run.returncode, 0)
+        self.assertIn("cannot tell the areas the last commit touches", gate_run.stderr)
+        self.assertEqual(self.list_checks(), [])
+
+    def test_the_check_of_a_commit_takes_no_area(self) -> None:
+        gate_run = self.run_script(self.worktree, "check.sh", "--last-commit", "server")
+        self.assertNotEqual(gate_run.returncode, 0)
+        self.assertIn("--last-commit takes no area", gate_run.stderr)
+
     def test_the_gate_runs_only_the_areas_given_in_their_order(self) -> None:
         gate_run = self.run_script(self.worktree, "check.sh", "server", "web")
         self.assertEqual(gate_run.returncode, 0, gate_run.stdout + gate_run.stderr)
@@ -2074,6 +2107,13 @@ class CheckTest(ScriptsTestCase):
                 self.assertNotEqual(gate_run.returncode, 0)
                 self.assertIn("is production's checkout", gate_run.stderr)
                 self.assertEqual(self.list_checks(), [])
+
+    def test_the_check_of_a_commit_refuses_production_s_checkout_before_anything_else(self) -> None:
+        # A commit_areas.py that would fail shows whether the refusal comes first.
+        (self.primary / "scripts" / "lib" / "commit_areas.py").write_text("import sys\n\nsys.exit(1)\n")
+        gate_run = self.run_script(self.primary, "check.sh", "--last-commit")
+        self.assertNotEqual(gate_run.returncode, 0)
+        self.assertIn("is production's checkout", gate_run.stderr)
 
 
 if __name__ == "__main__":

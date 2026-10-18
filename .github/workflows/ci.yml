@@ -1,5 +1,6 @@
-# Each job runs one area of scripts/check.sh, the gate every commit passes before it is pushed, so that CI checks
-# exactly what a session checks, and the areas run in parallel.
+# Each job runs one area of scripts/check.sh, the gate whose every area the last commit of a branch passes before it is
+# pushed (CLAUDE.md > Workflow, "Commits"), so that CI checks exactly what a session checks, and the areas run in
+# parallel.
 name: CI
 
 on:

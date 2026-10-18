@@ -41,9 +41,9 @@ may be back in the main checkout between two calls, where a rebase or a commit w
    says why" ask, and write each message with the `writing-commits` skill. Interactive editors are unavailable: fold a
    change into its commit with `cd <worktree> && git commit --fixup=<commit>`, then
    `cd <worktree> && GIT_SEQUENCE_EDITOR=: git rebase -i --autosquash <base>`.
-2. Check that every commit passes: `cd <worktree> && git rebase --exec 'scripts/check.sh <areas>' <base>`, with the
-   areas the branch changes (`lint`, `scripts`, `web`, `server`, `ocr`, `android`), then
-   `cd <worktree> && scripts/check.sh` on the last commit, every area.
+2. Check every commit as `CLAUDE.md` > Workflow, "Commits" asks: each one on the areas it touches, with
+   `cd <worktree> && git rebase --exec 'scripts/check.sh --last-commit' <base>`, then the last one on every area, with
+   `cd <worktree> && scripts/check.sh`.
 
 ## Review
 
@@ -73,7 +73,8 @@ may be back in the main checkout between two calls, where a rebase or a commit w
 1. Commit each fix with `cd <worktree> && git commit --fixup=<commit>`, naming the commit it belongs to.
 2. Run `cd <worktree> && GIT_SEQUENCE_EDITOR=: git rebase -i --autosquash <base>`. Git before 2.44 ignores
    `--autosquash` without `-i`, and the `-i` form works with every version.
-3. Push with `cd <worktree> && git push --force-with-lease`, then keep the body true: update every section the fixes
+3. Check the commits again, as [Shape the history](#shape-the-history) does.
+4. Push with `cd <worktree> && git push --force-with-lease`, then keep the body true: update every section the fixes
    changed.
 
 ## Merge

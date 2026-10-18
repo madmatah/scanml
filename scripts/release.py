@@ -9,7 +9,7 @@ Commits (CLAUDE.md > Workflow, "Commits"), which give the next version as SemVer
   - else (fixes and any other change): the next patch.
 They also give the draft of the release's section of CHANGELOG.md (Keep a Changelog): features
 under "Added", fixes under "Fixed", breaking changes under "Changed", marked as such. The other
-commits (refactor, perf, test, build, ci, docs, chore, and those that do not follow Conventional
+commits (refactor, perf, style, test, build, ci, docs, chore, and those that do not follow Conventional
 Commits) are left out and listed, so that the release pull request adds the ones that matter to
 the readers; it is where the section is edited.
 

@@ -28,7 +28,8 @@ export default {
   'Back to the library': 'Retour à la bibliothèque',
   'Your session has expired: please sign in again.': 'Votre session a expiré : reconnectez-vous.',
   'The ScanMyLib server is not responding correctly.': 'Le serveur ScanMyLib ne répond pas correctement.',
-  'The sign-in link contains an invalid or expired token.': 'Le lien de connexion contient un jeton invalide ou périmé.',
+  'The sign-in link contains an invalid or expired token.':
+    'Le lien de connexion contient un jeton invalide ou périmé.',
   'Could not sign in.': 'Connexion impossible.',
   'Sign out now?': 'Se déconnecter maintenant ?',
   'Photos are still being uploaded: they will fail if you sign out.':
@@ -80,7 +81,8 @@ export default {
   'Number inferred from the neighboring pages (same photo series)':
     'Numéro déduit des pages voisines (même série de photos)',
   'moved': 'déplacée',
-  'Placed by hand with “Organize”: it keeps this place.': 'Placée à la main avec « Organiser » : elle garde cette place.',
+  'Placed by hand with “Organize”: it keeps this place.':
+    'Placée à la main avec « Organiser » : elle garde cette place.',
   'placed by session': 'placée d’après la session',
   'No number: placed next to the pages photographed just before or just after it.':
     'Sans numéro : placée à côté des pages photographiées juste avant ou juste après elle.',
@@ -210,7 +212,8 @@ export default {
   'Upload finished: {sent}, {failures}': 'Envoi terminé : {sent}, {failures}',
   '{percent} of {size}': '{percent} de {size}',
   '{count} photo waiting to be uploaded': {
-    one: '{count} photo en attente d’envoi', other: '{count} photos en attente d’envoi',
+    one: '{count} photo en attente d’envoi',
+    other: '{count} photos en attente d’envoi',
   },
   'JPEG, PNG or WebP, 40 MiB maximum per photo. Photos are uploaded in the order of their file names.':
     'JPEG, PNG ou WebP, 40 Mio maximum par photo. Les photos sont envoyées dans l’ordre de leur nom de fichier.',
@@ -298,14 +301,17 @@ export default {
     'Rien ne permet de les placer : elles sont à la fin du document. Glissez-les à leur place.',
   '{count} page is outside the document (waiting for OCR, failed, excluded or duplicate): it is not affected.': {
     one: '{count} page est hors du document (en attente d’OCR, en erreur, exclue ou doublon) : elle n’est pas concernée.',
-    other: '{count} pages sont hors du document (en attente d’OCR, en erreur, exclues ou doublons) : elles ne sont pas concernées.',
+    other:
+      '{count} pages sont hors du document (en attente d’OCR, en erreur, exclues ou doublons) : elles ne sont pas concernées.',
   },
   '{count} page selected out of {total}': {
-    one: '{count} page sélectionnée sur {total}', other: '{count} pages sélectionnées sur {total}',
+    one: '{count} page sélectionnée sur {total}',
+    other: '{count} pages sélectionnées sur {total}',
   },
   'No page selected': 'Aucune page sélectionnée',
   'Select the range ({count} page)': {
-    one: 'Sélectionner l’intervalle ({count} page)', other: 'Sélectionner l’intervalle ({count} pages)',
+    one: 'Sélectionner l’intervalle ({count} page)',
+    other: 'Sélectionner l’intervalle ({count} pages)',
   },
   'Range ({count})': 'Intervalle ({count})',
   '{page}: position {position} of {total}.': '{page} : position {position} sur {total}.',

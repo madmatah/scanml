@@ -31,7 +31,17 @@ function visibleText(html) {
 
 // Typographic LaTeX as PaddleOCR-VL writes it (invented examples): 19$ ^{th} $ century,
 // Doe$ ^{12} $, Acme$ ^{™} $, Example$ ^{®} $, $ 8^{\text{va}} $, superscript letters ($ ^{e} $)…
-const TYPOGRAPHIC = ['^{e}', '^{12}', '^{™}', '^{®}', '^{\\text{™}}', '^{\\text{®}}', '8^{\\text{va}}', '^{th}', '^{m}'];
+const TYPOGRAPHIC = [
+  '^{e}',
+  '^{12}',
+  '^{™}',
+  '^{®}',
+  '^{\\text{™}}',
+  '^{\\text{®}}',
+  '8^{\\text{va}}',
+  '^{th}',
+  '^{m}',
+];
 
 describe('typographic LaTeX from the OCR', () => {
   test('is typeset without error or console warning', () => {

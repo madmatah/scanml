@@ -38,15 +38,21 @@ function axisLabels(segments, min, max) {
 
 export function renderCoverage(coverage) {
   const unnumbered = coverage?.unnumbered ?? 0;
-  const unnumberedNote = unnumbered > 0
-    && h('p', { class: 'coverage-note' },
-      `+ ${tn('{count} unnumbered page', '{count} unnumbered pages', unnumbered)}`);
+  const unnumberedNote =
+    unnumbered > 0 &&
+    h('p', { class: 'coverage-note' }, `+ ${tn('{count} unnumbered page', '{count} unnumbered pages', unnumbered)}`);
 
   if (coverage?.min === null || coverage?.min === undefined || coverage?.max === null || coverage?.max === undefined) {
-    return h('div', { class: 'coverage' },
-      h('p', { class: 'muted' },
-        t('No page number known yet: the coverage will appear once numbered pages have been processed.')),
-      unnumberedNote);
+    return h(
+      'div',
+      { class: 'coverage' },
+      h(
+        'p',
+        { class: 'muted' },
+        t('No page number known yet: the coverage will appear once numbered pages have been processed.'),
+      ),
+      unnumberedNote,
+    );
   }
 
   const { min, max } = coverage;
@@ -64,32 +70,64 @@ export function renderCoverage(coverage) {
     ? t('Scanned pages: {scanned}. Missing pages: {missing}.', { scanned: scannedLabel, missing: formatRanges(gaps) })
     : t('All pages from {min} to {max} are scanned.', { min, max });
 
-  const bar = h('div', { class: 'coverage-bar', role: 'img', 'aria-label': description },
-    segments.map(({ range, missing }) => h('span', {
-      class: ['coverage-segment', missing ? 'is-missing' : 'is-scanned'],
-      style: { flexGrow: String(range[1] - range[0] + 1) },
-      title: rangeTitle(range, missing),
-    })));
+  const bar = h(
+    'div',
+    { class: 'coverage-bar', role: 'img', 'aria-label': description },
+    segments.map(({ range, missing }) =>
+      h('span', {
+        class: ['coverage-segment', missing ? 'is-missing' : 'is-scanned'],
+        style: { flexGrow: String(range[1] - range[0] + 1) },
+        title: rangeTitle(range, missing),
+      }),
+    ),
+  );
 
-  const axis = h('div', { class: 'coverage-axis', 'aria-hidden': 'true' },
-    axisLabels(segments, min, max).map(({ value, position, end }) => h('span', {
-      class: ['coverage-tick', position === 0 && 'is-first', end && 'is-last'],
-      style: { left: `${position * 100}%` },
-    }, String(value))));
+  const axis = h(
+    'div',
+    { class: 'coverage-axis', 'aria-hidden': 'true' },
+    axisLabels(segments, min, max).map(({ value, position, end }) =>
+      h(
+        'span',
+        {
+          class: ['coverage-tick', position === 0 && 'is-first', end && 'is-last'],
+          style: { left: `${position * 100}%` },
+        },
+        String(value),
+      ),
+    ),
+  );
 
-  return h('div', { class: 'coverage' },
-    h('p', { class: 'coverage-headline' },
+  return h(
+    'div',
+    { class: 'coverage' },
+    h(
+      'p',
+      { class: 'coverage-headline' },
       tNodes('{fraction} pages between {min} and {max} ({percent})', {
-        fraction: h('strong', {}, `${scanned} / ${span}`), min, max, percent: formatPercent(scanned / span),
-      })),
+        fraction: h('strong', {}, `${scanned} / ${span}`),
+        min,
+        max,
+        percent: formatPercent(scanned / span),
+      }),
+    ),
     bar,
     axis,
-    h('dl', { class: 'coverage-details' },
-      h('div', {},
+    h(
+      'dl',
+      { class: 'coverage-details' },
+      h(
+        'div',
+        {},
         h('dt', {}, h('span', { class: 'swatch is-scanned', 'aria-hidden': 'true' }), t('Scanned')),
-        h('dd', {}, scannedLabel || '—')),
-      h('div', {},
+        h('dd', {}, scannedLabel || '—'),
+      ),
+      h(
+        'div',
+        {},
         h('dt', {}, h('span', { class: 'swatch is-missing', 'aria-hidden': 'true' }), t('Missing')),
-        h('dd', {}, gaps.length ? formatRanges(gaps) : tc('missing pages', 'none')))),
-    unnumberedNote);
+        h('dd', {}, gaps.length ? formatRanges(gaps) : tc('missing pages', 'none')),
+      ),
+    ),
+    unnumberedNote,
+  );
 }

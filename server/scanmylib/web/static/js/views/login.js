@@ -15,36 +15,68 @@ export function mountLogin(root, { setTitle, onSignedIn, message }) {
   setTitle(tc('screen title', 'Sign in'));
 
   const token = h('input', {
-    id: 'login-token', name: 'token', type: 'password', class: 'input input-mono', required: true,
-    autocomplete: 'current-password', autocapitalize: 'none', spellcheck: 'false', 'aria-describedby': 'login-help',
+    id: 'login-token',
+    name: 'token',
+    type: 'password',
+    class: 'input input-mono',
+    required: true,
+    autocomplete: 'current-password',
+    autocapitalize: 'none',
+    spellcheck: 'false',
+    'aria-describedby': 'login-help',
   });
-  const reveal = h('button', {
-    type: 'button', class: 'btn btn-icon', 'aria-pressed': 'false', 'aria-label': t('Show token'),
-  }, icon('eye'));
+  const reveal = h(
+    'button',
+    {
+      type: 'button',
+      class: 'btn btn-icon',
+      'aria-pressed': 'false',
+      'aria-label': t('Show token'),
+    },
+    icon('eye'),
+  );
   const error = h('p', { class: 'form-error', role: 'alert', hidden: !message }, message ?? '');
   const submit = h('button', { type: 'submit', class: 'btn btn-primary btn-block' }, t('Sign in'));
 
-  const form = h('form', { class: 'card login-card', novalidate: true },
-    h('div', { class: 'login-brand' },
+  const form = h(
+    'form',
+    { class: 'card login-card', novalidate: true },
+    h(
+      'div',
+      { class: 'login-brand' },
       h('img', { src: '/static/icons/icon.svg', alt: '', width: 48, height: 48 }),
-      h('div', {},
-        h('h1', { tabindex: '-1' }, 'ScanMyLib'),
-        h('p', { class: 'muted' }, t('Your digitized library')))),
+      h('div', {}, h('h1', { tabindex: '-1' }, 'ScanMyLib'), h('p', { class: 'muted' }, t('Your digitized library'))),
+    ),
     // Lets password managers store the token under a recognizable name.
     h('input', {
-      type: 'text', name: 'username', autocomplete: 'username', value: 'ScanMyLib', hidden: true, readonly: true,
+      type: 'text',
+      name: 'username',
+      autocomplete: 'username',
+      value: 'ScanMyLib',
+      hidden: true,
+      readonly: true,
     }),
-    h('div', { class: 'field' },
+    h(
+      'div',
+      { class: 'field' },
       h('label', { for: token.id }, t('Access token')),
       h('div', { class: 'input-group' }, token, reveal),
-      h('p', { id: 'login-help', class: 'hint' },
-        tNodes('The server creates this token the first time it starts, in the file {file} of its data folder. '
-          + 'A link of the form {link} signs you in directly.', {
-          file: h('code', {}, 'state/token'),
-          link: h('code', {}, 'http://…/#token=…'),
-        }))),
+      h(
+        'p',
+        { id: 'login-help', class: 'hint' },
+        tNodes(
+          'The server creates this token the first time it starts, in the file {file} of its data folder. ' +
+            'A link of the form {link} signs you in directly.',
+          {
+            file: h('code', {}, 'state/token'),
+            link: h('code', {}, 'http://…/#token=…'),
+          },
+        ),
+      ),
+    ),
     error,
-    submit);
+    submit,
+  );
 
   reveal.addEventListener('click', () => {
     const visible = token.type === 'password';
@@ -69,9 +101,10 @@ export function mountLogin(root, { setTitle, onSignedIn, message }) {
       await signIn(value);
       onSignedIn();
     } catch (failure) {
-      error.textContent = failure instanceof ApiError && failure.status === 401
-        ? t('Invalid token. Check it and try again.')
-        : errorMessage(failure, t('Could not sign in.'));
+      error.textContent =
+        failure instanceof ApiError && failure.status === 401
+          ? t('Invalid token. Check it and try again.')
+          : errorMessage(failure, t('Could not sign in.'));
       error.hidden = false;
       token.select();
     } finally {

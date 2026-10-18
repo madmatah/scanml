@@ -113,6 +113,8 @@ export class NodeCache {
 
 /** True when the keyboard event happens in a text field (shortcuts must not fire). */
 export function isTypingTarget(target) {
-  return target instanceof HTMLElement
-    && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
+  return (
+    target instanceof HTMLElement &&
+    (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))
+  );
 }

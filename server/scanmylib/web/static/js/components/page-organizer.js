@@ -18,8 +18,17 @@ import { errorMessage } from '../lib/errors.js';
 import { t, tn } from '../lib/i18n.js';
 import { pagePlacement, pageShortLabel, pageTitle } from '../lib/labels.js';
 import {
-  autoScrollStep, columnGap, dropTarget, inOrder, insertionMark, moveBlock, moveByOne, moveNextTo, rangeOf,
-  sameOrder, spanOf,
+  autoScrollStep,
+  columnGap,
+  dropTarget,
+  inOrder,
+  insertionMark,
+  moveBlock,
+  moveByOne,
+  moveNextTo,
+  rangeOf,
+  sameOrder,
+  spanOf,
 } from '../lib/order.js';
 import { confirmDialog, openModal } from './dialogs.js';
 import { icon } from './icons.js';
@@ -68,17 +77,28 @@ function isUnavailable(button) {
 export function placementChip(page, withUnplaced) {
   if (page.placement === 'unplaced' && !withUnplaced) return null;
   const placement = pagePlacement(page.placement);
-  return placement && h('span', {
-    class: ['chip', 'chip-placement', `placement-${page.placement}`], title: placement.description,
-  }, placement.label);
+  return (
+    placement &&
+    h(
+      'span',
+      {
+        class: ['chip', 'chip-placement', `placement-${page.placement}`],
+        title: placement.description,
+      },
+      placement.label,
+    )
+  );
 }
 
 /** The thumbnail that follows the pointer, with the number of pages moved. */
 function dragGhost(card, count) {
   const image = card.querySelector('.page-thumb img');
-  return h('div', { class: 'drag-ghost', 'aria-hidden': 'true' },
+  return h(
+    'div',
+    { class: 'drag-ghost', 'aria-hidden': 'true' },
     image && h('img', { src: image.currentSrc || image.src, alt: '', draggable: 'false' }),
-    count > 1 && h('span', { class: 'drag-ghost-count' }, String(count)));
+    count > 1 && h('span', { class: 'drag-ghost-count' }, String(count)),
+  );
 }
 
 /**
@@ -88,30 +108,53 @@ function dragGhost(card, count) {
 function moveDialog({ count, choices }) {
   return new Promise((resolve) => {
     const ids = { title: uniqueId('dialog-title'), target: uniqueId('move-target'), summary: uniqueId('move-summary') };
-    const sideChoices = [['before', t('before')], ['after', t('after')]];
-    const sides = sideChoices.map(([value, label]) => h('label', { class: 'segmented-option' },
-      h('input', { type: 'radio', name: 'side', value, checked: value === 'before' }),
-      h('span', {}, label)));
-    const target = h('select', {
-      id: ids.target, name: 'target', class: 'input', autofocus: true, 'aria-describedby': ids.summary,
-    }, choices.map(({ id, label }) => h('option', { value: id }, label)));
+    const sideChoices = [
+      ['before', t('before')],
+      ['after', t('after')],
+    ];
+    const sides = sideChoices.map(([value, label]) =>
+      h(
+        'label',
+        { class: 'segmented-option' },
+        h('input', { type: 'radio', name: 'side', value, checked: value === 'before' }),
+        h('span', {}, label),
+      ),
+    );
+    const target = h(
+      'select',
+      {
+        id: ids.target,
+        name: 'target',
+        class: 'input',
+        autofocus: true,
+        'aria-describedby': ids.summary,
+      },
+      choices.map(({ id, label }) => h('option', { value: id }, label)),
+    );
     const summary = h('p', { id: ids.summary, class: 'hint' });
-    const form = h('form', { method: 'dialog', class: 'dialog-body' },
+    const form = h(
+      'form',
+      { method: 'dialog', class: 'dialog-body' },
       h('h2', { id: ids.title, class: 'dialog-title' }, t('Move selection')),
-      h('p', { class: 'dialog-text' },
+      h(
+        'p',
+        { class: 'dialog-text' },
         count > 1
           ? t('{selected}, in their current order.', {
-            selected: tn('{count} selected page', '{count} selected pages', count),
-          })
-          : t('1 page selected.')),
-      h('fieldset', { class: 'field' },
-        h('legend', {}, t('Place')),
-        h('div', { class: 'segmented' }, sides)),
+              selected: tn('{count} selected page', '{count} selected pages', count),
+            })
+          : t('1 page selected.'),
+      ),
+      h('fieldset', { class: 'field' }, h('legend', {}, t('Place')), h('div', { class: 'segmented' }, sides)),
       h('div', { class: 'field' }, h('label', { for: ids.target }, t('the page')), target),
       summary,
-      h('div', { class: 'dialog-actions' },
+      h(
+        'div',
+        { class: 'dialog-actions' },
         h('button', { type: 'submit', value: 'cancel', class: 'btn' }, t('Cancel')),
-        h('button', { type: 'submit', value: 'move', class: 'btn btn-primary' }, icon('move'), t('Move'))));
+        h('button', { type: 'submit', value: 'move', class: 'btn btn-primary' }, icon('move'), t('Move')),
+      ),
+    );
     const dialog = h('dialog', { class: 'dialog', 'aria-labelledby': ids.title }, form);
 
     const describe = () => {
@@ -129,9 +172,13 @@ function moveDialog({ count, choices }) {
     };
     form.addEventListener('change', describe);
     describe();
-    dialog.addEventListener('close', () => {
-      resolve(dialog.returnValue === 'move' ? { targetId: target.value, side: form.elements.side.value } : null);
-    }, { once: true });
+    dialog.addEventListener(
+      'close',
+      () => {
+        resolve(dialog.returnValue === 'move' ? { targetId: target.value, side: form.elements.side.value } : null);
+      },
+      { once: true },
+    );
     openModal(dialog);
   });
 }
@@ -164,40 +211,80 @@ export function createPageOrganizer({ save, reset, reload, onDone }) {
   const titleId = uniqueId('organizer-title');
   const title = h('h3', { id: titleId, class: 'organizer-title', tabindex: '-1' }, t('Organize pages'));
   const status = h('p', { class: 'organizer-status' });
-  const savingNote = h('p', { class: 'organizer-saving', hidden: true },
-    h('span', { class: 'spinner', 'aria-hidden': 'true' }), t('Saving…'));
-  const clearButton = h('button', { type: 'button', class: 'btn btn-small btn-compact' },
-    icon('x'), h('span', { class: 'btn-label' }, t('Deselect all')));
+  const savingNote = h(
+    'p',
+    { class: 'organizer-saving', hidden: true },
+    h('span', { class: 'spinner', 'aria-hidden': 'true' }),
+    t('Saving…'),
+  );
+  const clearButton = h(
+    'button',
+    { type: 'button', class: 'btn btn-small btn-compact' },
+    icon('x'),
+    h('span', { class: 'btn-label' }, t('Deselect all')),
+  );
   const spanLong = h('span', { class: 'label-long' });
   const spanShort = h('span', { class: 'label-short' });
   const spanButton = h('button', { type: 'button', class: 'btn btn-small', hidden: true }, spanLong, spanShort);
-  const moveButton = h('button', { type: 'button', class: 'btn btn-small' }, icon('move'),
-    h('span', { class: 'label-long' }, t('Move selection…')), h('span', { class: 'label-short' }, t('Move…')));
+  const moveButton = h(
+    'button',
+    { type: 'button', class: 'btn btn-small' },
+    icon('move'),
+    h('span', { class: 'label-long' }, t('Move selection…')),
+    h('span', { class: 'label-short' }, t('Move…')),
+  );
   const doneButton = h('button', { type: 'button', class: 'btn btn-primary btn-small' }, icon('check'), t('Done'));
-  const resetButton = h('button', { type: 'button', class: 'btn btn-small', hidden: true },
-    icon('undo'), t('Restore automatic order'));
-  const toolbar = h('div', { class: 'organizer-toolbar' },
+  const resetButton = h(
+    'button',
+    { type: 'button', class: 'btn btn-small', hidden: true },
+    icon('undo'),
+    t('Restore automatic order'),
+  );
+  const toolbar = h(
+    'div',
+    { class: 'organizer-toolbar' },
     h('div', { class: 'organizer-heading' }, title, status, savingNote),
-    h('div', { class: 'organizer-actions' }, clearButton, spanButton, moveButton, doneButton));
+    h('div', { class: 'organizer-actions' }, clearButton, spanButton, moveButton, doneButton),
+  );
 
   const outsideNote = h('p', { class: 'hint', hidden: true });
-  const intro = h('div', { class: 'organizer-intro' },
-    h('div', { class: 'organizer-help' },
-      h('p', { class: 'hint hint-fine-pointer' },
-        t('Drag a page to move it: if it is selected, the whole selection follows it. '
-          + 'Click: select, Shift+click: range, Ctrl+click: add or remove. Esc cancels a move.')),
-      h('p', { class: 'hint hint-coarse-pointer' },
-        t('Tap a page to select it, check others, then drag it by the handle '
-          + '(top right of the thumbnail) or after a long press.')),
-      outsideNote),
-    resetButton);
+  const intro = h(
+    'div',
+    { class: 'organizer-intro' },
+    h(
+      'div',
+      { class: 'organizer-help' },
+      h(
+        'p',
+        { class: 'hint hint-fine-pointer' },
+        t(
+          'Drag a page to move it: if it is selected, the whole selection follows it. ' +
+            'Click: select, Shift+click: range, Ctrl+click: add or remove. Esc cancels a move.',
+        ),
+      ),
+      h(
+        'p',
+        { class: 'hint hint-coarse-pointer' },
+        t(
+          'Tap a page to select it, check others, then drag it by the handle ' +
+            '(top right of the thumbnail) or after a long press.',
+        ),
+      ),
+      outsideNote,
+    ),
+    resetButton,
+  );
 
   function pageGroup() {
     const heading = h('h4', { class: 'page-group-title' });
     const hint = h('p', { class: 'page-group-hint' });
     const list = h('ol', { class: 'page-grid organizer-grid', role: 'list' });
-    const element = h('section', { class: 'organizer-group' },
-      h('div', { class: 'page-group-header' }, heading, hint), list);
+    const element = h(
+      'section',
+      { class: 'organizer-group' },
+      h('div', { class: 'page-group-header' }, heading, hint),
+      list,
+    );
     return { element, heading, hint, list };
   }
   const main = pageGroup();
@@ -228,23 +315,44 @@ export function createPageOrganizer({ save, reset, reload, onDone }) {
     const body = h('span', { class: 'page-card-body' }, label);
     const index = h('span', { class: 'organizer-index', 'aria-hidden': 'true' });
     const checkbox = h('input', { type: 'checkbox', name: 'selected-pages', value: page.id });
-    const earlier = h('button', {
-      type: 'button', class: 'btn btn-icon btn-small', title: t('Place before the previous one'),
-      dataset: { step: '-1' },
-    }, icon('chevron-left'));
-    const later = h('button', {
-      type: 'button', class: 'btn btn-icon btn-small', title: t('Place after the next one'),
-      dataset: { step: '1' },
-    }, icon('chevron-right'));
-    const node = h('li', { class: 'organizer-card', dataset: { id: page.id } },
-      h('div', { class: 'organizer-card-frame' },
-        h('span', { class: 'page-thumb' },
+    const earlier = h(
+      'button',
+      {
+        type: 'button',
+        class: 'btn btn-icon btn-small',
+        title: t('Place before the previous one'),
+        dataset: { step: '-1' },
+      },
+      icon('chevron-left'),
+    );
+    const later = h(
+      'button',
+      {
+        type: 'button',
+        class: 'btn btn-icon btn-small',
+        title: t('Place after the next one'),
+        dataset: { step: '1' },
+      },
+      icon('chevron-right'),
+    );
+    const node = h(
+      'li',
+      { class: 'organizer-card', dataset: { id: page.id } },
+      h(
+        'div',
+        { class: 'organizer-card-frame' },
+        h(
+          'span',
+          { class: 'page-thumb' },
           image,
           index,
           h('span', { class: 'drag-handle', title: t('Drag to move'), 'aria-hidden': 'true' }, icon('grip')),
-          h('label', { class: 'organizer-check' }, checkbox)),
+          h('label', { class: 'organizer-check' }, checkbox),
+        ),
         body,
-        h('span', { class: 'organizer-steps' }, earlier, later)));
+        h('span', { class: 'organizer-steps' }, earlier, later),
+      ),
+    );
     const card = { node, image, label, body, badge: null, place: null, index, checkbox, earlier, later };
     cards.set(page.id, card);
     return card;
@@ -318,17 +426,19 @@ export function createPageOrganizer({ save, reset, reload, onDone }) {
     else main.hint.textContent = t('No numbered page: capture order.');
     tail.element.hidden = split === order.length;
     tail.heading.textContent = t('Unnumbered pages ({count})', { count: order.length - split });
-    tail.hint.textContent = t('Nothing tells where they go: they are at the end of the document. '
-      + 'Drag them to their place.');
+    tail.hint.textContent = t(
+      'Nothing tells where they go: they are at the end of the document. ' + 'Drag them to their place.',
+    );
 
     const outside = latest ? latest.pages.length - order.length : 0;
     outsideNote.hidden = outside === 0;
     outsideNote.textContent = tn(
-      '{count} page is outside the document (waiting for OCR, failed, excluded or duplicate): '
-        + 'it is not affected.',
-      '{count} pages are outside the document (waiting for OCR, failed, excluded or duplicates): '
-        + 'they are not affected.',
-      outside, { count: outside });
+      '{count} page is outside the document (waiting for OCR, failed, excluded or duplicate): ' + 'it is not affected.',
+      '{count} pages are outside the document (waiting for OCR, failed, excluded or duplicates): ' +
+        'they are not affected.',
+      outside,
+      { count: outside },
+    );
     renderToolbar();
   }
 
@@ -336,8 +446,8 @@ export function createPageOrganizer({ save, reset, reload, onDone }) {
     const count = selected.size;
     status.textContent = count
       ? tn('{count} page selected out of {total}', '{count} pages selected out of {total}', count, {
-        total: order.length,
-      })
+          total: order.length,
+        })
       : t('No page selected');
     setUnavailable(clearButton, count === 0);
     setUnavailable(moveButton, count === 0 || count === order.length || resetting);
@@ -398,11 +508,16 @@ export function createPageOrganizer({ save, reset, reload, onDone }) {
     const positions = moved.map((id) => order.indexOf(id) + 1);
     if (moved.length === 1) {
       return t('{page}: position {position} of {total}.', {
-        page: pageTitle(pages.get(moved[0])), position: positions[0], total: order.length,
+        page: pageTitle(pages.get(moved[0])),
+        position: positions[0],
+        total: order.length,
       });
     }
     return t('{count} pages moved: positions {first} to {last} of {total}.', {
-      count: moved.length, first: positions[0], last: positions.at(-1), total: order.length,
+      count: moved.length,
+      first: positions[0],
+      last: positions.at(-1),
+      total: order.length,
     });
   }
 
@@ -517,8 +632,10 @@ export function createPageOrganizer({ save, reset, reload, onDone }) {
     if (isUnavailable(resetButton)) return;
     const confirmed = await confirmDialog({
       title: t('Restore automatic order?'),
-      message: t('The pages will go back to the place given by their number or by their photo series. '
-        + 'Moves made by hand will be forgotten.'),
+      message: t(
+        'The pages will go back to the place given by their number or by their photo series. ' +
+          'Moves made by hand will be forgotten.',
+      ),
       confirmLabel: t('Restore automatic order'),
     });
     if (!confirmed || destroyed) return;
@@ -569,7 +686,8 @@ export function createPageOrganizer({ save, reset, reload, onDone }) {
       moving: [],
       target: null,
     };
-    if (mouse) event.preventDefault(); // no text selection, no native image drag
+    if (mouse)
+      event.preventDefault(); // no text selection, no native image drag
     else if (!onHandle) gesture.timer = setTimeout(pickUp, LONG_PRESS_MS);
     window.addEventListener('pointermove', onPointerMove);
     window.addEventListener('pointerup', onPointerUp);
@@ -636,7 +754,12 @@ export function createPageOrganizer({ save, reset, reload, onDone }) {
     const { scrollX, scrollY } = window;
     g.rects = order.map((id) => {
       const box = cards.get(id).node.getBoundingClientRect();
-      return { left: box.left + scrollX, top: box.top + scrollY, right: box.right + scrollX, bottom: box.bottom + scrollY };
+      return {
+        left: box.left + scrollX,
+        top: box.top + scrollY,
+        right: box.right + scrollX,
+        bottom: box.bottom + scrollY,
+      };
     });
     g.gap = columnGap(g.rects);
     g.origin = listsBox();
@@ -758,9 +881,13 @@ export function createPageOrganizer({ save, reset, reload, onDone }) {
   lists.addEventListener('pointerdown', onPointerDown);
   // A finger that picked a card up must not scroll the page (touch-action is
   // decided when the finger lands, before the long press).
-  lists.addEventListener('touchmove', (event) => {
-    if (gesture?.armed && event.cancelable) event.preventDefault();
-  }, { passive: false });
+  lists.addEventListener(
+    'touchmove',
+    (event) => {
+      if (gesture?.armed && event.cancelable) event.preventDefault();
+    },
+    { passive: false },
+  );
   lists.addEventListener('contextmenu', (event) => {
     if (gesture && gesture.pointerType !== 'mouse') event.preventDefault(); // long-press menu
   });
@@ -779,7 +906,8 @@ export function createPageOrganizer({ save, reset, reload, onDone }) {
       if (!isUnavailable(stepButton)) moveOne(id, Number(stepButton.dataset.step), stepButton);
     } else if (event.target.matches('input[type="checkbox"]')) {
       select(id, { toggle: true, range: event.shiftKey });
-    } else if (!event.target.closest('label')) { // a label forwards its click to its checkbox
+    } else if (!event.target.closest('label')) {
+      // a label forwards its click to its checkbox
       select(id, { range: event.shiftKey, toggle: event.ctrlKey || event.metaKey });
     }
   });

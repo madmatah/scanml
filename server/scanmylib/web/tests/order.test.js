@@ -110,7 +110,15 @@ const RECTS = [...grid(7), ...grid(2, { top: 480 })]; // rows at 0, 140, 280 (on
 
 describe('drop target in a grid', () => {
   test('rows follow the tops of the cards', () => {
-    assert.deepEqual(gridRows(RECTS).map(({ first, last }) => [first, last]), [[0, 2], [3, 5], [6, 6], [7, 8]]);
+    assert.deepEqual(
+      gridRows(RECTS).map(({ first, last }) => [first, last]),
+      [
+        [0, 2],
+        [3, 5],
+        [6, 6],
+        [7, 8],
+      ],
+    );
     assert.deepEqual(gridRows([]), []);
   });
 

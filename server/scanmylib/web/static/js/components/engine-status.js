@@ -12,7 +12,9 @@ import { icon } from './icons.js';
 function displayedState(monitor) {
   if (monitor.connection === 'offline') {
     return {
-      label: t('Server unreachable'), tone: 'danger', description: t('The ScanMyLib server is not responding.'),
+      label: t('Server unreachable'),
+      tone: 'danger',
+      description: t('The ScanMyLib server is not responding.'),
     };
   }
   const ocr = monitor.status?.ocr;
@@ -38,7 +40,8 @@ function panelContent(monitor, state) {
   if (status && monitor.connection !== 'offline') {
     const { ocr = {}, queue = {} } = status;
     const waiting = t('{queued} waiting, {processing} in progress', {
-      queued: formatNumber(queue.queued ?? 0), processing: formatNumber(queue.processing ?? 0),
+      queued: formatNumber(queue.queued ?? 0),
+      processing: formatNumber(queue.processing ?? 0),
     });
     rows.push(
       detailRow(t('Queue'), waiting),
@@ -62,9 +65,18 @@ function panelContent(monitor, state) {
 export function mountEngineStatus(container, monitor) {
   const label = h('span', { class: 'engine-label' }, t('OCR…'));
   const queue = h('span', { class: 'engine-queue' });
-  const button = h('button', {
-    type: 'button', class: 'engine-badge', 'aria-expanded': 'false', 'aria-controls': 'engine-panel',
-  }, h('span', { class: 'status-dot', 'aria-hidden': 'true' }), label, queue);
+  const button = h(
+    'button',
+    {
+      type: 'button',
+      class: 'engine-badge',
+      'aria-expanded': 'false',
+      'aria-controls': 'engine-panel',
+    },
+    h('span', { class: 'status-dot', 'aria-hidden': 'true' }),
+    label,
+    queue,
+  );
   const panel = h('div', { id: 'engine-panel', class: 'engine-panel', hidden: true });
   container.replaceChildren(button, panel);
 
@@ -97,31 +109,44 @@ export function mountEngineStatus(container, monitor) {
 }
 
 function banner(tone, title, message) {
-  return h('div', { class: ['banner', `banner-${tone}`], role: 'alert' },
+  return h(
+    'div',
+    { class: ['banner', `banner-${tone}`], role: 'alert' },
     icon('alert'),
-    h('div', {}, h('p', { class: 'banner-title' }, title), message && h('p', {}, message)));
+    h('div', {}, h('p', { class: 'banner-title' }, title), message && h('p', {}, message)),
+  );
 }
 
 function bannerFor(monitor) {
   if (monitor.connection === 'offline') {
-    return banner('danger', t('The ScanMyLib server is not responding.'),
+    return banner(
+      'danger',
+      t('The ScanMyLib server is not responding.'),
       t('Retrying every 3 seconds. Check that the PC is on and that the {service} service is running.', {
         service: quoted('api'),
-      }));
+      }),
+    );
   }
   const ocr = monitor.status?.ocr;
   if (!ocr) return null;
   if (ocr.reachable === false || ocr.state === 'unreachable') {
-    return banner('danger', t('The OCR engine is unreachable.'),
+    return banner(
+      'danger',
+      t('The OCR engine is unreachable.'),
       t('Received photos are kept and will be processed as soon as the {container} container responds again.', {
         container: quoted('ocr'),
-      }));
+      }),
+    );
   }
   if (ocr.state === 'error') {
-    return banner('danger', t('The OCR engine could not start.'),
-      ocr.last_error || t('Check the logs of the {container} container. The pages stay in the queue.', {
-        container: quoted('ocr'),
-      }));
+    return banner(
+      'danger',
+      t('The OCR engine could not start.'),
+      ocr.last_error ||
+        t('Check the logs of the {container} container. The pages stay in the queue.', {
+          container: quoted('ocr'),
+        }),
+    );
   }
   return null;
 }

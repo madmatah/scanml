@@ -94,8 +94,7 @@ function lookup(key) {
 
 function interpolate(template, values) {
   if (!values) return template;
-  return template.replace(PLACEHOLDER, (match, name) => (
-    Object.hasOwn(values, name) ? String(values[name]) : match));
+  return template.replace(PLACEHOLDER, (match, name) => (Object.hasOwn(values, name) ? String(values[name]) : match));
 }
 
 function translate(message, context) {
@@ -123,14 +122,17 @@ export function tn(singular, plural, count, values = {}) {
 export function tNodes(message, values = {}) {
   const parts = [];
   // split() with a capturing group alternates text and placeholder names.
-  translate(message).split(PLACEHOLDER).forEach((part, index) => {
-    let value = part;
-    if (index % 2 === 1) value = Object.hasOwn(values, part) ? values[part] : `{${part}}`;
-    if (value === null || value === undefined || value === '') return;
-    if (typeof value === 'object') parts.push(value); // a DOM node
-    else if (typeof parts.at(-1) === 'string') parts[parts.length - 1] += String(value);
-    else parts.push(String(value));
-  });
+  translate(message)
+    .split(PLACEHOLDER)
+    .forEach((part, index) => {
+      let value = part;
+      if (index % 2 === 1) value = Object.hasOwn(values, part) ? values[part] : `{${part}}`;
+      if (value === null || value === undefined || value === '') return;
+      if (typeof value === 'object')
+        parts.push(value); // a DOM node
+      else if (typeof parts.at(-1) === 'string') parts[parts.length - 1] += String(value);
+      else parts.push(String(value));
+    });
   return parts;
 }
 

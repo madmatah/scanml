@@ -28,8 +28,10 @@ const PAGE_GROUPS = {
   placed: () => ({ title: t('In the document'), hint: t('In the reading order of document.md.') }),
   unplaced: () => ({
     title: t('Unnumbered pages'),
-    hint: t('Nothing tells where they go: they are at the end of the document, in capture order. '
-      + '“Organize” can put them in their place.'),
+    hint: t(
+      'Nothing tells where they go: they are at the end of the document, in capture order. ' +
+        '“Organize” can put them in their place.',
+    ),
   }),
   pending: () => ({
     title: t('Not in the document yet'),
@@ -61,30 +63,58 @@ function groupOf(page) {
 function pageCard(page, withUnplaced) {
   const status = pageStatus(page.status);
   const source = numberSource(page.number_source);
-  return h('li', { class: ['page-card', page.excluded && 'is-excluded', page.duplicate_of && 'is-duplicate'] },
-    h('a', { class: 'page-card-link', href: href(paths.page(page.id)) },
-      h('span', { class: 'page-thumb' },
+  return h(
+    'li',
+    { class: ['page-card', page.excluded && 'is-excluded', page.duplicate_of && 'is-duplicate'] },
+    h(
+      'a',
+      { class: 'page-card-link', href: href(paths.page(page.id)) },
+      h(
+        'span',
+        { class: 'page-thumb' },
         // The server re-renders the thumbnail of a rotated page under the same URL.
         h('img', {
-          src: versionedUrl(page.thumb_url, page.rotation ?? 0), alt: '', loading: 'lazy', decoding: 'async',
+          src: versionedUrl(page.thumb_url, page.rotation ?? 0),
+          alt: '',
+          loading: 'lazy',
+          decoding: 'async',
         }),
-        page.status === 'processing' && h('span', { class: 'page-thumb-busy', 'aria-hidden': 'true' },
-          h('span', { class: 'spinner' }))),
-      h('span', { class: 'page-card-body' },
+        page.status === 'processing' &&
+          h('span', { class: 'page-thumb-busy', 'aria-hidden': 'true' }, h('span', { class: 'spinner' })),
+      ),
+      h(
+        'span',
+        { class: 'page-card-body' },
         h('span', { class: 'page-card-label' }, pageShortLabel(page)),
-        source && h('span', {
-          class: ['chip', 'chip-source', `source-${page.number_source}`], title: source.description,
-        }, source.label),
+        source &&
+          h(
+            'span',
+            {
+              class: ['chip', 'chip-source', `source-${page.number_source}`],
+              title: source.description,
+            },
+            source.label,
+          ),
         placementChip(page, withUnplaced),
         page.status !== 'done' && h('span', { class: ['chip', `chip-${status.tone}`] }, status.label),
         page.excluded && h('span', { class: 'chip chip-outline' }, tc('one page', 'Excluded')),
-        page.duplicate_of && h('span', { class: 'chip chip-warn' }, t('Duplicate')))));
+        page.duplicate_of && h('span', { class: 'chip chip-warn' }, t('Duplicate')),
+      ),
+    ),
+  );
 }
 
 function pageSignature(page, withUnplaced) {
   return JSON.stringify([
-    page.status, page.page_label, page.number_source, page.excluded, page.duplicate_of, page.thumb_url, page.rotation,
-    page.placement, withUnplaced,
+    page.status,
+    page.page_label,
+    page.number_source,
+    page.excluded,
+    page.duplicate_of,
+    page.thumb_url,
+    page.rotation,
+    page.placement,
+    withUnplaced,
   ]);
 }
 
@@ -97,33 +127,57 @@ function queueKey(status) {
 function statTiles(stats) {
   return STATS.map(({ key, label, tone }) => {
     const value = stats?.[key] ?? 0;
-    return h('div', { class: ['stat', value === 0 && 'is-zero', value > 0 && tone && `stat-${tone}`] },
+    return h(
+      'div',
+      { class: ['stat', value === 0 && 'is-zero', value > 0 && tone && `stat-${tone}`] },
       h('dt', { class: 'stat-label' }, label()),
-      h('dd', { class: 'stat-value' }, String(value)));
+      h('dd', { class: 'stat-value' }, String(value)),
+    );
   });
 }
 
 /** Upload buttons and progress list for one document. */
 function createUploader(documentId, { onUploaded }) {
   const filesInput = h('input', {
-    type: 'file', accept: 'image/*', multiple: true, hidden: true, 'data-upload': 'files',
+    type: 'file',
+    accept: 'image/*',
+    multiple: true,
+    hidden: true,
+    'data-upload': 'files',
   });
   const cameraInput = h('input', {
-    type: 'file', accept: 'image/*', capture: 'environment', hidden: true, 'data-upload': 'camera',
+    type: 'file',
+    accept: 'image/*',
+    capture: 'environment',
+    hidden: true,
+    'data-upload': 'camera',
   });
   const pickButton = h('button', { type: 'button', class: 'btn btn-primary' }, icon('upload'), t('Import photos'));
   const cameraButton = h('button', { type: 'button', class: 'btn' }, icon('camera'), t('Take a photo'));
 
   const headline = h('p', { class: 'upload-headline' });
   const progress = h('progress', {
-    class: 'upload-progress', max: 1, value: 0, 'aria-label': t('Upload progress'),
+    class: 'upload-progress',
+    max: 1,
+    value: 0,
+    'aria-label': t('Upload progress'),
   });
   const list = h('ul', { class: 'upload-list', role: 'list' });
-  const retryButton = h('button', { type: 'button', class: 'btn btn-small' },
-    icon('refresh'), t('Retry failed uploads'));
+  const retryButton = h(
+    'button',
+    { type: 'button', class: 'btn btn-small' },
+    icon('refresh'),
+    t('Retry failed uploads'),
+  );
   const clearButton = h('button', { type: 'button', class: 'btn btn-small btn-ghost' }, t('Clear the list'));
-  const panel = h('div', { class: 'upload-panel', hidden: true },
-    headline, progress, list, h('div', { class: 'upload-actions' }, retryButton, clearButton));
+  const panel = h(
+    'div',
+    { class: 'upload-panel', hidden: true },
+    headline,
+    progress,
+    list,
+    h('div', { class: 'upload-actions' }, retryButton, clearButton),
+  );
 
   // Successive camera shots form one capture session (the server infers
   // missing page numbers from neighbors within a session).
@@ -177,29 +231,50 @@ function createUploader(documentId, { onUploaded }) {
     const failures = failed.length + rejected.length;
     if (busy) {
       headline.textContent = t('Uploading: {sent} / {total} ({percent})', {
-        sent, total: tn('{count} photo', '{count} photos', accepted), percent: formatPercent(progress.value),
+        sent,
+        total: tn('{count} photo', '{count} photos', accepted),
+        percent: formatPercent(progress.value),
       });
     } else {
       const sentPhotos = tn('{count} photo sent', '{count} photos sent', sent);
       headline.textContent = failures
         ? t('Upload finished: {sent}, {failures}', {
-          sent: sentPhotos, failures: tn('{count} failure', '{count} failures', failures),
-        })
+            sent: sentPhotos,
+            failures: tn('{count} failure', '{count} failures', failures),
+          })
         : t('Upload finished: {sent}', { sent: sentPhotos });
     }
 
     const rows = [
-      ...uploading.map((item) => h('li', { class: 'upload-item' },
-        h('span', { class: 'upload-name' }, item.name),
-        h('span', { class: 'upload-state' },
-          t('{percent} of {size}', { percent: formatPercent(item.progress), size: formatBytes(item.size) })))),
-      ...[...failed, ...rejected].map((item) => h('li', { class: 'upload-item is-error' },
-        h('span', { class: 'upload-name' }, item.name),
-        h('span', { class: 'upload-state' }, item.error))),
+      ...uploading.map((item) =>
+        h(
+          'li',
+          { class: 'upload-item' },
+          h('span', { class: 'upload-name' }, item.name),
+          h(
+            'span',
+            { class: 'upload-state' },
+            t('{percent} of {size}', { percent: formatPercent(item.progress), size: formatBytes(item.size) }),
+          ),
+        ),
+      ),
+      ...[...failed, ...rejected].map((item) =>
+        h(
+          'li',
+          { class: 'upload-item is-error' },
+          h('span', { class: 'upload-name' }, item.name),
+          h('span', { class: 'upload-state' }, item.error),
+        ),
+      ),
     ];
     if (waiting) {
-      rows.push(h('li', { class: 'upload-item is-muted' },
-        tn('{count} photo waiting to be uploaded', '{count} photos waiting to be uploaded', waiting)));
+      rows.push(
+        h(
+          'li',
+          { class: 'upload-item is-muted' },
+          tn('{count} photo waiting to be uploaded', '{count} photos waiting to be uploaded', waiting),
+        ),
+      );
     }
     list.replaceChildren(...rows);
     list.hidden = rows.length === 0;
@@ -224,11 +299,19 @@ function createUploader(documentId, { onUploaded }) {
   render();
 
   return {
-    element: h('div', { class: 'uploader' },
+    element: h(
+      'div',
+      { class: 'uploader' },
       h('div', { class: 'button-row' }, pickButton, cameraButton),
-      h('p', { class: 'hint' },
-        t('JPEG, PNG or WebP, 40 MiB maximum per photo. Photos are uploaded in the order of their file names.')),
-      filesInput, cameraInput, panel),
+      h(
+        'p',
+        { class: 'hint' },
+        t('JPEG, PNG or WebP, 40 MiB maximum per photo. Photos are uploaded in the order of their file names.'),
+      ),
+      filesInput,
+      cameraInput,
+      panel,
+    ),
     destroy() {
       uploads.removeEventListener('change', onChange);
       uploads.removeEventListener('progress', onProgress);
@@ -263,30 +346,55 @@ export function mountDocument(root, { route, signal, monitor, setTitle }) {
   const meta = h('ul', { class: 'chips doc-meta', role: 'list' });
   const author = h('p', { class: 'doc-author' });
   const notes = h('p', { class: 'doc-notes' });
-  const readLink = h('a', { class: 'btn btn-primary', href: href(paths.reader(documentId)) },
-    icon('book'), t('Read document'));
+  const readLink = h(
+    'a',
+    { class: 'btn btn-primary', href: href(paths.reader(documentId)) },
+    icon('book'),
+    t('Read document'),
+  );
   const editButton = h('button', { type: 'button', class: 'btn' }, icon('edit'), t('Edit'));
   const deleteButton = h('button', { type: 'button', class: 'btn btn-danger' }, icon('trash'), t('Delete'));
   const coverage = h('div');
   const stats = h('dl', { class: 'stats' });
   const markdownLink = h('a', { class: 'btn', href: links.markdown(documentId) }, icon('download'), 'document.md');
-  const zipLink = h('a', { class: 'btn', href: links.exportZip(documentId, false) },
-    icon('archive'), t('.zip archive'));
+  const zipLink = h(
+    'a',
+    { class: 'btn', href: links.exportZip(documentId, false) },
+    icon('archive'),
+    t('.zip archive'),
+  );
   const withScansId = uniqueId('with-scans');
   const withScans = h('input', { type: 'checkbox', id: withScansId });
   const folder = h('code', { class: 'path' });
-  const copyFolderButton = h('button', {
-    type: 'button', class: 'btn btn-icon btn-small', 'aria-label': t('Copy the folder path'),
-  }, icon('copy'));
+  const copyFolderButton = h(
+    'button',
+    {
+      type: 'button',
+      class: 'btn btn-icon btn-small',
+      'aria-label': t('Copy the folder path'),
+    },
+    icon('copy'),
+  );
   const pagesCount = h('span', { class: 'section-count' });
-  const organizeButton = h('button', { type: 'button', class: 'btn btn-small', hidden: true },
-    icon('reorder'), t('Organize'));
-  const pagesHeader = h('div', { class: 'section-header' },
+  const organizeButton = h(
+    'button',
+    { type: 'button', class: 'btn btn-small', hidden: true },
+    icon('reorder'),
+    t('Organize'),
+  );
+  const pagesHeader = h(
+    'div',
+    { class: 'section-header' },
     h('h2', { id: 'pages-title', class: 'section-title' }, t('Pages'), ' ', pagesCount),
-    organizeButton);
+    organizeButton,
+  );
   const pagesBody = h('div', { class: 'page-groups' });
-  const pagesSection = h('section', { class: 'pages-section', 'aria-labelledby': 'pages-title' },
-    pagesHeader, pagesBody);
+  const pagesSection = h(
+    'section',
+    { class: 'pages-section', 'aria-labelledby': 'pages-title' },
+    pagesHeader,
+    pagesBody,
+  );
   const noPages = emptyState({
     iconName: 'camera',
     title: t('No pages yet'),
@@ -295,28 +403,56 @@ export function mountDocument(root, { route, signal, monitor, setTitle }) {
   const uploader = createUploader(documentId, { onUploaded: scheduleUploadRefresh });
 
   const layout = [
-    h('nav', { class: 'breadcrumb', 'aria-label': t('Breadcrumb') },
-      h('a', { href: href(paths.library()) }, icon('chevron-left'), t('Library'))),
-    h('header', { class: 'doc-header' },
+    h(
+      'nav',
+      { class: 'breadcrumb', 'aria-label': t('Breadcrumb') },
+      h('a', { href: href(paths.library()) }, icon('chevron-left'), t('Library')),
+    ),
+    h(
+      'header',
+      { class: 'doc-header' },
       h('div', { class: 'view-heading' }, title, author, meta, notes),
-      h('div', { class: 'view-actions' }, readLink, editButton, deleteButton)),
-    h('div', { class: 'doc-overview' },
-      h('section', { class: 'card', 'aria-labelledby': 'coverage-title' },
+      h('div', { class: 'view-actions' }, readLink, editButton, deleteButton),
+    ),
+    h(
+      'div',
+      { class: 'doc-overview' },
+      h(
+        'section',
+        { class: 'card', 'aria-labelledby': 'coverage-title' },
         h('h2', { id: 'coverage-title', class: 'card-title' }, t('Coverage')),
         coverage,
-        stats),
-      h('div', { class: 'doc-side' },
-        h('section', { class: 'card', 'aria-labelledby': 'upload-title' },
+        stats,
+      ),
+      h(
+        'div',
+        { class: 'doc-side' },
+        h(
+          'section',
+          { class: 'card', 'aria-labelledby': 'upload-title' },
           h('h2', { id: 'upload-title', class: 'card-title' }, t('Add pages')),
-          uploader.element),
-        h('section', { class: 'card', 'aria-labelledby': 'export-title' },
+          uploader.element,
+        ),
+        h(
+          'section',
+          { class: 'card', 'aria-labelledby': 'export-title' },
           h('h2', { id: 'export-title', class: 'card-title' }, t('Export')),
           h('div', { class: 'button-row' }, markdownLink, zipLink),
-          h('label', { class: 'checkbox checkbox-inline', for: withScansId }, withScans,
-            h('span', {}, t('Include the original photos in the archive'))),
-          h('div', { class: 'folder-path' },
+          h(
+            'label',
+            { class: 'checkbox checkbox-inline', for: withScansId },
+            withScans,
+            h('span', {}, t('Include the original photos in the archive')),
+          ),
+          h(
+            'div',
+            { class: 'folder-path' },
             h('span', { class: 'hint' }, t('Folder on the PC')),
-            h('div', { class: 'copy-line' }, folder, copyFolderButton))))),
+            h('div', { class: 'copy-line' }, folder, copyFolderButton),
+          ),
+        ),
+      ),
+    ),
     pagesSection,
   ];
 
@@ -325,7 +461,8 @@ export function mountDocument(root, { route, signal, monitor, setTitle }) {
     title.textContent = doc.title;
     author.textContent = doc.author || '';
     author.hidden = !doc.author;
-    setChildren(meta,
+    setChildren(
+      meta,
       h('li', { class: 'chip' }, documentKind(doc.kind)),
       doc.unwarp && h('li', { class: 'chip chip-accent' }, t('Curved-page straightening')),
     );
@@ -348,9 +485,12 @@ export function mountDocument(root, { route, signal, monitor, setTitle }) {
       const heading = h('h3', { class: 'page-group-title' });
       const hint = h('p', { class: 'page-group-hint' });
       const list = h('ul', { class: 'page-grid', role: 'list' });
-      const element = h('section', { class: 'page-group' },
+      const element = h(
+        'section',
+        { class: 'page-group' },
         h('div', { class: 'page-group-header' }, heading, hint),
-        list);
+        list,
+      );
       section = { element, heading, hint, list };
       groupSections.set(key, section);
     }
@@ -394,8 +534,9 @@ export function mountDocument(root, { route, signal, monitor, setTitle }) {
       }
       section.heading.textContent = `${info.title} (${group.pages.length})`;
       section.hint.textContent = info.hint;
-      const cards = group.pages.map((page) => pageCards.get(page.id, pageSignature(page, hasPlaced),
-        () => pageCard(page, hasPlaced)));
+      const cards = group.pages.map((page) =>
+        pageCards.get(page.id, pageSignature(page, hasPlaced), () => pageCard(page, hasPlaced)),
+      );
       syncChildren(section.list, cards);
       return section.element;
     });
@@ -427,12 +568,14 @@ export function mountDocument(root, { route, signal, monitor, setTitle }) {
       if (isAbort(error)) return;
       if (!doc) {
         const notFound = error.status === 404;
-        view.replaceChildren(errorState({
-          title: notFound ? t('Document not found') : t('Could not load'),
-          message: notFound ? t('This document does not exist or has been deleted.') : errorMessage(error),
-          onRetry: notFound ? null : load,
-          actions: [h('a', { class: 'btn', href: href(paths.library()) }, t('Back to the library'))],
-        }));
+        view.replaceChildren(
+          errorState({
+            title: notFound ? t('Document not found') : t('Could not load'),
+            message: notFound ? t('This document does not exist or has been deleted.') : errorMessage(error),
+            onRetry: notFound ? null : load,
+            actions: [h('a', { class: 'btn', href: href(paths.library()) }, t('Back to the library'))],
+          }),
+        );
         return;
       }
       if (error.status === 404) {
@@ -534,8 +677,10 @@ export function mountDocument(root, { route, signal, monitor, setTitle }) {
   async function deleteDocument() {
     const confirmed = await confirmDialog({
       title: t('Delete {title}?', { title: quoted(doc.title) }),
-      message: t('Its folder (Markdown, illustrations and photos) will be moved to the library’s trash (.trash): '
-        + 'nothing is permanently erased.'),
+      message: t(
+        'Its folder (Markdown, illustrations and photos) will be moved to the library’s trash (.trash): ' +
+          'nothing is permanently erased.',
+      ),
       confirmLabel: t('Delete document'),
       danger: true,
     });

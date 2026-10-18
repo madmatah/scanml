@@ -58,6 +58,25 @@ Rules applied by the api to every answer of the sandbox:
   `DATA_DIR/ocr-cache`) are on the same partition as the api's state, without
   a quota. A malicious sandbox could fill it (denial of service), without
   being able to read or exfiltrate anything.
+- `scripts/check.sh --fix` runs the pinned formatters of `server/`, `ocr/` and
+  `scripts/` on a copy of the tracked files they format (Python, shell, and the
+  web UI's own JavaScript, JSON and CSS, never a vendored file, a lock or a
+  Dockerfile), and brings back only their changes to those files
+  (`scripts/lib/formatting.py`): a file they create, or turn into a link, never
+  reaches the checkout, and nothing comes back once a file they changed holds,
+  or would hold, a character a terminal does not show (such as a control
+  character other than a tab or a line end the file already used, a format
+  character or a byte that is not UTF-8), once they add any character outside
+  ASCII, once they write a line far longer than the file's, which could push
+  text out of sight, or once they grow a file past twice its size and 64 KiB,
+  which no reader of the diff would judge. A file git diff would not show
+  (assume-unchanged, skip-worktree), there or in `android/`, stops `--fix`
+  before any formatter runs. A compromised formatter could still alter a tracked
+  script, which runs on the host, or move within a file a character outside
+  ASCII that the file already held, such as a no-break space of the French
+  catalog: read `git diff` after `--fix`, before running what it changed. ktlint
+  formats `android/` in place, in the app's build container with its network, as
+  `scripts/check.sh android` runs it.
 
 ## Residual risk: prompt injection
 

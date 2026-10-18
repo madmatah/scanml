@@ -42,8 +42,8 @@ may be back in the main checkout between two calls, where a rebase or a commit w
    `cd <worktree> && git commit --fixup=<commit>`, then
    `cd <worktree> && GIT_SEQUENCE_EDITOR=: git rebase -i --autosquash <base>`.
 2. Check that every commit passes: `cd <worktree> && git rebase --exec 'scripts/check.sh <areas>' <base>`, with the
-   areas the branch changes (`scripts`, `web`, `server`, `ocr`, `android`), then `cd <worktree> && scripts/check.sh` on
-   the last commit, every area.
+   areas the branch changes (`lint`, `scripts`, `web`, `server`, `ocr`, `android`), then
+   `cd <worktree> && scripts/check.sh` on the last commit, every area.
 
 ## Review
 

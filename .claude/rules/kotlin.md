@@ -38,5 +38,5 @@ top of `conventions.md`.
 - **Idioms that override the naming rules:** `it` in a short lambda; `e` for a caught exception; test names in
   backticks, as sentences, in tests only; composables named as nouns; and the names Android imposes (`onCreate`,
   `doWork`).
-- **Directives:** `@Suppress("ID")`, `@SuppressLint("ID")` and `tools:ignore`, each with its reason; `@OptIn(…)` for an
-  experimental API, on the narrowest declaration.
+- **Directives:** `@Suppress("ID")` (`@Suppress("ktlint:standard:<rule>")` for ktlint), `@SuppressLint("ID")` and
+  `tools:ignore`, each with its reason; `@OptIn(…)` for an experimental API, on the narrowest declaration.

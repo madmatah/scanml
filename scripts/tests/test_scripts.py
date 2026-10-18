@@ -44,6 +44,7 @@ COPIED = [
     ".gitignore",
     "VERSION",
     "scripts/lib/common.sh",
+    "scripts/lib/formatting.py",
     "scripts/lib/stack.py",
     "scripts/lib/version.py",
     "scripts/dev-env.sh",
@@ -55,6 +56,13 @@ COPIED = [
     "scripts/verify-sandbox.sh",
     "scripts/e2e_test.py",
     "scripts/check.sh",
+    "ocr/setup/install.sh",
+    "scripts/lint/Dockerfile",
+    "scripts/lint/Dockerfile.web",
+    "scripts/lint/requirements.lock",
+    "server/requirements-test.lock",
+    "server/scanmylib/web/package.json",
+    "server/scanmylib/web/package-lock.json",
 ]
 VERSION = (REPO / "VERSION").read_text().strip()
 VERSION_CODE = sum(int(part) * factor for part, factor in zip(VERSION.split("."), (10000, 100, 1), strict=True))
@@ -1596,13 +1604,18 @@ class CheckTest(ScriptsTestCase):
         build, server_tests = self.list_checks()
         self.assertEqual(server_tests[-1], image_id(build))
 
-    def test_the_sandbox_tests_run_without_privileges_on_read_only_sources(self) -> None:
-        gate_run = self.run_script(self.worktree, "check.sh", "ocr")
+    def test_the_web_and_sandbox_tests_run_without_privileges_on_read_only_sources(self) -> None:
+        gate_run = self.run_script(self.worktree, "check.sh", "web", "ocr")
         self.assertEqual(gate_run.returncode, 0, gate_run.stdout + gate_run.stderr)
-        build, sandbox_tests = (" ".join(argv) for argv in self.list_checks())
-        self.assertTrue(build.endswith(f"{self.worktree}/ocr"), build)
-        self.assertIn("--cap-drop ALL --security-opt no-new-privileges:true --user ", sandbox_tests)
-        self.assertIn(f"-v {self.worktree}/ocr:/app:ro ", sandbox_tests)
+        web_tests, build, sandbox_tests = self.list_checks()
+        self.assertTrue(build[-1].endswith(f"{self.worktree}/ocr"), build)
+        for run, mount in (
+            (web_tests, f"{self.worktree}/server/scanmylib/web:/web:ro"),
+            (sandbox_tests, f"{self.worktree}/ocr:/app:ro"),
+        ):
+            with self.subTest(run=run):
+                self.assert_isolated(run)
+                self.assertEqual(self.list_mounts(run), [mount])
 
     def test_on_github_actions_the_android_area_hands_its_settings_to_the_build(self) -> None:
         runner_temp = self.home / "work" / "_temp"
@@ -1617,13 +1630,313 @@ class CheckTest(ScriptsTestCase):
         [android_build] = (" ".join(argv) for argv in self.list_checks())
         self.assertIn(f"{ci_data_directory}/android/sdk:/opt/android-sdk", android_build)
 
+    def test_the_android_area_runs_the_tests_lint_and_ktlint(self) -> None:
+        gate_run = self.run_script(
+            self.worktree, "check.sh", "android", environment={"CI": "true", "DATA_DIR": str(self.base / "ci")}
+        )
+        self.assertEqual(gate_run.returncode, 0, gate_run.stdout + gate_run.stderr)
+        [android_build] = self.list_checks()
+        self.assertEqual(android_build[-3:], ["test", "lint", "ktlintCheck"])
+
+    def list_tool_runs(self) -> list[list[str]]:
+        # The app's build container, which runs ktlint, is scripts/build-apk.sh's: its own tests cover it.
+        return [argv for argv in self.list_checks() if argv[0] == "run" and "ktlintFormat" not in argv]
+
+    @staticmethod
+    def list_mounts(run: list[str]) -> list[str]:
+        return [run[index + 1] for index, argument in enumerate(run) if argument == "-v"]
+
+    def assert_isolated(self, run: list[str]) -> None:
+        flags = {"--rm", "--read-only", "--init"}
+        options_with_any_value = {"--env", "-v", "-w"}
+        allowed_values = {
+            "--network": {"none"},
+            "--cap-drop": {"ALL"},
+            "--security-opt": {"no-new-privileges:true"},
+            "--user": {f"{os.getuid()}:{os.getgid()}"},
+            "--tmpfs": {"/tmp"},
+        }
+        options = []
+        index = 1
+        while run[index].startswith("-"):
+            option = run[index]
+            options.append(option)
+            if option in flags:
+                index += 1
+                continue
+            self.assertIn(option, options_with_any_value | allowed_values.keys(), run)
+            if option in allowed_values:
+                self.assertIn(run[index + 1], allowed_values[option], run)
+            index += 2
+        for option in ("--network", "--read-only", "--cap-drop", "--security-opt", "--user"):
+            self.assertEqual(options.count(option), 1, (option, run))
+
+    def test_the_lint_area_checks_every_language(self) -> None:
+        gate_run = self.run_script(self.worktree, "check.sh", "lint")
+        self.assertEqual(gate_run.returncode, 0, gate_run.stdout + gate_run.stderr)
+        tools = [" ".join(argv) for argv in self.list_tool_runs()]
+        for expected in (
+            "ruff format --check .",
+            "ruff check .",
+            "mypy --config-file ../mypy.ini scanmylib tests",
+            "mypy --config-file ../mypy.ini scanmylib_ocr tests bench",
+            "mypy --config-file ../mypy.ini lib release.py e2e_test.py tests",
+            "zizmor --offline",
+            "koalaman/shellcheck:",
+            "-d -- ",
+            "biome ci",
+        ):
+            with self.subTest(expected=expected):
+                self.assertTrue(any(expected in tool for tool in tools), tools)
+
+    def test_the_lint_tools_run_without_network_or_privileges_on_read_only_sources(self) -> None:
+        gate_run = self.run_script(self.worktree, "check.sh", "lint")
+        self.assertEqual(gate_run.returncode, 0, gate_run.stdout + gate_run.stderr)
+        runs = self.list_tool_runs()
+        self.assertEqual(len(runs), 9)
+        for run in runs:
+            with self.subTest(run=run):
+                self.assert_isolated(run)
+                mounts = self.list_mounts(run)
+                self.assertTrue(mounts and all(mount.endswith(":ro") for mount in mounts), mounts)
+
+    def test_the_lint_area_checks_new_shell_scripts_and_skips_deleted_ones(self) -> None:
+        (self.worktree / "scripts" / "new.sh").write_text("#!/usr/bin/env bash\n")
+        (self.worktree / "scripts" / "setup.sh").unlink()
+        gate_run = self.run_script(self.worktree, "check.sh", "lint")
+        self.assertEqual(gate_run.returncode, 0, gate_run.stdout + gate_run.stderr)
+        [shellcheck] = (run for run in self.list_tool_runs() if any("koalaman/shellcheck" in part for part in run))
+        shell_scripts = shellcheck[shellcheck.index("--") + 1 :]
+        self.assertIn("scripts/new.sh", shell_scripts)
+        self.assertNotIn("scripts/setup.sh", shell_scripts)
+
+    def test_a_tool_that_reports_findings_fails_and_stops_the_lint_area(self) -> None:
+        self.rules([{"match": r" ruff check \.$", "exit": 1}])
+        gate_run = self.run_script(self.worktree, "check.sh", "lint")
+        self.assertNotEqual(gate_run.returncode, 0)
+        self.assertTrue(" ".join(self.list_tool_runs()[-1]).endswith("ruff check ."))
+
+    def test_the_lint_tools_are_built_from_their_locks_alone(self) -> None:
+        gate_run = self.run_script(self.worktree, "check.sh", "lint")
+        self.assertEqual(gate_run.returncode, 0, gate_run.stdout + gate_run.stderr)
+        contexts = [call.get("context") for call in self.calls() if call["argv"][:1] == ["build"]]
+        self.assertEqual(
+            contexts,
+            [
+                ["scripts/lint/Dockerfile", "scripts/lint/requirements.lock", "server/requirements-test.lock"],
+                [
+                    "scripts/lint/Dockerfile.web",
+                    "server/scanmylib/web/package-lock.json",
+                    "server/scanmylib/web/package.json",
+                ],
+            ],
+        )
+
+    def run_fix(self) -> subprocess.CompletedProcess[str]:
+        return self.run_script(
+            self.worktree, "check.sh", "--fix", environment={"CI": "true", "DATA_DIR": str(self.base / "ci")}
+        )
+
+    def find_last_copy(self) -> Path:
+        mounts = [mount for run in self.list_tool_runs() for mount in self.list_mounts(run)]
+        server_mount = next(mount for mount in reversed(mounts) if mount.endswith(":/src/server"))
+        return Path(server_mount.split(":")[0]).parent.parent
+
+    def test_fix_formats_and_fixes_every_language_and_checks_nothing(self) -> None:
+        gate_run = self.run_fix()
+        self.assertEqual(gate_run.returncode, 0, gate_run.stdout + gate_run.stderr)
+        tools = [" ".join(argv) for argv in self.list_checks() if argv[0] == "run"]
+        for expected in ("ruff check --fix .", "ruff format .", "-w -- ", "biome check --write", "ktlintFormat"):
+            with self.subTest(expected=expected):
+                self.assertTrue(any(expected in tool for tool in tools), tools)
+        self.assertFalse(any("ruff format --check" in tool or "biome ci" in tool for tool in tools), tools)
+        self.assertEqual(self.list_areas_checked(gate_run), [])
+
+    def test_fix_runs_the_formatters_without_network_or_privileges_writing_to_the_copy_alone(self) -> None:
+        gate_run = self.run_fix()
+        self.assertEqual(gate_run.returncode, 0, gate_run.stdout + gate_run.stderr)
+        copy = self.find_last_copy()
+        self.assertFalse(copy.is_relative_to(self.home), copy)
+        tree = copy / "tree"
+        biome, ruff_check, ruff_format, shfmt = self.list_tool_runs()
+        self.assertEqual(self.list_mounts(biome), [f"{tree}/server/scanmylib/web:/web"])
+        for run in (ruff_check, ruff_format, shfmt):
+            self.assertEqual(
+                self.list_mounts(run),
+                [
+                    f"{self.worktree}:/src:ro",
+                    f"{tree}/server:/src/server",
+                    f"{tree}/ocr:/src/ocr",
+                    f"{tree}/scripts:/src/scripts",
+                ],
+            )
+        for run in (biome, ruff_check, ruff_format, shfmt):
+            with self.subTest(run=run):
+                self.assert_isolated(run)
+
+    def test_fix_brings_back_what_each_formatter_changes_in_tracked_files(self) -> None:
+        for tool, container_path, path, text in (
+            (r" ruff format \.$", "/src/scripts/e2e_test.py", "scripts/e2e_test.py", "# formatted\n"),
+            (r" -w -- ", "/src/scripts/dev.sh", "scripts/dev.sh", "# formatted\n"),
+            ("biome check --write", "/web/package.json", "server/scanmylib/web/package.json", "{}\n"),
+        ):
+            with self.subTest(tool=tool):
+                self.rules([{"match": tool, "files": {container_path: text}}])
+                gate_run = self.run_fix()
+                self.assertEqual(gate_run.returncode, 0, gate_run.stdout + gate_run.stderr)
+                self.assertEqual((self.worktree / path).read_text(), text)
+
+    def test_fix_never_brings_back_a_file_a_formatter_creates(self) -> None:
+        self.rules([{"match": r" ruff format \.$", "files": {"/src/scripts/tests/test_planted.py": "planted\n"}}])
+        gate_run = self.run_fix()
+        self.assertEqual(gate_run.returncode, 0, gate_run.stdout + gate_run.stderr)
+        self.assertFalse((self.worktree / "scripts" / "tests" / "test_planted.py").exists())
+
+    def test_fix_never_brings_back_a_file_the_formatters_do_not_format(self) -> None:
+        vendored = self.worktree / "server" / "scanmylib" / "web" / "static" / "vendor" / "library.min.js"
+        vendored.parent.mkdir(parents=True)
+        vendored.write_text("library\n")
+        self.git(self.worktree, "add", str(vendored))
+        self.git(self.worktree, "commit", "--quiet", "--message", "Vendored library")
+        lock = self.worktree / "server" / "scanmylib" / "web" / "package-lock.json"
+        for path, container_path in ((vendored, "/web/static/vendor/library.min.js"), (lock, "/web/package-lock.json")):
+            with self.subTest(container_path=container_path):
+                text_before = path.read_text()
+                self.rules([{"match": "biome check --write", "files": {container_path: "spliced\n"}}])
+                gate_run = self.run_fix()
+                self.assertEqual(gate_run.returncode, 0, gate_run.stdout + gate_run.stderr)
+                self.assertEqual(path.read_text(), text_before)
+
+    def test_fix_leaves_untracked_files_alone_and_says_so(self) -> None:
+        (self.worktree / "scripts" / "local.sh").write_text("#!/usr/bin/env bash\n")
+        self.rules([{"match": r" -w -- ", "files": {"/src/scripts/local.sh": "formatted\n"}}])
+        gate_run = self.run_fix()
+        self.assertEqual(gate_run.returncode, 0, gate_run.stdout + gate_run.stderr)
+        self.assertEqual((self.worktree / "scripts" / "local.sh").read_text(), "#!/usr/bin/env bash\n")
+        self.assertIn("scripts/local.sh", gate_run.stderr)
+
+    def test_fix_runs_ktlint_before_anything_comes_back(self) -> None:
+        # Brought back first, this script would run in place of the checkout's own, which builds the app.
+        planted = "#!/usr/bin/env bash\nexit 3\n"
+        self.rules([{"match": r" ruff format \.$", "files": {"/src/scripts/build-apk.sh": planted}}])
+        gate_run = self.run_fix()
+        self.assertEqual(gate_run.returncode, 0, gate_run.stdout + gate_run.stderr)
+        self.assertTrue(any("ktlintFormat" in argv for argv in self.list_checks()))
+        self.assertEqual((self.worktree / "scripts" / "build-apk.sh").read_text(), planted)
+
+    def assert_nothing_came_back(
+        self, gate_run: subprocess.CompletedProcess[str], texts_before: dict[str, str]
+    ) -> None:
+        self.assertNotEqual(gate_run.returncode, 0)
+        self.assertIn("into something other than a file", gate_run.stderr)
+        self.assertEqual({path: (self.worktree / path).read_text() for path in texts_before}, texts_before)
+
+    def test_fix_brings_back_nothing_once_a_formatter_turns_a_file_into_a_link(self) -> None:
+        (self.base / "secret").write_text("secret\n")
+        texts_before = {path: (self.worktree / path).read_text() for path in ("scripts/dev.sh", "scripts/prod.sh")}
+        self.rules(
+            [
+                {"match": r" ruff format \.$", "files": {"/src/scripts/dev.sh": "formatted\n"}},
+                {"match": r" -w -- ", "links": {"/src/scripts/prod.sh": str(self.base / "secret")}},
+            ]
+        )
+        self.assert_nothing_came_back(self.run_fix(), texts_before)
+        self.assertFalse((self.worktree / "scripts" / "prod.sh").is_symlink())
+
+    def test_fix_brings_back_nothing_once_a_formatter_turns_a_directory_into_a_link(self) -> None:
+        elsewhere = self.base / "elsewhere"
+        shutil.copytree(self.worktree / "scripts" / "lib", elsewhere)
+        texts_before = {
+            path: (self.worktree / path).read_text() for path in ("scripts/dev.sh", "scripts/lib/common.sh")
+        }
+        self.rules(
+            [
+                {"match": r" ruff format \.$", "files": {"/src/scripts/dev.sh": "formatted\n"}},
+                {"match": r" -w -- ", "links": {"/src/scripts/lib": str(elsewhere)}},
+            ]
+        )
+        self.assert_nothing_came_back(self.run_fix(), texts_before)
+        self.assertFalse((self.worktree / "scripts" / "lib").is_symlink())
+
+    def test_fix_brings_back_nothing_once_a_tracked_file_changes_while_the_formatters_run(self) -> None:
+        self.rules(
+            [
+                {
+                    "match": r" ruff format \.$",
+                    "files": {"/src/scripts/dev.sh": "formatted\n"},
+                    "host_files": {str(self.worktree / "scripts" / "dev.sh"): "edited meanwhile\n"},
+                }
+            ]
+        )
+        gate_run = self.run_fix()
+        self.assertNotEqual(gate_run.returncode, 0)
+        self.assertIn("scripts/dev.sh changed in the checkout", gate_run.stderr)
+        self.assertEqual((self.worktree / "scripts" / "dev.sh").read_text(), "edited meanwhile\n")
+
+    def assert_fix_refuses_a_file_marked_assume_unchanged(self, path: str) -> None:
+        self.git(self.worktree, "update-index", "--assume-unchanged", path)
+        gate_run = self.run_fix()
+        self.assertNotEqual(gate_run.returncode, 0)
+        self.assertIn(path, gate_run.stderr)
+        self.assertEqual([argv for argv in self.list_checks() if argv[0] == "run"], [])
+
+    def test_fix_refuses_tracked_files_that_git_diff_would_not_show_before_any_formatter_runs(self) -> None:
+        self.assert_fix_refuses_a_file_marked_assume_unchanged("scripts/dev.sh")
+
+    def test_fix_refuses_an_android_file_git_diff_would_not_show_as_ktlint_formats_android_in_place(self) -> None:
+        (self.worktree / "android").mkdir()
+        (self.worktree / "android" / "Example.kt").write_text("class Example\n")
+        self.git(self.worktree, "add", "android/Example.kt")
+        self.git(self.worktree, "commit", "--quiet", "--message", "Example")
+        self.assert_fix_refuses_a_file_marked_assume_unchanged("android/Example.kt")
+
+    def test_fix_removes_its_copy_once_it_succeeds(self) -> None:
+        gate_run = self.run_fix()
+        self.assertEqual(gate_run.returncode, 0, gate_run.stdout + gate_run.stderr)
+        self.assertFalse(self.find_last_copy().exists())
+
+    def test_fix_removes_its_copy_once_it_brings_back_nothing(self) -> None:
+        self.rules([{"match": r" -w -- ", "links": {"/src/scripts/prod.sh": "/nonexistent"}}])
+        gate_run = self.run_fix()
+        self.assertNotEqual(gate_run.returncode, 0)
+        self.assertIn("into something other than a file", gate_run.stderr)
+        self.assertFalse(self.find_last_copy().exists())
+
+    def test_fix_runs_every_tool_after_those_that_leave_findings(self) -> None:
+        self.rules([{"match": r"ruff check --fix|ruff format \.$| -w -- |biome check --write|ktlintFormat", "exit": 1}])
+        self.run_fix()
+        tools = [" ".join(argv) for argv in self.list_checks() if argv[0] == "run"]
+        for expected in ("ruff check --fix .", "ruff format .", "-w -- ", "biome check --write", "ktlintFormat"):
+            with self.subTest(expected=expected):
+                self.assertTrue(any(expected in tool for tool in tools), tools)
+
+    def test_fix_fails_when_any_tool_leaves_findings(self) -> None:
+        for failing in (
+            r" ruff check --fix \.$",
+            r" ruff format \.$",
+            r" -w -- ",
+            "biome check --write",
+            "ktlintFormat",
+        ):
+            with self.subTest(failing=failing):
+                self.rules([{"match": failing, "exit": 1}])
+                gate_run = self.run_fix()
+                self.assertNotEqual(gate_run.returncode, 0)
+                self.assertIn("left to fix by hand", gate_run.stderr)
+
+    def test_fix_takes_no_area(self) -> None:
+        gate_run = self.run_script(self.worktree, "check.sh", "--fix", "server")
+        self.assertNotEqual(gate_run.returncode, 0)
+        self.assertIn("--fix takes no area", gate_run.stderr)
+        self.assertEqual(self.calls(), [])
+
     def test_by_default_the_gate_checks_every_area_in_order(self) -> None:
         self.write_scripts_test("pass")
         gate_run = self.run_script(
             self.worktree, "check.sh", environment={"CI": "true", "DATA_DIR": str(self.base / "ci")}
         )
         self.assertEqual(gate_run.returncode, 0, gate_run.stdout + gate_run.stderr)
-        self.assertEqual(self.list_areas_checked(gate_run), ["scripts", "web", "server", "ocr", "android"])
+        self.assertEqual(self.list_areas_checked(gate_run), ["lint", "scripts", "web", "server", "ocr", "android"])
         self.assertIn("Ran 1 test", gate_run.stderr)
 
     def test_the_gate_drops_the_git_variables_of_its_caller(self) -> None:
@@ -1664,10 +1977,13 @@ class CheckTest(ScriptsTestCase):
                 self.assertEqual(self.calls(), [])
 
     def test_the_gate_never_runs_in_production_s_checkout(self) -> None:
-        gate_run = self.run_script(self.primary, "check.sh", "web")
-        self.assertNotEqual(gate_run.returncode, 0)
-        self.assertIn("is production's checkout", gate_run.stderr)
-        self.assertEqual(self.list_checks(), [])
+        # --fix would write there.
+        for arguments in (["web"], ["--fix"]):
+            with self.subTest(arguments=arguments):
+                gate_run = self.run_script(self.primary, "check.sh", *arguments)
+                self.assertNotEqual(gate_run.returncode, 0)
+                self.assertIn("is production's checkout", gate_run.stderr)
+                self.assertEqual(self.list_checks(), [])
 
 
 if __name__ == "__main__":

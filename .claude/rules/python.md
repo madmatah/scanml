@@ -35,4 +35,6 @@ Software Foundation's style guide (PEP 8) and its typing PEPs. These rules come 
   caught exception; `_` for a value ignored on purpose; and the names a library or the standard library imposes, such as
   the `format` parameter of `BaseHTTPRequestHandler.log_message`.
 - **Directives:** `# type: ignore[code]` and `# noqa: CODE`, always with the code and the reason. A bare
-  `# type: ignore` or `# noqa` is refused: it would silence every other error on its line.
+  `# type: ignore` or `# noqa` is refused: it would silence every other error on its line. `# fmt: skip` keeps a call or
+  a literal laid out by hand where the formatter would put each item on its own line and lose what reads together: a
+  command's options and their values, a request's parameters, a log message and its values, the corners of a shape.

@@ -40,6 +40,7 @@ These constraints drive the choices in this document:
 | HTTPX | 0.28.1 | The api's client of the sandbox, over its Unix socket |
 | qrcode | 8.2 | The QR codes of pairing |
 | pytest | 9.1.1 | The api's tests |
+| Ruff, mypy | 0.16.10, 2.4.0 | Formatting and lint of the Python, and its types, strict |
 | JavaScript (ES modules) | the browser's | The web UI, loaded as it is, without a build step |
 | KaTeX | 0.19.0 | Typesetting of the LaTeX formulas in the web UI, vendored |
 | Node.js | 22 | The web UI's unit tests (`node --test`) |
@@ -53,6 +54,10 @@ These constraints drive the choices in this document:
 | OkHttp, Coil | 5.5.0, 3.6.3 | The app's client of the PC, and its images |
 | JUnit | 4.13.2 | The app's unit tests |
 | Bash | — | The scripts that install, develop, check and deploy |
+| ShellCheck, shfmt | 0.11.0, 3.14.1 | Lint and formatting of the shell scripts |
+| ktlint | 1.8.0 | Formatting and lint of the app's Kotlin, in Android Studio's style with trailing commas |
+| Biome | 2.5.15 | Formatting and lint of the web UI |
+| zizmor | 1.30.1 | Audit of the GitHub workflows |
 
 Notes:
 
@@ -67,7 +72,17 @@ Notes:
   versions.
 - **The app is built in throwaway containers** (`eclipse-temurin` with the JDK 21), signed offline with a key kept
   outside the repository, without R8 shrinking.
-- **No formatter, linter or type checker runs yet,** besides Android lint: review checks the conventions.
+- **Every language has its formatter and its linter in the gate,** so that a review never discusses layout and the
+  tools catch what they can; review checks the rest of the conventions. The tools of the `lint` area run in containers
+  without network or privileges, on read-only sources: the Python tools and the api's dependencies, which mypy needs,
+  from hashed locks; Biome from the web UI's lockfile; ShellCheck and shfmt from their authors' images, by digest.
+  ktlint runs through Gradle in the app's build container, with its network and its writable `android/`, and Gradle's
+  verification metadata checks it as it checks the app's dependencies. `scripts/check.sh --fix` runs the other
+  formatters on a copy of the tracked files they format in `server/`, `ocr/` and `scripts/` (never a vendored file or a
+  lock), and brings back only their changes to those files, so that nothing they create reaches the checkout, where the
+  host would run it, and no change reaches a file whose diff a reader could not judge. Biome's
+  `noDescendingSpecificity` is off: the stylesheet orders its rules by component, and reordering them to satisfy it
+  would change which rule wins.
 - **`CLAUDE.md` and `.claude/` are the agent guidance** ([Agent guidance](#agent-guidance)).
 
 ## Architecture
@@ -151,7 +166,7 @@ The modules as they are, and the layer each one belongs to, whose directory the 
 | OCR sandbox | `protocol`, `engines/base` | Messages between supervisor and worker, the interface of an engine | Application |
 | OCR sandbox | `manager`, `runtime`, `config`, `gpu`, `client` | Engine lifecycle and page queue, engine processes, settings, GPU readings, a client of the socket | Application and adapters |
 | OCR sandbox | `engines/paddleocr_vl`, `engines/images` | PaddleOCR-VL-1.6, and its image handling | Adapters |
-| scripts | `lib/stack.py`, `lib/version.py`, `lib/common.sh` | The `.env` format, production's checkout and the isolation of a stack; the version of a build; shared shell functions | Tools |
+| scripts | `lib/stack.py`, `lib/version.py`, `lib/formatting.py`, `lib/common.sh` | The `.env` format, production's checkout and the isolation of a stack; the version of a build; what the gate hands to its formatters and linters, and what comes back; shared shell functions | Tools |
 | scripts | `setup.sh`, `dev-env.sh`, `dev.sh`, `build-apk.sh`, `check.sh`, `deploy.sh`, `prod.sh`, `release.py`, `e2e_test.py`, `verify-sandbox.sh`, `vendor-katex.sh` | Install, develop, build the app, check, deploy, operate, release, test end to end, verify the sandbox, vendor KaTeX | Tools |
 
 ## Repository layout
@@ -209,8 +224,13 @@ Each row names a rule, the rules file that states it, and what enforces it.
 | Production is operated by hand only through `scripts/prod.sh compose` (`.claude/rules/sandbox.md` > Development stacks and production) | `scripts/lib/stack.py check-compose-command --production`, through `scripts/prod.sh` |
 | The dev app keeps its own application id (`.claude/rules/sandbox.md` > Development stacks and production) | The signing container of `scripts/build-apk.sh` |
 | Production runs published releases only (`.claude/rules/releases.md`) | `scripts/deploy.sh`, `scripts/setup.sh`, `scripts/prod.sh` and `scripts/build-apk.sh` |
-| Never weaken what the lockfile or the registry settings guarantee (`.claude/rules/configuration.md` > Dependencies) | `pip --require-hashes`, Gradle's dependency verification, the checksums of `scripts/build-apk.sh` and `scripts/vendor-katex.sh` |
+| Never weaken what the lockfile or the registry settings guarantee (`.claude/rules/configuration.md` > Dependencies) | `pip --require-hashes`, `npm ci`'s integrity check, Gradle's dependency verification, the image digests of `scripts/check.sh`, the checksums of `scripts/build-apk.sh` and `scripts/vendor-katex.sh` |
 | The French translation lives only in the catalogs (`CLAUDE.md` > Language) | The web UI's unit tests; Android lint for missing translations |
+| Part of the rules of the Python: PEP 8 at 120 columns, imports, typed signatures with no bare `Any`, no blind `except`, no mutable defaults (`.claude/rules/python.md`), no shell or SQL string built from input (`.claude/rules/conventions.md` > Input from outside the program), and, in part, no character a reader cannot see written as such (`.claude/rules/conventions.md` > Characters a reader cannot see) | Ruff and mypy `--strict`, in `scripts/check.sh lint` |
+| Part of the rules of the shell scripts: quoting and `[[ … ]]` (ShellCheck), indentation (shfmt) (`.claude/rules/bash.md`) | ShellCheck and shfmt, in `scripts/check.sh lint` |
+| The Kotlin conventions at 120 columns, file names (`.claude/rules/kotlin.md`) | ktlint, in `scripts/check.sh android` |
+| The rules of the web UI: layout, `const`, strict equality, named exports (`.claude/rules/web.md`) | Biome, in `scripts/check.sh lint` |
+| Part of the rules of continuous integration: actions pinned to commits, the jobs' permissions and credentials, no template injection (`.claude/rules/configuration.md` > Continuous integration) | zizmor, in `scripts/check.sh lint` |
 | Every rule no tool can check: architecture, conventions, tests as specification… | `/expert-review` ([Code review](#code-review)), before every pull request |
 
 ## Conventions

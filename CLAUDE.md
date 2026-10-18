@@ -107,9 +107,13 @@ Production runs on this machine, from the main checkout, `~/Dev/scanmylib`, and 
 
 ## Commands
 
-- `scripts/check.sh [AREA...]`: the gate, in this order: `scripts` (the tests of the scripts), `web` (the web UI's unit
-  tests), `server` (the api's tests), `ocr` (the sandbox's unit tests, without the models) and `android` (the app's unit
-  tests and lint). Given areas, it checks only those. It must pass on every commit you push.
+- `scripts/check.sh [AREA...]`: the gate, in this order: `lint` (Ruff, mypy, zizmor, ShellCheck, shfmt and Biome),
+  `scripts` (the tests of the scripts), `web` (the web UI's unit tests), `server` (the api's tests), `ocr` (the
+  sandbox's unit tests, without the models) and `android` (the app's unit tests, lint and ktlint). Given areas, it
+  checks only those. It must pass on every commit you push.
+- `scripts/check.sh --fix`: formats every language and applies the linters' safe fixes: ktlint formats the app in
+  place, the other formatters only the files git tracks (`git add` a new file first); read `git diff` before running
+  what it changed.
 - `scripts/dev-env.sh`, then `scripts/dev.sh up [--real-ocr]`, `status`, `logs`, `down`, `build [api|ocr]` and
   `compose COMMAND...`: the development stack of a worktree.
 - `scripts/build-apk.sh [TASK...]`: the dev app (tests, build, lint and signing), or the Gradle tasks given.
@@ -138,8 +142,8 @@ read the file before you do what its line says.
 
 - `repository.md`, loaded in every session: what belongs in the repository, no real document names, no personal
   information, and how external work is credited.
-- `conventions.md`, loaded in every session: naming and the allowed acronyms, units, comments, and input from outside
-  the program.
+- `conventions.md`, loaded in every session: naming and the allowed acronyms, units, comments, characters a reader
+  cannot see, and input from outside the program.
 - `python.md`, for any Python file: layout, casing, typing, plain data, errors, internal names, async code, idioms and
   directives.
 - `kotlin.md`, for the app's Kotlin, Gradle scripts and resources: layout, casing, null safety, immutability, closed
@@ -148,9 +152,10 @@ read the file before you do what its line says.
 - `bash.md`, for any shell script: strict mode, logic in Python, quoting, `.env` files, errors and temporary files.
 - `architecture.md`, for any source code, test or build file, and before adding a dependency: layers, ports and wiring,
   responsibilities, stored and shared data, SOLID and organization.
-- `configuration.md`, for a build file, a lock, a Dockerfile, `compose.yaml`, CI, Claude Code settings, skills or
-  agents, and before adding or upgrading a dependency, even with a command that edits no file you read: the units,
-  dependencies and what pins them, continuous integration, checks and Claude Code automation.
+- `configuration.md`, for a build file, a lock, a Dockerfile, `compose.yaml`, CI, the configuration of a formatter,
+  linter or type checker, Claude Code settings, skills or agents, and before adding or upgrading a dependency, even with
+  a command that edits no file you read: the units, dependencies and what pins them, continuous integration, checks and
+  Claude Code automation.
 - `sandbox.md`, for the OCR sandbox, `compose.yaml`, a Dockerfile, `.env.example`, the scripts, the app's manifest, and
   the api's code that reads the sandbox's results: the sandbox's isolation, containers and the host, and what keeps
   development stacks from production.

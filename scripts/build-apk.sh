@@ -44,7 +44,7 @@
 # home (CI, a new ANDROID_DIR). After changing dependencies, record the new checksums in a
 # worktree whose .env points ANDROID_DIR to a new directory (the "app:" task paths keep the
 # script from signing anything):
-#   scripts/build-apk.sh --write-verification-metadata sha256 test app:assembleDev app:assembleRelease lint
+#   scripts/build-apk.sh --write-verification-metadata sha256 test app:assembleDev app:assembleRelease lint ktlintCheck
 # then check every added checksum (Maven Central and Google Maven publish a .sha1 per file)
 # before committing.
 #

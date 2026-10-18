@@ -37,40 +37,40 @@ mark_done() { date -Is > "$SANDBOX/.done-$1"; }
 #    Only the paddlepaddle-gpu wheel comes from the official Paddle CDN (it is not
 #    published on PyPI); all its dependencies are resolved from PyPI.
 if ! step_done venv-paddle; then
-  echo "--- [1/4] venv-paddle"
-  rm -rf "$SANDBOX/venv-paddle"
-  uv venv --python /usr/local/bin/python3.12 "$SANDBOX/venv-paddle"
-  uv pip install --python "$SANDBOX/venv-paddle/bin/python" \
-    "paddlepaddle-gpu @ $PADDLE_WHEEL_URL" "$PADDLEOCR_SPEC" safetensors
-  mark_done venv-paddle
+    echo "--- [1/4] venv-paddle"
+    rm -rf "$SANDBOX/venv-paddle"
+    uv venv --python /usr/local/bin/python3.12 "$SANDBOX/venv-paddle"
+    uv pip install --python "$SANDBOX/venv-paddle/bin/python" \
+        "paddlepaddle-gpu @ $PADDLE_WHEEL_URL" "$PADDLEOCR_SPEC" safetensors
+    mark_done venv-paddle
 fi
 
 # 2. vLLM (fast inference server for the PaddleOCR-VL vision-language model).
 if ! step_done venv-vllm; then
-  echo "--- [2/4] venv-vllm"
-  rm -rf "$SANDBOX/venv-vllm"
-  uv venv --python /usr/local/bin/python3.12 "$SANDBOX/venv-vllm"
-  uv pip install --python "$SANDBOX/venv-vllm/bin/python" "$VLLM_SPEC"
-  mark_done venv-vllm
+    echo "--- [2/4] venv-vllm"
+    rm -rf "$SANDBOX/venv-vllm"
+    uv venv --python /usr/local/bin/python3.12 "$SANDBOX/venv-vllm"
+    uv pip install --python "$SANDBOX/venv-vllm/bin/python" "$VLLM_SPEC"
+    mark_done venv-vllm
 fi
 
 # 3. PaddleOCR-VL-1.6 weights, pinned to a known Hugging Face commit.
 if ! step_done model-vl; then
-  echo "--- [3/4] $MODEL_REPO@$MODEL_REVISION"
-  "$SANDBOX/venv-vllm/bin/python" - <<EOF
+    echo "--- [3/4] $MODEL_REPO@$MODEL_REVISION"
+    "$SANDBOX/venv-vllm/bin/python" - << EOF
 from huggingface_hub import snapshot_download
 snapshot_download("$MODEL_REPO", revision="$MODEL_REVISION",
                   local_dir="$SANDBOX/models/PaddleOCR-VL-1.6")
 EOF
-  mark_done model-vl
+    mark_done model-vl
 fi
 
 # 4. Auxiliary PaddleX models used by the pipeline (layout detection, page
 #    orientation, page unwarping), pinned to known Hugging Face commits. They are
 #    fetched with huggingface_hub only: no Paddle code ever runs with network.
 if ! step_done models-paddlex; then
-  echo "--- [4/4] PaddleX auxiliary models"
-  "$SANDBOX/venv-vllm/bin/python" - <<EOF
+    echo "--- [4/4] PaddleX auxiliary models"
+    "$SANDBOX/venv-vllm/bin/python" - << EOF
 from huggingface_hub import snapshot_download
 for name, revision in {
     "PP-DocLayoutV3": "241f8bdfc77a7c7bee915a5057aaee58c235a8d3",
@@ -81,11 +81,11 @@ for name, revision in {
                       local_dir=f"$PADDLE_PDX_CACHE_HOME/official_models/{name}")
     print("downloaded", name, revision)
 EOF
-  mark_done models-paddlex
+    mark_done models-paddlex
 fi
 
 # Manifest: what exactly is installed in the sandbox.
-"$SANDBOX/venv-paddle/bin/python" - <<EOF
+"$SANDBOX/venv-paddle/bin/python" - << EOF
 import json, importlib.metadata as md, subprocess, datetime, pathlib
 def versions(py, pkgs):
     out = subprocess.run([py, "-c",
@@ -107,4 +107,4 @@ EOF
 rm -rf "$SANDBOX/cache"
 
 echo "=== setup complete — $(date -Is) ==="
-du -sh "$SANDBOX"/venv-paddle "$SANDBOX"/venv-vllm "$SANDBOX"/models "$SANDBOX"/paddlex 2>/dev/null || true
+du -sh "$SANDBOX"/venv-paddle "$SANDBOX"/venv-vllm "$SANDBOX"/models "$SANDBOX"/paddlex 2> /dev/null || true

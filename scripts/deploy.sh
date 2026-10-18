@@ -60,7 +60,10 @@ ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 # shellcheck source=lib/common.sh
 source "$ROOT/scripts/lib/common.sh"
 
-usage() { sed -n '/^# Usage:/,/^#   *the database as/{s/^# \{0,1\}//;p}' "${BASH_SOURCE[0]}" >&2; exit 2; }
+usage() {
+    sed -n '/^# Usage:/,/^#   *the database as/{s/^# \{0,1\}//;p}' "${BASH_SOURCE[0]}" >&2
+    exit 2
+}
 
 DRY_RUN=0 SKIP_TESTS=0 BUILD_APK=0 FIRST_INSTALL=0 ALLOW_DOWNGRADE=0
 for arg in "$@"; do
@@ -90,7 +93,10 @@ problems=()
 pass() { printf '  ok    %s\n' "$*"; }
 info() { printf '  info  %s\n' "$*"; }
 warn() { printf '  warn  %s\n' "$*"; }
-fail() { printf '  FAIL  %s\n' "$*"; problems+=("$*"); }
+fail() {
+    printf '  FAIL  %s\n' "$*"
+    problems+=("$*")
+}
 # A git precondition: enforced in production, only reported in a rehearsal.
 git_fail() { if [[ -n $REHEARSAL ]]; then printf '  warn  %s (rehearsal: not enforced)\n' "$*"; else fail "$*"; fi; }
 
@@ -181,7 +187,7 @@ if ((env_read)); then
     # stop resolve it (this checkout as project directory: relative extends files and bind sources
     # are read from this checkout, uncommitted changes included).
     elif isolation=$( (COMPOSE_ROOT=$EXPORT assert_isolated_from_production "$ENV_FILE") 2>&1 \
-        && (assert_isolated_from_production "$ENV_FILE") 2>&1 ); then
+        && (assert_isolated_from_production "$ENV_FILE") 2>&1); then
         pass "the rehearsal stack $PROJECT shares nothing with production"
     else
         fail "the rehearsal stack is not isolated from production:"
@@ -501,9 +507,9 @@ PY
     local old
     find "$backups" -mindepth 1 -maxdepth 1 -type d -name 'state-*' ! -name '*.partial' -printf '%f\n' \
         | sort | head -n "-$KEEP_BACKUPS" | while read -r old; do
-            rm -rf -- "${backups:?}/$old"
-            echo "  removed the old backup $old (the $KEEP_BACKUPS most recent are kept)"
-        done
+        rm -rf -- "${backups:?}/$old"
+        echo "  removed the old backup $old (the $KEEP_BACKUPS most recent are kept)"
+    done
 }
 if ((DRY_RUN)); then
     echo "  would copy $DATA_DIR/state (without thumbs/) to $DATA_DIR/backups/$BACKUP_NAME (SQLite online"

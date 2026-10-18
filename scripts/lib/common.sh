@@ -29,7 +29,10 @@ readonly STACK_VARIABLES=(
 unset "${STACK_VARIABLES[@]}" COMPOSE_ROOT STACK_COMPOSE_FILE STACK_ENV_FILE
 
 say() { printf '\n\033[1;34m==> %s\033[0m\n' "$*"; }
-die() { printf 'error: %s\n' "$*" >&2; exit 1; }
+die() {
+    printf 'error: %s\n' "$*" >&2
+    exit 1
+}
 
 # load_env FILE NAME: checks that FILE keeps to the strict .env format (scripts/lib/stack.py) and
 # loads its KEY=VALUE lines into the global associative array NAME. Dies on any format error.
@@ -55,20 +58,20 @@ production_checkout() {
     python3 "$SCRIPTS_LIB/stack.py" production-checkout <<< "$containers"
 }
 
-is_production_checkout() {  # is_production_checkout DIR CHECKOUT
+is_production_checkout() { # is_production_checkout DIR CHECKOUT
     [[ "$(cd -- "$1" && pwd -P)" == "$(realpath -m -- "$2")" ]]
 }
 
 # Tracked files that git status does not compare with HEAD (assume-unchanged or skip-worktree):
 # their changes would go unnoticed.
-hidden_changes() {  # hidden_changes DIR
+hidden_changes() { # hidden_changes DIR
     git -C "$1" ls-files -v | sed -n 's/^[a-zS] //p'
 }
 
 # Production runs published releases only (.claude/rules/releases.md): HEAD must be the commit of the
 # tag vVERSION, VERSION being HEAD's, as published on origin (git ls-remote), or with "local" as
 # this checkout's tags say. Prints why not, and fails.
-release_problem() {  # release_problem DIR [local]
+release_problem() { # release_problem DIR [local]
     local dir=$1 version tag head named
     version=$(git -C "$dir" show HEAD:VERSION 2> /dev/null | tr -d '[:space:]' || true)
     if [[ ! $version =~ ^[0-9]{1,3}\.[0-9]{1,2}\.[0-9]{1,2}$ ]]; then
@@ -135,7 +138,7 @@ production_containers() {
 # shares nothing with production and keeps to its own DATA_DIR: project, images, settings, ports,
 # host paths (scripts/lib/stack.py). Without interpolation, docker compose keeps env_file and
 # label_file, which it otherwise merges into the settings.
-assert_isolated_from_production() {  # assert_isolated_from_production [ENV_FILE]
+assert_isolated_from_production() { # assert_isolated_from_production [ENV_FILE]
     local env_file=${1:-$ROOT/.env} config raw containers
     [[ -f $env_file ]] || die "no $env_file: run scripts/dev-env.sh first"
     python3 "$SCRIPTS_LIB/stack.py" env "$env_file" > /dev/null || exit 1
@@ -151,7 +154,7 @@ assert_isolated_from_production() {  # assert_isolated_from_production [ENV_FILE
 
 # Ignored files under android/ besides Gradle's own caches and outputs: they could end up in the
 # release app (a stray keystore or APK in src/, a local.properties...).
-android_stray_files() {  # android_stray_files ROOT
+android_stray_files() { # android_stray_files ROOT
     git -C "$1" ls-files --others --ignored --exclude-standard --directory -- android \
         | grep -vE '^android/(\.gradle|\.kotlin|build|app/build)/' || true
 }

@@ -44,6 +44,8 @@ review: read what a check needs of them.
     reader more than one hop away;
   - an expert check that enforces a written rule without citing it;
   - a skill or an agent whose instructions no longer match the repository;
+  - a skill whose `description` lists its steps, is not in the third person, or does not say what the skill is for and
+    when to use it;
   - `CLAUDE.md` over 200 lines.
 - **References** (`.claude/rules/documents.md` > References), in every changed file, the messages of the tools included:
   - a section, rule or step number used as a reference;

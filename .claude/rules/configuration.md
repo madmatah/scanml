@@ -13,6 +13,7 @@ paths:
   - "scripts/build-apk.sh"
   - "scripts/vendor-katex.sh"
   - "scripts/check.sh"
+  - "scripts/lib/parallel_tests.py"
   - "scripts/lint/**"
   - "ruff.toml"
   - "mypy.ini"

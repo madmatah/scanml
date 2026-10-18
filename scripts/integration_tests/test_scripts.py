@@ -50,6 +50,8 @@ COPIED = [
     "VERSION",
     "scripts/lib/common.sh",
     "scripts/lib/formatting.py",
+    "scripts/lib/parallel_tests.py",
+    "scripts/tests/test_parallel_tests.py",
     "scripts/lib/stack.py",
     "scripts/lib/version.py",
     "scripts/dev-env.sh",
@@ -1657,7 +1659,7 @@ class CheckTest(ScriptsTestCase):
         return re.findall(r"Checking (\w+)", gate_run.stdout)
 
     def write_scripts_test(self, body: str, directory: str = "tests") -> None:
-        # The fixture holds no tests of scripts/: the scripts and integration areas run this one instead.
+        # The fixture holds none of the tests of scripts/ but the runner's own: the areas run this one next to them.
         tests = self.worktree / "scripts" / directory
         tests.mkdir(parents=True, exist_ok=True)
         (tests / "test_placeholder.py").write_text(

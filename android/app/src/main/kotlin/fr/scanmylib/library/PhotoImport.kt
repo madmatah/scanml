@@ -26,10 +26,13 @@ enum class ImageFormat {
         /** The format of an image whose file starts with [header], or null if the server refuses it. */
         fun sniff(header: ByteArray): ImageFormat? = when {
             header.startsWith(JPEG_SIGNATURE) -> JPEG
+
             header.startsWith(PNG_SIGNATURE) -> PNG
+
             // RIFF container: "RIFF", 4 bytes of size, then the form type.
             header.startsWith(RIFF_SIGNATURE) && header.size >= SIGNATURE_SIZE &&
                 header.copyOfRange(8, SIGNATURE_SIZE).contentEquals(WEBP_FORM_TYPE) -> WEBP
+
             else -> null
         }
 

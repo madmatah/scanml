@@ -120,6 +120,7 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         val WIFI_ONLY = booleanPreferencesKey("wifi_only")
         val KEEP_LOCAL_COPIES = booleanPreferencesKey("keep_local_copies")
         val SCANNER_MODE = stringPreferencesKey("scanner_mode")
+
         /** The default camera (named after the source of the last run, which it replaced). */
         val SCAN_SOURCE = stringPreferencesKey("scan_source")
         val GOOGLE_SCANNER_UNAVAILABLE = booleanPreferencesKey("google_scanner_unavailable")

@@ -69,9 +69,15 @@ class PairingViewModel(
     fun onQrCodeScanned(text: String) {
         when (val result = PairingUri.parse(text)) {
             is PairingResult.Invalid -> state.update { it.copy(problem = PairingProblem.InvalidQrCode(result.error)) }
+
             is PairingResult.Valid -> {
                 state.update {
-                    it.copy(url = result.server.displayUrl, token = result.server.token, urlError = null, tokenInvalid = false)
+                    it.copy(
+                        url = result.server.displayUrl,
+                        token = result.server.token,
+                        urlError = null,
+                        tokenInvalid = false,
+                    )
                 }
                 connect(result.server)
             }

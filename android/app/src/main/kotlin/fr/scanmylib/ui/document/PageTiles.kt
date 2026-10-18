@@ -68,7 +68,9 @@ fun ServerPageTile(page: ServerPageEntity, server: ServerConfig?, onClick: () ->
         status = {
             when {
                 page.duplicate -> StatusLine(stringResource(R.string.page_duplicate), R.drawable.ic_content_copy)
+
                 page.excluded -> StatusLine(stringResource(R.string.page_excluded), R.drawable.ic_block)
+
                 else -> StatusLine(
                     stringResource(page.status.badgeRes()),
                     page.status.iconRes(),

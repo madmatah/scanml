@@ -51,10 +51,9 @@ class ApiRequests(private val server: ServerConfig, private val json: Json = Api
     fun document(id: String): Request = authenticated(url("api", "documents", id)).build()
 
     /** Idempotent: creates the document with this client-side id, or updates it. */
-    fun upsertDocument(id: String, body: DocumentUpsert): Request =
-        authenticated(url("api", "documents", id))
-            .put(json.encodeToString(DocumentUpsert.serializer(), body).toRequestBody(JSON))
-            .build()
+    fun upsertDocument(id: String, body: DocumentUpsert): Request = authenticated(url("api", "documents", id))
+        .put(json.encodeToString(DocumentUpsert.serializer(), body).toRequestBody(JSON))
+        .build()
 
     /** Idempotent on [PageUpload.pageId]: the server ignores a page it already has. */
     fun uploadPage(upload: PageUpload, image: File): Request {

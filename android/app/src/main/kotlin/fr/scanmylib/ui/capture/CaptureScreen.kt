@@ -315,6 +315,7 @@ private fun CameraCapture(viewModel: CaptureViewModel, onClose: () -> Unit, onSw
     var leaving by rememberSaveable { mutableStateOf(false) }
     // The photo shown large, by file: a photo landing meanwhile does not take its place.
     var shownPhoto by rememberSaveable { mutableStateOf<String?>(null) }
+
     // Photos taken in this visit, or on their way: leaving asks first, and waits for the one being
     // saved. The pages from before the visit are not this screen's: with no photo of its own, it
     // closes at once.
@@ -630,7 +631,12 @@ private fun FlashButton(flash: FlashSetting, onClick: () -> Unit, modifier: Modi
 
 /** The last photo taken, small; tapping it shows it larger. */
 @Composable
-private fun LastPhoto(page: StagedPage?, enabled: Boolean, onClick: (StagedPage) -> Unit, modifier: Modifier = Modifier) {
+private fun LastPhoto(
+    page: StagedPage?,
+    enabled: Boolean,
+    onClick: (StagedPage) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     if (page == null) return
     LocalImage(
         page.file,

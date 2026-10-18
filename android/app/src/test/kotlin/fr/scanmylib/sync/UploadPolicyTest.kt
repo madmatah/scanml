@@ -32,7 +32,10 @@ class UploadPolicyTest {
     @Test
     fun `classifies upload errors`() {
         assertEquals(UploadFailure.NETWORK, uploadFailureOf(ApiException.Unreachable(IOException("timeout"))))
-        assertEquals(UploadFailure.SERVER_ERROR, uploadFailureOf(ApiException.InvalidResponse(IllegalArgumentException())))
+        assertEquals(
+            UploadFailure.SERVER_ERROR,
+            uploadFailureOf(ApiException.InvalidResponse(IllegalArgumentException())),
+        )
         assertEquals(UploadFailure.UNAUTHORIZED, uploadFailureOf(ApiException.Unauthorized()))
         assertEquals(UploadFailure.DOCUMENT_MISSING, uploadFailureOf(ApiException.Http(404, "unknown document")))
         assertEquals(UploadFailure.TOO_LARGE, uploadFailureOf(ApiException.Http(413, null)))

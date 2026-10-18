@@ -76,7 +76,9 @@ fun ScanMyLibTheme(dark: Boolean = isSystemInDarkTheme(), content: @Composable (
             val context = LocalContext.current
             if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         }
+
         dark -> DarkColors
+
         else -> LightColors
     }
     MaterialTheme(colorScheme = colorScheme, content = content)

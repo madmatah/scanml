@@ -14,7 +14,11 @@ class DocumentPagesTest {
     @Test
     fun `shows each page once, with the server state when the server lists it`() {
         val pages = DocumentPages.merge(
-            local = listOf(local("a", UploadState.UPLOADED), local("b", UploadState.UPLOADING), local("c", UploadState.QUEUED)),
+            local = listOf(
+                local("a", UploadState.UPLOADED),
+                local("b", UploadState.UPLOADING),
+                local("c", UploadState.QUEUED),
+            ),
             server = listOf(server("x"), server("a")),
         )
         assertEquals(listOf("b", "c"), pages.local.map { it.id })

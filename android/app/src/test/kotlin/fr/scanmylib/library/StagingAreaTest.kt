@@ -40,7 +40,10 @@ class StagingAreaTest {
         val staging = staging()
         val added = staging.add(
             document,
-            listOf(StagingInput(staging.image("a"), shotTime), StagingInput(staging.image("b"), shotTime.plusSeconds(4))),
+            listOf(
+                StagingInput(staging.image("a"), shotTime),
+                StagingInput(staging.image("b"), shotTime.plusSeconds(4)),
+            ),
         )
         assertEquals(listOf(1, 2), added.map { it.seq })
         assertEquals(3, staging.shoot("c", shotTime.plusSeconds(9)).seq)

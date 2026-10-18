@@ -33,12 +33,7 @@ fun BackButton(onClick: () -> Unit) {
 
 /** A highlighted message with an icon: a problem, or the state of the connection to the PC. */
 @Composable
-fun MessageCard(
-    text: String,
-    @DrawableRes icon: Int,
-    modifier: Modifier = Modifier,
-    isError: Boolean = false,
-) {
+fun MessageCard(text: String, @DrawableRes icon: Int, modifier: Modifier = Modifier, isError: Boolean = false) {
     val colors = if (isError) {
         CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.errorContainer,
@@ -98,9 +93,14 @@ fun connectionCheckMessage(check: ConnectionCheck): String = when (check) {
     } else {
         stringResource(R.string.connection_ok, check.status.version)
     }
+
     ConnectionCheck.Unreachable -> stringResource(R.string.connection_unreachable)
+
     ConnectionCheck.NotScanMyLib -> stringResource(R.string.connection_not_scanmylib)
+
     ConnectionCheck.IncompatibleServer -> stringResource(R.string.connection_incompatible)
+
     ConnectionCheck.TokenRefused -> stringResource(R.string.connection_token_refused)
+
     is ConnectionCheck.Failed -> stringResource(R.string.connection_failed, check.detail)
 }

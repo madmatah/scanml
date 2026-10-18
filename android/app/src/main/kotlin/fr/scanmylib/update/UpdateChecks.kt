@@ -49,7 +49,8 @@ private val DOWNLOAD_PATH = Regex("""/download/[A-Za-z0-9._-]{1,64}\.apk""")
  * The versions the PC may announce, shown as is: a release or a development build
  * (scripts/lib/version.py); mirrors `_VERSION_NAME` in server/scanmylib/published_apk.py.
  */
-private val VERSION_NAME = Regex("""(?=.{5,64}$)[0-9]{1,3}\.[0-9]{1,2}\.[0-9]{1,3}(-[0-9A-Za-z.]+)?(\+[0-9A-Za-z.]+)?""")
+private val VERSION_NAME =
+    Regex("""(?=.{5,64}$)[0-9]{1,3}\.[0-9]{1,2}\.[0-9]{1,3}(-[0-9A-Za-z.]+)?(\+[0-9A-Za-z.]+)?""")
 
 /** The largest APK the app downloads: far above its own size, well below a full phone. */
 internal const val MAX_APK_SIZE = 512L * 1024 * 1024
@@ -60,7 +61,12 @@ internal const val MAX_APK_SIZE = 512L * 1024 * 1024
  * production one each check their own), not newer, or an unexpected version, size or download
  * path.
  */
-fun offeredUpdate(server: HttpUrl, apk: PublishedApk?, installedId: String, installedVersionCode: Long): AvailableUpdate? {
+fun offeredUpdate(
+    server: HttpUrl,
+    apk: PublishedApk?,
+    installedId: String,
+    installedVersionCode: Long,
+): AvailableUpdate? {
     if (apk == null || apk.applicationId != installedId || apk.versionCode <= installedVersionCode) return null
     if (!VERSION_NAME.matches(apk.version) || apk.size !in 1..MAX_APK_SIZE) return null
     if (!DOWNLOAD_PATH.matches(apk.path)) return null

@@ -150,10 +150,12 @@ class LibraryRepository(
             actionForMissing(document, hasPagesToUpload, hasStagedPages, listedAt).also { action ->
                 when (action) {
                     MissingDocumentAction.KEEP -> Unit
+
                     MissingDocumentAction.RECREATE -> {
                         documents.upsert(listOf(document.asNotOnServer()))
                         serverPages.deleteForDocument(documentId)
                     }
+
                     MissingDocumentAction.DELETE -> {
                         orphanedCopies = pendingPages.keptCopiesOf(listOf(documentId))
                         documents.deleteUnlessPending(listOf(documentId))

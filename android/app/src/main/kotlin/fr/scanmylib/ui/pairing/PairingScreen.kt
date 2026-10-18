@@ -169,12 +169,14 @@ private fun problemMessage(problem: PairingProblem): String = when (problem) {
             PairingError.INVALID_TOKEN -> R.string.pairing_error_qr_invalid_token
         },
     )
+
     // A first pairing, too: "no longer recognizes this phone" would be wrong here.
     is PairingProblem.Connection -> if (problem.check == ConnectionCheck.TokenRefused) {
         stringResource(R.string.pairing_error_token_refused)
     } else {
         connectionCheckMessage(problem.check)
     }
+
     is PairingProblem.ScannerUnavailable ->
         stringResource(R.string.pairing_error_scanner_unavailable) + "\n\n" + problem.detail
 }

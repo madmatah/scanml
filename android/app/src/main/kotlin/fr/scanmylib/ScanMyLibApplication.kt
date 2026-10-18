@@ -10,7 +10,9 @@ import coil3.SingletonImageLoader
 import fr.scanmylib.diagnostics.CrashReporter
 import kotlinx.coroutines.launch
 
-class ScanMyLibApplication : Application(), SingletonImageLoader.Factory {
+class ScanMyLibApplication :
+    Application(),
+    SingletonImageLoader.Factory {
 
     /**
      * Created on first use rather than in [onCreate]: WorkManager, initialized by a content provider

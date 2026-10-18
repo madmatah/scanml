@@ -128,7 +128,10 @@ class PhotoImportTest {
     @Test
     fun `photos over the server's limits are left out`() {
         assertNull(photoRejection(ImageFormat.JPEG, bytes = MAX_SCAN_BYTES, pixels = MAX_SCAN_PIXELS))
-        assertEquals(PhotoRejection.TOO_LARGE, photoRejection(ImageFormat.JPEG, MAX_SCAN_BYTES + 1, pixels = 12_000_000))
+        assertEquals(
+            PhotoRejection.TOO_LARGE,
+            photoRejection(ImageFormat.JPEG, MAX_SCAN_BYTES + 1, pixels = 12_000_000),
+        )
         // A 200-megapixel photo, well under 40 MiB.
         assertEquals(PhotoRejection.TOO_LARGE, photoRejection(ImageFormat.JPEG, 30_000_000, pixels = 16_320L * 12_240))
         assertNull(photoRejection(ImageFormat.WEBP, 1_000, pixels = null))

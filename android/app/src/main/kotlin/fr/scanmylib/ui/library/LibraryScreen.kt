@@ -134,16 +134,20 @@ fun LibraryScreen(
 private fun PcStatusCard(pc: PcState) {
     when (pc) {
         PcState.Unknown -> Unit
+
         is PcState.Online -> MessageCard(
             pcOnlineText(pc.status),
             if (pc.status.readingUnavailable) R.drawable.ic_error else R.drawable.ic_cloud_done,
         )
+
         PcState.Unreachable -> MessageCard(stringResource(R.string.library_pc_unreachable), R.drawable.ic_cloud_off)
+
         PcState.TokenRefused -> MessageCard(
             stringResource(R.string.library_pc_token_refused),
             R.drawable.ic_error,
             isError = true,
         )
+
         is PcState.Error -> MessageCard(
             stringResource(R.string.library_pc_error, pc.detail),
             R.drawable.ic_error,
@@ -157,9 +161,15 @@ private fun pcOnlineText(status: ServerStatus): String {
     val ocrError = status.ocr.lastError
     val waiting = status.queue.queued + status.queue.processing
     return when {
-        status.ocr.state == "error" && ocrError != null -> stringResource(R.string.library_pc_online_ocr_error, ocrError)
+        status.ocr.state == "error" && ocrError != null -> stringResource(
+            R.string.library_pc_online_ocr_error,
+            ocrError,
+        )
+
         status.readingUnavailable -> stringResource(R.string.library_pc_online_reading_unavailable)
+
         waiting == 0 -> stringResource(R.string.library_pc_online_idle)
+
         else -> pluralStringResource(R.plurals.library_pc_online_busy, waiting, waiting)
     }
 }
@@ -247,30 +257,36 @@ private fun CardLineText(line: CardLine) {
             R.drawable.ic_schedule,
             color = MaterialTheme.colorScheme.tertiary,
         )
+
         is CardLine.Refused -> StatusLine(
             pluralStringResource(R.plurals.library_pages_failed, line.count, line.count),
             R.drawable.ic_error,
             color = MaterialTheme.colorScheme.error,
         )
+
         CardLine.DocumentRefused -> StatusLine(
             stringResource(R.string.library_document_refused),
             R.drawable.ic_error,
             color = MaterialTheme.colorScheme.error,
         )
+
         is CardLine.ReadFailed -> StatusLine(
             pluralStringResource(R.plurals.library_pages_read_failed, line.count, line.count),
             R.drawable.ic_error,
             color = MaterialTheme.colorScheme.error,
         )
+
         is CardLine.InTransit -> StatusLine(
             pluralStringResource(R.plurals.library_pages_in_transit, line.count, line.count),
             R.drawable.ic_cloud_upload,
         )
+
         is CardLine.BeingRead -> StatusLine(
             pluralStringResource(R.plurals.library_pages_being_read, line.count, line.count),
             R.drawable.ic_autorenew,
             color = MaterialTheme.colorScheme.primary,
         )
+
         CardLine.NotOnPcYet -> StatusLine(stringResource(R.string.document_not_on_pc_yet), R.drawable.ic_cloud_off)
     }
 }

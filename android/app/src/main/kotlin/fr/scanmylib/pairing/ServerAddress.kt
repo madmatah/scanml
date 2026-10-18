@@ -50,7 +50,6 @@ object ServerAddress {
 }
 
 /** Tokens travel in an HTTP header: printable ASCII without spaces, reasonably short. */
-fun isValidToken(token: String): Boolean =
-    token.length in 1..MAX_TOKEN_LENGTH && token.all { it in '!'..'~' }
+fun isValidToken(token: String): Boolean = token.length in 1..MAX_TOKEN_LENGTH && token.all { it in '!'..'~' }
 
 private const val MAX_TOKEN_LENGTH = 512

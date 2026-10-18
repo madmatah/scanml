@@ -124,7 +124,10 @@ interface PendingPageDao {
     )
     suspend fun recordFailure(id: String, state: UploadState, failure: UploadFailure, detail: String?)
 
-    @Query("UPDATE pending_pages SET state = 'QUEUED', failure = NULL, lastError = NULL WHERE id = :id AND state = 'FAILED'")
+    @Query(
+        "UPDATE pending_pages SET state = 'QUEUED', failure = NULL, lastError = NULL " +
+            "WHERE id = :id AND state = 'FAILED'",
+    )
     suspend fun retry(id: String): Int
 
     /** Deletes a page unless it is being uploaded; returns the number of deleted rows. */

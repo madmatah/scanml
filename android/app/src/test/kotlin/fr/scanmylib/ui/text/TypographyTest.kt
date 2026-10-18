@@ -37,7 +37,8 @@ class TypographyTest {
                     val before = text.getOrNull(match.range.first - 1)
                     // Not in an address: "http://", "192.168.1.10:8765".
                     val next = text.getOrNull(match.range.first + 1)
-                    val isUrl = match.value == ":" && (text.startsWith("//", match.range.first + 1) || next?.isDigit() == true)
+                    val isUrl =
+                        match.value == ":" && (text.startsWith("//", match.range.first + 1) || next?.isDigit() == true)
                     val isFormat = match.value == "%" && (before == '%' || next in FORMAT_CHARS)
                     if (!isUrl && !isFormat && before != NBSP && before != NNBSP) {
                         add("$name: no non-breaking space before «${match.value}» in «$text»")

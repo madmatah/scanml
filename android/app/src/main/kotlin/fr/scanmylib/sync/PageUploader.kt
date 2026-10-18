@@ -73,6 +73,7 @@ class PageUploader(
                     documents.markNeedsUpload(page.documentId)
                     pendingPages.recordFailure(page.id, UploadState.QUEUED, failure.kind, failure.detail)
                 }
+
                 failure.kind.retryable -> {
                     pendingPages.recordFailure(page.id, UploadState.QUEUED, failure.kind, failure.detail)
                     return if (failure.kind == UploadFailure.UNAUTHORIZED) {
@@ -81,6 +82,7 @@ class PageUploader(
                         UploadRunResult.RETRY_LATER
                     }
                 }
+
                 else -> pendingPages.recordFailure(page.id, UploadState.FAILED, failure.kind, failure.detail)
             }
         }
@@ -140,8 +142,11 @@ class PageUploader(
 /** Classifies an API error for the upload queue: retry later, wait for the user, or give up. */
 internal fun uploadFailureOf(e: ApiException): UploadFailure = when (e) {
     is ApiException.Unreachable -> UploadFailure.NETWORK
+
     is ApiException.InvalidResponse -> UploadFailure.SERVER_ERROR
+
     is ApiException.Unauthorized -> UploadFailure.UNAUTHORIZED
+
     is ApiException.Http -> when (e.code) {
         404 -> UploadFailure.DOCUMENT_MISSING
         408, 429 -> UploadFailure.SERVER_ERROR

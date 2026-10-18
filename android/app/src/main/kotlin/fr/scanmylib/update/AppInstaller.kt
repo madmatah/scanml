@@ -143,6 +143,7 @@ class AndroidInstaller(private val context: Context) : AppInstaller {
     private companion object {
         const val TAG = "AndroidInstaller"
 
-        val SIGNING_FLAGS = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) PackageManager.GET_SIGNING_CERTIFICATES else 0
+        val SIGNING_FLAGS =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) PackageManager.GET_SIGNING_CERTIFICATES else 0
     }
 }

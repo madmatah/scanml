@@ -51,11 +51,8 @@ sealed interface UpdateState {
      * Handed to Android's installer, in its session [sessionId], which asks the user to confirm;
      * [confirmation] is Android's prompt, to show again if the user left it without answering.
      */
-    data class Installing(
-        override val update: AvailableUpdate,
-        val sessionId: Int,
-        val confirmation: Intent? = null,
-    ) : WithUpdate
+    data class Installing(override val update: AvailableUpdate, val sessionId: Int, val confirmation: Intent? = null) :
+        WithUpdate
 
     /** [detail]: Android's message, when it gave one, for "Details". */
     data class Failed(override val update: AvailableUpdate, val failure: UpdateFailure, val detail: String? = null) :
@@ -123,7 +120,12 @@ class AppUpdater(
     /** Asks the PC now (Settings), unless an update is being downloaded or installed. */
     fun check() {
         val current = mutableState.value
-        if (current is UpdateState.Checking || current is UpdateState.Downloading || current is UpdateState.Installing) return
+        if (current is UpdateState.Checking ||
+            current is UpdateState.Downloading ||
+            current is UpdateState.Installing
+        ) {
+            return
+        }
         val id = attempts.next { mutableState.value = UpdateState.Checking }
         job = scope.launch { askPc(id)?.let { setFor(id, it) } }
     }
@@ -157,11 +159,13 @@ class AppUpdater(
     fun onReturn() {
         when (val current = mutableState.value) {
             is UpdateState.NeedsPermission -> if (installer.canInstall()) install()
+
             is UpdateState.Installing -> scope.launch {
                 if (!withContext(Dispatchers.IO) { installer.hasSession(current.sessionId) }) {
                     mutableState.compareAndSet(current, UpdateState.Available(current.update))
                 }
             }
+
             else -> Unit
         }
     }
@@ -344,11 +348,15 @@ internal fun installResult(
     val update = installing.update
     return when (status) {
         PackageInstaller.STATUS_PENDING_USER_ACTION -> installing.copy(confirmation = confirmation)
+
         // The new version replaces this process: nothing left to show.
         PackageInstaller.STATUS_SUCCESS -> UpdateState.UpToDate
+
         // The user said no on the system's prompt: the update is still offered.
         PackageInstaller.STATUS_FAILURE_ABORTED -> UpdateState.Available(update)
+
         PackageInstaller.STATUS_FAILURE_STORAGE -> UpdateState.Failed(update, UpdateFailure.STORAGE_FULL, message)
+
         // Including a conflict, rarely another key since the app compares them first (another
         // app's permission or provider...), and an incompatible APK (ABI, Android version).
         else -> UpdateState.Failed(update, UpdateFailure.INSTALL, message)

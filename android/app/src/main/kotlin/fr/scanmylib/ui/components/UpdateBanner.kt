@@ -47,12 +47,7 @@ import fr.scanmylib.update.UpdateState
  * message behind "Details". Nothing for the other states.
  */
 @Composable
-fun UpdateBanner(
-    state: UpdateState,
-    onInstall: () -> Unit,
-    onCancel: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
+fun UpdateBanner(state: UpdateState, onInstall: () -> Unit, onCancel: () -> Unit, modifier: Modifier = Modifier) {
     if (state !is UpdateState.WithUpdate) return
     val context = LocalContext.current
     val version = state.update.version
@@ -75,13 +70,20 @@ fun UpdateBanner(
             modifier = Modifier.padding(start = 16.dp, top = 12.dp, end = 8.dp, bottom = 4.dp),
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(painterResource(if (isError) R.drawable.ic_error else R.drawable.ic_system_update), contentDescription = null)
+                Icon(
+                    painterResource(if (isError) R.drawable.ic_error else R.drawable.ic_system_update),
+                    contentDescription = null,
+                )
                 val text = when (state) {
                     is UpdateState.Available -> stringResource(R.string.update_available, version)
+
                     is UpdateState.NeedsPermission -> stringResource(R.string.update_permission, version)
+
                     is UpdateState.Downloading ->
                         stringResource(R.string.update_downloading, version, (state.progress * 100).toInt())
+
                     is UpdateState.Installing -> stringResource(R.string.update_installing, version)
+
                     is UpdateState.Failed -> failureText(state.failure)
                 }
                 // Read out when it changes, but not at each percent: the progress bar gives it when focused.
@@ -102,14 +104,25 @@ fun UpdateBanner(
                 )
             }
             if (state is UpdateState.Downloading) {
-                LinearProgressIndicator(progress = { state.progress }, modifier = Modifier.fillMaxWidth().padding(end = 8.dp))
+                LinearProgressIndicator(
+                    progress = { state.progress },
+                    modifier = Modifier.fillMaxWidth().padding(end = 8.dp),
+                )
             }
             Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
                 when (state) {
-                    is UpdateState.Available -> TextButton(onClick = onInstall) { Text(stringResource(R.string.update_install)) }
-                    is UpdateState.NeedsPermission ->
-                        TextButton(onClick = { context.openInstallPermission() }) { Text(stringResource(R.string.update_allow)) }
-                    is UpdateState.Downloading -> TextButton(onClick = onCancel) { Text(stringResource(R.string.cancel)) }
+                    is UpdateState.Available -> TextButton(onClick = onInstall) {
+                        Text(stringResource(R.string.update_install))
+                    }
+
+                    is UpdateState.NeedsPermission -> TextButton(onClick = { context.openInstallPermission() }) {
+                        Text(stringResource(R.string.update_allow))
+                    }
+
+                    is UpdateState.Downloading -> TextButton(onClick = onCancel) {
+                        Text(stringResource(R.string.cancel))
+                    }
+
                     is UpdateState.Installing -> {
                         // Android's prompt, left without an answer: shown again from here.
                         state.confirmation?.let { confirmation ->
@@ -119,9 +132,12 @@ fun UpdateBanner(
                         }
                         TextButton(onClick = onCancel) { Text(stringResource(R.string.cancel)) }
                     }
+
                     is UpdateState.Failed -> {
                         if (state.detail != null) {
-                            TextButton(onClick = { showsDetail = true }) { Text(stringResource(R.string.update_details)) }
+                            TextButton(onClick = { showsDetail = true }) {
+                                Text(stringResource(R.string.update_details))
+                            }
                         }
                         TextButton(onClick = onInstall) { Text(stringResource(R.string.retry)) }
                     }
@@ -151,12 +167,19 @@ private fun DetailDialog(detail: String, onClose: () -> Unit) {
 @Composable
 private fun failureText(failure: UpdateFailure): String = when (failure) {
     UpdateFailure.DOWNLOAD -> stringResource(R.string.update_failed_download)
+
     UpdateFailure.STORAGE_FULL -> stringResource(R.string.message_storage_full)
+
     UpdateFailure.NOT_AS_ANNOUNCED -> stringResource(R.string.update_failed_not_as_announced)
+
     UpdateFailure.UNREADABLE -> stringResource(R.string.update_failed_unreadable)
+
     UpdateFailure.OTHER_APP -> stringResource(R.string.update_failed_other_app)
+
     UpdateFailure.NOT_NEWER -> stringResource(R.string.update_failed_not_newer)
+
     UpdateFailure.OTHER_SIGNER -> stringResource(R.string.update_failed_other_signer)
+
     // Android's message, if any, behind "Details".
     UpdateFailure.INSTALL -> stringResource(R.string.update_failed_install)
 }

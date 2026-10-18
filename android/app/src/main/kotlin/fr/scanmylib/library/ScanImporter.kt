@@ -258,7 +258,12 @@ internal suspend fun <T> importPhotos(
         deleteQuietly(copies) // the copies already added are no longer there
         throw e
     }
-    return PhotoImportResult(added = accepted.size, unsupported = unsupported, tooLarge = tooLarge, unreadable = unreadable)
+    return PhotoImportResult(
+        added = accepted.size,
+        unsupported = unsupported,
+        tooLarge = tooLarge,
+        unreadable = unreadable,
+    )
 }
 
 /**

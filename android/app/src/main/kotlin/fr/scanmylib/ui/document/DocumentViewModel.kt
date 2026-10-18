@@ -310,7 +310,9 @@ class DocumentViewModel(
         prepare(photos.size, cancellable = true) { onProgress ->
             val result = scanImporter.addPhotos(documentId, photos, onProgress)
             if (result.unsupported + result.tooLarge + result.unreadable > 0) {
-                messageChannel.send(DocumentMessage.PhotosSkipped(result.unsupported, result.tooLarge, result.unreadable))
+                messageChannel.send(
+                    DocumentMessage.PhotosSkipped(result.unsupported, result.tooLarge, result.unreadable),
+                )
             }
         }
     }
@@ -508,6 +510,7 @@ internal val DocumentMessage.important: Boolean get() = when (this) {
     DocumentMessage.PhotoPickerUnavailable,
     DocumentMessage.TokenRefused,
     -> true
+
     DocumentMessage.Unreachable,
     is DocumentMessage.ServerError,
     is DocumentMessage.PagesQueued,

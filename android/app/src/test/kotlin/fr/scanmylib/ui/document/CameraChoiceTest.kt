@@ -24,7 +24,10 @@ class CameraChoiceTest {
 
     @Test
     fun `without a camera, Scan opens Google's scanner, even after it failed`() {
-        assertEquals(ScanSource.GOOGLE_SCANNER, ScanUiState(defaultCamera = ScanSource.CAMERA, hasCamera = false).camera)
+        assertEquals(
+            ScanSource.GOOGLE_SCANNER,
+            ScanUiState(defaultCamera = ScanSource.CAMERA, hasCamera = false).camera,
+        )
         assertEquals(
             ScanSource.GOOGLE_SCANNER,
             ScanUiState(googleScannerUnavailable = true, hasCamera = false).camera,

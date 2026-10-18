@@ -48,7 +48,7 @@ cd ~/Dev/scanmylib/.claude/worktrees/release-next && scripts/release.py      # o
 
 It prints the last release, the commits since, the next version and why, the draft of the release's section of
 `CHANGELOG.md` (Keep a Changelog: features under Added, fixes under Fixed, breaking changes under Changed), and the
-commits it leaves out (refactor, perf, test, build, ci, docs, chore). It changes nothing. It refuses when there is nothing to
+commits it leaves out (refactor, perf, style, test, build, ci, docs, chore). It changes nothing. It refuses when there is nothing to
 release, or when commits are still to fold (`fixup!`, `amend!`): those are folded in their pull request before it is
 merged; if one reached `main` anyway, `main` is never rewritten, and with the user's agreement `--allow-unfolded`
 releases it as it is. It warns about commits that do not follow Conventional Commits: look at what they change before

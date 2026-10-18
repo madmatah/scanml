@@ -91,8 +91,8 @@ Production runs on this machine, from the main checkout, `~/Dev/scanmylib`, and 
 - **Commits:** commit as you like while the work is in progress. Before pushing, rewrite the branch into atomic commits
   that each pass `scripts/check.sh`: one logical change each, with its tests and documents. Messages follow Conventional
   Commits, `type(scope): summary` in the imperative and lowercase, with a type among `feat`, `fix`, `refactor`, `perf`,
-  `test`, `docs`, `build`, `ci` and `chore`, and a scope when the change stays in one area: `ocr`, `server`, `web`,
-  `android` or `scripts`.
+  `style`, `test`, `docs`, `build`, `ci` and `chore` (`style` for a change of layout only, such as a formatter's), and a
+  scope when the change stays in one area: `ocr`, `server`, `web`, `android` or `scripts`.
 - **A commit message says why.** The subject names the change. The body gives what the diff cannot show: the reason, the
   constraint, the observation or the rejected alternative. A body that restates the diff is noise.
 - **Review before pushing:** run `/expert-review` on the branch, and fix each finding in the commit it belongs to, or

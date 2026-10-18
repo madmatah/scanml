@@ -13,7 +13,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 
 /** The SHA-256 (lowercase hex) and the size of a downloaded file. */
-data class Downloaded(val sha256: String, val size: Long)
+data class ApkDownload(val sha256: String, val size: Long)
 
 /**
  * Downloads [update]'s APK into [file], reporting the bytes received so far ([onProgress]);
@@ -28,7 +28,7 @@ suspend fun downloadApk(
     update: AvailableUpdate,
     file: File,
     onProgress: (Long) -> Unit,
-): Downloaded = withContext(Dispatchers.IO) {
+): ApkDownload = withContext(Dispatchers.IO) {
     val digest = MessageDigest.getInstance("SHA-256")
     var received = 0L
     val client = http.newBuilder().followRedirects(false).followSslRedirects(false).build()
@@ -69,7 +69,7 @@ suspend fun downloadApk(
     } finally {
         watcher.cancel()
     }
-    Downloaded(digest.digest().joinToString("") { "%02x".format(it) }, received)
+    ApkDownload(digest.digest().joinToString("") { "%02x".format(it) }, received)
 }
 
 private const val BUFFER_SIZE = 64 * 1024

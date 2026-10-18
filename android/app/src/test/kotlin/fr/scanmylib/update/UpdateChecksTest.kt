@@ -119,7 +119,7 @@ class UpdateChecksTest {
             val progress = mutableListOf<Long>()
 
             val whole = downloadApk(OkHttpClient(), update.copy(size = 3000, url = url), file) { progress += it }
-            assertEquals(Downloaded(sha256Of(content), 3000), whole)
+            assertEquals(ApkDownload(sha256Of(content), 3000), whole)
             assertEquals(3000L, progress.last())
             assertEquals(content.toList(), file.readBytes().toList())
 

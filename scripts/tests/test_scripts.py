@@ -21,16 +21,20 @@ import itertools
 import json
 import os
 import pwd
+import queue
 import re
 import shutil
+import signal
 import socket
 import sqlite3
 import subprocess
 import tempfile
 import threading
+import time
 import unittest
 from collections.abc import Callable, Mapping
 from contextlib import closing
+from dataclasses import dataclass
 from pathlib import Path
 
 from docker_shim import LoggedCall, Rule, image_id
@@ -91,6 +95,12 @@ def port_in_use(port: int) -> bool:
         except OSError:
             return True
     return False
+
+
+@dataclass(frozen=True)
+class RunningScript:
+    process: subprocess.Popen[str]
+    lines: queue.Queue[str | None]
 
 
 class Health:
@@ -338,6 +348,72 @@ class ScriptsTestCase(unittest.TestCase):
             timeout=timeout,
             env=self.environment(**(environment or {})),
         )
+
+    def start_script(self, checkout: Path, script: str) -> RunningScript:
+        process = subprocess.Popen(
+            [str(checkout / "scripts" / script)],
+            cwd=checkout,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            env=self.environment(),
+            start_new_session=True,
+        )
+        self.addCleanup(self.stop, process)
+        lines: queue.Queue[str | None] = queue.Queue()
+
+        def read_lines() -> None:
+            # A thread rather than select(): a line already read into the pipe's buffer would never wake select().
+            for line in process.stdout or ():
+                lines.put(line)
+            lines.put(None)
+
+        threading.Thread(target=read_lines, daemon=True).start()
+        return RunningScript(process, lines)
+
+    @staticmethod
+    def read_output_until(running: RunningScript, expected: str, idle_seconds: float = 60) -> str:
+        output = ""
+        while expected not in output:
+            try:
+                line = running.lines.get(timeout=idle_seconds)
+            except queue.Empty:
+                return output
+            if line is None:
+                # The end of the output stays there for the next read.
+                running.lines.put(None)
+                return output
+            output += line
+        return output
+
+    @staticmethod
+    def is_waiting_on(running: RunningScript, command: str, search_seconds: float = 60) -> bool:
+        deadline_seconds = time.monotonic() + search_seconds
+        while time.monotonic() < deadline_seconds:
+            for entry in Path("/proc").iterdir():
+                if not entry.name.isdigit():
+                    continue
+                try:
+                    stat = (entry / "stat").read_text()
+                except OSError:
+                    # The process ended since the directory was listed, or belongs to someone the system hides.
+                    continue
+                # pid (comm) state ppid pgrp session: comm may hold spaces and parentheses.
+                name = stat[stat.index("(") + 1 : stat.rindex(")")]
+                session = int(stat[stat.rindex(")") + 2 :].split()[3])
+                if name == command and session == running.process.pid:
+                    return True
+            time.sleep(0.05)
+        return False
+
+    @staticmethod
+    def stop(process: subprocess.Popen[str]) -> None:
+        # The whole session: the script and what it waits on, such as flock.
+        if process.poll() is None:
+            os.killpg(process.pid, signal.SIGTERM)
+        process.wait(timeout=60)
+        if process.stdout is not None:
+            process.stdout.close()
 
     def assert_only_reads(self) -> None:
         """Every docker call was read-only: listing, inspecting, resolving the configuration."""
@@ -1396,10 +1472,16 @@ class BuildApkTest(ScriptsTestCase):
         lock = os.open(android, os.O_RDONLY)
         self.addCleanup(os.close, lock)
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        with self.assertRaises(subprocess.TimeoutExpired) as waited:
-            self.run_script(self.worktree, "build-apk.sh", timeout=5)
-        self.assertIn("Waiting for another build", (waited.exception.stdout or b"").decode())
-        self.assertEqual(self.runs(), [])
+        build = self.start_script(self.worktree, "build-apk.sh")
+        output_while_locked = self.read_output_until(build, "Waiting for another build")
+        waits_on_the_lock = self.is_waiting_on(build, "flock")
+        runs_while_locked = self.runs()
+        fcntl.flock(lock, fcntl.LOCK_UN)
+        output_once_released = self.read_output_until(build, "Version ")
+        self.assertIn("Waiting for another build", output_while_locked)
+        self.assertTrue(waits_on_the_lock)
+        self.assertEqual(runs_while_locked, [])
+        self.assertIn("Version ", output_once_released)
 
 
 class ProdShTest(ScriptsTestCase):

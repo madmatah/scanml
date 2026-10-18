@@ -75,13 +75,24 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Run the unit tests of the scripts
+        run: scripts/check.sh scripts
+
+  integration:
+    name: Integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       # The checks rely on what docker compose resolves, which changes with its version.
       - name: Show the docker compose version
         run: docker compose version
-      # The .env parser, the isolation check from production and the scripts that use them, with a docker stand-in
-      # (scripts/tests/docker_shim.py): docker compose only resolves configurations, nothing is built or started.
-      - name: Run the tests of the scripts
-        run: scripts/check.sh scripts
+      # The scripts themselves, with a docker stand-in (scripts/integration_tests/docker_shim.py): docker compose only
+      # resolves configurations, nothing is built or started.
+      - name: Run the integration tests of the scripts
+        run: scripts/check.sh integration
 
   android:
     name: Android

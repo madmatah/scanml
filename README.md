@@ -296,11 +296,11 @@ indexed in [`CLAUDE.md`](CLAUDE.md). A rehearsal of a deployment, on a throwaway
 
 `scripts/check.sh` is the gate: the formatters, linters and type checker of every language (Ruff and mypy for the
 Python, ShellCheck and shfmt for the shell scripts, Biome for the web UI, ktlint for the app, zizmor for the workflows),
-the tests of the scripts, on the host's `python3`, and, in throwaway containers, those of the web UI, the server and the
-OCR sandbox, and the Android tests and lint (`scripts/check.sh server web` checks those areas only).
-`scripts/check.sh --fix` formats the code and applies the linters' safe fixes: ktlint to the app in place, the other
-formatters to the files git tracks in `server/`, `ocr/` and `scripts/`; read `git diff` before running what it changed.
-Every commit pushed passes the gate, and every pull request runs it in the continuous integration
+the unit and integration tests of the scripts, on the host's `python3`, and, in throwaway containers, those of the web
+UI, the server and the OCR sandbox, and the Android tests and lint (`scripts/check.sh server web` checks those areas
+only). `scripts/check.sh --fix` formats the code and applies the linters' safe fixes: ktlint to the app in place, the
+other formatters to the files git tracks in `server/`, `ocr/` and `scripts/`; read `git diff` before running what it
+changed. Every commit pushed passes the gate, and every pull request runs it in the continuous integration
 (`.github/workflows/ci.yml`, one job per area). Pull requests are merged when it is green.
 
 The tools of the gate are pinned. `scripts/lint/requirements.lock`, the Python tools with their hashes, is regenerated

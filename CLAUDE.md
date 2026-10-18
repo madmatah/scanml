@@ -183,8 +183,8 @@ read the file before you do what its line says.
   development stacks from production.
 - `releases.md`, for `VERSION`, `CHANGELOG.md`, and the release and deployment scripts and workflow: what a release is,
   who changes `VERSION`, and what production runs.
-- `tests.md`, for any test or test support, and before fixing a bug, since the fix starts with a test: writing a test,
-  test levels and test support.
+- `tests.md`, for any test, test support or test framework configuration, and before fixing a bug, since the fix starts
+  with a test: the structure of a test file, writing a test, levels, test support and each test framework.
 - `documents.md`, for any document or agent guidance, and any reference to a document, tool messages included: present
   tense, where each statement lives, references by heading, rules files, expert reviewers, skills and the pull request
   template.

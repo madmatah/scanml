@@ -25,7 +25,14 @@
       },
       "suspicious": {
         "noVar": "error",
-        "noDoubleEquals": "error"
+        "noDoubleEquals": "error",
+        "noMisplacedAssertion": "error",
+        "noFocusedTests": "error",
+        "noSkippedTests": "error",
+        "noDuplicateTestHooks": "error"
+      },
+      "complexity": {
+        "noExcessiveNestedTestSuites": "error"
       }
     }
   },

@@ -230,6 +230,8 @@ Each row names a rule, the rules file that states it, and what enforces it.
 | Part of the rules of the shell scripts: quoting and `[[ … ]]` (ShellCheck), indentation (shfmt) (`.claude/rules/bash.md`) | ShellCheck and shfmt, in `scripts/check.sh lint` |
 | The Kotlin conventions at 120 columns, file names (`.claude/rules/kotlin.md`) | ktlint, in `scripts/check.sh android` |
 | The rules of the web UI: layout, `const`, strict equality, named exports (`.claude/rules/web.md`) | Biome, in `scripts/check.sh lint` |
+| Part of the rules of the api's tests: a broad exception asserted with its message, its raising call alone in its block, no assertion in an `except` (`.claude/rules/tests.md` > pytest) | Ruff's PT011, PT012 and PT017, in `scripts/check.sh lint` |
+| Part of the rules of the web UI's tests: assertions in tests only, no test focused or skipped by its name, no hook twice in a group, five levels at most (`.claude/rules/tests.md` > node:test) | Biome, in `scripts/check.sh lint` |
 | Part of the rules of continuous integration: actions pinned to commits, the jobs' permissions and credentials, no template injection (`.claude/rules/configuration.md` > Continuous integration) | zizmor, in `scripts/check.sh lint` |
 | A commit footer holds only what tools read (`CLAUDE.md` > Workflow) | `attribution` in `.claude/settings.json`, which keeps Claude Code's own commit trailers and pull request line out |
 | Every rule no tool can check: architecture, conventions, tests as specification… | `/expert-review` ([Code review](#code-review)), before every pull request |
@@ -300,7 +302,10 @@ copy. `.claude/rules/documents.md` > Where a statement lives says what goes wher
 
 The tests are the specification of the business rules. To learn how a part of the system behaves, read its tests: each
 one states one rule, in a sentence, in the vocabulary of the domain. That is why the code carries no comment that states
-a rule. `.claude/rules/tests.md` says how tests are written.
+a rule. New test files follow one structure, so that the sentence runs from the component through the operation and the
+situations to the test's name, and a reader, and an agent, finds the arrangement, the act and the assertions in the same
+place in every file that follows it; the older files move to it (planned), as `.claude/rules/tests.md` > Structure
+says, and that file says how tests are written.
 
 ### Test levels
 

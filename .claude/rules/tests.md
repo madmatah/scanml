@@ -9,26 +9,114 @@ paths:
   - "scripts/tests/**"
   - "scripts/e2e_test.py"
   - "scripts/verify-sandbox.sh"
+  - "server/pyproject.toml"
+  - "android/app/build.gradle.kts"
 ---
 
 # Tests
 
 Tests are the specification of the business rules: to learn how a part of the system behaves, read its tests.
 
+## Structure
+
+New test files follow one structure, so that a rule reads the same way everywhere, and its arrangement, its act and its
+assertions sit in known places. Its words are those of a framework that nests groups of tests and runs hooks around
+them: a group, a test, a hook that runs before each test of its group, and a hook that runs once before all of them. The
+section of each test framework below gives its own words for them, and how it stands in for what it lacks.
+
+A test added to, or changed in, a file written before this structure may keep that file's layout in three respects
+only: its grouping, in place of the levels and situations below; the form of the file's test names, in place of
+`should`; and its arrangement and its act in the test's body, a costly act included, in place of hooks. Every other
+rule applies to it. The older files move to the structure area by area, each area in a pull request of its own
+(planned).
+
+- **Level 1 names the component the file tests,** in domain vocabulary, as the file is named: `The ordering`, in the
+  tests of `ordering`. A file tests one component; a file of integration or scenario tests may hold several subjects,
+  one level-1 group each.
+- **Level 2 names the operation whose rule the tests state:** the function, the method or the constant under test, such
+  as `The roman_to_int() function`. Level 2 is there even when the file tests a single function.
+  - When the act is a sequence of calls, level 2 names the last one, whose rule the tests state, and the earlier calls
+    are arrangement.
+  - When no operation of the component owns the rule, such as a page that the OCR loop finishes or a phone whose
+    pairing is revoked, or when the rule spans several of its operations, level 2 is the situation:
+    `When the page is rescanned`.
+- **Above the unit level, level 1 names the subject,** such as `A document scanned twice`, and level 2 the situation.
+- **Situations are nested groups named `When …`,** nested at most three deep under level 2, so that the sentence they
+  make stays readable.
+- **Hooks arrange and act; each test only asserts.** Teardown aside, a group holds its arrangement and its act in a
+  single hook. A test may read what the act produced, and project it with a pure query (a map, a filter, a computation
+  that calls nothing under test and changes nothing), but never calls what its group tests, except to assert a refusal
+  or inside a property run, below. An assertion lives in a test only, never in a hook or in a helper: a helper
+  computes, and the test asserts. A constant under test needs no hook: its test reads it.
+- **What the act produces is named for what it is:** `layout`, `page_number`, `hint`, never `result`, `input` or `data`,
+  and declared in its group.
+- **One expectation per test;** a few tightly related ones are allowed, such as the two bounds of a range. One
+  comparison over an ordered sequence or a composite record is one expectation, and stays one when the order or the
+  combination is the rule.
+- **A costly act runs once,** in a hook that runs once for its group, when its tests only read what it produced: a
+  server on a real socket, a git repository, an image build by the docker stand-in, thousands of iterations. The act
+  captures, as plain copies, every value its tests read, and nothing under it changes what it produced. CI can run tests
+  several times slower than a contributor's machine, so where the framework times out a hook, the hook's timeout is at
+  least twice the act's duration on CI.
+- **A sequence of steps nests:** each `When …` group continues from the state its parent left.
+  - A cheap sequence continues in hooks that run before each test, each level adding one step.
+  - A costly sequence runs whole in one hook that runs once, which captures a copy at each step, and its nested groups
+    hold no hook and read those captures.
+  - A chain never mixes the two: a hook that runs once builds only on the ancestors' hooks that run once, since it runs
+    before an ancestor's hook that runs before each test: it builds on what an earlier test left, or on nothing, and the
+    ancestor's hook then rebuilds that state under every test.
+- **A value read in the middle of a sequence is captured where it happens,** before the next step changes it, so that a
+  test compares two moments and not the final state with itself.
+- **A comparison runs both acts in the same hook,** each product named for what it is (`numbered_layout`,
+  `unnumbered_layout`), as distinct objects.
+- **A refusal names its reason.** When the refusal is thrown, the hook keeps the act as a function, and the test asserts
+  that calling it fails with the expected error and its message or pattern, so that a failure for another reason fails
+  the test. When it is returned as a value, such as an HTTP status and its detail, the act captures it like any
+  product, and the test asserts its type, its value or its message.
+- **A property keeps its whole run inside one test:** its generators, its act and its expectation stay in one property
+  run, under a `When given any …` group that names the generated domain. A property is the run of a property-based
+  testing library, which none of the project's test frameworks has yet: a loop over inputs in a test is not one.
+- **A check over a collection** gathers the mismatches and asserts that there are none, next to an expectation on the
+  count of what it checked, so that an empty collection fails.
+- **Tables:**
+  - a parameterized test only for a simple table of data that no act produces, such as the entries of a constant,
+    inside a `When …` group, each row named so that it states its own rule;
+  - a table whose rows each need an act is a parameterized group, with the act in its hook, since a parameterized test
+    would call the unit in the test;
+  - a table of subjects is a parameterized group at level 2;
+  - a table built from production data covers a new entry by itself, where a hand-written list would not.
+- **Shared data that nothing changes** lives in the narrowest group that holds every test reading it, or at the file's
+  top level when that group is the file's only level 1. An object that an act mutates or writes into is built in each
+  hook that runs before a test. An aliasing test, whose output is its input, keeps passing the same object.
+- **Teardown** lives in the group whose hook set up what it releases. The file's top level holds only imports, constant
+  data, helpers that build or compute, and the hooks that a framework's section below puts there for a costly act;
+  everything a test runs happens in its hooks and its test.
+- **A benchmark keeps the form its tool measures,** since the tool measures what runs inside its measured call: this
+  structure does not apply to `ocr/bench/`.
+
 ## Writing a test
 
-- **A test name is a sentence that states one rule**, in domain vocabulary: `test_a_rescanned_page_replaces_the_old_one`
-  in Python, `` `keeps the token out of its text form` `` in Kotlin,
-  `'an unnumbered plate stays after the page scanned before it'` in JavaScript. A test group names the concept under
-  test.
-- **One rule per test.** The body reads top to bottom, setup, action, expectation, with no branching. Inputs are named
-  values, not unexplained literals.
+- **A test name is a sentence that states one rule**, in domain vocabulary, starts with `should`, after any prefix the
+  framework requires, and keeps the reason the rule has when its groups do not give it. With the names of its groups,
+  it reads as one sentence: `The ordering > The roman_to_int() function > When the numeral is not canonical > should
+  return None, so that a stray word never numbers a page`, whose Python form is
+  `test_should_return_none_so_that_a_stray_word_never_numbers_a_page`. A name is `` `should hint the next page` `` in
+  Kotlin, and `'should keep the selection in reading order'` in JavaScript.
+- **One rule per test.** Neither a test nor its hooks branch, and every expectation can fail: an expectation on a value
+  that the test built itself checks nothing. Inputs are named values, not unexplained literals.
+- **Every test asserts:** the gate fails a test that runs no assertion, wherever the test framework can tell, so that a
+  test whose act never reaches its expectation does not pass. Where it cannot, review checks it.
+- **No test is committed focused or skipped,** nor marked as an expected failure (`xfail`, `expectedFailure`, `todo`): a
+  skip or a mark takes a test out of the gate's verdict without a word, and a focus takes the others out wherever a
+  runner honors it. A conditional skip that the section of the test framework allows, with its reason, is the only
+  exception.
 - **A bug fix starts with a test** that reproduces the bug.
 - **Floating point:** compare with a tolerance, unless bit-exactness is the rule under test.
 - **No test depends on timing, the wall clock or the order of the tests,** and randomness is seeded, or reports its
-  seed, so that a failure replays. A coroutine runs on a test dispatcher that the test advances, and a clock is a port
-  that the test sets.
-- **A deleted test, or a loosened expectation, states its reason** in the change.
+  seed, so that a failure replays. A coroutine runs on a test dispatcher that a hook advances, and a clock is a port
+  that a hook sets.
+- **A deleted test, or a loosened expectation, states its reason** in the change, and so does a dropped refusal message
+  or a weaker assertion.
 - **The fixtures name no real document** and hold no personal data: invented titles, authors and pages, as
   `repository.md` > No real document names says.
 
@@ -59,3 +147,220 @@ Tests are the specification of the business rules: to learn how a part of the sy
 - **Only tests import test support.** The fake OCR sandbox (`server/scanmylib/devtools/fake_ocr.py`) is the exception:
   it ships in the api's image, since the development stack runs it as `ocr-fake`, and it refuses the production project
   and a socket that a real sandbox serves. Every other piece of test support lives in a test directory.
+
+## pytest
+
+The api's tests, in `server/tests/`, run on pytest.
+
+- **Its words:** a group is a class whose name starts with `Test`, nested in its parent's (`TestTheOrdering` >
+  `TestTheRomanToIntFunction` > `TestWhenTheNumeralIsNotCanonical`), since pytest collects only the classes with that
+  prefix; a test is a method named `test_should_…`; a hook is a fixture defined in its group. The fixtures of
+  `server/tests/conftest.py`, such as `client`, `settings` and `fake_ocr`, are shared arrangement: test support that a
+  group's fixtures request, and that acts on nothing under test.
+- **What the act produces is a fixture named for it,** which the tests, and the fixtures of the nested groups, request
+  as an argument. A fixture never sets an attribute on `self`: pytest gives each test a new instance of its class, and
+  runs a fixture of an outer class, or of class scope, on another one, which the tests never see. An act whose tests
+  read its effect through another fixture, such as a fake it writes to, is `autouse=True`. A fixture returns one value,
+  so the products of one act, such as the two sides of a comparison or the captures of a costly sequence, are the fields
+  of a frozen dataclass or a `NamedTuple` that it returns, each named for what it is.
+- **A sequence nests through the fixtures:** a nested group's fixture requests its parent's product, and returns the
+  next state under a name of its own.
+- **A fixture of `scope="class"` runs once per class, each nested class included,** so a costly act whose captures
+  nested groups read is a fixture of `scope="module"`, at the file's top level, which runs once per file, one for each
+  such act: the only hooks there. A fixture of a wider scope runs before the narrower ones, whatever their group, and
+  pytest refuses one that requests a narrower one.
+- **A refusal:** the fixture returns the act as a function, and the test calls it as the only statement of
+  `with pytest.raises(ReadingOrderRefused, match="…"):`, whose pattern is searched in the message. Ruff refuses a broad
+  exception, such as `ValueError` or `OSError`, without `match` (PT011), a block of several statements (PT012) and an
+  assertion in an `except` (PT017); the `match` of the project's own exceptions is left to review. A coroutine runs
+  through `asyncio.run`, inside the block for a refusal.
+- **Teardown follows the `yield` of its fixture,** in a `with` around the `yield`, or in a function the fixture gives
+  `request.addfinalizer` before it acts: pytest skips what follows the `yield` of a fixture that raised before it.
+- **Tables:** `@pytest.mark.parametrize`, with `ids` that name each row, for a table of data; a parameterized group is a
+  fixture with `params` and `ids`, whose act reads `request.param`.
+- **A test that asserts nothing passes:** pytest has no check for it, and a test that returns a value only warns, so
+  review checks it. No lint sees an assertion in a fixture, nor a skip.
+- **No timeout:** pytest times out no test and no fixture.
+- **No skip:** everything the api's tests need is in their image.
+
+For example:
+
+```python
+class TestTheOrdering:
+    class TestTheRomanToIntFunction:
+        class TestWhenTheNumeralIsCanonical:
+            @pytest.fixture
+            def number(self) -> int | None:
+                return roman_to_int("xiv")
+
+            def test_should_read_its_value(self, number: int | None) -> None:
+                assert number == 14
+
+        class TestWhenTheNumeralIsNotCanonical:
+            @pytest.fixture
+            def number(self) -> int | None:
+                return roman_to_int("iiii")
+
+            def test_should_return_none_so_that_a_stray_word_never_numbers_a_page(self, number: int | None) -> None:
+                assert number is None
+```
+
+## unittest
+
+The tests of the OCR sandbox, in `ocr/tests/`, and of the scripts, in `scripts/tests/`, run on `unittest`: the gate runs
+them with the standard library only, the `python3` of the sandbox's image and the host's.
+
+- **Its words:** the loader collects only the `TestCase` classes at a module's top level, never one nested in another
+  class, so groups do not nest. Level 1 is the module, named after the component, which its docstring names, and each
+  `TestCase` class names level 2 and its situations at once: `TheReleaseCodeFunctionWhenTheMinorVersionChanges`. A test
+  is a method named `test_should_…`, the hook before each test `setUp`, and the hook that runs once the class method
+  `setUpClass`.
+- **What the act produces is an attribute** that `setUp` sets on `self`, or `setUpClass` on `cls`, named for what it is.
+- **A sequence nests by inheritance:** a parent situation's arrangement and act live in the `setUp` of a base `TestCase`
+  that holds no test, of which the loader runs nothing, named as the situation's class with a leading underscore
+  (`_TheXWhenA`). The parent situation's own tests sit in a class of the situation's name that extends it and adds no
+  step (`TheXWhenA`), and each child, named for both situations (`TheXWhenAWhenB`), extends it too, its `setUp` calling
+  `super().setUp()` first, then taking its own step. A `TestCase` that holds tests is never a base, since the loader
+  runs its tests again in every subclass.
+- **`setUpClass` runs once per class, an inherited one included,** and calls its parent's only through
+  `super().setUpClass()`. So a costly act whose tests sit in one class runs in that class's `setUpClass`, and one whose
+  captures the classes of several situations read runs in `setUpModule`, the only hook at a file's top level, which
+  keeps them on the base `TestCase` those classes extend, as one declared `ClassVar` holding a frozen dataclass or a
+  `NamedTuple` of the captures.
+- **Teardown is registered with `addCleanup`, `addClassCleanup` or `unittest.addModuleCleanup`, as soon as the hook
+  holds what it releases:** `tearDown`, `tearDownClass` and `tearDownModule` do not run when their hook fails, and the
+  act runs in the hook.
+- **A refusal:** `setUp` keeps the act as a function, and the test asserts
+  `self.assertRaisesRegex(StackRefused, "…", self.act)`, whose pattern is searched in the message.
+- **Tables:** a table of data is one test that asserts each row in a `self.subTest(…)` named for it; for rows that each
+  need an act, `setUp` runs it for every row and keeps each product under its row, and the test asserts them as a check
+  over a collection, each in its `subTest`.
+- **A test that asserts nothing passes:** `unittest` counts no assertion, and a test that returns a value only warns, so
+  review checks it. No lint sees an assertion in `setUp`, nor a skip.
+- **No timeout:** `unittest` times out no test and no hook.
+- **The skips allowed** are conditional, with `skipUnless`, `skipIf` or `self.skipTest` and their reason, and only
+  these:
+  - the engine's environment is missing, such as Pillow outside the worker's environment, since the sandbox's tests also
+    run without it;
+  - the tests run as root, which writes where a test expects a refusal;
+  - no real docker CLI is there to resolve a configuration;
+  - the temporary directory lies in the home directory, which the scripts refuse;
+  - port 8770 is taken, by a running development stack.
+
+For example:
+
+```python
+class TheReleaseCodeFunctionWhenTheMinorVersionChanges(unittest.TestCase):
+    def setUp(self) -> None:
+        self.code = version.release_code((1, 3, 0))
+        self.previous_code = version.release_code((1, 2, 99))
+
+    def test_should_be_above_every_patch_of_the_previous_minor_version_so_that_phones_install_it(self) -> None:
+        self.assertGreater(self.code, self.previous_code)
+```
+
+## node:test
+
+The web UI's tests, in `server/scanmylib/web/tests/`, run on Node's own runner, `node --test`, with
+`node:assert/strict`.
+
+- **Its words:** `describe`, `it`, `beforeEach` and `before`, imported from `node:test`, with `afterEach` and `after`
+  for teardown. For the first test of a nested group, the parent's `before` runs, then the group's `before`, then the
+  parent's `beforeEach`, then the group's: a `before` runs ahead of its ancestors' `beforeEach`.
+- **What the act produces lives in a `let`** declared in its `describe`.
+- **A refusal:** the hook keeps the act as a function, `act = () => …`, and the test asserts
+  `assert.throws(act, { name: '…', message: /…/ })`; an asynchronous one, `await assert.rejects(act(), { … })`. The
+  error is described as an object: a string in its place is the assertion's own failure message, and checks nothing.
+- **Biome refuses what the structure forbids,** at error: `noMisplacedAssertion` (an assertion outside an `it` or a
+  `test`, in a hook or a helper), `noFocusedTests`, `noSkippedTests`, `noDuplicateTestHooks` and
+  `noExcessiveNestedTestSuites`. It knows them by name, so none of what escapes it is written: the `only`, `skip` and
+  `todo` options, whatever their value, `describe.todo` and `it.todo`, `t.skip()` and `t.todo()`, and a bare
+  `assert(…)`, written `assert.ok(…)`.
+- **A test that asserts nothing passes:** only a `t.plan()` in each test would fail it, so review checks it.
+- **No timeout:** a test or a hook runs without a limit unless it sets one.
+- **No DOM and no skip:** the tests run in Node, on the modules of the UI that hold no DOM.
+
+For example:
+
+```js
+describe('The reading order', () => {
+  describe('The moveBlock() function', () => {
+    describe('When the pages were selected in click order', () => {
+      const pages = ['a', 'b', 'c', 'd', 'e', 'f'];
+      const clickedPages = ['e', 'b'];
+      const firstPosition = 0;
+      let order;
+      beforeEach(() => {
+        order = moveBlock(pages, clickedPages, firstPosition);
+      });
+
+      it('should move them in reading order', () => {
+        assert.deepEqual(order, ['b', 'e', 'a', 'c', 'd', 'f']);
+      });
+    });
+  });
+});
+```
+
+## JUnit
+
+The app's tests, in `android/app/src/test/`, run on JUnit 4, on the JVM, with kotlinx-coroutines-test.
+
+- **Its words:** a group is a class nested in its parent's, without `inner`, under `@RunWith(Enclosed::class)`, which
+  runs the public nested classes of a class, skips the abstract ones, and never runs a test of the class itself: a class
+  holds either groups or tests. Level 1 is the class named after the file, `PageNumberingTest`, and the groups are named
+  `TheHintForMethod` or `WhenThePagesAreConsecutive`. A test is a `@Test` function named `` `should …` ``, the hook
+  before each test `@Before`, the hook that runs once `@BeforeClass` on a `@JvmStatic` function of the
+  `companion object` of a class that holds tests, and teardown `@After` and `@AfterClass`.
+- **A class under `@RunWith(Enclosed::class)` holds no companion object, and no other public nested class or object
+  than its groups:** Kotlin compiles a companion object to a nested class, and Enclosed would run a public one as a
+  group.
+- **A sequence does not nest,** since a nested class runs on its own, without its parent's `@Before`: its situations are
+  sibling groups, each named for its whole chain of at most three situations (`WhenAPageIsQueued`,
+  `WhenAPageIsQueuedAndTheNetworkDrops`). Each step is written once, as a private function of the file that takes the
+  state the step before left and takes that one step, and each group's `@Before` arranges, then calls the steps of its
+  chain in order, its own last.
+- **A costly act runs in the `@BeforeClass` of the one class whose tests read it,** since a class under Enclosed holds
+  no companion object for a `@BeforeClass` of its own: the situations of a costly sequence are then the tests of that
+  one class, each name saying its step.
+- **What the act produces is a `lateinit var`** declared in its class, or in its companion object for the act of a
+  `@BeforeClass`, which throws when a test reads it before a hook set it. A non-null type that `lateinit` refuses, a
+  primitive or a value class, takes a `var` delegated to `Delegates.notNull()`, which throws the same way and keeps the
+  type non-null, as `assertEquals` with a tolerance needs; and a product that may be null is held inside a non-null
+  value in a `lateinit var`, such as a list or a data class of the act's products, so that a test that expects `null`
+  still fails when no hook ran.
+- **A refusal:** the hook keeps the act as a function, and the test asserts
+  `assertThrows(PairingRefused::class.java) { act() }` and the message of the exception it returns. A suspending act
+  cannot run in `assertThrows`, whose block is not inline: the test reads `runCatching { act() }.exceptionOrNull()`
+  inside `runTest`.
+- **A suspending act runs in `runTest`, in its hook,** on a test dispatcher: its body times out after 60 seconds, and
+  JUnit 4 times out no hook.
+- **Tables:** a parameterized group is a nested class under `@RunWith(Parameterized::class)`, whose `@Before` runs the
+  act for its row, each row named by `@Parameters(name = …)`.
+- **A test that asserts nothing passes:** JUnit counts no assertion, so review checks it. ktlint checks no rule of the
+  tests.
+- **No skip:** no `@Ignore` and no `Assume`, since the app's tests need nothing that the JVM lacks.
+
+For example:
+
+```kotlin
+@RunWith(Enclosed::class)
+class PageNumberingTest {
+    @RunWith(Enclosed::class)
+    class TheHintForMethod {
+        class WhenThePagesAreConsecutive {
+            private lateinit var hints: List<Int?>
+
+            @Before
+            fun hintFourPages() {
+                hints = List(4, PageNumbering(firstPage = 13, consecutive = true)::hintFor)
+            }
+
+            @Test
+            fun `should number the pages on from the first one`() {
+                assertEquals(listOf(13, 14, 15, 16), hints)
+            }
+        }
+    }
+}
+```

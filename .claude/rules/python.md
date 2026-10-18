@@ -32,8 +32,10 @@ Software Foundation's style guide (PEP 8) and its typing PEPs. These rules come 
 - **No mutable default argument,** and no mutable class attribute shared between instances: a dataclass field takes
   `field(default_factory=…)`.
 - **Idioms that override the naming rules:** `self` and `cls`; dunder names (`__init__`, `__main__.py`); `exc` for a
-  caught exception; `_` for a value ignored on purpose; and the names a library or the standard library imposes, such as
-  the `format` parameter of `BaseHTTPRequestHandler.log_message`.
+  caught exception; `_` for a value ignored on purpose; in tests, a pytest fixture named for the value it provides, and
+  test groups named as their phrase (`TestWhenTheNumeralIsNotCanonical`,
+  `TheReleaseCodeFunctionWhenTheMinorVersionChanges`), as `tests.md` > pytest and > unittest write them; and the names a
+  library or the standard library imposes, such as the `format` parameter of `BaseHTTPRequestHandler.log_message`.
 - **Directives:** `# type: ignore[code]` and `# noqa: CODE`, always with the code and the reason. A bare
   `# type: ignore` or `# noqa` is refused: it would silence every other error on its line. `# fmt: skip` keeps a call or
   a literal laid out by hand where the formatter would put each item on its own line and lose what reads together: a

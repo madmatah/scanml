@@ -14,6 +14,9 @@ select = [
     # Most bidirectional characters, and the backspace, SUB, ESC, NUL and zero-width space written as such in a string
     # (.claude/rules/conventions.md > Characters a reader cannot see)
     "PLE2502", "PLE2510", "PLE2512", "PLE2513", "PLE2514", "PLE2515",
+    # A broad exception asserted with its message, its raising call alone in its block, and no assertion in an except
+    # (.claude/rules/tests.md > pytest)
+    "PT011", "PT012", "PT017",
 ]
 ignore = [
     # Exceptions are named after what went wrong, not with an Error suffix (.claude/rules/python.md).

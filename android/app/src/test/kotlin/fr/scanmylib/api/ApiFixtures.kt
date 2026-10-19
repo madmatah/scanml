@@ -4,6 +4,9 @@ package fr.scanmylib.api
 object ApiFixtures {
     const val DOCUMENT_ID = "6f1c2d3e-4b5a-4c6d-8e7f-90a1b2c3d4e5"
     const val PAGE_ID = "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d"
+    const val SESSION_ID = "0b1c2d3e-0000-4000-8000-000000000001"
+    const val CAPTURED_AT = "2026-10-12T20:15:30+02:00"
+    const val TOKEN = "q9Xz-Lm_3vT0"
 
     const val HEALTH = """{"name": "ScanMyLib", "version": "0.1.0", "api": 1}"""
 
@@ -41,8 +44,8 @@ object ApiFixtures {
           "id": "$PAGE_ID",
           "document_id": "$DOCUMENT_ID",
           "key": "20261012-201530_1a2b3c4d",
-          "session_id": "0b1c2d3e-0000-4000-8000-000000000001", "seq": 3,
-          "captured_at": "2026-10-12T20:15:30+02:00", "uploaded_at": "2026-10-12T20:16:00+02:00",
+          "session_id": "$SESSION_ID", "seq": 3,
+          "captured_at": "$CAPTURED_AT", "uploaded_at": "2026-10-12T20:16:00+02:00",
           "status": "done",
           "error": null,
           "number": 42,
@@ -65,4 +68,13 @@ object ApiFixtures {
 
     /** `GET /api/documents/{id}`: the document and its pages. */
     val DOCUMENT_DETAIL = DOCUMENT.trimEnd().removeSuffix("}") + """, "pages": [$PAGE]}"""
+
+    fun buildPageUpload(seq: Int, pageNumberHint: Int?) = PageUpload(
+        documentId = DOCUMENT_ID,
+        pageId = PAGE_ID,
+        sessionId = SESSION_ID,
+        seq = seq,
+        capturedAt = CAPTURED_AT,
+        pageNumberHint = pageNumberHint,
+    )
 }

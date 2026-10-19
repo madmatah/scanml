@@ -1,4 +1,5 @@
-"""The next release from the commits since the last one (scripts/release.py).
+"""The next release from the commits since the last one (scripts/release.py), and the workflows that publish it
+(.github/workflows/).
 
 Standard library and git only:
     python3 -m unittest discover -s scripts/tests
@@ -7,14 +8,17 @@ Standard library and git only:
 from __future__ import annotations
 
 import datetime
+import functools
 import os
 import re
 import subprocess
 import sys
 import tempfile
+import types
 import unittest
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from pathlib import Path
+from typing import ClassVar
 
 from git_environment import build_git_environment
 
@@ -23,6 +27,7 @@ sys.path.insert(0, str(SCRIPTS))
 import release  # noqa: E402 (scripts/release.py, found once scripts/ is on the path)
 from release import Change  # noqa: E402 (the same module)
 
+COMMIT = "0123456789abcdef0123456789abcdef01234567"
 CHANGELOG = """# Changelog
 
 The notable changes of each release.
@@ -38,57 +43,186 @@ The notable changes of each release.
 [unreleased]: https://github.com/example/project/compare/v0.2.3...HEAD
 [0.2.3]: https://github.com/example/project/tree/v0.2.3
 """
+SECTION_EDITED_IN_ITS_PULL_REQUEST = "### Added\n\n- App: updates, edited by hand\n\n### Fixed\n\n- App: a crash\n"
+SUBJECTS_OF_EVERY_KIND = (
+    "fix(android): a crash",
+    "feat(server): a route",
+    "build: a script",
+    "feat!: a new format",
+    "feat(cli): a flag",
+    "Odd one",
+    "fixup! feat(server): a route",
+)
+SUBJECTS_WITHOUT_NOTES = ("docs: explain the setup", "build(scripts): pin a tool", "fixup! docs: explain the setup")
 
 
-def change(subject: str, body: str = "") -> Change:
-    return Change.parse("0123456789abcdef0123456789abcdef01234567", subject, body)
+def parse_changes(*subjects: str) -> list[Change]:
+    return [Change.parse(COMMIT, subject, "") for subject in subjects]
 
 
-class ChangesTest(unittest.TestCase):
-    def test_conventional_commits(self) -> None:
+class TheChangeParseMethodWhenTheSubjectFollowsConventionalCommits(unittest.TestCase):
+    def setUp(self) -> None:
+        self.change = Change.parse(COMMIT, "feat(android): scan from the card", "")
+
+    def test_should_read_its_type_scope_and_summary(self) -> None:
         self.assertEqual(
-            change("feat(android): scan from the card"),
-            Change(
-                change("x").commit, "feat(android): scan from the card", "feat", "android", "scan from the card", False
-            ),
+            self.change,
+            Change(COMMIT, "feat(android): scan from the card", "feat", "android", "scan from the card", False),
         )
-        self.assertEqual((change("fix: a crash").type, change("fix: a crash").scope), ("fix", None))
-        self.assertTrue(change("feat(server)!: drop the old route").breaking)
-        self.assertTrue(change("refactor: rename", "Why.\n\nBREAKING CHANGE: the route moved").breaking)
-        self.assertTrue(change("refactor: rename", "BREAKING-CHANGE: the route moved").breaking)
-        self.assertFalse(change("docs: explain", "Not a BREAKING CHANGE: inline").breaking)
-        for subject in ("Fix a crash", "feat:no space", "feat(Android): upper case", "feat: "):
-            with self.subTest(subject=subject):
-                self.assertIsNone(change(subject).type)
 
-    def test_the_increment(self) -> None:
-        fix, feat, breaking = change("fix: a"), change("feat: b"), change("refactor!: c")
-        self.assertEqual(release.increment([fix, change("docs: d")], (0, 2, 3)), "patch")
-        self.assertEqual(release.increment([fix, feat], (0, 2, 3)), "minor")
-        self.assertEqual(release.increment([fix, feat, breaking], (0, 2, 3)), "minor", "0.x promises nothing")
-        self.assertEqual(release.increment([fix, breaking], (1, 2, 3)), "major")
-        self.assertEqual(release.increment([change("Not conventional")], (1, 2, 3)), "patch")
 
-    def test_bump(self) -> None:
-        self.assertEqual(release.bump((0, 2, 3), "patch"), (0, 2, 4))
-        self.assertEqual(release.bump((0, 2, 3), "minor"), (0, 3, 0))
-        self.assertEqual(release.bump((0, 2, 3), "major"), (1, 0, 0))
-        for last, level in [((0, 99, 3), "minor"), ((0, 2, 99), "patch"), ((999, 0, 0), "major")]:
-            with self.subTest(last=last, level=level), self.assertRaises(release.ReleaseError):
-                release.bump(last, level)
+class TheChangeParseMethodWhenTheSubjectHasNoScope(unittest.TestCase):
+    def setUp(self) -> None:
+        self.change = Change.parse(COMMIT, "fix: a crash", "")
 
-    def test_the_draft_of_the_changelog(self) -> None:
-        changes = [
-            change("fix(android): a crash"),
-            change("feat(server): a route"),
-            change("build: a script"),
-            change("feat!: a new format"),
-            change("feat(cli): a flag"),
-            change("Odd one"),
-            change("fixup! feat(server): a route"),
-        ]
+    def test_should_read_its_type_and_no_scope(self) -> None:
+        self.assertEqual((self.change.type, self.change.scope), ("fix", None))
+
+
+class TheChangeParseMethodWhenTheTypeIsMarkedBreaking(unittest.TestCase):
+    def setUp(self) -> None:
+        self.change = Change.parse(COMMIT, "feat(server)!: drop the old route", "")
+
+    def test_should_be_a_breaking_change(self) -> None:
+        self.assertTrue(self.change.breaking)
+
+
+class TheChangeParseMethodWhenTheBodyHasABreakingChangeFooter(unittest.TestCase):
+    bodies: ClassVar[Mapping[str, str]] = types.MappingProxyType(
+        {
+            "BREAKING CHANGE": "Why.\n\nBREAKING CHANGE: the route moved",
+            "BREAKING-CHANGE": "BREAKING-CHANGE: the route moved",
+        }
+    )
+
+    def setUp(self) -> None:
+        self.breaking = {
+            row: Change.parse(COMMIT, "refactor: rename", body).breaking for row, body in self.bodies.items()
+        }
+
+    def test_should_be_a_breaking_change(self) -> None:
+        for row in self.bodies:
+            with self.subTest(row):
+                self.assertTrue(self.breaking[row])
+
+
+class TheChangeParseMethodWhenTheBodyMentionsABreakingChangeInsideALine(unittest.TestCase):
+    def setUp(self) -> None:
+        self.change = Change.parse(COMMIT, "docs: explain", "Not a BREAKING CHANGE: inline")
+
+    def test_should_not_be_a_breaking_change(self) -> None:
+        self.assertFalse(self.change.breaking)
+
+
+class TheChangeParseMethodWhenTheSubjectDoesNotFollowConventionalCommits(unittest.TestCase):
+    subjects: ClassVar[Mapping[str, str]] = types.MappingProxyType(
+        {
+            "no type": "Fix a crash",
+            "no space after the colon": "feat:no space",
+            "an uppercase scope": "feat(Android): upper case",
+            "no summary": "feat: ",
+        }
+    )
+
+    def setUp(self) -> None:
+        self.types = {row: Change.parse(COMMIT, subject, "").type for row, subject in self.subjects.items()}
+
+    def test_should_read_no_type(self) -> None:
+        for row in self.subjects:
+            with self.subTest(row):
+                self.assertIsNone(self.types[row])
+
+
+class TheIncrementFunctionWhenTheChangesHoldFixesAndOtherChanges(unittest.TestCase):
+    def setUp(self) -> None:
+        self.increment = release.increment(parse_changes("fix: a", "docs: d"), (0, 2, 3))
+
+    def test_should_be_a_patch(self) -> None:
+        self.assertEqual(self.increment, "patch")
+
+
+class TheIncrementFunctionWhenTheChangesHoldAFeature(unittest.TestCase):
+    def setUp(self) -> None:
+        self.increment = release.increment(parse_changes("fix: a", "feat: b"), (0, 2, 3))
+
+    def test_should_be_a_minor_release(self) -> None:
+        self.assertEqual(self.increment, "minor")
+
+
+class TheIncrementFunctionWhenABreakingChangeComesBeforeVersionOne(unittest.TestCase):
+    def setUp(self) -> None:
+        self.increment = release.increment(parse_changes("fix: a", "feat: b", "refactor!: c"), (0, 2, 3))
+
+    def test_should_be_a_minor_release_since_a_0_x_version_promises_nothing(self) -> None:
+        self.assertEqual(self.increment, "minor")
+
+
+class TheIncrementFunctionWhenABreakingChangeComesFromVersionOneOn(unittest.TestCase):
+    def setUp(self) -> None:
+        self.increment = release.increment(parse_changes("fix: a", "refactor!: c"), (1, 2, 3))
+
+    def test_should_be_a_major_release(self) -> None:
+        self.assertEqual(self.increment, "major")
+
+
+class TheIncrementFunctionWhenACommitDoesNotFollowConventionalCommits(unittest.TestCase):
+    def setUp(self) -> None:
+        self.increment = release.increment(parse_changes("Not conventional"), (1, 2, 3))
+
+    def test_should_be_a_patch(self) -> None:
+        self.assertEqual(self.increment, "patch")
+
+
+class TheBumpFunctionWhenTheNextVersionFitsInVersion(unittest.TestCase):
+    following_releases: ClassVar[Mapping[str, tuple[int, int, int]]] = types.MappingProxyType(
+        {
+            "patch": (0, 2, 4),
+            "minor": (0, 3, 0),
+            "major": (1, 0, 0),
+        }
+    )
+
+    def setUp(self) -> None:
+        self.releases = {level: release.bump((0, 2, 3), level) for level in self.following_releases}
+
+    def test_should_raise_the_level_and_reset_the_levels_below(self) -> None:
+        for level, following_release in self.following_releases.items():
+            with self.subTest(level):
+                self.assertEqual(self.releases[level], following_release)
+
+
+class TheBumpFunctionWhenTheNextVersionIsPastWhatVersionAllows(unittest.TestCase):
+    last_releases: ClassVar[Mapping[str, tuple[tuple[int, int, int], str]]] = types.MappingProxyType(
+        {
+            "a minor version of 100": ((0, 99, 3), "minor"),
+            "a patch of 100": ((0, 2, 99), "patch"),
+            "a major version of 1000": ((999, 0, 0), "major"),
+        }
+    )
+
+    def setUp(self) -> None:
+        self.bumping_acts = {
+            row: functools.partial(release.bump, last, level) for row, (last, level) in self.last_releases.items()
+        }
+
+    def test_should_refuse_it_asking_for_another_increment(self) -> None:
+        for row in self.last_releases:
+            with self.subTest(row):
+                self.assertRaisesRegex(
+                    release.ReleaseError,
+                    "is past what VERSION allows .*choose another increment",
+                    self.bumping_acts[row],
+                )
+
+
+class TheNotesFunctionWhenTheChangesHoldFeaturesFixesAndABreakingChange(unittest.TestCase):
+    def setUp(self) -> None:
+        changes = parse_changes(*SUBJECTS_OF_EVERY_KIND)
+        self.notes = release.notes(changes)
+
+    def test_should_draft_them_in_the_sections_of_keep_a_changelog_each_named_by_its_scope(self) -> None:
         self.assertEqual(
-            release.notes(changes),
+            self.notes,
             "\n".join(
                 [
                     "### Added",
@@ -107,44 +241,64 @@ class ChangesTest(unittest.TestCase):
                 ]
             ),
         )
+
+
+class TheLeftOutFunctionWhenTheChangesHoldFeaturesFixesAndABreakingChange(unittest.TestCase):
+    def setUp(self) -> None:
+        changes = parse_changes(*SUBJECTS_OF_EVERY_KIND)
+        self.left_out = release.left_out(changes)
+
+    def test_should_list_the_other_changes_and_those_still_to_fold(self) -> None:
         self.assertEqual(
-            release.left_out(changes),
+            self.left_out,
             [
                 "- `0123456789ab` build: a script",
                 "- `0123456789ab` Odd one",
                 "- `0123456789ab` fixup! feat(server): a route",
             ],
         )
-        self.assertEqual(release.summary(changes), "1 breaking change, 2 features, 1 fix, 3 other changes")
-
-    def test_a_release_with_nothing_notable_lists_its_changes(self) -> None:
-        changes = [
-            change("docs: explain the setup"),
-            change("build(scripts): pin a tool"),
-            change("fixup! docs: explain the setup"),
-        ]
-        self.assertEqual(release.notes(changes), "### Changed\n\n- Explain the setup\n- Scripts: pin a tool\n")
-        self.assertEqual(release.left_out(changes), ["- `0123456789ab` fixup! docs: explain the setup"])
 
 
-class ChangelogTest(unittest.TestCase):
-    def test_a_release_s_section_goes_after_unreleased(self) -> None:
-        updated = release.add_release(CHANGELOG, "0.3.0", "0.2.3", "2026-10-20", "### Added\n\n- App: updates\n")
+class TheSummaryFunctionWhenTheChangesHoldFeaturesFixesAndABreakingChange(unittest.TestCase):
+    def setUp(self) -> None:
+        changes = parse_changes(*SUBJECTS_OF_EVERY_KIND)
+        self.summary = release.summary(changes)
+
+    def test_should_count_each_kind_of_change(self) -> None:
+        self.assertEqual(self.summary, "1 breaking change, 2 features, 1 fix, 3 other changes")
+
+
+class TheNotesFunctionWhenNoChangeIsNotable(unittest.TestCase):
+    def setUp(self) -> None:
+        changes = parse_changes(*SUBJECTS_WITHOUT_NOTES)
+        self.notes = release.notes(changes)
+
+    def test_should_list_the_changes_under_changed_so_that_the_release_has_notes(self) -> None:
+        self.assertEqual(self.notes, "### Changed\n\n- Explain the setup\n- Scripts: pin a tool\n")
+
+
+class TheLeftOutFunctionWhenNoChangeIsNotable(unittest.TestCase):
+    def setUp(self) -> None:
+        changes = parse_changes(*SUBJECTS_WITHOUT_NOTES)
+        self.left_out = release.left_out(changes)
+
+    def test_should_list_only_the_changes_still_to_fold(self) -> None:
+        self.assertEqual(self.left_out, ["- `0123456789ab` fixup! docs: explain the setup"])
+
+
+class TheAddReleaseFunctionWhenTheChangelogIsReady(unittest.TestCase):
+    def setUp(self) -> None:
+        self.changelog = release.add_release(CHANGELOG, "0.3.0", "0.2.3", "2026-10-20", "### Added\n\n- App: updates\n")
+
+    def test_should_add_the_section_after_unreleased_and_link_it_to_the_comparison_with_the_last_release(
+        self,
+    ) -> None:
         self.assertEqual(
-            updated,
+            self.changelog,
             CHANGELOG.replace(
                 "## [Unreleased]\n",
                 "\n".join(
-                    [
-                        "## [Unreleased]",
-                        "",
-                        "## [0.3.0] - 2026-10-20",
-                        "",
-                        "### Added",
-                        "",
-                        "- App: updates",
-                        "",
-                    ]
+                    ["## [Unreleased]", "", "## [0.3.0] - 2026-10-20", "", "### Added", "", "- App: updates", ""]
                 ),
             ).replace(
                 "[unreleased]: https://github.com/example/project/compare/v0.2.3...HEAD\n",
@@ -153,38 +307,48 @@ class ChangelogTest(unittest.TestCase):
             ),
         )
 
-    def test_refusals(self) -> None:
-        for name, changelog, expected in [
-            ("no [Unreleased]", CHANGELOG.replace("## [Unreleased]\n", ""), "no '## [Unreleased]' heading"),
-            (
-                "entries under [Unreleased]",
+
+class TheAddReleaseFunctionWhenTheChangelogCannotTakeTheRelease(unittest.TestCase):
+    changelogs: ClassVar[Mapping[str, tuple[str, str]]] = types.MappingProxyType(
+        {
+            "no [Unreleased]": (CHANGELOG.replace("## [Unreleased]\n", ""), "no '## [Unreleased]' heading"),
+            "entries under [Unreleased]": (
                 CHANGELOG.replace("## [Unreleased]\n", "## [Unreleased]\n\n- Early\n"),
                 "entries under [Unreleased]",
             ),
-            ("no link", CHANGELOG.replace("[unreleased]: ", "[later]: "), "no '[unreleased]:"),
-            (
-                "a link from another release",
+            "no link": (CHANGELOG.replace("[unreleased]: ", "[later]: "), "no '[unreleased]:"),
+            "a link from another release": (
                 CHANGELOG.replace("v0.2.3...HEAD", "v0.2.2...HEAD"),
                 "compares from v0.2.2, not from the last release v0.2.3",
             ),
-            ("the release is there", CHANGELOG.replace("## [0.2.3]", "## [0.3.0]"), "already has a section [0.3.0]"),
-        ]:
-            with self.subTest(name), self.assertRaisesRegex(release.ReleaseError, re.escape(expected)):
-                release.add_release(changelog, "0.3.0", "0.2.3", "2026-10-20", "### Added\n\n- App: updates\n")
+            "the release is there": (CHANGELOG.replace("## [0.2.3]", "## [0.3.0]"), "already has a section [0.3.0]"),
+        }
+    )
 
-    def test_completing_a_release_keeps_its_edited_entries(self) -> None:
-        changelog = release.add_release(
-            CHANGELOG,
-            "0.3.0",
-            "0.2.3",
-            "2026-10-20",
-            "### Added\n\n- App: updates, edited by hand\n\n### Fixed\n\n- App: a crash\n",
-        )
-        completed = release.complete_release(
+    def setUp(self) -> None:
+        self.adding_acts = {
+            row: functools.partial(
+                release.add_release, changelog, "0.3.0", "0.2.3", "2026-10-20", "### Added\n\n- App: updates\n"
+            )
+            for row, (changelog, _) in self.changelogs.items()
+        }
+
+    def test_should_refuse_it_saying_why(self) -> None:
+        for row, (_, reason) in self.changelogs.items():
+            with self.subTest(row):
+                self.assertRaisesRegex(release.ReleaseError, re.escape(reason), self.adding_acts[row])
+
+
+class TheCompleteReleaseFunctionWhenTheSectionWasEditedByHand(unittest.TestCase):
+    def setUp(self) -> None:
+        changelog = release.add_release(CHANGELOG, "0.3.0", "0.2.3", "2026-10-20", SECTION_EDITED_IN_ITS_PULL_REQUEST)
+        self.changelog = release.complete_release(
             changelog,
             "0.3.0",
             "### Added\n\n- Server: a route\n\n### Changed\n\n- Scripts: a check\n\n### Fixed\n\n- Server: a leak\n",
         )
+
+    def test_should_add_each_entry_at_the_end_of_its_subsection_and_keep_the_entries_edited_by_hand(self) -> None:
         self.assertIn(
             "\n".join(
                 [
@@ -207,33 +371,82 @@ class ChangelogTest(unittest.TestCase):
                     "## [0.2.3] - 2026-10-15",
                 ]
             ),
-            completed,
+            self.changelog,
         )
-        # A subsection the section lacks, after the others: at its end.
-        completed = release.complete_release(changelog, "0.3.0", "### Security\n\n- Server: a check\n")
-        self.assertIn("- App: a crash\n\n### Security\n\n- Server: a check\n\n## [0.2.3]", completed)
-        # Keep a Changelog's order, hand-written subsections included.
+
+
+class TheCompleteReleaseFunctionWhenASubsectionTheSectionLacksComesAfterItsOthers(unittest.TestCase):
+    def setUp(self) -> None:
+        changelog = release.add_release(CHANGELOG, "0.3.0", "0.2.3", "2026-10-20", SECTION_EDITED_IN_ITS_PULL_REQUEST)
+        self.changelog = release.complete_release(changelog, "0.3.0", "### Security\n\n- Server: a check\n")
+
+    def test_should_add_it_at_the_end_of_the_section(self) -> None:
+        self.assertIn("- App: a crash\n\n### Security\n\n- Server: a check\n\n## [0.2.3]", self.changelog)
+
+
+class TheCompleteReleaseFunctionWhenASubsectionTheSectionLacksComesBeforeOneWrittenByHand(unittest.TestCase):
+    def setUp(self) -> None:
+        changelog = release.add_release(CHANGELOG, "0.3.0", "0.2.3", "2026-10-20", SECTION_EDITED_IN_ITS_PULL_REQUEST)
         edited = changelog.replace("### Fixed\n", "### Removed\n\n- Server: the old route\n\n### Fixed\n")
-        completed = release.complete_release(edited, "0.3.0", "### Changed\n\n- **Breaking:** Server: a format\n")
+        self.changelog = release.complete_release(edited, "0.3.0", "### Changed\n\n- **Breaking:** Server: a format\n")
+
+    def test_should_add_it_in_the_order_of_keep_a_changelog(self) -> None:
         self.assertIn(
             "- App: updates, edited by hand\n\n### Changed\n\n- **Breaking:** Server: a format\n\n### Removed\n",
-            completed,
+            self.changelog,
         )
-        # The last section, right before the links.
-        completed = release.complete_release(CHANGELOG, "0.2.3", "### Fixed\n\n- OCR: a fix\n")
-        self.assertIn("- Scan books\n\n### Fixed\n\n- OCR: a fix\n\n[unreleased]:", completed)
-        with self.assertRaisesRegex(release.ReleaseError, re.escape("no section ## [0.4.0]")):
-            release.complete_release(CHANGELOG, "0.4.0", "### Fixed\n\n- OCR: a fix\n")
 
-    def test_completing_a_release_refuses_an_entry_before_any_subsection(self) -> None:
-        with self.assertRaisesRegex(release.ReleaseError, re.escape("comes before any subsection: - OCR: a fix")):
-            release.complete_release(CHANGELOG, "0.2.3", "- OCR: a fix\n\n### Fixed\n\n- Server: a leak\n")
 
-    def test_the_release_base_of_a_commit_message(self) -> None:
-        commit = "0123456789abcdef0123456789abcdef01234567"
-        self.assertEqual(release.release_base(f"chore(release): 0.3.0\n\nWhy.\n\nRelease-Base: {commit}\n"), commit)
-        self.assertIsNone(release.release_base("chore(release): 0.3.0\n\nRelease-Base: 0123\n"))
-        self.assertIsNone(release.release_base(f"chore(release): 0.3.0\n\nThe Release-Base: {commit}\n"))
+class TheCompleteReleaseFunctionWhenTheSectionIsTheLastOne(unittest.TestCase):
+    def setUp(self) -> None:
+        self.changelog = release.complete_release(CHANGELOG, "0.2.3", "### Fixed\n\n- OCR: a fix\n")
+
+    def test_should_add_the_entries_right_before_the_links(self) -> None:
+        self.assertIn("- Scan books\n\n### Fixed\n\n- OCR: a fix\n\n[unreleased]:", self.changelog)
+
+
+class TheCompleteReleaseFunctionWhenTheChangelogHasNoSectionForTheRelease(unittest.TestCase):
+    def setUp(self) -> None:
+        self.complete = functools.partial(release.complete_release, CHANGELOG, "0.4.0", "### Fixed\n\n- OCR: a fix\n")
+
+    def test_should_refuse_it_naming_the_missing_section(self) -> None:
+        self.assertRaisesRegex(release.ReleaseError, re.escape("no section ## [0.4.0]"), self.complete)
+
+
+class TheCompleteReleaseFunctionWhenAnEntryComesBeforeAnySubsection(unittest.TestCase):
+    def setUp(self) -> None:
+        self.complete = functools.partial(
+            release.complete_release, CHANGELOG, "0.2.3", "- OCR: a fix\n\n### Fixed\n\n- Server: a leak\n"
+        )
+
+    def test_should_refuse_it_naming_the_entry(self) -> None:
+        self.assertRaisesRegex(
+            release.ReleaseError, re.escape("comes before any subsection: - OCR: a fix"), self.complete
+        )
+
+
+class TheReleaseBaseFunctionWhenTheMessageEndsWithTheTrailer(unittest.TestCase):
+    def setUp(self) -> None:
+        self.base = release.release_base(f"chore(release): 0.3.0\n\nWhy.\n\nRelease-Base: {COMMIT}\n")
+
+    def test_should_read_the_commit_of_the_trailer(self) -> None:
+        self.assertEqual(self.base, COMMIT)
+
+
+class TheReleaseBaseFunctionWhenTheTrailerHoldsNoFullCommit(unittest.TestCase):
+    def setUp(self) -> None:
+        self.base = release.release_base("chore(release): 0.3.0\n\nRelease-Base: 0123\n")
+
+    def test_should_find_none(self) -> None:
+        self.assertIsNone(self.base)
+
+
+class TheReleaseBaseFunctionWhenTheTrailerDoesNotStartItsLine(unittest.TestCase):
+    def setUp(self) -> None:
+        self.base = release.release_base(f"chore(release): 0.3.0\n\nThe Release-Base: {COMMIT}\n")
+
+    def test_should_find_none(self) -> None:
+        self.assertIsNone(self.base)
 
 
 class CommandTest(unittest.TestCase):

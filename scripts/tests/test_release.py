@@ -225,6 +225,10 @@ class ChangelogTest(unittest.TestCase):
         with self.assertRaisesRegex(release.ReleaseError, re.escape("no section ## [0.4.0]")):
             release.complete_release(CHANGELOG, "0.4.0", "### Fixed\n\n- OCR: a fix\n")
 
+    def test_completing_a_release_refuses_an_entry_before_any_subsection(self) -> None:
+        with self.assertRaisesRegex(release.ReleaseError, re.escape("comes before any subsection: - OCR: a fix")):
+            release.complete_release(CHANGELOG, "0.2.3", "- OCR: a fix\n\n### Fixed\n\n- Server: a leak\n")
+
     def test_the_release_base_of_a_commit_message(self) -> None:
         commit = "0123456789abcdef0123456789abcdef01234567"
         self.assertEqual(release.release_base(f"chore(release): 0.3.0\n\nWhy.\n\nRelease-Base: {commit}\n"), commit)

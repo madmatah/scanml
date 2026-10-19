@@ -2,259 +2,777 @@
 
 from __future__ import annotations
 
+import contextlib
 import dataclasses
 import errno
+import functools
 import os
+from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Never, Self
+from typing import Any, Never, Self
 
 import pytest
-from fastapi.testclient import TestClient
 from starlette.datastructures import FormData
 from starlette.formparsers import MultiPartParser
 
 from scanmylib import __version__
-from scanmylib.app import create_app
 from scanmylib.auth import load_or_create_token
-from scanmylib.config import Settings
-from scanmylib.devtools.fake_ocr import FakeOcrServer
 from scanmylib.images import MAX_UPLOAD_BYTES
-from support import AUTH, TOKEN, create_document, jpeg, new_id, upload
+from scanmylib.middleware import CONTENT_SECURITY_POLICY
+from support import (
+    AUTH,
+    TOKEN,
+    Answer,
+    build_client,
+    capture_answer,
+    create_document,
+    jpeg,
+    preparing_settings,
+    running_api,
+    serving_fake_ocr,
+    upload,
+)
 
-PROTECTED = [
-    ("GET", "/api/status"),
-    ("GET", "/api/pairing"),
-    ("GET", "/api/pairing/qr.svg"),
-    ("GET", "/api/pairing/apk-qr.svg"),
-    ("GET", "/api/documents"),
-    ("PUT", f"/api/documents/{new_id()}"),
-    ("PUT", f"/api/documents/{new_id()}/order"),
-    ("DELETE", f"/api/documents/{new_id()}/order"),
-    ("GET", f"/api/documents/{new_id()}/markdown"),
-    ("GET", f"/api/documents/{new_id()}/files/document.md"),
-    ("POST", f"/api/documents/{new_id()}/pages"),
-    ("GET", f"/api/pages/{new_id()}"),
-    ("PATCH", f"/api/pages/{new_id()}"),
-    ("POST", f"/api/pages/{new_id()}/reprocess"),
-    ("DELETE", f"/api/pages/{new_id()}"),
-    ("GET", f"/api/pages/{new_id()}/thumb"),
-]
-
-
-def test_health_is_public(client: TestClient) -> None:
-    response = client.get("/api/health")
-    assert response.status_code == 200
-    assert response.json() == {"name": "ScanMyLib", "version": __version__, "api": 1, "apk": None}
+DOCUMENT_ID = "6f1c0000-0000-4000-8000-000000000001"
+PAGE_ID = "6f1c0000-0000-4000-8000-000000000002"
+QR_CODE_PATHS = ["/api/pairing/qr.svg", "/api/pairing/apk-qr.svg"]
+APK = b"PK\x03\x04 fake apk"
+JSON_CONTENT = {"Content-Type": "application/json"}
+CSRF_HEADER = {"X-ScanMyLib": "1"}
+OPEN_FILE_DESCRIPTOR = os.fdopen
 
 
-@pytest.mark.parametrize(("method", "path"), PROTECTED)
-def test_protected_routes_require_a_credential(client: TestClient, method: str, path: str) -> None:
-    for headers in (
-        {},
-        {"Authorization": "Bearer wrong"},
-        {"Authorization": TOKEN},
-        {"Cookie": "scanmylib_session=forged"},
-    ):
-        response = client.request(method, path, headers=headers, json={"title": "x"} if method != "GET" else None)
-        assert response.status_code == 401, (headers, response.text)
-        assert response.json() == {"detail": "unauthorized"}
+class FullDiskFile:
+    def __init__(self, file_descriptor: int, mode: str, encoding: str) -> None:
+        self._stream = OPEN_FILE_DESCRIPTOR(file_descriptor, mode, encoding=encoding)
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(self, *exc_info: object) -> None:
+        self._stream.close()
+
+    def write(self, text: str) -> Never:
+        raise OSError(errno.ENOSPC, "No space left on device")
 
 
-def test_bearer_token_grants_access(client: TestClient) -> None:
-    assert client.get("/api/documents", headers=AUTH).json() == {"documents": []}
+def locate_token_file(directory: Path) -> Path:
+    return directory / "state" / "token"
 
 
-def test_web_session_cookie_and_csrf_header(client: TestClient) -> None:
-    assert client.post("/api/session", json={"token": "wrong"}).status_code == 401
-    response = client.post("/api/session", json={"token": TOKEN})
-    assert response.status_code == 204
-    cookie = response.headers["set-cookie"]
-    for attribute in ("scanmylib_session=", "HttpOnly", "Max-Age=31536000", "Path=/", "SameSite=strict"):
-        assert attribute in cookie
-    assert "Secure" not in cookie  # plain HTTP on the LAN
-    session_id = client.cookies["scanmylib_session"]
+def build_bearer_header(token: str) -> dict[str, str]:
+    return {"Authorization": f"Bearer {token}"}
 
-    assert client.get("/api/documents").status_code == 200
-    document_id = new_id()
-    refused = client.put(f"/api/documents/{document_id}", json={"title": "No header"})
-    assert refused.status_code == 403
-    assert refused.json() == {"detail": "missing X-ScanMyLib header"}
-    assert (
-        client.put(
-            f"/api/documents/{document_id}", json={"title": "With header"}, headers={"X-ScanMyLib": "1"}
+
+def build_cookie_header(session_id: str) -> dict[str, str]:
+    return {"Cookie": f"scanmylib_session={session_id}"}
+
+
+@dataclass(frozen=True)
+class WebSession:
+    wrong_login_status: int
+    login_status: int
+    cookie: str
+    read_status: int
+    change_without_header: Answer
+    change_with_header_status: int
+    logout_status: int
+    is_cookie_kept_after_logout: bool
+    read_after_logout_status: int
+    replayed_cookie_status: int
+
+
+@dataclass(frozen=True)
+class GeneratedToken:
+    token: str
+    bearer_status: int
+    file_mode: int
+    token_after_restart: str
+
+
+@dataclass(frozen=True)
+class ReplacedEmptyToken:
+    empty_login_status: int
+    file_content_login_status: int
+    token: str
+    bearer_status: int
+    file_mode: int
+
+
+@dataclass(frozen=True)
+class CreatedToken:
+    token: str
+    file_content: str
+
+
+@dataclass(frozen=True)
+class GuardedUploads:
+    without_credential_status: int
+    wrong_bearer_status: int
+    cookie_without_header_status: int
+    bodies_read_after_refusals: int
+    accepted_status: int
+    bodies_read_after_acceptance: int
+
+
+@dataclass(frozen=True)
+class BearerAnswers:
+    listing: dict[str, Any]
+    change_status: int
+
+
+@dataclass(frozen=True)
+class WebUi:
+    placeholder: Answer
+    page: str
+    script_status: int
+    script_type: str
+    escape_statuses: dict[str, int]
+
+
+@dataclass(frozen=True)
+class QrCode:
+    content_type: str
+    content: bytes
+
+
+@dataclass(frozen=True)
+class PairingAcrossTheBuild:
+    apk_status_before_build: int
+    pairing_before_build: dict[str, Any]
+    apk_status_after_build: int
+    apk_content: bytes
+    apk_type: str
+    pairing_after_build: dict[str, Any]
+    qr_codes: dict[str, QrCode]
+
+
+@dataclass(frozen=True)
+class OversizedUpload:
+    status: int
+    content_security_policy: str
+
+
+@dataclass(frozen=True)
+class AnswersToUnencodableInput:
+    login: Answer
+    field_statuses: dict[str, int]
+
+
+@pytest.fixture(scope="module")
+def web_session(tmp_path_factory: pytest.TempPathFactory) -> WebSession:
+    with running_api(tmp_path_factory.mktemp("api")) as api:
+        client = api.client
+        wrong_login_status = client.post("/api/session", json={"token": "wrong"}).status_code
+        login = client.post("/api/session", json={"token": TOKEN})
+        session_id = client.cookies["scanmylib_session"]
+        read_status = client.get("/api/documents").status_code
+        change_without_header = client.put(f"/api/documents/{DOCUMENT_ID}", json={"title": "No header"})
+        change_with_header_status = client.put(
+            f"/api/documents/{DOCUMENT_ID}", json={"title": "With header"}, headers=CSRF_HEADER
         ).status_code
-        == 201
-    )
-
-    assert client.delete("/api/session").status_code == 204
-    assert "scanmylib_session" not in client.cookies
-    assert client.get("/api/documents").status_code == 401
-    # The server forgot the session: replaying the old cookie does not work.
-    assert client.get("/api/documents", headers={"Cookie": f"scanmylib_session={session_id}"}).status_code == 401
-
-
-def test_phone_requests_with_bearer_need_no_csrf_header(client: TestClient) -> None:
-    assert client.put(f"/api/documents/{new_id()}", json={"title": "From the phone"}, headers=AUTH).status_code == 201
-
-
-def test_sessions_end_when_the_token_is_regenerated(settings: Settings, fake_ocr: FakeOcrServer) -> None:
-    with TestClient(create_app(settings)) as first:
-        assert first.post("/api/session", json={"token": TOKEN}).status_code == 204
-        cookie = first.cookies["scanmylib_session"]
-    with TestClient(create_app(dataclasses.replace(settings, token="another-token-1234567890"))) as second:
-        assert second.get("/api/documents", headers={"Cookie": f"scanmylib_session={cookie}"}).status_code == 401
+        logout_status = client.delete("/api/session").status_code
+        return WebSession(
+            wrong_login_status=wrong_login_status,
+            login_status=login.status_code,
+            cookie=login.headers["set-cookie"],
+            read_status=read_status,
+            change_without_header=capture_answer(change_without_header),
+            change_with_header_status=change_with_header_status,
+            logout_status=logout_status,
+            is_cookie_kept_after_logout="scanmylib_session" in client.cookies,
+            read_after_logout_status=client.get("/api/documents").status_code,
+            replayed_cookie_status=client.get("/api/documents", headers=build_cookie_header(session_id)).status_code,
+        )
 
 
-def test_token_is_generated_once_and_kept(settings: Settings, fake_ocr: FakeOcrServer) -> None:
-    generated = dataclasses.replace(settings, token=None)
-    with TestClient(create_app(generated)) as client:
-        token = generated.token_path.read_text().strip()
-        assert len(token) >= 43
-        assert client.get("/api/documents", headers={"Authorization": f"Bearer {token}"}).status_code == 200
-    assert oct(generated.token_path.stat().st_mode & 0o777) == "0o600"
-    with TestClient(create_app(generated)):
-        assert generated.token_path.read_text().strip() == token
+@pytest.fixture(scope="module")
+def generated_token(tmp_path_factory: pytest.TempPathFactory) -> GeneratedToken:
+    with (
+        preparing_settings(tmp_path_factory.mktemp("api"), token=None) as settings,
+        serving_fake_ocr(settings.ocr_socket),
+    ):
+        with build_client(settings) as client:
+            token = settings.token_path.read_text().strip()
+            bearer_status = client.get("/api/documents", headers=build_bearer_header(token)).status_code
+        file_mode = settings.token_path.stat().st_mode & 0o777
+        with build_client(settings):
+            token_after_restart = settings.token_path.read_text().strip()
+    return GeneratedToken(token, bearer_status, file_mode, token_after_restart)
 
 
-@pytest.mark.parametrize("content", ["", "\n", "  \n"])
-def test_an_empty_token_file_gets_a_new_token(settings: Settings, fake_ocr: FakeOcrServer, content: str) -> None:
-    # E.g. left by a crash or a full disk during the first start: it used to
-    # become the token, and an empty login opened a session for anyone.
-    generated = dataclasses.replace(settings, token=None)
-    generated.state_dir.mkdir(parents=True)
-    generated.token_path.write_text(content)
-    with TestClient(create_app(generated)) as client:
-        assert client.post("/api/session", json={"token": ""}).status_code == 401
-        assert client.post("/api/session", json={"token": content}).status_code == 401
-        token = generated.token_path.read_text().strip()
-        assert len(token) >= 43
-        assert client.get("/api/documents", headers={"Authorization": f"Bearer {token}"}).status_code == 200
-    assert oct(generated.token_path.stat().st_mode & 0o777) == "0o600"
-
-
-def test_a_failed_token_write_leaves_no_token_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    path = tmp_path / "state" / "token"
-    fdopen = os.fdopen
-
-    class FullDisk:
-        def __init__(self, fd: int, mode: str, encoding: str) -> None:
-            self._stream = fdopen(fd, mode, encoding=encoding)
-
-        def __enter__(self) -> Self:
-            return self
-
-        def __exit__(self, *exc_info: object) -> None:
-            self._stream.close()
-
-        def write(self, data: str) -> Never:
-            raise OSError(errno.ENOSPC, "No space left on device")
-
-    monkeypatch.setattr(os, "fdopen", FullDisk)
-    with pytest.raises(OSError, match="No space left on device"):
-        load_or_create_token(path)
-    monkeypatch.undo()
-    assert list(path.parent.iterdir()) == []  # no empty token file, no temporary file
-    token = load_or_create_token(path)  # the next start creates a real token
-    assert len(token) >= 43 and path.read_text().strip() == token
-
-
-def test_security_headers(client: TestClient) -> None:
-    for path in ("/", "/api/health", "/api/documents"):
-        headers = client.get(path, headers=AUTH).headers
-        assert headers["content-security-policy"].startswith("default-src 'self'")
-        assert "frame-ancestors 'none'" in headers["content-security-policy"]
-        assert headers["x-content-type-options"] == "nosniff"
-        assert headers["x-frame-options"] == "DENY"
-        assert headers["referrer-policy"] == "no-referrer"
-    assert client.get("/api/documents", headers=AUTH).headers["cache-control"] == "no-store"
-
-
-def test_api_documentation_is_not_exposed(client: TestClient) -> None:
-    for path in ("/docs", "/redoc", "/openapi.json"):
-        assert client.get(path).status_code == 404
-
-
-def test_upload_bodies_are_not_read_before_authentication(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
-    parsed: list[MultiPartParser] = []
+@pytest.fixture(scope="module")
+def guarded_uploads(tmp_path_factory: pytest.TempPathFactory) -> GuardedUploads:
+    parsers: list[MultiPartParser] = []
     parse = MultiPartParser.parse
 
     async def recording_parse(self: MultiPartParser) -> FormData:
-        parsed.append(self)
+        parsers.append(self)
         return await parse(self)
 
-    monkeypatch.setattr(MultiPartParser, "parse", recording_parse)
-    document_id = create_document(client)
-    for headers, status in (({}, 401), ({"Authorization": "Bearer wrong"}, 401)):
-        assert upload(client, document_id, jpeg(), headers=headers).status_code == status
-    assert client.post("/api/session", json={"token": TOKEN}).status_code == 204
-    assert upload(client, document_id, jpeg(), headers={}).status_code == 403  # cookie without CSRF header
-    assert parsed == []  # refused before the 40 MiB body was read and spooled
-    assert upload(client, document_id, jpeg(), headers={"X-ScanMyLib": "1"}).status_code == 201
-    assert len(parsed) == 1
+    with pytest.MonkeyPatch.context() as patch, running_api(tmp_path_factory.mktemp("api")) as api:
+        patch.setattr(MultiPartParser, "parse", recording_parse)
+        document_id = create_document(api.client)
+        without_credential_status = upload(api.client, document_id, jpeg(), headers={}).status_code
+        wrong_bearer_status = upload(api.client, document_id, jpeg(), headers=build_bearer_header("wrong")).status_code
+        api.client.post("/api/session", json={"token": TOKEN}).raise_for_status()
+        cookie_without_header_status = upload(api.client, document_id, jpeg(), headers={}).status_code
+        bodies_read_after_refusals = len(parsers)
+        accepted_status = upload(api.client, document_id, jpeg(), headers=CSRF_HEADER).status_code
+        return GuardedUploads(
+            without_credential_status=without_credential_status,
+            wrong_bearer_status=wrong_bearer_status,
+            cookie_without_header_status=cookie_without_header_status,
+            bodies_read_after_refusals=bodies_read_after_refusals,
+            accepted_status=accepted_status,
+            bodies_read_after_acceptance=len(parsers),
+        )
 
 
-def test_unencodable_json_input_gets_a_validation_error(client: TestClient) -> None:
-    # The 422 response used to echo the invalid input, which failed to encode (500).
-    json_type = {"Content-Type": "application/json"}
-    login = client.post("/api/session", content=b'{"token": "\\ud800"}', headers=json_type)
-    assert login.status_code == 422
-    assert login.json()["detail"][0]["loc"] == ["body", "token"]
-    assert "input" not in login.json()["detail"][0]
-    document_id = create_document(client)
-    for path, body in (
-        (f"/api/documents/{document_id}", b'{"title": "x\\udfff"}'),
-        (f"/api/documents/{document_id}", b'{"title": NaN}'),
-        (f"/api/pages/{new_id()}", b'{"manual_number": Infinity}'),
-        (f"/api/pages/{new_id()}", b'{"rotation": 1e999}'),
-    ):
-        assert client.patch(path, content=body, headers={**AUTH, **json_type}).status_code == 422, body
-    assert client.post("/api/session", content='{"token": "é"}'.encode(), headers=json_type).status_code == 401
+@pytest.fixture(scope="module")
+def web_ui(tmp_path_factory: pytest.TempPathFactory) -> WebUi:
+    with running_api(tmp_path_factory.mktemp("api")) as api:
+        placeholder = api.client.get("/")
+        static = api.settings.web_dir / "static"
+        static.mkdir(parents=True)
+        (api.settings.web_dir / "index.html").write_text("<!doctype html><title>ScanMyLib UI</title>")
+        (static / "app.js").write_text("console.log('ok')")
+        page = api.client.get("/").text
+        script = api.client.get("/static/app.js")
+        escapes = ["/static/../index.html", "/static/%2e%2e/index.html"]
+        return WebUi(
+            placeholder=Answer(placeholder.status_code, placeholder.text),
+            page=page,
+            script_status=script.status_code,
+            script_type=script.headers["content-type"],
+            escape_statuses={path: api.client.get(path).status_code for path in escapes},
+        )
 
 
-def test_request_bodies_are_limited(client: TestClient) -> None:
-    assert (
-        client.post(
-            "/api/session", content=b"{" + b" " * (2 * 1024 * 1024) + b"}", headers={"Content-Type": "application/json"}
-        ).status_code
-        == 413
-    )
-    document_id = create_document(client)
-    response = upload(client, document_id, b"\xff\xd8" + b"\x00" * (MAX_UPLOAD_BYTES + 2 * 1024 * 1024))
-    assert response.status_code == 413
-    assert response.headers["content-security-policy"]
+@pytest.fixture(scope="module")
+def pairing_across_the_build(tmp_path_factory: pytest.TempPathFactory) -> PairingAcrossTheBuild:
+    with running_api(tmp_path_factory.mktemp("api")) as api:
+        apk_status_before_build = api.client.get("/download/scanmylib.apk").status_code
+        pairing_before_build = api.client.get("/api/pairing", headers=AUTH).json()
+        api.settings.apk_path.parent.mkdir(parents=True)
+        api.settings.apk_path.write_bytes(APK)
+        apk = api.client.get("/download/scanmylib.apk")
+        qr_codes = {path: api.client.get(path, headers=AUTH) for path in QR_CODE_PATHS}
+        return PairingAcrossTheBuild(
+            apk_status_before_build=apk_status_before_build,
+            pairing_before_build=pairing_before_build,
+            apk_status_after_build=apk.status_code,
+            apk_content=apk.content,
+            apk_type=apk.headers["content-type"],
+            pairing_after_build=api.client.get("/api/pairing", headers=AUTH).json(),
+            qr_codes={
+                path: QrCode(qr_code.headers["content-type"], qr_code.content) for path, qr_code in qr_codes.items()
+            },
+        )
 
 
-def test_web_ui_placeholder_then_files(client: TestClient, settings: Settings) -> None:
-    placeholder = client.get("/")
-    assert placeholder.status_code == 200 and "the web UI is not installed" in placeholder.text
-    static = settings.web_dir / "static"
-    static.mkdir(parents=True)
-    (settings.web_dir / "index.html").write_text("<!doctype html><title>ScanMyLib UI</title>")
-    (static / "app.js").write_text("console.log('ok')")
-    assert "ScanMyLib UI" in client.get("/").text
-    script = client.get("/static/app.js")
-    assert script.status_code == 200 and script.headers["content-type"].startswith("text/javascript")
-    assert client.get("/static/../index.html").status_code == 404
-    assert client.get("/static/%2e%2e/index.html").status_code == 404
+class TestTheAuthentication:
+    #: At least 43 characters, as a token of 32 random bytes in URL-safe base64.
+    SHORTEST_TOKEN_LENGTH = 43
+    OWNER_ONLY_MODE = 0o600
+
+    class TestWhenTheHealthIsReadWithoutACredential:
+        @pytest.fixture(scope="class")
+        @classmethod
+        def health(cls, tmp_path_factory: pytest.TempPathFactory) -> Answer:
+            with running_api(tmp_path_factory.mktemp("api")) as api:
+                return capture_answer(api.client.get("/api/health"))
+
+        def test_should_answer_it(self, health: Answer) -> None:
+            assert health.status == 200
+
+        def test_should_name_the_api_with_its_version_and_level(self, health: Answer) -> None:
+            assert health.body == {"name": "ScanMyLib", "version": __version__, "api": 1, "apk": None}
+
+    class TestWhenARequestCarriesNoValidCredential:
+        PROTECTED_ROUTES: tuple[tuple[str, str, dict[str, str] | None], ...] = (
+            ("GET", "/api/status", None),
+            ("GET", "/api/pairing", None),
+            ("GET", "/api/pairing/qr.svg", None),
+            ("GET", "/api/pairing/apk-qr.svg", None),
+            ("GET", "/api/documents", None),
+            ("PUT", f"/api/documents/{DOCUMENT_ID}", {"title": "x"}),
+            ("PUT", f"/api/documents/{DOCUMENT_ID}/order", {"title": "x"}),
+            ("DELETE", f"/api/documents/{DOCUMENT_ID}/order", {"title": "x"}),
+            ("GET", f"/api/documents/{DOCUMENT_ID}/markdown", None),
+            ("GET", f"/api/documents/{DOCUMENT_ID}/files/document.md", None),
+            ("POST", f"/api/documents/{DOCUMENT_ID}/pages", {"title": "x"}),
+            ("GET", f"/api/pages/{PAGE_ID}", None),
+            ("PATCH", f"/api/pages/{PAGE_ID}", {"title": "x"}),
+            ("POST", f"/api/pages/{PAGE_ID}/reprocess", {"title": "x"}),
+            ("DELETE", f"/api/pages/{PAGE_ID}", {"title": "x"}),
+            ("GET", f"/api/pages/{PAGE_ID}/thumb", None),
+        )
+
+        @pytest.fixture(
+            scope="class",
+            params=[{}, build_bearer_header("wrong"), {"Authorization": TOKEN}, build_cookie_header("forged")],
+            ids=["no-credential", "a-wrong-bearer-token", "the-token-without-its-bearer-scheme", "a-forged-cookie"],
+        )
+        @classmethod
+        def answers(cls, request: pytest.FixtureRequest, tmp_path_factory: pytest.TempPathFactory) -> dict[str, Answer]:
+            with running_api(tmp_path_factory.mktemp("api")) as api:
+                return {
+                    f"{method} {path}": capture_answer(
+                        api.client.request(method, path, headers=request.param, json=body)
+                    )
+                    for method, path, body in cls.PROTECTED_ROUTES
+                }
+
+        def test_should_refuse_every_protected_route(self, answers: dict[str, Answer]) -> None:
+            granted_routes = [route for route, answer in answers.items() if answer.status != 401]
+            assert len(answers) == 16
+            assert granted_routes == []
+
+        def test_should_say_that_the_request_is_unauthorized(self, answers: dict[str, Answer]) -> None:
+            unexplained_routes = [
+                route for route, answer in answers.items() if answer.body != {"detail": "unauthorized"}
+            ]
+            assert len(answers) == 16
+            assert unexplained_routes == []
+
+    class TestWhenARequestCarriesTheBearerToken:
+        @pytest.fixture(scope="class")
+        @classmethod
+        def answers(cls, tmp_path_factory: pytest.TempPathFactory) -> BearerAnswers:
+            with running_api(tmp_path_factory.mktemp("api")) as api:
+                listing = api.client.get("/api/documents", headers=AUTH).json()
+                change = api.client.put(f"/api/documents/{DOCUMENT_ID}", json={"title": "From the phone"}, headers=AUTH)
+                return BearerAnswers(listing, change.status_code)
+
+        def test_should_grant_access(self, answers: BearerAnswers) -> None:
+            assert answers.listing == {"documents": []}
+
+        def test_should_accept_a_change_from_the_phone_without_the_csrf_header(self, answers: BearerAnswers) -> None:
+            assert answers.change_status == 201
+
+    class TestWhenTheWebUiLogsInWithAWrongToken:
+        def test_should_refuse_it(self, web_session: WebSession) -> None:
+            assert web_session.wrong_login_status == 401
+
+    class TestWhenTheWebUiLogsInWithTheToken:
+        def test_should_open_a_session(self, web_session: WebSession) -> None:
+            assert web_session.login_status == 204
+
+        def test_should_set_the_session_cookie(self, web_session: WebSession) -> None:
+            assert "scanmylib_session=" in web_session.cookie
+
+        def test_should_hide_the_cookie_from_scripts(self, web_session: WebSession) -> None:
+            assert "HttpOnly" in web_session.cookie
+
+        def test_should_keep_the_session_for_a_year(self, web_session: WebSession) -> None:
+            assert "Max-Age=31536000" in web_session.cookie
+
+        def test_should_send_the_cookie_with_every_path(self, web_session: WebSession) -> None:
+            assert "Path=/" in web_session.cookie
+
+        def test_should_send_the_cookie_with_the_requests_of_its_own_site_only(self, web_session: WebSession) -> None:
+            assert "SameSite=strict" in web_session.cookie
+
+        def test_should_not_mark_the_cookie_secure_since_the_lan_serves_plain_http(
+            self, web_session: WebSession
+        ) -> None:
+            assert "Secure" not in web_session.cookie
+
+        class TestWhenAReadCarriesItsCookie:
+            def test_should_grant_access(self, web_session: WebSession) -> None:
+                assert web_session.read_status == 200
+
+        class TestWhenAChangeCarriesItsCookieWithoutTheCsrfHeader:
+            def test_should_refuse_it(self, web_session: WebSession) -> None:
+                assert web_session.change_without_header.status == 403
+
+            def test_should_say_that_the_header_is_missing(self, web_session: WebSession) -> None:
+                assert web_session.change_without_header.body == {"detail": "missing X-ScanMyLib header"}
+
+        class TestWhenAChangeCarriesItsCookieAndTheCsrfHeader:
+            def test_should_accept_it(self, web_session: WebSession) -> None:
+                assert web_session.change_with_header_status == 201
+
+        class TestWhenTheWebUiLogsOut:
+            def test_should_close_the_session(self, web_session: WebSession) -> None:
+                assert web_session.logout_status == 204
+
+            def test_should_clear_the_cookie(self, web_session: WebSession) -> None:
+                assert web_session.is_cookie_kept_after_logout is False
+
+            def test_should_refuse_a_read_without_the_cookie(self, web_session: WebSession) -> None:
+                assert web_session.read_after_logout_status == 401
+
+            class TestWhenTheOldCookieIsReplayed:
+                def test_should_refuse_it_since_the_api_forgot_the_session(self, web_session: WebSession) -> None:
+                    assert web_session.replayed_cookie_status == 401
+
+    class TestWhenTheTokenIsRegenerated:
+        @pytest.fixture(scope="class")
+        @classmethod
+        def replayed_cookie_status(cls, tmp_path_factory: pytest.TempPathFactory) -> int:
+            with preparing_settings(tmp_path_factory.mktemp("api")) as settings, serving_fake_ocr(settings.ocr_socket):
+                with build_client(settings) as first:
+                    first.post("/api/session", json={"token": TOKEN}).raise_for_status()
+                    session_id = first.cookies["scanmylib_session"]
+                with build_client(dataclasses.replace(settings, token="another-token-1234567890")) as second:
+                    return second.get("/api/documents", headers=build_cookie_header(session_id)).status_code
+
+        def test_should_end_the_open_sessions(self, replayed_cookie_status: int) -> None:
+            assert replayed_cookie_status == 401
+
+    class TestWhenNoTokenIsConfigured:
+        def test_should_generate_a_token_of_at_least_43_characters(self, generated_token: GeneratedToken) -> None:
+            assert len(generated_token.token) >= TestTheAuthentication.SHORTEST_TOKEN_LENGTH
+
+        def test_should_accept_it_as_the_bearer_token(self, generated_token: GeneratedToken) -> None:
+            assert generated_token.bearer_status == 200
+
+        def test_should_keep_its_file_readable_by_its_owner_only(self, generated_token: GeneratedToken) -> None:
+            assert generated_token.file_mode == TestTheAuthentication.OWNER_ONLY_MODE
+
+        class TestWhenTheApiStartsAgain:
+            def test_should_keep_the_token(self, generated_token: GeneratedToken) -> None:
+                assert generated_token.token_after_restart == generated_token.token
+
+    class TestWhenTheTokenFileIsEmpty:
+        @pytest.fixture(scope="class", params=["", "\n", "  \n"], ids=["empty", "a-line-end", "spaces-and-a-line-end"])
+        @classmethod
+        def replaced_token(
+            cls, request: pytest.FixtureRequest, tmp_path_factory: pytest.TempPathFactory
+        ) -> ReplacedEmptyToken:
+            # Left by a crash or a full disk during the first start, such a file used to become the token.
+            with preparing_settings(tmp_path_factory.mktemp("api"), token=None) as settings:
+                settings.state_dir.mkdir(parents=True)
+                settings.token_path.write_text(request.param)
+                with serving_fake_ocr(settings.ocr_socket), build_client(settings) as client:
+                    empty_login_status = client.post("/api/session", json={"token": ""}).status_code
+                    file_content_login_status = client.post("/api/session", json={"token": request.param}).status_code
+                    token = settings.token_path.read_text().strip()
+                    bearer_status = client.get("/api/documents", headers=build_bearer_header(token)).status_code
+                return ReplacedEmptyToken(
+                    empty_login_status=empty_login_status,
+                    file_content_login_status=file_content_login_status,
+                    token=token,
+                    bearer_status=bearer_status,
+                    file_mode=settings.token_path.stat().st_mode & 0o777,
+                )
+
+        def test_should_refuse_an_empty_login_so_that_no_one_opens_a_session_without_the_token(
+            self, replaced_token: ReplacedEmptyToken
+        ) -> None:
+            assert replaced_token.empty_login_status == 401
+
+        def test_should_refuse_the_content_of_the_file_as_a_login(self, replaced_token: ReplacedEmptyToken) -> None:
+            assert replaced_token.file_content_login_status == 401
+
+        def test_should_generate_a_new_token_of_at_least_43_characters(
+            self, replaced_token: ReplacedEmptyToken
+        ) -> None:
+            assert len(replaced_token.token) >= TestTheAuthentication.SHORTEST_TOKEN_LENGTH
+
+        def test_should_accept_the_new_token_as_the_bearer_token(self, replaced_token: ReplacedEmptyToken) -> None:
+            assert replaced_token.bearer_status == 200
+
+        def test_should_keep_its_file_readable_by_its_owner_only(self, replaced_token: ReplacedEmptyToken) -> None:
+            assert replaced_token.file_mode == TestTheAuthentication.OWNER_ONLY_MODE
+
+    class TestTheLoadOrCreateTokenFunction:
+        class TestWhenTheDiskIsFull:
+            @pytest.fixture
+            def create_token(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Callable[[], str]:
+                monkeypatch.setattr(os, "fdopen", FullDiskFile)
+                return functools.partial(load_or_create_token, locate_token_file(tmp_path))
+
+            def test_should_fail_with_the_error_of_the_disk(self, create_token: Callable[[], str]) -> None:
+                with pytest.raises(OSError, match="No space left on device"):
+                    create_token()
+
+            class TestWhenItHasFailed:
+                @pytest.fixture
+                def left_files(self, create_token: Callable[[], str], tmp_path: Path) -> list[str]:
+                    with contextlib.suppress(OSError):
+                        create_token()
+                    return sorted(path.name for path in locate_token_file(tmp_path).parent.iterdir())
+
+                def test_should_leave_no_token_file_and_no_temporary_file(self, left_files: list[str]) -> None:
+                    assert left_files == []
+
+                class TestWhenTheDiskHasRoomAgain:
+                    @pytest.fixture
+                    def created_token(
+                        self, left_files: list[str], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+                    ) -> CreatedToken:
+                        monkeypatch.undo()
+                        token = load_or_create_token(locate_token_file(tmp_path))
+                        return CreatedToken(token, locate_token_file(tmp_path).read_text().strip())
+
+                    def test_should_create_a_token_of_at_least_43_characters(self, created_token: CreatedToken) -> None:
+                        assert len(created_token.token) >= TestTheAuthentication.SHORTEST_TOKEN_LENGTH
+
+                    def test_should_write_it_to_its_file(self, created_token: CreatedToken) -> None:
+                        assert created_token.file_content == created_token.token
+
+    class TestWhenUploadsAreRefusedForTheirCredentials:
+        def test_should_refuse_one_without_a_credential(self, guarded_uploads: GuardedUploads) -> None:
+            assert guarded_uploads.without_credential_status == 401
+
+        def test_should_refuse_one_with_a_wrong_bearer_token(self, guarded_uploads: GuardedUploads) -> None:
+            assert guarded_uploads.wrong_bearer_status == 401
+
+        def test_should_refuse_one_with_the_cookie_but_without_the_csrf_header(
+            self, guarded_uploads: GuardedUploads
+        ) -> None:
+            assert guarded_uploads.cookie_without_header_status == 403
+
+        def test_should_refuse_them_before_reading_their_bodies_so_that_none_is_spooled_for_nothing(
+            self, guarded_uploads: GuardedUploads
+        ) -> None:
+            assert guarded_uploads.bodies_read_after_refusals == 0
+
+        class TestWhenAnUploadCarriesTheCookieAndTheCsrfHeader:
+            def test_should_accept_it(self, guarded_uploads: GuardedUploads) -> None:
+                assert guarded_uploads.accepted_status == 201
+
+            def test_should_read_its_body_once(self, guarded_uploads: GuardedUploads) -> None:
+                assert guarded_uploads.bodies_read_after_acceptance == 1
 
 
-def test_apk_download_and_pairing(client: TestClient, settings: Settings) -> None:
-    assert client.get("/download/scanmylib.apk").status_code == 404
-    pairing = client.get("/api/pairing", headers=AUTH).json()
-    assert pairing == {
-        "url": "http://192.168.1.10:8765",
-        "token": TOKEN,
-        "pair_uri": f"scanmylib://pair?url=http%3A%2F%2F192.168.1.10%3A8765&token={TOKEN}",
-        "apk_available": False,
-        "apk_url": "http://192.168.1.10:8765/download/scanmylib.apk",
-    }
-    settings.apk_path.parent.mkdir(parents=True)
-    settings.apk_path.write_bytes(b"PK\x03\x04 fake apk")
-    apk = client.get("/download/scanmylib.apk")
-    assert apk.status_code == 200 and apk.content == b"PK\x03\x04 fake apk"
-    assert apk.headers["content-type"] == "application/vnd.android.package-archive"
-    assert client.get("/api/pairing", headers=AUTH).json()["apk_available"] is True
-    for path in ("/api/pairing/qr.svg", "/api/pairing/apk-qr.svg"):
-        qr = client.get(path, headers=AUTH)
-        assert qr.headers["content-type"] == "image/svg+xml"
-        assert b"<svg" in qr.content and b"<script" not in qr.content
+class TestTheSecurityHeaders:
+    class TestWhenTheWebUiTheHealthOrTheDocumentsAreRead:
+        READ_PATHS = ("/", "/api/health", "/api/documents")
+
+        @pytest.fixture(scope="class")
+        @classmethod
+        def headers_by_path(cls, tmp_path_factory: pytest.TempPathFactory) -> dict[str, dict[str, str]]:
+            with running_api(tmp_path_factory.mktemp("api")) as api:
+                return {path: dict(api.client.get(path, headers=AUTH).headers) for path in cls.READ_PATHS}
+
+        def test_should_allow_content_from_the_api_s_own_origin_only(
+            self, headers_by_path: dict[str, dict[str, str]]
+        ) -> None:
+            open_paths = [
+                path
+                for path, headers in headers_by_path.items()
+                if not headers["content-security-policy"].startswith("default-src 'self'")
+            ]
+            assert len(headers_by_path) == 3
+            assert open_paths == []
+
+        def test_should_forbid_any_page_to_frame_them(self, headers_by_path: dict[str, dict[str, str]]) -> None:
+            framable_paths = [
+                path
+                for path, headers in headers_by_path.items()
+                if "frame-ancestors 'none'" not in headers["content-security-policy"]
+            ]
+            assert len(headers_by_path) == 3
+            assert framable_paths == []
+
+        def test_should_forbid_browsers_to_guess_their_type(self, headers_by_path: dict[str, dict[str, str]]) -> None:
+            sniffable_paths = [
+                path for path, headers in headers_by_path.items() if headers["x-content-type-options"] != "nosniff"
+            ]
+            assert len(headers_by_path) == 3
+            assert sniffable_paths == []
+
+        def test_should_forbid_framing_them_by_the_older_header_too(
+            self, headers_by_path: dict[str, dict[str, str]]
+        ) -> None:
+            framable_paths = [path for path, headers in headers_by_path.items() if headers["x-frame-options"] != "DENY"]
+            assert len(headers_by_path) == 3
+            assert framable_paths == []
+
+        def test_should_send_no_referrer(self, headers_by_path: dict[str, dict[str, str]]) -> None:
+            referring_paths = [
+                path for path, headers in headers_by_path.items() if headers["referrer-policy"] != "no-referrer"
+            ]
+            assert len(headers_by_path) == 3
+            assert referring_paths == []
+
+        def test_should_forbid_caching_the_documents(self, headers_by_path: dict[str, dict[str, str]]) -> None:
+            assert headers_by_path["/api/documents"]["cache-control"] == "no-store"
+
+
+class TestThePublicRoutes:
+    class TestWhenTheWebUiIsNotInstalled:
+        def test_should_answer_its_page(self, web_ui: WebUi) -> None:
+            assert web_ui.placeholder.status == 200
+
+        def test_should_say_that_it_is_not_installed(self, web_ui: WebUi) -> None:
+            assert "the web UI is not installed" in web_ui.placeholder.body
+
+        class TestWhenItIsInstalled:
+            def test_should_serve_its_page(self, web_ui: WebUi) -> None:
+                assert "ScanMyLib UI" in web_ui.page
+
+            def test_should_serve_its_scripts(self, web_ui: WebUi) -> None:
+                assert web_ui.script_status == 200
+
+            def test_should_serve_its_scripts_as_javascript(self, web_ui: WebUi) -> None:
+                assert web_ui.script_type.startswith("text/javascript")
+
+            def test_should_refuse_a_path_out_of_its_static_folder(self, web_ui: WebUi) -> None:
+                served_paths = [path for path, status in web_ui.escape_statuses.items() if status != 404]
+                assert len(web_ui.escape_statuses) == 2
+                assert served_paths == []
+
+    class TestWhenTheApiDocumentationIsRequested:
+        @pytest.fixture(scope="class")
+        @classmethod
+        def statuses(cls, tmp_path_factory: pytest.TempPathFactory) -> dict[str, int]:
+            with running_api(tmp_path_factory.mktemp("api")) as api:
+                return {path: api.client.get(path).status_code for path in ("/docs", "/redoc", "/openapi.json")}
+
+        def test_should_not_expose_it(self, statuses: dict[str, int]) -> None:
+            exposed_paths = [path for path, status in statuses.items() if status != 404]
+            assert len(statuses) == 3
+            assert exposed_paths == []
+
+
+class TestThePairing:
+    class TestWhenNoApkIsBuilt:
+        def test_should_offer_no_apk_to_download(self, pairing_across_the_build: PairingAcrossTheBuild) -> None:
+            assert pairing_across_the_build.apk_status_before_build == 404
+
+        def test_should_give_the_url_and_the_token_of_the_api_with_their_pairing_link(
+            self, pairing_across_the_build: PairingAcrossTheBuild
+        ) -> None:
+            assert pairing_across_the_build.pairing_before_build == {
+                "url": "http://192.168.1.10:8765",
+                "token": TOKEN,
+                "pair_uri": f"scanmylib://pair?url=http%3A%2F%2F192.168.1.10%3A8765&token={TOKEN}",
+                "apk_available": False,
+                "apk_url": "http://192.168.1.10:8765/download/scanmylib.apk",
+            }
+
+        class TestWhenTheApkIsBuilt:
+            def test_should_offer_it_to_download(self, pairing_across_the_build: PairingAcrossTheBuild) -> None:
+                assert pairing_across_the_build.apk_status_after_build == 200
+
+            def test_should_serve_the_built_file(self, pairing_across_the_build: PairingAcrossTheBuild) -> None:
+                assert pairing_across_the_build.apk_content == APK
+
+            def test_should_serve_it_as_an_android_package(
+                self, pairing_across_the_build: PairingAcrossTheBuild
+            ) -> None:
+                assert pairing_across_the_build.apk_type == "application/vnd.android.package-archive"
+
+            def test_should_say_that_it_is_available(self, pairing_across_the_build: PairingAcrossTheBuild) -> None:
+                assert pairing_across_the_build.pairing_after_build["apk_available"] is True
+
+            def test_should_serve_the_qr_codes_as_scalable_vector_graphics(
+                self, pairing_across_the_build: PairingAcrossTheBuild
+            ) -> None:
+                qr_codes = pairing_across_the_build.qr_codes
+                other_paths = [path for path, qr_code in qr_codes.items() if qr_code.content_type != "image/svg+xml"]
+                assert len(qr_codes) == 2
+                assert other_paths == []
+
+            def test_should_draw_the_qr_codes_in_a_vector_graphics_element(
+                self, pairing_across_the_build: PairingAcrossTheBuild
+            ) -> None:
+                qr_codes = pairing_across_the_build.qr_codes
+                undrawn_paths = [path for path, qr_code in qr_codes.items() if b"<svg" not in qr_code.content]
+                assert len(qr_codes) == 2
+                assert undrawn_paths == []
+
+            def test_should_put_no_script_in_the_qr_codes(
+                self, pairing_across_the_build: PairingAcrossTheBuild
+            ) -> None:
+                qr_codes = pairing_across_the_build.qr_codes
+                scripted_paths = [path for path, qr_code in qr_codes.items() if b"<script" in qr_code.content]
+                assert len(qr_codes) == 2
+                assert scripted_paths == []
+
+
+class TestTheBodySizeLimits:
+    class TestWhenAJsonBodyIsLargerThanItsLimit:
+        BODY_SIZE_BYTES = 2 * 1024 * 1024
+
+        @pytest.fixture(scope="class")
+        @classmethod
+        def status(cls, tmp_path_factory: pytest.TempPathFactory) -> int:
+            with running_api(tmp_path_factory.mktemp("api")) as api:
+                body = b"{" + b" " * cls.BODY_SIZE_BYTES + b"}"
+                return api.client.post("/api/session", content=body, headers=JSON_CONTENT).status_code
+
+        def test_should_refuse_it_as_too_large(self, status: int) -> None:
+            assert status == 413
+
+    class TestWhenAnUploadIsLargerThanItsLimit:
+        BYTES_BEYOND_THE_LARGEST_IMAGE = 2 * 1024 * 1024
+
+        @pytest.fixture(scope="class")
+        @classmethod
+        def oversized_upload(cls, tmp_path_factory: pytest.TempPathFactory) -> OversizedUpload:
+            with running_api(tmp_path_factory.mktemp("api")) as api:
+                document_id = create_document(api.client)
+                image = b"\xff\xd8" + b"\x00" * (MAX_UPLOAD_BYTES + cls.BYTES_BEYOND_THE_LARGEST_IMAGE)
+                response = upload(api.client, document_id, image)
+                return OversizedUpload(response.status_code, response.headers["content-security-policy"])
+
+        def test_should_refuse_it_as_too_large(self, oversized_upload: OversizedUpload) -> None:
+            assert oversized_upload.status == 413
+
+        def test_should_keep_the_content_security_policy_on_the_refusal(
+            self, oversized_upload: OversizedUpload
+        ) -> None:
+            assert oversized_upload.content_security_policy == CONTENT_SECURITY_POLICY
+
+
+class TestTheValidationErrors:
+    class TestWhenTheJsonOfARequestCannotBeEncodedBack:
+        @pytest.fixture(scope="class")
+        @classmethod
+        def answers_to_unencodable_input(cls, tmp_path_factory: pytest.TempPathFactory) -> AnswersToUnencodableInput:
+            # The 422 response used to echo the invalid input, which failed to encode: a 500.
+            with running_api(tmp_path_factory.mktemp("api")) as api:
+                login = api.client.post("/api/session", content=b'{"token": "\\ud800"}', headers=JSON_CONTENT)
+                document_id = create_document(api.client)
+                patches = {
+                    "a-title-with-a-lone-surrogate": (f"/api/documents/{document_id}", b'{"title": "x\\udfff"}'),
+                    "a-title-that-is-not-a-number": (f"/api/documents/{document_id}", b'{"title": NaN}'),
+                    "a-page-number-that-is-infinite": (f"/api/pages/{PAGE_ID}", b'{"manual_number": Infinity}'),
+                    "a-rotation-beyond-any-float": (f"/api/pages/{PAGE_ID}", b'{"rotation": 1e999}'),
+                }
+                return AnswersToUnencodableInput(
+                    login=capture_answer(login),
+                    field_statuses={
+                        name: api.client.patch(path, content=body, headers={**AUTH, **JSON_CONTENT}).status_code
+                        for name, (path, body) in patches.items()
+                    },
+                )
+
+        def test_should_refuse_a_login_holding_a_lone_surrogate_as_invalid(
+            self, answers_to_unencodable_input: AnswersToUnencodableInput
+        ) -> None:
+            assert answers_to_unencodable_input.login.status == 422
+
+        def test_should_locate_the_error_in_the_token(
+            self, answers_to_unencodable_input: AnswersToUnencodableInput
+        ) -> None:
+            assert answers_to_unencodable_input.login.body["detail"][0]["loc"] == ["body", "token"]
+
+        def test_should_not_echo_the_input_back(self, answers_to_unencodable_input: AnswersToUnencodableInput) -> None:
+            assert "input" not in answers_to_unencodable_input.login.body["detail"][0]
+
+        def test_should_refuse_as_invalid_a_field_holding_a_lone_surrogate_an_infinity_or_a_not_a_number_value(
+            self, answers_to_unencodable_input: AnswersToUnencodableInput
+        ) -> None:
+            field_statuses = answers_to_unencodable_input.field_statuses
+            accepted_fields = [field for field, status in field_statuses.items() if status != 422]
+            assert len(field_statuses) == 4
+            assert accepted_fields == []
+
+    class TestWhenTheJsonOfALoginHoldsAnAccentedLetter:
+        @pytest.fixture(scope="class")
+        @classmethod
+        def status(cls, tmp_path_factory: pytest.TempPathFactory) -> int:
+            with running_api(tmp_path_factory.mktemp("api")) as api:
+                body = '{"token": "é"}'.encode()
+                return api.client.post("/api/session", content=body, headers=JSON_CONTENT).status_code
+
+        def test_should_read_it_and_refuse_it_only_as_a_wrong_token(self, status: int) -> None:
+            assert status == 401

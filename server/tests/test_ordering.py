@@ -6,6 +6,7 @@ import dataclasses
 import itertools
 import random
 from collections.abc import Sequence
+from typing import NamedTuple
 
 import pytest
 
@@ -56,71 +57,20 @@ def labels(layout: Layout, ids: Sequence[str] | None = None) -> list[str | None]
     return [n.label if (n := layout.placements[i].number) else None for i in ids]
 
 
-# -- parsing detected numbers ------------------------------------------------------
+def label_of(page_number: PageNumber | None) -> str | None:
+    return page_number.label if page_number is not None else None
 
 
-@pytest.mark.parametrize(
-    ("texts", "expected"),
-    [
-        (["42"], PageNumber(42)),
-        (["- 12 -"], PageNumber(12)),
-        (["— 7 —"], PageNumber(7)),
-        (["Page 9"], PageNumber(9)),
-        (["p. 15"], PageNumber(15)),
-        (["(23)"], PageNumber(23)),
-        (["0"], None),
-        (["12345"], None),
-        (["1/2"], None),
-        ([""], None),
-        ([], None),
-    ],
-)
-def test_parse_arabic(texts: list[str], expected: PageNumber | None) -> None:
-    assert parse_detected_numbers(texts) == expected
+class Reading(NamedTuple):
+    page_number: PageNumber | None
+    expected_page_number: PageNumber
 
 
-@pytest.mark.parametrize(
-    ("texts", "expected"),
-    [
-        (["42", "43"], PageNumber(42, 43)),
-        (["43", "42"], PageNumber(42, 43)),  # right page read first
-        (["12-13"], PageNumber(12, 13)),
-        (["3", "42", "43"], PageNumber(42, 43)),
-        (["42", "57"], PageNumber(42)),  # not consecutive: first number
-    ],
-)
-def test_parse_spread(texts: list[str], expected: PageNumber) -> None:
-    assert parse_detected_numbers(texts) == expected
-
-
-@pytest.mark.parametrize(
-    ("texts", "value"),
-    [(["xii"], 12), (["XIV"], 14), (["- iv -"], 4), (["cxc"], 190)],
-)
-def test_parse_roman_front_matter(texts: list[str], value: int) -> None:
-    number = parse_detected_numbers(texts)
-    assert number == PageNumber(value, front_matter=True)
-    assert number.label == int_to_roman(value)
-
-
-@pytest.mark.parametrize("text", ["mix", "dim", "iiii", "vx", "civil", "M", "abc"])
-def test_parse_rejects_words_and_non_canonical_roman(text: str) -> None:
-    assert parse_detected_numbers([text]) is None
-
-
-def test_arabic_wins_over_roman() -> None:
-    assert parse_detected_numbers(["iv", "5"]) == PageNumber(5)
-
-
-def test_roman_round_trip() -> None:
-    for value in range(1, 400):
-        assert roman_to_int(int_to_roman(value)) == value
-
-
-def test_labels() -> None:
-    assert PageNumber(42).label == "42"
-    assert PageNumber(42, 43).label == "42–43"
-    assert PageNumber(12, front_matter=True).label == "xii"
+class RomanReading(NamedTuple):
+    page_number: PageNumber | None
+    label: str | None
+    expected_value: int
+    expected_label: str
 
 
 # -- effective number ------------------------------------------------------------
@@ -1176,3 +1126,141 @@ def test_moving_loose_sessions_into_a_book_positions_only_their_pages(seed: int)
     at = rng.choice([k for k in range(placed + 1) if k in (0, placed) or place[k - 1] != place[k]])
     positions, _ = put_order(pages, rest[:at] + block + rest[at:])
     assert set(given(positions)) <= set(block)
+
+
+class TestTheOrdering:
+    class TestTheParseDetectedNumbersFunction:
+        class TestWhenATextIsAnArabicNumber:
+            @pytest.fixture(
+                params=[
+                    (["42"], 42),
+                    (["- 12 -"], 12),
+                    (["— 7 —"], 7),
+                    (["Page 9"], 9),
+                    (["p. 15"], 15),
+                    (["(23)"], 23),
+                ],
+                ids=["alone", "between hyphens", "between dashes", "after the word page", "after p.", "in parentheses"],
+            )
+            def reading(self, request: pytest.FixtureRequest) -> Reading:
+                texts, value = request.param
+                return Reading(page_number=parse_detected_numbers(texts), expected_page_number=PageNumber(value))
+
+            def test_should_read_the_number_without_what_is_printed_around_it(self, reading: Reading) -> None:
+                assert reading.page_number == reading.expected_page_number
+
+        class TestWhenNoTextHoldsAPageNumber:
+            @pytest.fixture(
+                params=[["0"], ["12345"], ["1/2"], [""], []],
+                ids=["zero", "five digits", "a fraction", "an empty text", "no text"],
+            )
+            def page_number(self, request: pytest.FixtureRequest) -> PageNumber | None:
+                return parse_detected_numbers(request.param)
+
+            def test_should_return_none(self, page_number: PageNumber | None) -> None:
+                assert page_number is None
+
+        class TestWhenTheTextsHoldTwoConsecutiveNumbers:
+            @pytest.fixture(
+                params=[(["42", "43"], 42), (["43", "42"], 42), (["12-13"], 12), (["3", "42", "43"], 42)],
+                ids=["in order", "the right page read first", "joined by a hyphen", "after another number"],
+            )
+            def reading(self, request: pytest.FixtureRequest) -> Reading:
+                texts, first_page = request.param
+                return Reading(
+                    page_number=parse_detected_numbers(texts),
+                    expected_page_number=PageNumber(first_page, first_page + 1),
+                )
+
+            def test_should_read_a_spread_of_two_pages(self, reading: Reading) -> None:
+                assert reading.page_number == reading.expected_page_number
+
+        class TestWhenTheTextsHoldTwoNumbersThatAreNotConsecutive:
+            @pytest.fixture
+            def page_number(self) -> PageNumber | None:
+                return parse_detected_numbers(["42", "57"])
+
+            def test_should_read_the_first_one(self, page_number: PageNumber | None) -> None:
+                assert page_number == PageNumber(42)
+
+        class TestWhenATextIsARomanNumeral:
+            @pytest.fixture(
+                params=[(["xii"], 12, "xii"), (["XIV"], 14, "xiv"), (["- iv -"], 4, "iv"), (["cxc"], 190, "cxc")],
+                ids=["in lowercase", "in uppercase", "between hyphens", "in the hundreds"],
+            )
+            def roman_reading(self, request: pytest.FixtureRequest) -> RomanReading:
+                texts, value, label = request.param
+                page_number = parse_detected_numbers(texts)
+                return RomanReading(
+                    page_number=page_number, label=label_of(page_number), expected_value=value, expected_label=label
+                )
+
+            def test_should_read_it_as_front_matter(self, roman_reading: RomanReading) -> None:
+                assert roman_reading.page_number == PageNumber(roman_reading.expected_value, front_matter=True)
+
+            def test_should_label_it_in_lowercase_roman_numerals(self, roman_reading: RomanReading) -> None:
+                assert roman_reading.label == roman_reading.expected_label
+
+        class TestWhenATextIsAWordOrANonCanonicalRomanNumeral:
+            @pytest.fixture(
+                params=["mix", "dim", "iiii", "vx", "civil", "M", "abc"],
+                ids=[
+                    "a word with an m",
+                    "a word with a d",
+                    "four ones",
+                    "five before ten",
+                    "a word of roman letters",
+                    "a thousand, beyond front matter",
+                    "a word",
+                ],
+            )
+            def page_number(self, request: pytest.FixtureRequest) -> PageNumber | None:
+                return parse_detected_numbers([request.param])
+
+            def test_should_return_none_so_that_a_stray_word_never_numbers_a_page(
+                self, page_number: PageNumber | None
+            ) -> None:
+                assert page_number is None
+
+        class TestWhenTheTextsHoldAnArabicAndARomanNumber:
+            @pytest.fixture
+            def page_number(self) -> PageNumber | None:
+                return parse_detected_numbers(["iv", "5"])
+
+            def test_should_read_the_arabic_number(self, page_number: PageNumber | None) -> None:
+                assert page_number == PageNumber(5)
+
+    class TestTheRomanToIntFunction:
+        class TestWhenTheNumeralIsWrittenByIntToRoman:
+            @pytest.fixture
+            def values_read_back(self) -> dict[int, int | None]:
+                return {value: roman_to_int(int_to_roman(value)) for value in range(1, 400)}
+
+            def test_should_read_back_every_value_from_1_to_399(self, values_read_back: dict[int, int | None]) -> None:
+                assert len(values_read_back) == 399
+                assert [value for value, read_back in values_read_back.items() if read_back != value] == []
+
+    class TestThePageNumberLabelProperty:
+        class TestWhenThePageNumberIsArabic:
+            @pytest.fixture
+            def label(self) -> str:
+                return PageNumber(42).label
+
+            def test_should_be_the_number(self, label: str) -> None:
+                assert label == "42"
+
+        class TestWhenThePageNumberIsASpread:
+            @pytest.fixture
+            def label(self) -> str:
+                return PageNumber(42, 43).label
+
+            def test_should_join_its_two_numbers_with_an_en_dash(self, label: str) -> None:
+                assert label == "42–43"
+
+        class TestWhenThePageNumberIsFrontMatter:
+            @pytest.fixture
+            def label(self) -> str:
+                return PageNumber(12, front_matter=True).label
+
+            def test_should_be_its_lowercase_roman_numeral(self, label: str) -> None:
+                assert label == "xii"

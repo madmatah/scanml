@@ -4,78 +4,105 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Awaitable, Callable
+from typing import NamedTuple
+
+import pytest
 
 from scanmylib.debounce import BatchAction, DebouncedBatch
 
-
-def run_batch(action: BatchAction, scenario: Callable[[DebouncedBatch], Awaitable[None]]) -> None:
-    async def main() -> None:
-        batch = DebouncedBatch(action, delay=0.01, max_delay=0.02)
-        batch.start()
-        await scenario(batch)
-        await batch.aclose()
-
-    asyncio.run(main())
+THE_INDEX = "index"
 
 
-def test_changes_are_batched() -> None:
-    calls: list[tuple[list[str], bool]] = []
-
-    async def action(keys: set[str], index: bool) -> None:
-        calls.append((sorted(keys), index))
-
-    async def scenario(batch: DebouncedBatch) -> None:
-        batch.schedule("a")
-        batch.schedule("b")
-        batch.schedule("a")
-        await asyncio.sleep(0.2)
-
-    run_batch(action, scenario)
-    assert calls == [(["a"], False), (["b"], False), ([], True)]
+class ActionRun(NamedTuple):
+    keys: list[str]
+    includes_the_index: bool
 
 
-def test_failed_work_is_retried_without_holding_up_the_rest() -> None:
-    calls: list[tuple[list[str], bool]] = []
-    failures = {"a": 2, "index": 1}  # e.g. a full disk: "a" fails twice, the index once
+INDEX_ONLY = ActionRun(keys=[], includes_the_index=True)
 
-    async def action(keys: set[str], index: bool) -> None:
-        calls.append((sorted(keys), index))
-        for name in [*keys, *(["index"] if index else [])]:
-            if failures.get(name):
-                failures[name] -= 1
+
+class ActionFailingLikeAFullDisk:
+    def __init__(self, failures_by_key: dict[str, int]) -> None:
+        self.runs: list[ActionRun] = []
+        self._failures_left = dict(failures_by_key)
+
+    async def __call__(self, keys: set[str], includes_the_index: bool) -> None:
+        self.runs.append(ActionRun(keys=sorted(keys), includes_the_index=includes_the_index))
+        for key in [*keys, *([THE_INDEX] if includes_the_index else [])]:
+            if self._failures_left.get(key):
+                self._failures_left[key] -= 1
                 raise OSError(28, "No space left on device")
 
-    async def scenario(batch: DebouncedBatch) -> None:
-        batch.schedule("a")
-        batch.schedule("b")
-        await asyncio.sleep(0.5)
 
-    run_batch(action, scenario)
-    assert calls == [
-        (["a"], False),
-        (["b"], False),
-        ([], True),  # "b" is written although "a" failed
-        (["a"], False),
-        ([], True),  # retried later
-        (["a"], False),
-    ]
+def run_batch(action: BatchAction, drive: Callable[[DebouncedBatch], Awaitable[None]]) -> None:
+    async def drive_a_started_batch() -> None:
+        batch = DebouncedBatch(action, delay=0.01, max_delay=0.02)
+        batch.start()
+        await drive(batch)
+        await batch.aclose()
+
+    asyncio.run(drive_a_started_batch())
 
 
-def test_flush_failure_is_retried_in_the_background() -> None:
-    calls: list[tuple[list[str], bool]] = []
-    failures = [1]
+class TestTheDebouncedBatch:
+    class TestTheScheduleMethod:
+        class TestWhenKeysAreScheduledInABurst:
+            @pytest.fixture(scope="class")
+            @classmethod
+            def action_runs(cls) -> list[ActionRun]:
+                action = ActionFailingLikeAFullDisk(failures_by_key={})
 
-    async def action(keys: set[str], index: bool) -> None:
-        calls.append((sorted(keys), index))
-        if failures[0]:
-            failures[0] -= 1
-            raise OSError(28, "No space left on device")
+                async def schedule_a_burst_then_wait(batch: DebouncedBatch) -> None:
+                    batch.schedule("a")
+                    batch.schedule("b")
+                    batch.schedule("a")
+                    await asyncio.sleep(0.2)
 
-    async def scenario(batch: DebouncedBatch) -> None:
-        batch.schedule("a")
-        await batch.flush("a")  # e.g. GET /markdown: fails, the document stays pending
-        await asyncio.sleep(0.3)
+                run_batch(action, schedule_a_burst_then_wait)
+                return list(action.runs)
 
-    run_batch(action, scenario)
-    assert calls[:2] == [(["a"], False), ([], True)]
-    assert (["a"], False) in calls[2:]
+            def test_should_rewrite_each_key_once_then_the_index_once(self, action_runs: list[ActionRun]) -> None:
+                assert action_runs == [ActionRun(["a"], False), ActionRun(["b"], False), INDEX_ONLY]
+
+        class TestWhenTheActionFailsForAKeyAndForTheIndex:
+            @pytest.fixture(scope="class")
+            @classmethod
+            def action_runs(cls) -> list[ActionRun]:
+                action = ActionFailingLikeAFullDisk(failures_by_key={"a": 2, THE_INDEX: 1})
+
+                async def schedule_two_keys_then_wait(batch: DebouncedBatch) -> None:
+                    batch.schedule("a")
+                    batch.schedule("b")
+                    await asyncio.sleep(0.5)
+
+                run_batch(action, schedule_two_keys_then_wait)
+                return list(action.runs)
+
+            def test_should_still_rewrite_the_other_keys_and_the_index_in_the_same_run(
+                self, action_runs: list[ActionRun]
+            ) -> None:
+                assert action_runs[:3] == [ActionRun(["a"], False), ActionRun(["b"], False), INDEX_ONLY]
+
+            def test_should_retry_the_failed_work_later_until_it_succeeds(self, action_runs: list[ActionRun]) -> None:
+                assert action_runs[3:] == [ActionRun(["a"], False), INDEX_ONLY, ActionRun(["a"], False)]
+
+    class TestTheFlushMethod:
+        class TestWhenTheActionFailsForTheFlushedKey:
+            @pytest.fixture(scope="class")
+            @classmethod
+            def action_runs(cls) -> list[ActionRun]:
+                action = ActionFailingLikeAFullDisk(failures_by_key={"a": 1})
+
+                async def flush_the_key_as_a_read_of_its_markdown_does_then_wait(batch: DebouncedBatch) -> None:
+                    batch.schedule("a")
+                    await batch.flush("a")
+                    await asyncio.sleep(0.3)
+
+                run_batch(action, flush_the_key_as_a_read_of_its_markdown_does_then_wait)
+                return list(action.runs)
+
+            def test_should_still_rewrite_the_index(self, action_runs: list[ActionRun]) -> None:
+                assert action_runs[:2] == [ActionRun(["a"], False), INDEX_ONLY]
+
+            def test_should_retry_the_failed_key_in_the_background(self, action_runs: list[ActionRun]) -> None:
+                assert ActionRun(["a"], False) in action_runs[2:]

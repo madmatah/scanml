@@ -3,300 +3,910 @@ package fr.scanmylib.ui.capture
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
 import androidx.lifecycle.SavedStateHandle
+import fr.scanmylib.MainDispatcherRule
+import fr.scanmylib.library.StagedPage
 import fr.scanmylib.library.StagingArea
 import fr.scanmylib.library.StagingInput
 import java.io.File
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
-import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.Dispatchers
+import kotlin.properties.Delegates
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.plus
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.currentTime
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import org.junit.After
+import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import org.junit.experimental.runners.Enclosed
 import org.junit.rules.TemporaryFolder
+import org.junit.runner.RunWith
 
-@OptIn(ExperimentalCoroutinesApi::class)
+@RunWith(Enclosed::class)
 class CaptureViewModelTest {
+    @RunWith(Enclosed::class)
+    class TheUiStateProperty {
+        class WhenTheCameraOpensAfterPagesWereScanned {
+            @get:Rule
+            val mainDispatcher = MainDispatcherRule()
 
-    @get:Rule
-    val folder = TemporaryFolder()
+            @get:Rule
+            val folder = TemporaryFolder()
 
-    private val document = "6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b"
-    private val clock = Clock.fixed(Instant.parse("2026-10-12T18:30:00Z"), ZoneOffset.UTC)
-    private val cameraClosed = ImageCaptureException(ImageCapture.ERROR_CAMERA_CLOSED, "Camera is closed.", null)
+            private val scannedPageCount = 5
+            private lateinit var state: CaptureUiState
 
-    @Before
-    fun setUp() {
-        Dispatchers.setMain(UnconfinedTestDispatcher())
-    }
+            @Before
+            fun openTheCamera() = runTest {
+                val staging = createStagingArea(folder)
+                scanPagesAsGoogleScannerDoes(staging, scannedPageCount)
+                state = openTheCamera(staging).awaitState { it.ready }
+            }
 
-    @After
-    fun tearDown() {
-        Dispatchers.resetMain()
-    }
+            @Test
+            fun `should show none of them as photos of this visit`() {
+                assertEquals(emptyList<StagedPage>(), state.pages)
+            }
 
-    /** The view model, with what it tells the screen: closings and messages. */
-    private class Screen(val viewModel: CaptureViewModel) {
-        val closings = mutableListOf<Unit>()
-        val closingCount = MutableStateFlow(0)
-        val messages = mutableListOf<CaptureMessage>()
+            @Test
+            fun `should count them as waiting to be sent`() {
+                assertEquals(scannedPageCount, state.waiting)
+            }
 
-        /** Waits for the screen to be told to close: deleting photos takes the disk's time. */
-        suspend fun awaitClosed() {
-            closingCount.first { it > 0 }
-        }
-
-        /** Takes a photo and returns it once its file is chosen, as the camera receives it. */
-        suspend fun shoot(): Shot {
-            // The shutter waits for the start of the visit, as on the screen.
-            awaitState { it.ready }
-            val shot = CompletableDeferred<Shot>()
-            assertTrue(viewModel.shoot { shot.complete(it) })
-            return shot.await()
-        }
-
-        suspend fun awaitState(predicate: (CaptureUiState) -> Boolean): CaptureUiState =
-            viewModel.uiState.first(predicate)
-    }
-
-    private val stagingRoot get() = File(folder.root, "staging")
-
-    /**
-     * The disk's work, on the test's scheduler like the rest: each test runs on one thread, in a
-     * fixed order, and nothing it started runs after it (on another thread, it raced the test's
-     * assertions and resumed on a main dispatcher already reset).
-     */
-    private val TestScope.io get() = StandardTestDispatcher(testScheduler)
-
-    /** The staging area, on a fresh read of the disk as by a new process. */
-    private fun TestScope.staging() = StagingArea(stagingRoot, io)
-
-    /**
-     * The camera screen, on the document's run in [staging], restored from [savedState] if given,
-     * once it knows where its visit starts.
-     */
-    private suspend fun TestScope.screen(
-        staging: StagingArea = staging(),
-        savedState: SavedStateHandle = SavedStateHandle(),
-    ): Screen {
-        val screen = Screen(CaptureViewModel(savedState, document, staging, clock, io))
-        val collector = UnconfinedTestDispatcher(testScheduler)
-        backgroundScope.launch(collector) {
-            screen.viewModel.closed.collect {
-                screen.closings += it
-                screen.closingCount.value++
+            @Test
+            fun `should have no photo to keep or delete, so that closing the screen asks nothing`() {
+                assertEquals(0, state.photoCount)
             }
         }
-        backgroundScope.launch(collector) { screen.viewModel.messages.collect { screen.messages += it } }
-        screen.awaitState { it.ready }
-        return screen
+
+        class WhenTheCameraOpens {
+            @get:Rule
+            val mainDispatcher = MainDispatcherRule()
+
+            @get:Rule
+            val folder = TemporaryFolder()
+
+            private lateinit var state: CaptureUiState
+
+            @Before
+            fun openTheCamera() = runTest {
+                state = openTheCamera(createStagingArea(folder)).awaitTheStartOfTheVisit()
+            }
+
+            @Test
+            fun `should leave the flash off, since on paper it mostly adds glare`() {
+                assertEquals(FlashSetting.OFF, state.flash)
+            }
+        }
     }
 
-    /** A run of [count] pages scanned before the camera opens, as with Google's scanner. */
-    private suspend fun StagingArea.scanned(count: Int): List<String> = (1..count).map { n ->
-        val content = "scanned page $n"
-        val file = incomingFile(document).apply { writeText(content) }
-        add(document, listOf(StagingInput(file, clock.instant())))
+    @RunWith(Enclosed::class)
+    class TheShootMethod {
+        class WhenTheCameraIsReady {
+            @get:Rule
+            val mainDispatcher = MainDispatcherRule()
+
+            @get:Rule
+            val folder = TemporaryFolder()
+
+            private var isPhotoTaken by Delegates.notNull<Boolean>()
+
+            @Before
+            fun pressTheShutter() = runTest {
+                val screen = openTheCamera(createStagingArea(folder))
+                isPhotoTaken = screen.pressTheShutter()
+            }
+
+            @Test
+            fun `should take the photo`() {
+                assertTrue(isPhotoTaken)
+            }
+        }
+
+        class WhenAPhotoIsBeingSaved {
+            @get:Rule
+            val mainDispatcher = MainDispatcherRule()
+
+            @get:Rule
+            val folder = TemporaryFolder()
+
+            private var isPhotoTaken by Delegates.notNull<Boolean>()
+            private var captureCount by Delegates.notNull<Int>()
+
+            @OptIn(ExperimentalCoroutinesApi::class)
+            @Before
+            fun pressTheShutterAgain() = runTest {
+                val screen = openTheCamera(createStagingArea(folder))
+                screen.takeAPhoto()
+                isPhotoTaken = screen.pressTheShutter()
+                advanceUntilIdle()
+                captureCount = screen.captureCount
+            }
+
+            @Test
+            fun `should take nothing, so that a second tap never takes the same page twice`() {
+                assertFalse(isPhotoTaken)
+            }
+
+            @Test
+            fun `should start no second capture`() {
+                assertEquals(1, captureCount)
+            }
+        }
+
+        class WhenAPhotoWasSaved {
+            @get:Rule
+            val mainDispatcher = MainDispatcherRule()
+
+            @get:Rule
+            val folder = TemporaryFolder()
+
+            private var isPhotoTaken by Delegates.notNull<Boolean>()
+
+            @Before
+            fun pressTheShutterAgain() = runTest {
+                val screen = openTheCamera(createStagingArea(folder))
+                screen.photograph("page 1")
+                isPhotoTaken = screen.pressTheShutter()
+            }
+
+            @Test
+            fun `should take the next photo`() {
+                assertTrue(isPhotoTaken)
+            }
+        }
+
+        class WhenThePhotoFailedAfterTheUserLeft {
+            @get:Rule
+            val mainDispatcher = MainDispatcherRule()
+
+            @get:Rule
+            val folder = TemporaryFolder()
+
+            private var isPhotoTaken by Delegates.notNull<Boolean>()
+
+            @Before
+            fun pressTheShutterAgain() = runTest {
+                val screen = openTheCamera(createStagingArea(folder))
+                val shot = screen.takeAPhoto()
+                screen.leave()
+                writeThePhoto(shot, "half a photo")
+                screen.reportThePhotoFailed(shot)
+                screen.awaitState { !it.shooting }
+                isPhotoTaken = screen.pressTheShutter()
+            }
+
+            @Test
+            fun `should take the photo again`() {
+                assertTrue(isPhotoTaken)
+            }
+        }
+
+        class WhenTheVisitWasDiscardedWithAPhotoOnItsWay {
+            @get:Rule
+            val mainDispatcher = MainDispatcherRule()
+
+            @get:Rule
+            val folder = TemporaryFolder()
+
+            private var isPhotoTaken by Delegates.notNull<Boolean>()
+
+            @Before
+            fun pressTheShutterAgain() = runTest {
+                val screen = openTheCamera(createStagingArea(folder))
+                screen.photograph("first page")
+                val shot = screen.takeAPhoto()
+                writeThePhoto(shot, "page on its way")
+                screen.discardTheVisit()
+                screen.reportThePhotoSaved(shot)
+                screen.awaitState { !it.shooting && it.pages.isEmpty() }
+                isPhotoTaken = screen.pressTheShutter()
+            }
+
+            @Test
+            fun `should still take photos, should the screen stay`() {
+                assertTrue(isPhotoTaken)
+            }
+        }
+    }
+
+    @RunWith(Enclosed::class)
+    class TheOnShotSavedMethod {
+        class WhenAPhotoIsTakenAfterPagesWereScanned {
+            @get:Rule
+            val mainDispatcher = MainDispatcherRule()
+
+            @get:Rule
+            val folder = TemporaryFolder()
+
+            private val scannedPageCount = 5
+            private lateinit var state: CaptureUiState
+            private lateinit var lastPageContent: String
+
+            @Before
+            fun photographAPage() = runTest {
+                val staging = createStagingArea(folder)
+                scanPagesAsGoogleScannerDoes(staging, scannedPageCount)
+                val screen = openTheCamera(staging)
+                screen.photograph("photo 1")
+                state = screen.awaitState { it.pages.size == 1 }
+                lastPageContent = state.pages.last().file.readText()
+            }
+
+            @Test
+            fun `should keep counting the pages scanned before as waiting`() {
+                assertEquals(scannedPageCount, state.waiting)
+            }
+
+            @Test
+            fun `should show the photo as the last page of the visit, never a page from before it`() {
+                assertEquals("photo 1", lastPageContent)
+            }
+        }
+
+        class WhenTheOnlyPhotoOfTheVisitWasDeletedAndIsTakenAgain {
+            @get:Rule
+            val mainDispatcher = MainDispatcherRule()
+
+            @get:Rule
+            val folder = TemporaryFolder()
+
+            private lateinit var visitContents: List<String>
+
+            @Before
+            fun photographThePageAgain() = runTest {
+                val staging = createStagingArea(folder)
+                scanPagesAsGoogleScannerDoes(staging, 2)
+                val screen = openTheCamera(staging)
+                screen.photograph("blurred")
+                screen.deleteTheOnlyPhoto()
+                screen.photograph("sharp")
+                visitContents = screen.awaitState { it.pages.size == 1 }.pages.map { it.file.readText() }
+            }
+
+            @Test
+            fun `should show the new photo as the visit's`() {
+                assertEquals(listOf("sharp"), visitContents)
+            }
+        }
+
+        class WhenThePhotoIsSavedAfterTheUserLeft {
+            @get:Rule
+            val mainDispatcher = MainDispatcherRule()
+
+            @get:Rule
+            val folder = TemporaryFolder()
+
+            private lateinit var state: CaptureUiState
+            private lateinit var visitContents: List<String>
+            private var closingCount by Delegates.notNull<Int>()
+            private lateinit var messages: List<CaptureMessage>
+
+            @OptIn(ExperimentalCoroutinesApi::class)
+            @Before
+            fun saveThePhoto() = runTest {
+                val screen = openTheCamera(createStagingArea(folder))
+                val shot = screen.takeAPhoto()
+                screen.leave()
+                writeThePhoto(shot, "last page")
+                screen.reportThePhotoSaved(shot)
+                state = screen.awaitState { it.pages.size == 1 && !it.shooting }
+                visitContents = state.pages.map { it.file.readText() }
+                advanceUntilIdle()
+                closingCount = screen.closingCount
+                messages = screen.messages
+            }
+
+            @Test
+            fun `should add the photo to the run`() {
+                assertEquals(listOf("last page"), visitContents)
+            }
+
+            @Test
+            fun `should be done leaving`() {
+                assertFalse(state.finishing)
+            }
+
+            @Test
+            fun `should close the screen`() {
+                assertEquals(1, closingCount)
+            }
+
+            @Test
+            fun `should say nothing`() {
+                assertEquals(emptyList<CaptureMessage>(), messages)
+            }
+        }
+    }
+
+    @RunWith(Enclosed::class)
+    class TheOnShotFailedMethod {
+        class WhenThePhotoFailsAfterTheUserLeft {
+            @get:Rule
+            val mainDispatcher = MainDispatcherRule()
+
+            @get:Rule
+            val folder = TemporaryFolder()
+
+            private lateinit var state: CaptureUiState
+            private lateinit var messages: List<CaptureMessage>
+            private var closingCount by Delegates.notNull<Int>()
+            private var isPhotoLeftOnDisk by Delegates.notNull<Boolean>()
+
+            @OptIn(ExperimentalCoroutinesApi::class)
+            @Before
+            fun failThePhoto() = runTest {
+                val screen = openTheCamera(createStagingArea(folder))
+                val shot = screen.takeAPhoto()
+                screen.leave()
+                writeThePhoto(shot, "half a photo")
+                screen.reportThePhotoFailed(shot)
+                state = screen.awaitState { !it.shooting }
+                advanceUntilIdle()
+                messages = screen.messages
+                closingCount = screen.closingCount
+                isPhotoLeftOnDisk = shot.file.exists()
+            }
+
+            @Test
+            fun `should keep the screen open, to say so`() {
+                assertEquals(0, closingCount)
+            }
+
+            @Test
+            fun `should stop leaving`() {
+                assertFalse(state.finishing)
+            }
+
+            @Test
+            fun `should say that the photo failed`() {
+                assertEquals(listOf<CaptureMessage>(CaptureMessage.ShotFailed), messages)
+            }
+
+            @Test
+            fun `should add no page`() {
+                assertEquals(emptyList<StagedPage>(), state.pages)
+            }
+
+            @Test
+            fun `should delete what the camera wrote of the photo`() {
+                assertFalse(isPhotoLeftOnDisk)
+            }
+        }
+
+        class WhenTheCameraClosesWhileWritingThePhoto {
+            @get:Rule
+            val mainDispatcher = MainDispatcherRule()
+
+            @get:Rule
+            val folder = TemporaryFolder()
+
+            private lateinit var messages: List<CaptureMessage>
+
+            @Before
+            fun closeTheCamera() = runTest {
+                val screen = openTheCamera(createStagingArea(folder))
+                val shot = screen.takeAPhoto()
+                screen.reportTheCameraClosed(shot)
+                waitWhileTheCameraWritesThePhoto()
+                messages = screen.messages
+            }
+
+            @Test
+            fun `should say nothing while it waits for the photo`() {
+                assertEquals(emptyList<CaptureMessage>(), messages)
+            }
+        }
+
+        class WhenTheCameraClosesWhileWritingThePhotoAndThenWritesIt {
+            @get:Rule
+            val mainDispatcher = MainDispatcherRule()
+
+            @get:Rule
+            val folder = TemporaryFolder()
+
+            private lateinit var visitContents: List<String>
+            private lateinit var messages: List<CaptureMessage>
+
+            @OptIn(ExperimentalCoroutinesApi::class)
+            @Before
+            fun writeThePhotoLate() = runTest {
+                val screen = openTheCamera(createStagingArea(folder))
+                val shot = screen.takeAPhoto()
+                screen.reportTheCameraClosed(shot)
+                waitWhileTheCameraWritesThePhoto()
+                writeThePhoto(shot, "page")
+                val state = screen.awaitState { it.pages.size == 1 && !it.shooting }
+                visitContents = state.pages.map { it.file.readText() }
+                advanceUntilIdle()
+                messages = screen.messages
+            }
+
+            @Test
+            fun `should still add the photo to the run`() {
+                assertEquals(listOf("page"), visitContents)
+            }
+
+            @Test
+            fun `should say nothing`() {
+                assertEquals(emptyList<CaptureMessage>(), messages)
+            }
+        }
+
+        class WhenTheCameraClosesAndNeverWritesThePhoto {
+            @get:Rule
+            val mainDispatcher = MainDispatcherRule()
+
+            @get:Rule
+            val folder = TemporaryFolder()
+
+            private lateinit var state: CaptureUiState
+            private lateinit var messages: List<CaptureMessage>
+            private var reportDelayMilliseconds by Delegates.notNull<Long>()
+            private var isPhotoLeftOnDisk by Delegates.notNull<Boolean>()
+
+            @OptIn(ExperimentalCoroutinesApi::class)
+            @Before
+            fun loseThePhoto() = runTest {
+                val screen = openTheCamera(createStagingArea(folder))
+                val shot = screen.takeAPhoto()
+                leaveThePhotoEmpty(shot)
+                val closedAtMilliseconds = currentTime
+                screen.reportTheCameraClosed(shot)
+                state = screen.awaitState { !it.shooting }
+                reportDelayMilliseconds = currentTime - closedAtMilliseconds
+                messages = screen.messages
+                isPhotoLeftOnDisk = shot.file.exists()
+            }
+
+            @Test
+            fun `should report it lost only once the camera had its 5 s to write it`() {
+                assertTrue(reportDelayMilliseconds >= 5_000)
+            }
+
+            @Test
+            fun `should say that the photo failed`() {
+                assertEquals(listOf<CaptureMessage>(CaptureMessage.ShotFailed), messages)
+            }
+
+            @Test
+            fun `should add no page`() {
+                assertEquals(emptyList<StagedPage>(), state.pages)
+            }
+
+            @Test
+            fun `should delete the empty photo`() {
+                assertFalse(isPhotoLeftOnDisk)
+            }
+        }
+    }
+
+    @RunWith(Enclosed::class)
+    class TheFinishMethod {
+        class WhenNoPhotoIsOnItsWay {
+            @get:Rule
+            val mainDispatcher = MainDispatcherRule()
+
+            @get:Rule
+            val folder = TemporaryFolder()
+
+            private var closingCount by Delegates.notNull<Int>()
+
+            @Before
+            fun leave() = runTest {
+                val screen = openTheCamera(createStagingArea(folder))
+                screen.leave()
+                closingCount = screen.closingCount
+            }
+
+            @Test
+            fun `should close the screen at once`() {
+                assertEquals(1, closingCount)
+            }
+        }
+
+        class WhenAPhotoIsBeingSaved {
+            @get:Rule
+            val mainDispatcher = MainDispatcherRule()
+
+            @get:Rule
+            val folder = TemporaryFolder()
+
+            private lateinit var state: CaptureUiState
+            private var closingCount by Delegates.notNull<Int>()
+
+            @OptIn(ExperimentalCoroutinesApi::class)
+            @Before
+            fun leave() = runTest {
+                val screen = openTheCamera(createStagingArea(folder))
+                screen.takeAPhoto()
+                screen.leave()
+                state = screen.awaitState { it.finishing }
+                advanceUntilIdle()
+                closingCount = screen.closingCount
+            }
+
+            @Test
+            fun `should wait for the photo to join the run`() {
+                assertTrue(state.shooting)
+            }
+
+            @Test
+            fun `should keep the screen open meanwhile`() {
+                assertEquals(0, closingCount)
+            }
+        }
+    }
+
+    @RunWith(Enclosed::class)
+    class TheDeletePageMethod {
+        class WhenTheOnlyPhotoOfTheVisitIsDeleted {
+            @get:Rule
+            val mainDispatcher = MainDispatcherRule()
+
+            @get:Rule
+            val folder = TemporaryFolder()
+
+            private val scannedPageCount = 2
+            private lateinit var scannedContents: List<String>
+            private lateinit var state: CaptureUiState
+            private lateinit var runContents: List<String>
+
+            @Before
+            fun deleteThePhoto() = runTest {
+                val staging = createStagingArea(folder)
+                scannedContents = scanPagesAsGoogleScannerDoes(staging, scannedPageCount)
+                val screen = openTheCamera(staging)
+                screen.photograph("blurred")
+                state = screen.deleteTheOnlyPhoto()
+                runContents = readContents(staging)
+            }
+
+            @Test
+            fun `should keep counting the pages from before the visit as waiting`() {
+                assertEquals(scannedPageCount, state.waiting)
+            }
+
+            @Test
+            fun `should leave the pages from before the visit in the run`() {
+                assertEquals(scannedContents, runContents)
+            }
+        }
+    }
+
+    @RunWith(Enclosed::class)
+    class TheDiscardMethod {
+        class WhenTheVisitHasNoPhotoOfItsOwn {
+            @get:Rule
+            val mainDispatcher = MainDispatcherRule()
+
+            @get:Rule
+            val folder = TemporaryFolder()
+
+            private lateinit var scannedContents: List<String>
+            private var closingCount by Delegates.notNull<Int>()
+            private lateinit var runContents: List<String>
+
+            @OptIn(ExperimentalCoroutinesApi::class)
+            @Before
+            fun discardTheVisit() = runTest {
+                val staging = createStagingArea(folder)
+                scannedContents = scanPagesAsGoogleScannerDoes(staging, 5)
+                val screen = openTheCamera(staging)
+                screen.discardTheVisit()
+                advanceUntilIdle()
+                closingCount = screen.closingCount
+                runContents = readContents(staging)
+            }
+
+            @Test
+            fun `should close the screen`() {
+                assertEquals(1, closingCount)
+            }
+
+            @Test
+            fun `should keep the draft`() {
+                assertEquals(scannedContents, runContents)
+            }
+        }
+
+        class WhenTheVisitHasAPhoto {
+            @get:Rule
+            val mainDispatcher = MainDispatcherRule()
+
+            @get:Rule
+            val folder = TemporaryFolder()
+
+            private lateinit var scannedContents: List<String>
+            private var closingCount by Delegates.notNull<Int>()
+            private lateinit var runContents: List<String>
+
+            @OptIn(ExperimentalCoroutinesApi::class)
+            @Before
+            fun discardTheVisit() = runTest {
+                val staging = createStagingArea(folder)
+                scannedContents = scanPagesAsGoogleScannerDoes(staging, 5)
+                val screen = openTheCamera(staging)
+                screen.photograph("photo 1")
+                screen.discardTheVisit()
+                advanceUntilIdle()
+                closingCount = screen.closingCount
+                runContents = readContents(staging)
+            }
+
+            @Test
+            fun `should close the screen`() {
+                assertEquals(1, closingCount)
+            }
+
+            @Test
+            fun `should delete the photos of this visit only`() {
+                assertEquals(scannedContents, runContents)
+            }
+        }
+    }
+
+    class WhenTheVisitIsDiscardedWithAPhotoOnItsWay {
+        @get:Rule
+        val mainDispatcher = MainDispatcherRule()
+
+        @get:Rule
+        val folder = TemporaryFolder()
+
+        private lateinit var state: CaptureUiState
+        private var closingCount by Delegates.notNull<Int>()
+        private lateinit var messages: List<CaptureMessage>
+        private var isPhotoLeftOnDisk by Delegates.notNull<Boolean>()
+
+        @OptIn(ExperimentalCoroutinesApi::class)
+        @Before
+        fun discardTheVisit() = runTest {
+            val screen = openTheCamera(createStagingArea(folder))
+            screen.photograph("first page")
+            val shot = screen.takeAPhoto()
+            writeThePhoto(shot, "page on its way")
+            screen.discardTheVisit()
+            screen.reportThePhotoSaved(shot)
+            state = screen.awaitState { !it.shooting && it.pages.isEmpty() }
+            advanceUntilIdle()
+            closingCount = screen.closingCount
+            messages = screen.messages
+            isPhotoLeftOnDisk = shot.file.exists()
+        }
+
+        @Test
+        fun `should delete the photo on its way too`() {
+            assertFalse(isPhotoLeftOnDisk)
+        }
+
+        @Test
+        fun `should close the screen`() {
+            assertEquals(1, closingCount)
+        }
+
+        @Test
+        fun `should not be leaving, should the screen stay`() {
+            assertFalse(state.finishing)
+        }
+
+        @Test
+        fun `should say nothing`() {
+            assertEquals(emptyList<CaptureMessage>(), messages)
+        }
+    }
+
+    @RunWith(Enclosed::class)
+    class WhenTheProcessEndsAfterAPhoto {
+        class WhenTheScreenComesBack {
+            @get:Rule
+            val mainDispatcher = MainDispatcherRule()
+
+            @get:Rule
+            val folder = TemporaryFolder()
+
+            private val scannedPageCount = 5
+            private lateinit var state: CaptureUiState
+            private lateinit var visitContents: List<String>
+
+            @Before
+            fun comeBack() = runTest {
+                val savedState = SavedStateHandle()
+                val staging = createStagingArea(folder)
+                scanPagesAsGoogleScannerDoes(staging, scannedPageCount)
+                openTheCamera(staging, savedState).photograph("photo 1")
+                state = comeBackAfterTheEndOfTheProcess(folder, savedState).awaitState { it.ready }
+                visitContents = state.pages.map { it.file.readText() }
+            }
+
+            @Test
+            fun `should still show the photo as the visit's`() {
+                assertEquals(listOf("photo 1"), visitContents)
+            }
+
+            @Test
+            fun `should still count the pages from before the visit as waiting`() {
+                assertEquals(scannedPageCount, state.waiting)
+            }
+        }
+
+        class WhenTheScreenComesBackAndTheCameraOpensAgain {
+            @get:Rule
+            val mainDispatcher = MainDispatcherRule()
+
+            @get:Rule
+            val folder = TemporaryFolder()
+
+            private val scannedPageCount = 5
+            private lateinit var state: CaptureUiState
+
+            @Before
+            fun openTheCameraAgain() = runTest {
+                val savedState = SavedStateHandle()
+                val staging = createStagingArea(folder)
+                scanPagesAsGoogleScannerDoes(staging, scannedPageCount)
+                openTheCamera(staging, savedState).photograph("photo 1")
+                comeBackAfterTheEndOfTheProcess(folder, savedState)
+                state = openTheCameraAgain(folder).awaitState { it.ready }
+            }
+
+            @Test
+            fun `should start a new visit after that photo`() {
+                assertEquals(emptyList<StagedPage>(), state.pages)
+            }
+
+            @Test
+            fun `should count that photo as waiting, with the pages from before it`() {
+                assertEquals(scannedPageCount + 1, state.waiting)
+            }
+        }
+    }
+}
+
+private const val DOCUMENT_ID = "6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b"
+private val CLOCK: Clock = Clock.fixed(Instant.parse("2026-10-12T18:30:00Z"), ZoneOffset.UTC)
+
+// In the test's virtual time: a press that the shutter refused fails its hook at once.
+private const val SHOT_WAIT_MILLISECONDS = 1_000L
+
+private class CameraScreen(val viewModel: CaptureViewModel, scope: CoroutineScope) {
+    private val receivedMessages = mutableListOf<CaptureMessage>()
+    private val shots = Channel<Shot>(Channel.UNLIMITED)
+
+    var closingCount = 0
+        private set
+
+    var captureCount = 0
+        private set
+
+    val messages: List<CaptureMessage> get() = receivedMessages.toList()
+
+    init {
+        scope.launch { viewModel.closed.collect { closingCount++ } }
+        scope.launch { viewModel.messages.collect { receivedMessages += it } }
+    }
+
+    suspend fun awaitState(predicate: (CaptureUiState) -> Boolean): CaptureUiState = viewModel.uiState.first(predicate)
+
+    suspend fun awaitTheStartOfTheVisit(): CaptureUiState = awaitState { it.ready }
+
+    suspend fun pressTheShutter(): Boolean {
+        awaitTheStartOfTheVisit()
+        return viewModel.shoot { shot ->
+            captureCount++
+            shots.trySend(shot)
+        }
+    }
+
+    suspend fun awaitTheShot(): Shot = withTimeout(SHOT_WAIT_MILLISECONDS) { shots.receive() }
+}
+
+/*
+ * The disk's work, on the test's scheduler like the rest: each test runs on one thread, in a fixed
+ * order, and nothing it started runs after it (on another thread, it raced the test's assertions
+ * and resumed on a main dispatcher already reset).
+ */
+private val TestScope.io: CoroutineDispatcher get() = StandardTestDispatcher(testScheduler)
+
+private fun TestScope.createStagingArea(folder: TemporaryFolder) = StagingArea(File(folder.root, "staging"), io)
+
+private suspend fun readContents(staging: StagingArea): List<String> =
+    staging.pages(DOCUMENT_ID).map { it.file.readText() }
+
+private suspend fun scanPagesAsGoogleScannerDoes(staging: StagingArea, count: Int): List<String> =
+    (1..count).map { number ->
+        val content = "scanned page $number"
+        val file = staging.incomingFile(DOCUMENT_ID).apply { writeText(content) }
+        staging.add(DOCUMENT_ID, listOf(StagingInput(file, CLOCK.instant())))
         content
     }
 
-    private suspend fun StagingArea.contents(): List<String> = pages(document).map { it.file.readText() }
+@OptIn(ExperimentalCoroutinesApi::class)
+private suspend fun TestScope.openTheCamera(
+    staging: StagingArea,
+    savedState: SavedStateHandle = SavedStateHandle(),
+): CameraScreen {
+    val viewModel = CaptureViewModel(savedState, DOCUMENT_ID, staging, CLOCK, io)
+    val screen = CameraScreen(viewModel, backgroundScope + UnconfinedTestDispatcher(testScheduler))
+    screen.awaitTheStartOfTheVisit()
+    return screen
+}
 
-    /** Takes a photo of [content] and waits for it to join the visit. */
-    private suspend fun Screen.photograph(content: String) {
-        val shot = shoot()
-        shot.file.writeText(content)
-        viewModel.onShotSaved(shot)
-        awaitState { !it.shooting && it.pages.any { page -> page.file.readText() == content } }
-    }
+private suspend fun TestScope.comeBackAfterTheEndOfTheProcess(
+    folder: TemporaryFolder,
+    savedState: SavedStateHandle,
+): CameraScreen = openTheCamera(
+    createStagingArea(folder),
+    SavedStateHandle(savedState.keys().associateWith { savedState.get<Any?>(it) }),
+)
 
-    @Test
-    fun `with no photo of its own, the visit has nothing to keep or delete, and the draft stays`() = runTest {
-        val staging = staging()
-        val scanned = staging.scanned(5)
-        val screen = screen(staging)
+private suspend fun TestScope.openTheCameraAgain(folder: TemporaryFolder): CameraScreen =
+    openTheCamera(createStagingArea(folder))
 
-        val state = screen.awaitState { it.ready }
-        assertEquals(emptyList<Any>(), state.pages)
-        assertEquals(5, state.waiting)
-        // Closing does not ask: the screen closes at once.
-        assertEquals(0, state.photoCount)
+private suspend fun CameraScreen.takeAPhoto(): Shot {
+    pressTheShutter()
+    return awaitTheShot()
+}
 
-        screen.viewModel.discard()
-        screen.awaitClosed()
-        assertEquals(listOf(Unit), screen.closings)
-        assertEquals(scanned, staging.contents())
-    }
+private suspend fun CameraScreen.photograph(content: String) {
+    val shot = takeAPhoto()
+    writeThePhoto(shot, content)
+    reportThePhotoSaved(shot)
+    awaitState { !it.shooting && it.pages.any { page -> page.file.readText() == content } }
+}
 
-    @Test
-    fun `discarding deletes this visit's photos only`() = runTest {
-        val staging = staging()
-        val scanned = staging.scanned(5)
-        val screen = screen(staging)
-        screen.photograph("photo 1")
+private fun writeThePhoto(shot: Shot, content: String) {
+    shot.file.writeText(content)
+}
 
-        val state = screen.awaitState { it.pages.size == 1 }
-        assertEquals(5, state.waiting)
-        // The last photo is this visit's, never a page from before it.
-        assertEquals("photo 1", state.pages.last().file.readText())
+private fun leaveThePhotoEmpty(shot: Shot) {
+    shot.file.createNewFile()
+}
 
-        screen.viewModel.discard()
-        screen.awaitClosed()
-        assertEquals(listOf(Unit), screen.closings)
-        assertEquals(scanned, staging.contents())
-    }
+private fun CameraScreen.reportThePhotoSaved(shot: Shot) {
+    viewModel.onShotSaved(shot)
+}
 
-    @Test
-    fun `deleting the last photo leaves the pages from before the visit`() = runTest {
-        val staging = staging()
-        val scanned = staging.scanned(2)
-        val screen = screen(staging)
-        screen.photograph("blurred")
+private fun CameraScreen.reportThePhotoFailed(shot: Shot) {
+    viewModel.onShotFailed(shot, ImageCaptureException(ImageCapture.ERROR_CAPTURE_FAILED, "failed", null))
+}
 
-        screen.viewModel.deletePage(screen.awaitState { it.pages.size == 1 }.pages.single())
-        val state = screen.awaitState { it.pages.isEmpty() }
-        assertEquals(2, state.waiting)
-        assertEquals(scanned, staging.contents())
-        // The photo taken again is this visit's.
-        screen.photograph("sharp")
-        assertEquals(listOf("sharp"), screen.awaitState { it.pages.size == 1 }.pages.map { it.file.readText() })
-    }
+private fun CameraScreen.reportTheCameraClosed(shot: Shot) {
+    viewModel.onShotFailed(shot, ImageCaptureException(ImageCapture.ERROR_CAMERA_CLOSED, "Camera is closed.", null))
+}
 
-    @Test
-    fun `the start of the visit survives the end of the process`() = runTest {
-        val staging = staging()
-        staging.scanned(5)
-        val savedState = SavedStateHandle()
-        screen(staging, savedState).photograph("photo 1")
+/*
+ * The camera is still writing the photo: well within the screen's wait, and before its state stops
+ * being shared, 5 s after its last observer.
+ */
+@OptIn(ExperimentalCoroutinesApi::class)
+private fun TestScope.waitWhileTheCameraWritesThePhoto() {
+    advanceTimeBy(1_000)
+}
 
-        // The process ends; the screen comes back with its saved state, on the files left on disk.
-        val restored = SavedStateHandle(savedState.keys().associateWith { savedState.get<Any?>(it) })
-        val state = screen(staging(), restored).awaitState { it.ready }
-        assertEquals(listOf("photo 1"), state.pages.map { it.file.readText() })
-        assertEquals(5, state.waiting)
+private fun CameraScreen.leave() {
+    viewModel.finish()
+}
 
-        // A new visit to the camera starts after that photo.
-        val newVisit = screen(staging()).awaitState { it.ready }
-        assertEquals(emptyList<Any>(), newVisit.pages)
-        assertEquals(6, newVisit.waiting)
-    }
+private fun CameraScreen.discardTheVisit() {
+    viewModel.discard()
+}
 
-    @Test
-    fun `leaving while a photo is being saved waits for it to join the run`() = runTest {
-        val screen = screen()
-        val shot = screen.shoot()
-        // A second tap while the photo is being saved takes nothing.
-        assertFalse(screen.viewModel.shoot { error("second photo") })
-
-        screen.viewModel.finish()
-        assertTrue(screen.awaitState { it.finishing }.shooting)
-        assertEquals(emptyList<Unit>(), screen.closings)
-
-        shot.file.writeText("last page") // written by the camera
-        screen.viewModel.onShotSaved(shot)
-        val state = screen.awaitState { it.pages.size == 1 && !it.shooting }
-        assertEquals("last page", state.pages.single().file.readText())
-        assertFalse(state.finishing)
-        assertEquals(listOf(Unit), screen.closings)
-        assertEquals(emptyList<CaptureMessage>(), screen.messages)
-    }
-
-    @Test
-    fun `with no photo on its way, leaving is immediate`() = runTest {
-        val screen = screen()
-        screen.viewModel.finish()
-        assertEquals(listOf(Unit), screen.closings)
-    }
-
-    @Test
-    fun `a photo that fails while leaving keeps the screen open, to say so`() = runTest {
-        val screen = screen()
-        val shot = screen.shoot()
-        screen.viewModel.finish()
-
-        shot.file.writeText("half a photo") // the camera failed while writing it
-        screen.viewModel.onShotFailed(shot, ImageCaptureException(ImageCapture.ERROR_CAPTURE_FAILED, "failed", null))
-        val state = screen.awaitState { !it.shooting }
-        assertFalse(state.finishing)
-        assertTrue(state.pages.isEmpty())
-        assertEquals(listOf<CaptureMessage>(CaptureMessage.ShotFailed), screen.messages)
-        assertEquals(emptyList<Unit>(), screen.closings)
-        assertFalse(shot.file.exists())
-        // The photo can be taken again.
-        screen.shoot()
-    }
-
-    @Test
-    fun `a photo the camera writes after closing still joins the run`() = runTest {
-        val screen = screen()
-        val shot = screen.shoot()
-
-        // The phone was locked during the save: CameraX reports the camera closed, then finishes
-        // writing the photo all the same.
-        screen.viewModel.onShotFailed(shot, cameraClosed)
-        // The screen waits for the photo while the camera is still writing it (well within the
-        // wait, and before the screen's state stops being shared, 5 s after its last observer).
-        advanceTimeBy(1_000)
-        assertEquals(emptyList<CaptureMessage>(), screen.messages)
-        shot.file.writeText("page")
-
-        val state = screen.awaitState { it.pages.size == 1 && !it.shooting }
-        assertEquals("page", state.pages.single().file.readText())
-        assertEquals(emptyList<CaptureMessage>(), screen.messages)
-    }
-
-    @Test
-    fun `a photo the camera never writes is reported lost`() = runTest {
-        val screen = screen()
-        val shot = screen.shoot()
-
-        shot.file.createNewFile() // left empty by the camera
-        screen.viewModel.onShotFailed(shot, cameraClosed)
-        val state = screen.awaitState { !it.shooting }
-        // Only once the camera had its time to write it: 5 s.
-        assertTrue(currentTime >= 5_000)
-        assertTrue(state.pages.isEmpty())
-        assertEquals(listOf<CaptureMessage>(CaptureMessage.ShotFailed), screen.messages)
-        assertFalse(shot.file.exists())
-    }
-
-    @Test
-    fun `discarding the visit discards the photo on its way too`() = runTest {
-        val screen = screen()
-        val first = screen.shoot()
-        first.file.writeText("first page")
-        screen.viewModel.onShotSaved(first)
-        screen.awaitState { it.pages.size == 1 && !it.shooting }
-
-        // The camera has written the next photo, but not reported it yet.
-        val shot = screen.shoot()
-        shot.file.writeText("page on its way")
-        screen.viewModel.discard()
-        screen.viewModel.onShotSaved(shot)
-
-        val state = screen.awaitState { !it.shooting && it.pages.isEmpty() }
-        assertFalse(state.finishing)
-        assertFalse(shot.file.exists())
-        assertEquals(listOf(Unit), screen.closings)
-        assertEquals(emptyList<CaptureMessage>(), screen.messages)
-        // Should the screen stay (closing it was dropped), photos can still be taken.
-        screen.shoot()
-    }
+private suspend fun CameraScreen.deleteTheOnlyPhoto(): CaptureUiState {
+    viewModel.deletePage(awaitState { it.pages.size == 1 }.pages.single())
+    return awaitState { it.pages.isEmpty() }
 }

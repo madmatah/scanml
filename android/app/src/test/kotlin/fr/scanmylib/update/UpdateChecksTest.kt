@@ -1,194 +1,329 @@
 package fr.scanmylib.update
 
 import fr.scanmylib.api.PublishedApk
-import java.io.File
-import java.io.IOException
-import java.net.InetAddress
-import java.net.ServerSocket
-import java.security.MessageDigest
-import kotlin.concurrent.thread
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.cancelAndJoin
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.withTimeout
-import mockwebserver3.MockResponse
-import mockwebserver3.MockWebServer
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.OkHttpClient
-import okio.Buffer
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
-import org.junit.Rule
+import org.junit.Before
 import org.junit.Test
-import org.junit.rules.TemporaryFolder
+import org.junit.experimental.runners.Enclosed
+import org.junit.runner.RunWith
+import org.junit.runners.Parameterized
 
+@RunWith(Enclosed::class)
 class UpdateChecksTest {
+    @RunWith(Enclosed::class)
+    class TheOfferedUpdateFunction {
+        class WhenThePcPublishesANewerApkOfThisApp {
+            private lateinit var offer: Offer
 
-    @get:Rule
-    val folder = TemporaryFolder()
-
-    private val app = "fr.scanmylib.dev"
-    private val pc = "http://192.168.1.10:8770/".toHttpUrl()
-    private val sha256 = "ab".repeat(32)
-    private val apk = PublishedApk(app, "0.8.0", 800, sha256, 1234, "/download/scanmylib.apk")
-
-    @Test
-    fun `a newer APK of this app is offered, downloaded from the paired PC`() {
-        val update = offeredUpdate(pc, apk, app, installedVersionCode = 700)
-        assertEquals(
-            AvailableUpdate("0.8.0", 800, sha256, 1234, "http://192.168.1.10:8770/download/scanmylib.apk".toHttpUrl()),
-            update,
-        )
-    }
-
-    @Test
-    fun `nothing is offered for the same version, another app, or an odd path`() {
-        assertNull(offeredUpdate(pc, null, app, 700))
-        assertNull(offeredUpdate(pc, apk, app, 800))
-        assertNull(offeredUpdate(pc, apk, app, 900))
-        // The production app and the development app each check their own.
-        assertNull(offeredUpdate(pc, apk, "fr.scanmylib", 700))
-        assertNull(offeredUpdate(pc, apk.copy(path = "//example.invalid/scanmylib.apk"), app, 700))
-        assertNull(offeredUpdate(pc, apk.copy(path = "/download/../api/documents"), app, 700))
-        assertNull(offeredUpdate(pc, apk.copy(size = 0), app, 700))
-    }
-
-    @Test
-    fun `nothing is offered with a version or a size the server would not announce`() {
-        // A release, or a development build (scripts/lib/version.py), up to 64 characters.
-        val longest = "0.2.4-dev+g" + "a".repeat(53)
-        val accepted = listOf("123.45.67", "0.2.4-dev.27+g1a2b3c4d5e6f", "0.2.4-dev+g1a2b3c4d5e6f.dirty", "0.2.4-dev")
-        for (version in accepted + longest) {
-            assertNotNull(version, offeredUpdate(pc, apk.copy(version = version), app, 700))
-        }
-        val tooLong = longest + "a"
-        val odd = listOf("0.8", "0.8.0.1", "0.8.0-", "0.8.0+", "0.8.0-dév", tooLong, "1234.0.0", "0.100.0", "0.8.0\n")
-        for (version in odd + listOf("ScanMyLib 0.8.0", "")) {
-            assertNull(version, offeredUpdate(pc, apk.copy(version = version), app, 700))
-        }
-        assertNotNull(offeredUpdate(pc, apk.copy(size = MAX_APK_SIZE), app, 700))
-        assertNull(offeredUpdate(pc, apk.copy(size = MAX_APK_SIZE + 1), app, 700))
-        assertNull(offeredUpdate(pc, apk.copy(size = -1), app, 700))
-    }
-
-    private val update = AvailableUpdate("0.8.0", 800, sha256, 1234, pc)
-    private val signers = setOf("cd".repeat(32))
-    private val facts = ApkFacts(app, 800, signers)
-
-    private fun check(
-        sha: String = sha256,
-        size: Long = 1234,
-        apk: ApkFacts? = facts,
-        installedSigners: Set<String>? = signers,
-    ) = checkDownloadedApk(update, sha, size, apk, app, installedVersionCode = 700, installedSigners = installedSigners)
-
-    @Test
-    fun `the downloaded APK is installed only when it is the one announced, for this app, newer, same signer`() {
-        assertNull(check())
-        assertNull(check(sha = sha256.uppercase()))
-        assertEquals(UpdateFailure.NOT_AS_ANNOUNCED, check(size = 1235))
-        assertEquals(UpdateFailure.NOT_AS_ANNOUNCED, check(sha = "00".repeat(32)))
-        assertEquals(UpdateFailure.UNREADABLE, check(apk = null))
-        assertEquals(UpdateFailure.OTHER_APP, check(apk = facts.copy(packageName = "fr.scanmylib")))
-        assertEquals(UpdateFailure.NOT_NEWER, check(apk = facts.copy(versionCode = 700)))
-        // Newer, but not the version announced.
-        assertEquals(UpdateFailure.NOT_AS_ANNOUNCED, check(apk = facts.copy(versionCode = 900)))
-        assertEquals(UpdateFailure.OTHER_SIGNER, check(apk = facts.copy(signers = setOf("ef".repeat(32)))))
-        // Signers Android does not report are left to its own check.
-        assertNull(check(apk = facts.copy(signers = null)))
-        assertNull(check(installedSigners = null))
-    }
-
-    @Test
-    fun `the download reports its digest and size, and stops past the announced size`() = runTest {
-        MockWebServer().use { server ->
-            val content = ByteArray(3000) { (it % 251).toByte() }
-            server.enqueue(MockResponse.Builder().body(Buffer().write(content)).build())
-            server.enqueue(MockResponse.Builder().body(Buffer().write(ByteArray(1024 * 1024))).build())
-            server.enqueue(MockResponse.Builder().code(404).build())
-            server.start()
-            val url = server.url("/download/scanmylib.apk")
-            val file = File(folder.root, "updates/scanmylib.apk")
-            val progress = mutableListOf<Long>()
-
-            val whole = downloadApk(OkHttpClient(), update.copy(size = 3000, url = url), file) { progress += it }
-            assertEquals(ApkDownload(sha256Of(content), 3000), whole)
-            assertEquals(3000L, progress.last())
-            assertEquals(content.toList(), file.readBytes().toList())
-
-            // Stops at the first read past the announced size, far from the end of the body.
-            val tooLong = downloadApk(OkHttpClient(), update.copy(size = 3000, url = url), file) {}
-            assertTrue("received ${tooLong.size}", tooLong.size in 3001..3000 + 64 * 1024)
-
-            val failure = runCatching { downloadApk(OkHttpClient(), update.copy(url = url), file) {} }.exceptionOrNull()
-            assertEquals(true, failure is IOException)
-        }
-    }
-
-    @Test
-    fun `a redirect is not followed`() = runTest {
-        MockWebServer().use { server ->
-            server.enqueue(MockResponse.Builder().code(302).addHeader("Location", "/download/other.apk").build())
-            server.enqueue(MockResponse.Builder().body(Buffer().write(ByteArray(1234))).build())
-            server.start()
-            val url = server.url("/download/scanmylib.apk")
-            val file = File(folder.root, "updates/scanmylib.apk")
-
-            val failure = runCatching { downloadApk(OkHttpClient(), update.copy(url = url), file) {} }.exceptionOrNull()
-            assertTrue("$failure", failure is IOException)
-            assertEquals(1, server.requestCount)
-        }
-    }
-
-    @Test
-    fun `a canceled download stops at once, even in the middle of a stalled read`() = runBlocking {
-        // A PC that sends the headers and one byte of the APK, then nothing until the phone hangs up.
-        ServerSocket(0, 1, InetAddress.getByName("127.0.0.1")).use { listener ->
-            val pc = thread(isDaemon = true) {
-                listener.accept().use { socket ->
-                    socket.getOutputStream().write("HTTP/1.1 200 OK\r\nContent-Length: 100\r\n\r\nA".toByteArray())
-                    socket.getOutputStream().flush()
-                    runCatching { socket.getInputStream().readBytes() }
-                }
+            @Before
+            fun readTheOffer() {
+                offer = Offer(offeredUpdate(PC_URL, PUBLISHED_APK, APP, INSTALLED_VERSION_CODE))
             }
-            val file = File(folder.root, "updates/stalled.apk")
-            val url = "http://127.0.0.1:${listener.localPort}/download/scanmylib.apk".toHttpUrl()
-            val http = OkHttpClient()
-            val firstByte = CompletableDeferred<Unit>()
-            var received = 0L
-            var failure: Throwable? = null
-            val download = launch(Dispatchers.Default) {
-                try {
-                    downloadApk(http, update.copy(size = 100, url = url), file) {
-                        received = it
-                        firstByte.complete(Unit)
-                    }
-                } catch (e: Throwable) {
-                    failure = e
-                    throw e
-                }
+
+            @Test
+            fun `should offer it, downloaded from the paired PC`() {
+                assertEquals(
+                    AvailableUpdate("0.8.0", 800, SHA256, 1234, "http://192.168.1.10:8770$DOWNLOAD_PATH".toHttpUrl()),
+                    offer.update,
+                )
             }
-            withTimeout(10_000) { firstByte.await() }
-            // Leaves the download the time to wait in its next read.
-            delay(200)
-            val started = System.nanoTime()
-            download.cancelAndJoin()
-            val elapsed = System.nanoTime() - started
-            assertTrue("canceled in ${elapsed / 1_000_000} ms", elapsed < 2_000_000_000)
-            // Canceled during the read that waits for the rest, not before the download started.
-            assertEquals(1L, received)
-            assertTrue("$failure", failure is CancellationException)
-            pc.join(2_000)
+        }
+
+        @RunWith(Parameterized::class)
+        class WhenTheApkIsNotOneToInstall(
+            private val apk: String,
+            private val published: PublishedApk?,
+            private val installedId: String,
+            private val installedVersionCode: Long,
+        ) {
+            private lateinit var offer: Offer
+
+            @Before
+            fun readTheOffer() {
+                offer = Offer(offeredUpdate(PC_URL, published, installedId, installedVersionCode))
+            }
+
+            @Test
+            fun `should offer nothing`() {
+                assertNull(apk, offer.update)
+            }
+
+            companion object {
+                @JvmStatic
+                @Parameterized.Parameters(name = "{0}")
+                fun apks(): List<Array<Any?>> = listOf(
+                    arrayOf("no APK published", null, APP, INSTALLED_VERSION_CODE),
+                    arrayOf("the version installed", PUBLISHED_APK, APP, 800L),
+                    arrayOf("an older version", PUBLISHED_APK, APP, 900L),
+                    arrayOf(
+                        "the production app's, since each app checks its own",
+                        PUBLISHED_APK,
+                        "fr.scanmylib",
+                        INSTALLED_VERSION_CODE,
+                    ),
+                    arrayOf(
+                        "an APK on another host",
+                        PUBLISHED_APK.copy(path = "//example.invalid/scanmylib.apk"),
+                        APP,
+                        INSTALLED_VERSION_CODE,
+                    ),
+                    arrayOf(
+                        "an APK outside the downloads",
+                        PUBLISHED_APK.copy(path = "/download/../api/documents"),
+                        APP,
+                        INSTALLED_VERSION_CODE,
+                    ),
+                )
+            }
+        }
+
+        @RunWith(Parameterized::class)
+        class WhenTheVersionIsOneTheServerAnnounces(private val build: String, private val version: String) {
+            private lateinit var offer: Offer
+
+            @Before
+            fun readTheOffer() {
+                offer = Offer(offeredUpdate(PC_URL, PUBLISHED_APK.copy(version = version), APP, INSTALLED_VERSION_CODE))
+            }
+
+            @Test
+            fun `should offer it, with its version`() {
+                assertEquals(build, version, offer.update?.version)
+            }
+
+            companion object {
+                // A release, or a development build (scripts/lib/version.py), up to 64 characters.
+                @JvmStatic
+                @Parameterized.Parameters(name = "{0}")
+                fun versions(): List<Array<Any>> = listOf(
+                    arrayOf("a release", "123.45.67"),
+                    arrayOf("a development build", "0.2.4-dev.27+g1a2b3c4d5e6f"),
+                    arrayOf("a development build with changes", "0.2.4-dev+g1a2b3c4d5e6f.dirty"),
+                    arrayOf("a development build without its commit", "0.2.4-dev"),
+                    arrayOf("the longest version, of 64 characters", LONGEST_VERSION),
+                )
+            }
+        }
+
+        @RunWith(Parameterized::class)
+        class WhenTheVersionIsOneTheServerWouldNotAnnounce(private val build: String, private val version: String) {
+            private lateinit var offer: Offer
+
+            @Before
+            fun readTheOffer() {
+                offer = Offer(offeredUpdate(PC_URL, PUBLISHED_APK.copy(version = version), APP, INSTALLED_VERSION_CODE))
+            }
+
+            @Test
+            fun `should offer nothing`() {
+                assertNull(build, offer.update)
+            }
+
+            companion object {
+                @JvmStatic
+                @Parameterized.Parameters(name = "{0}")
+                fun versions(): List<Array<Any>> = listOf(
+                    arrayOf("two numbers", "0.8"),
+                    arrayOf("four numbers", "0.8.0.1"),
+                    arrayOf("an empty pre-release", "0.8.0-"),
+                    arrayOf("an empty build", "0.8.0+"),
+                    arrayOf("a letter outside ASCII", "0.8.0-é"),
+                    arrayOf("65 characters", LONGEST_VERSION + "a"),
+                    arrayOf("a major version of four digits", "1234.0.0"),
+                    arrayOf("a minor version of three digits", "0.100.0"),
+                    arrayOf("a line end", "0.8.0\n"),
+                    arrayOf("a name before the version", "ScanMyLib 0.8.0"),
+                    arrayOf("no version", ""),
+                )
+            }
+        }
+
+        class WhenTheApkIsTheLargestTheAppDownloads {
+            private lateinit var offer: Offer
+
+            @Before
+            fun readTheOffer() {
+                val largest = PUBLISHED_APK.copy(size = MAX_APK_SIZE)
+                offer = Offer(offeredUpdate(PC_URL, largest, APP, INSTALLED_VERSION_CODE))
+            }
+
+            @Test
+            fun `should offer it`() {
+                assertEquals(MAX_APK_SIZE, offer.update?.size)
+            }
+        }
+
+        @RunWith(Parameterized::class)
+        class WhenTheSizeIsOneTheAppDoesNotDownload(private val apk: String, private val sizeBytes: Long) {
+            private lateinit var offer: Offer
+
+            @Before
+            fun readTheOffer() {
+                offer = Offer(offeredUpdate(PC_URL, PUBLISHED_APK.copy(size = sizeBytes), APP, INSTALLED_VERSION_CODE))
+            }
+
+            @Test
+            fun `should offer nothing`() {
+                assertNull(apk, offer.update)
+            }
+
+            companion object {
+                @JvmStatic
+                @Parameterized.Parameters(name = "{0}")
+                fun sizes(): List<Array<Any>> = listOf(
+                    arrayOf("an empty APK", 0L),
+                    arrayOf("a negative size", -1L),
+                    arrayOf("a byte over the largest APK the app downloads", MAX_APK_SIZE + 1),
+                )
+            }
         }
     }
 
-    private fun sha256Of(bytes: ByteArray) =
-        MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
+    @RunWith(Enclosed::class)
+    class TheCheckDownloadedApkFunction {
+        @RunWith(Parameterized::class)
+        class WhenTheApkMayBeInstalled(
+            private val apk: String,
+            private val sha256: String,
+            private val facts: ApkFacts?,
+            private val installedSigners: Set<String>?,
+        ) {
+            private lateinit var problem: Problem
+
+            @Before
+            fun checkTheApk() {
+                problem = Problem(
+                    checkDownloadedApk(
+                        UPDATE,
+                        sha256,
+                        UPDATE.size,
+                        facts,
+                        APP,
+                        INSTALLED_VERSION_CODE,
+                        installedSigners,
+                    ),
+                )
+            }
+
+            @Test
+            fun `should let Android install it`() {
+                assertNull(apk, problem.failure)
+            }
+
+            companion object {
+                @JvmStatic
+                @Parameterized.Parameters(name = "{0}")
+                fun apks(): List<Array<Any?>> = listOf(
+                    arrayOf("the APK announced, of this app, newer, by the same signer", SHA256, FACTS, SIGNERS),
+                    arrayOf("a digest written in uppercase", SHA256.uppercase(), FACTS, SIGNERS),
+                    arrayOf(
+                        "signers Android does not report for the APK, left to its own check",
+                        SHA256,
+                        FACTS.copy(signers = null),
+                        SIGNERS,
+                    ),
+                    arrayOf(
+                        "signers Android does not report for the installed app, left to its own check",
+                        SHA256,
+                        FACTS,
+                        null,
+                    ),
+                )
+            }
+        }
+
+        @RunWith(Parameterized::class)
+        class WhenTheApkMayNotBeInstalled(
+            private val apk: String,
+            private val sha256: String,
+            private val sizeBytes: Long,
+            private val facts: ApkFacts?,
+            private val expected: UpdateFailure,
+        ) {
+            private lateinit var problem: Problem
+
+            @Before
+            fun checkTheApk() {
+                problem = Problem(
+                    checkDownloadedApk(UPDATE, sha256, sizeBytes, facts, APP, INSTALLED_VERSION_CODE, SIGNERS),
+                )
+            }
+
+            @Test
+            fun `should refuse it, with the reason`() {
+                assertEquals(apk, expected, problem.failure)
+            }
+
+            companion object {
+                @JvmStatic
+                @Parameterized.Parameters(name = "{0}")
+                fun apks(): List<Array<Any?>> = listOf(
+                    arrayOf("a size not as announced", SHA256, UPDATE.size + 1, FACTS, UpdateFailure.NOT_AS_ANNOUNCED),
+                    arrayOf(
+                        "a digest not as announced",
+                        "00".repeat(32),
+                        UPDATE.size,
+                        FACTS,
+                        UpdateFailure.NOT_AS_ANNOUNCED,
+                    ),
+                    arrayOf(
+                        "a file Android cannot read as an APK",
+                        SHA256,
+                        UPDATE.size,
+                        null,
+                        UpdateFailure.UNREADABLE,
+                    ),
+                    arrayOf(
+                        "another app's APK",
+                        SHA256,
+                        UPDATE.size,
+                        FACTS.copy(packageName = "fr.scanmylib"),
+                        UpdateFailure.OTHER_APP,
+                    ),
+                    arrayOf(
+                        "an APK no newer than the app installed",
+                        SHA256,
+                        UPDATE.size,
+                        FACTS.copy(versionCode = INSTALLED_VERSION_CODE),
+                        UpdateFailure.NOT_NEWER,
+                    ),
+                    arrayOf(
+                        "a newer APK, but not the version announced",
+                        SHA256,
+                        UPDATE.size,
+                        FACTS.copy(versionCode = UNANNOUNCED_NEWER_VERSION_CODE),
+                        UpdateFailure.NOT_AS_ANNOUNCED,
+                    ),
+                    arrayOf(
+                        "an APK of another signer",
+                        SHA256,
+                        UPDATE.size,
+                        FACTS.copy(signers = setOf("ef".repeat(32))),
+                        UpdateFailure.OTHER_SIGNER,
+                    ),
+                )
+            }
+        }
+    }
 }
+
+private const val APP = "fr.scanmylib.dev"
+private const val INSTALLED_VERSION_CODE = 700L
+private const val UNANNOUNCED_NEWER_VERSION_CODE = 900L
+private val PC_URL: HttpUrl = "http://192.168.1.10:8770/".toHttpUrl()
+private const val DOWNLOAD_PATH = "/download/scanmylib.apk"
+private val SHA256 = "ab".repeat(32)
+private val PUBLISHED_APK = PublishedApk(APP, "0.8.0", 800, SHA256, 1234, DOWNLOAD_PATH)
+private val UPDATE = AvailableUpdate("0.8.0", 800, SHA256, 1234, PC_URL)
+private val SIGNERS = setOf("cd".repeat(32))
+private val FACTS = ApkFacts(APP, 800, SIGNERS)
+private val LONGEST_VERSION = "0.2.4-dev+g" + "a".repeat(53)
+
+/** The update offered, null when there is none, held in a non-null value so that a test fails when no hook ran. */
+private data class Offer(val update: AvailableUpdate?)
+
+/** Why a downloaded APK may not be installed, null when it may, held as [Offer] is. */
+private data class Problem(val failure: UpdateFailure?)

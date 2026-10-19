@@ -15,9 +15,9 @@
 #               host's python3, against throwaway repositories and a docker stand-in that builds and starts nothing
 #
 # --fix formats the code and applies the linters' safe fixes instead of checking. ktlint formats android/ in place.
-# The other formatters work on a copy of the tracked files they format in server/, ocr/ and scripts/ (git add a new
-# file first), and only their changes to those files come back (scripts/lib/formatting.py): read git diff before running
-# what they changed. Every tool runs even after one that leaves findings, and the script then fails.
+# The other formatters work on a copy of the tracked files they format in server/, ocr/, scripts/ and .claude/skills/
+# (git add a new file first), and only their changes to those files come back (scripts/lib/formatting.py): read git diff
+# before running what they changed. Every tool runs even after one that leaves findings, and the script then fails.
 #
 # --last-commit checks only the areas that read what the last commit changes (scripts/lib/commit_areas.py), none for
 # documents and agent guidance; CLAUDE.md > Workflow, "Commits" says when each mode runs.
@@ -35,10 +35,11 @@ readonly SHELLCHECK_DIGEST=sha256:61862eba1fcf09a484ebcc6feea46f1782532571a34ed5
 readonly SHELLCHECK_IMAGE=koalaman/shellcheck:v0.11.0@$SHELLCHECK_DIGEST
 readonly SHFMT_DIGEST=sha256:8c06884a35683d8763fba6c0d9484d11a61a96da65f8d497d6f625825a6043f2
 readonly SHFMT_IMAGE=mvdan/shfmt:v3.14.1@$SHFMT_DIGEST
-readonly FORMATTED_DIRECTORIES=(server ocr scripts)
+readonly FORMATTED_DIRECTORIES=(server ocr scripts .claude/skills)
 # The files the formatters of the copy format, and nothing else: no other file comes back, such as a vendored file or a
 # lock, whose change git diff would not let a reader judge.
-readonly FORMATTED_PATHSPECS=('server/*.py' 'ocr/*.py' 'scripts/*.py' 'ocr/*.sh' 'scripts/*.sh'
+readonly FORMATTED_PATHSPECS=('server/*.py' 'ocr/*.py' 'scripts/*.py' '.claude/skills/*.py' 'ocr/*.sh' 'scripts/*.sh'
+    '.claude/skills/*.sh'
     'server/scanmylib/web/*.js' 'server/scanmylib/web/*.json' 'server/scanmylib/web/*.css'
     ':(exclude)server/scanmylib/web/static/vendor/' ':(exclude)server/scanmylib/web/package-lock.json')
 # Without .env (CI only), scripts/build-apk.sh reads its settings from the environment, which
@@ -103,7 +104,7 @@ run_python_tool() {
 }
 
 check_lint() {
-    local python_tools web_tools shell_scripts
+    local python_tools web_tools shell_scripts listed_scripts skill_scripts script
     python_tools=$(build_python_tools)
     run_python_tool "$python_tools" CHECKED_SOURCES . ruff format --check .
     run_python_tool "$python_tools" CHECKED_SOURCES . ruff check .
@@ -113,6 +114,17 @@ check_lint() {
         scanmylib_ocr tests bench
     run_python_tool "$python_tools" CHECKED_SOURCES scripts env MYPYPATH=lib:tests:integration_tests mypy \
         --config-file ../mypy.ini lib release.py e2e_test.py tests integration_tests
+    # As the shell scripts: new ones included, deleted ones left out.
+    mapfile -d '' -t listed_scripts < <(git -C "$ROOT" ls-files -z --cached --others --exclude-standard -- \
+        '.claude/skills/*/scripts/*.py')
+    wait "$!" || die "cannot list the scripts of the skills: see git's error above"
+    skill_scripts=()
+    for script in "${listed_scripts[@]}"; do
+        if [[ -f $ROOT/$script ]]; then skill_scripts+=("$script"); fi
+    done
+    if ((${#skill_scripts[@]})); then
+        run_python_tool "$python_tools" CHECKED_SOURCES . mypy --config-file mypy.ini -- "${skill_scripts[@]}"
+    fi
     run_python_tool "$python_tools" CHECKED_SOURCES . zizmor --offline --no-progress .github/workflows
     mapfile -d '' -t shell_scripts < <(python3 "$ROOT/scripts/lib/formatting.py" shell-scripts "$ROOT")
     wait "$!" || die "cannot list the shell scripts: see git's error above"

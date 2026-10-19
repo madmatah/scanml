@@ -71,6 +71,8 @@ COPIED = [
     "server/requirements-test.lock",
     "server/scanmylib/web/package.json",
     "server/scanmylib/web/package-lock.json",
+    # A skill, so that .claude/skills/ exists to mount, as in the repository.
+    ".claude/skills/pull-request/SKILL.md",
 ]
 VERSION = (REPO / "VERSION").read_text().strip()
 VERSION_CODE = sum(int(part) * factor for part, factor in zip(VERSION.split("."), (10000, 100, 1), strict=True))
@@ -1818,6 +1820,20 @@ class CheckTest(ScriptsTestCase):
                 mounts = self.list_mounts(run)
                 self.assertTrue(mounts and all(mount.endswith(":ro") for mount in mounts), mounts)
 
+    def test_the_lint_area_types_the_scripts_of_the_skills_new_ones_included_and_deleted_ones_skipped(self) -> None:
+        scripts = self.worktree / ".claude" / "skills" / "example" / "scripts"
+        scripts.mkdir(parents=True)
+        (scripts / "gone.py").write_text("print('gone')\n")
+        self.git(self.worktree, "add", str(scripts / "gone.py"))
+        self.git(self.worktree, "commit", "--quiet", "--message", "A script of a skill")
+        (scripts / "gone.py").unlink()
+        (scripts / "tool.py").write_text("print('tool')\n")
+        gate_run = self.run_script(self.worktree, "check.sh", "lint")
+        self.assertEqual(gate_run.returncode, 0, gate_run.stdout + gate_run.stderr)
+        tools = [" ".join(argv) for argv in self.list_tool_runs()]
+        [skills_mypy] = (tool for tool in tools if "mypy --config-file mypy.ini --" in tool)
+        self.assertTrue(skills_mypy.endswith("mypy --config-file mypy.ini -- .claude/skills/example/scripts/tool.py"))
+
     def test_the_lint_area_checks_new_shell_scripts_and_skips_deleted_ones(self) -> None:
         (self.worktree / "scripts" / "new.sh").write_text("#!/usr/bin/env bash\n")
         (self.worktree / "scripts" / "setup.sh").unlink()
@@ -1886,6 +1902,7 @@ class CheckTest(ScriptsTestCase):
                     f"{tree}/server:/src/server",
                     f"{tree}/ocr:/src/ocr",
                     f"{tree}/scripts:/src/scripts",
+                    f"{tree}/.claude/skills:/src/.claude/skills",
                 ],
             )
         for run in (biome, ruff_check, ruff_format, shfmt):

@@ -26,6 +26,7 @@ EVERY_AREA = ["lint", "scripts", "web", "server", "ocr", "android", "integration
 
 # One path for each rule of commit_areas.PATH_RULES, and the areas a commit that changes it alone is checked on.
 AREAS_OF_EACH_PATH = {
+    ".claude/skills/pull-request/scripts/publish_screenshots.py": ["lint", "integration"],
     ".claude/rules/tests.md": [],
     "docs/foundations.md": [],
     "CLAUDE.md": [],

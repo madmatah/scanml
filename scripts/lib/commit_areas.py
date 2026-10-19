@@ -12,14 +12,18 @@ Standard library and git only:
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import subprocess
 import sys
 from collections.abc import Iterable, Sequence
 from pathlib import Path
 
 GATE_AREAS = ("lint", "scripts", "web", "server", "ocr", "android", "integration")
-# A narrower prefix comes before the wider one it sits in, since the first that matches wins.
+# A narrower prefix comes before the wider one it sits in, since the first that matches wins. A prefix is an fnmatch
+# pattern: its `*` matches any characters, `/` included.
 PATH_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
+    # The scripts that skills keep: the lint area checks them, and their tests are integration tests.
+    (".claude/skills/*/scripts/", ("lint", "integration")),
     (".claude/", ()),
     ("docs/", ()),
     ("CLAUDE.md", ()),
@@ -57,7 +61,7 @@ PATH_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
 
 def find_rule(path: str) -> tuple[str, tuple[str, ...]] | None:
     for prefix, areas in PATH_RULES:
-        if path == prefix or (prefix.endswith("/") and path.startswith(prefix)):
+        if path == prefix or (prefix.endswith("/") and fnmatch.fnmatchcase(path, f"{prefix}*")):
             return prefix, areas
     return None
 

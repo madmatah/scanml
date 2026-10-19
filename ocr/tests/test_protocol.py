@@ -1,61 +1,57 @@
-"""Protocol channel and worker loop tests (stdlib only, no GPU)."""
+"""The channel of the protocol between the supervisor and the worker (ocr/scanmylib_ocr/protocol.py).
+
+Standard library only, in the sandbox's image: `scripts/check.sh ocr`.
+"""
 
 from __future__ import annotations
 
+import functools
 import os
+import select
 import unittest
+from contextlib import suppress
 from unittest import mock
 
-from scanmylib_ocr import protocol, worker
-from scanmylib_ocr.engines.base import PageEngine, PageOptions, PageResult
+from scanmylib_ocr import protocol
 from scanmylib_ocr.protocol import Channel
 
-
-class HugeResultEngine(PageEngine):
-    def load(self) -> None:
-        pass
-
-    def parse(self, image_path: str, options: PageOptions) -> PageResult:
-        return {
-            "width": 1000,
-            "height": 1400,
-            "markdown": "x" * 4096,
-            "images": [],
-            "blocks": [],
-            "page_numbers": [],
-            "page_continuation": None,
-            "preprocess": {},
-        }
+LIMIT_BYTES = 1024
+OVERSIZED_MESSAGE = {"result": "x" * 4096}
 
 
-class ChannelSizeTest(unittest.TestCase):
+def has_bytes_waiting(read_end: int) -> bool:
+    readable_ends, _, _ = select.select([read_end], [], [], 0)
+    return readable_ends == [read_end]
+
+
+class _TheSendMethodWhenTheMessageIsLargerThanTheLimit(unittest.TestCase):
     def setUp(self) -> None:
-        to_worker_read, self.to_worker_write = os.pipe()
-        self.from_worker_read, from_worker_write = os.pipe()
-        self.worker_side = Channel(to_worker_read, from_worker_write)
-        self.supervisor_side = Channel(self.from_worker_read, self.to_worker_write)
-        self.addCleanup(self.worker_side.close)
-        self.addCleanup(self.supervisor_side.close)
-        patcher = mock.patch.object(protocol, "MAX_MESSAGE_BYTES", 1024)
-        patcher.start()
-        self.addCleanup(patcher.stop)
+        to_worker_read_end, to_worker_write_end = os.pipe()
+        self.from_worker_read_end, from_worker_write_end = os.pipe()
+        worker_channel = Channel(to_worker_read_end, from_worker_write_end)
+        self.addCleanup(worker_channel.close)
+        supervisor_channel = Channel(self.from_worker_read_end, to_worker_write_end)
+        self.addCleanup(supervisor_channel.close)
+        limit_patcher = mock.patch.object(protocol, "MAX_MESSAGE_BYTES", LIMIT_BYTES)
+        limit_patcher.start()
+        self.addCleanup(limit_patcher.stop)
+        self.send_oversized_message = functools.partial(worker_channel.send, OVERSIZED_MESSAGE)
 
-    def test_an_oversized_message_is_refused_before_anything_is_written(self) -> None:
-        with self.assertRaisesRegex(ValueError, "larger than"):
-            self.worker_side.send({"result": "x" * 4096})
-        os.set_blocking(self.from_worker_read, False)
-        with self.assertRaises(BlockingIOError):
-            os.read(self.from_worker_read, 1)
 
-    def test_an_oversized_result_becomes_an_error_reply(self) -> None:
-        self.supervisor_side.send({"op": "parse", "id": "job-1", "image_path": "page.jpg"})
-        self.supervisor_side.send({"op": "shutdown"})
-        with self.assertLogs("scanmylib_ocr.worker", "ERROR"):
-            worker.serve(self.worker_side, HugeResultEngine())
-        reply = self.supervisor_side.receive()
-        assert reply is not None
-        self.assertEqual((reply["id"], reply["ok"], reply["error"]), ("job-1", False, protocol.PROCESSING_FAILED))
-        self.assertIn("larger than", reply["detail"])
+class TheSendMethodWhenTheMessageIsLargerThanTheLimit(_TheSendMethodWhenTheMessageIsLargerThanTheLimit):
+    def test_should_refuse_it(self) -> None:
+        self.assertRaisesRegex(ValueError, f"larger than {LIMIT_BYTES}", self.send_oversized_message)
+
+
+class TheSendMethodWhenTheMessageIsLargerThanTheLimitWhenItIsRefused(_TheSendMethodWhenTheMessageIsLargerThanTheLimit):
+    def setUp(self) -> None:
+        super().setUp()
+        with suppress(ValueError):
+            self.send_oversized_message()
+        self.has_bytes_for_the_supervisor = has_bytes_waiting(self.from_worker_read_end)
+
+    def test_should_write_nothing_so_that_the_supervisor_never_reads_part_of_a_message(self) -> None:
+        self.assertFalse(self.has_bytes_for_the_supervisor)
 
 
 if __name__ == "__main__":

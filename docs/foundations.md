@@ -53,7 +53,7 @@ These constraints drive the choices in this document:
 | CameraX, ML Kit document scanner and code scanner | 1.6.2, 16.0.0, 16.1.0 | The app's camera, Google's document scanner and the QR code reader |
 | OkHttp, Coil | 5.5.0, 3.6.3 | The app's client of the PC, and its images |
 | JUnit | 4.13.2 | The app's unit tests |
-| Robolectric, Roborazzi | 4.17, 1.76.0 | The app's screenshot tests, which draw its screens on the JVM |
+| Robolectric, Roborazzi | 4.17, 1.76.0 | The app's screenshot tests, which draw its screens on the JVM, and its tests that need Android's framework |
 | Bash | — | The scripts that install, develop, check and deploy |
 | ShellCheck, shfmt | 0.11.0, 3.14.1 | Lint and formatting of the shell scripts |
 | ktlint | 1.8.0 | Formatting and lint of the app's Kotlin, in Android Studio's style with trailing commas |
@@ -133,6 +133,7 @@ states the rules, and `docs/SECURITY.md` the threat model, the guarantees and th
 | Page order | a page is placed by its manual position, else its effective page number (roman front matter before arabic pages), else next to its neighbors in the same capture session, else at the end; a manual reordering stores positions only for the pages moved |
 | Phone capture | Google's ML Kit document scanner (retouching off by default), the app's own camera (one original photo per tap), or photos imported from the gallery, from the app or shared to it by another app (only what that app's provider grants) |
 | App updates | offered by the paired PC (`/api/health` describes the APK it publishes), checked when the library shows or is refreshed, at most once an hour, again once the library reaches the PC after a failed check, and from the settings; the app downloads the APK from that PC, checks its digest, package, version and signing certificate (where Android reports it), and hands it to Android's installer, which asks the user each time |
+| App's look | its own colors, "Paper & Ink" (warm paper neutrals, a teal accent, ocher for what needs a look), the same on every phone, so that the app matches its icon and its colors mean the same for everyone, where the wallpaper's colors (Material You) change with each phone; a light and a dark theme, as the phone is; medium- and high-contrast variants, chosen from the phone's contrast setting (Android 14 and later), since a fixed scheme would otherwise ignore it, and checked by a unit test of their contrast ratios; titles in the phone's own serif, so that no font is bundled |
 | Pairing and access | a random bearer token, shared by QR code; plain HTTP on the local network; remote use through a VPN |
 | Deployment | Docker Compose (`api`, `ocr`), restarted automatically with Docker; no official instance: each installation deploys the releases it chooses, with `scripts/deploy.sh` |
 | Releases | one version for the api and the app (`VERSION`), so that the app a PC offers always matches its api; a release is a pull request of its own, whose notes are drafted from the Conventional Commits since the last release (`scripts/release.py`) in the Keep a Changelog format, and a workflow publishes it once it is merged, so that a release is reviewed like any change and published by nothing but its merge |
@@ -365,6 +366,9 @@ Every branch goes through `/expert-review` before its pull request. It is a proj
 - FastAPI: https://fastapi.tiangolo.com
 - Android app architecture: https://developer.android.com/topic/architecture
 - Jetpack Compose: https://developer.android.com/compose
+- Material 3 color roles: https://m3.material.io/styles/color/roles
+- material-color-utilities (the contrast levels of Material's schemes): https://github.com/material-foundation/material-color-utilities
+- WCAG 2.2: https://www.w3.org/TR/WCAG22/
 - ML Kit document scanner: https://developers.google.com/ml-kit/vision/doc-scanner
 - KaTeX: https://katex.org
 - Conventional Commits 1.0.0: https://www.conventionalcommits.org/en/v1.0.0/

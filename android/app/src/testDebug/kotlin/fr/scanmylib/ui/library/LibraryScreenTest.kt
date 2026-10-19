@@ -14,6 +14,7 @@ import fr.scanmylib.db.DocumentEntity
 import fr.scanmylib.db.LibraryRow
 import fr.scanmylib.db.ServerDocumentState
 import fr.scanmylib.model.DocumentKind
+import fr.scanmylib.ui.theme.Contrast
 import fr.scanmylib.ui.theme.ScanMyLibTheme
 import fr.scanmylib.update.UpdateState
 import org.junit.Before
@@ -32,13 +33,13 @@ class LibraryScreenTest {
         @RunWith(ParameterizedRobolectricTestRunner::class)
         @GraphicsMode(GraphicsMode.Mode.NATIVE)
         @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
-        class WhenThePcIsReading(private val theme: String, private val dark: Boolean) {
+        class WhenThePcIsReading(private val theme: String, private val dark: Boolean, private val contrast: Contrast) {
             @get:Rule
             val compose = createComposeRule()
 
             @Before
             fun drawTheLibrary() {
-                compose.setContent { ScanMyLibTheme(dark = dark) { LibraryContentOf(LIBRARY) } }
+                compose.setContent { ScanMyLibTheme(dark = dark, contrast = contrast) { LibraryContentOf(LIBRARY) } }
                 compose.onRoot().captureRoboImage("build/outputs/roborazzi/library-reading-$theme.png")
             }
 
@@ -108,7 +109,12 @@ class LibraryScreenTest {
 
                 @JvmStatic
                 @ParameterizedRobolectricTestRunner.Parameters(name = "in the {0} theme")
-                fun themes(): List<Array<Any>> = listOf(arrayOf("light", false), arrayOf("dark", true))
+                fun themes(): List<Array<Any>> = listOf(
+                    arrayOf("light", false, Contrast.STANDARD),
+                    arrayOf("dark", true, Contrast.STANDARD),
+                    arrayOf("light-high-contrast", false, Contrast.HIGH),
+                    arrayOf("dark-high-contrast", true, Contrast.HIGH),
+                )
             }
         }
     }

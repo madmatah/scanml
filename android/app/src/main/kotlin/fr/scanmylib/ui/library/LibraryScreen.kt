@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FilledTonalIconButton
@@ -53,6 +54,9 @@ import fr.scanmylib.ui.components.StatusLine
 import fr.scanmylib.ui.components.UpdateBanner
 import fr.scanmylib.ui.components.iconRes
 import fr.scanmylib.ui.components.readingUnavailable
+import fr.scanmylib.ui.theme.cardColor
+import fr.scanmylib.ui.theme.cardTitle
+import fr.scanmylib.ui.theme.wordmark
 import fr.scanmylib.update.UpdateState
 
 @Composable
@@ -102,7 +106,7 @@ internal fun LibraryContent(
         modifier = modifier,
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.app_name)) },
+                title = { Text(stringResource(R.string.app_name), style = MaterialTheme.typography.wordmark) },
                 actions = {
                     IconButton(onClick = onOpenSettings) {
                         Icon(painterResource(R.drawable.ic_settings), stringResource(R.string.settings_title))
@@ -115,6 +119,9 @@ internal fun LibraryContent(
                 onClick = onNewDocument,
                 icon = { Icon(painterResource(R.drawable.ic_add), contentDescription = null) },
                 text = { Text(stringResource(R.string.library_new_document)) },
+                // Material's default, primaryContainer, is close to the dark background.
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
             )
         },
     ) { padding ->
@@ -227,7 +234,11 @@ private fun DocumentCard(
     onScan: () -> Unit,
 ) {
     val document = row.document
-    Card(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
+    Card(
+        onClick = onClick,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.cardColor),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
         Row(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -237,7 +248,7 @@ private fun DocumentCard(
             Column(verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.weight(1f)) {
                 Text(
                     document.title,
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.cardTitle,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -325,7 +336,7 @@ private fun Cover(document: DocumentEntity, server: ServerConfig?) {
         modifier = Modifier
             .size(width = 56.dp, height = 72.dp)
             .clip(MaterialTheme.shapes.small)
-            .background(MaterialTheme.colorScheme.surfaceVariant),
+            .background(MaterialTheme.colorScheme.surfaceContainerHighest),
     ) {
         Icon(
             painterResource(document.kind.iconRes()),

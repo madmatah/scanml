@@ -111,7 +111,7 @@ def locate_socket(socket_directory: Path) -> Path:
     return socket_directory / "ocr.sock"
 
 
-def make_settings(directory: Path, socket_directory: Path) -> Settings:
+def make_settings(directory: Path, socket_directory: Path, *, token: str | None = TOKEN) -> Settings:
     return Settings(
         library_dir=directory / "library",
         library_host_path="/home/user/Documents/ScanMyLib",
@@ -120,7 +120,7 @@ def make_settings(directory: Path, socket_directory: Path) -> Settings:
         public_url="http://192.168.1.10:8765",
         apk_path=directory / "app" / "scanmylib.apk",
         web_dir=directory / "web",
-        token=TOKEN,
+        token=token,
         assemble_delay_s=0.05,
         ocr_retry_max_s=0.2,
     )
@@ -147,9 +147,9 @@ def serving_fake_ocr(socket_path: Path) -> Iterator[FakeOcrServer]:
 
 
 @contextmanager
-def preparing_settings(directory: Path) -> Iterator[Settings]:
+def preparing_settings(directory: Path, *, token: str | None = TOKEN) -> Iterator[Settings]:
     with temporary_socket_directory() as socket_directory:
-        yield make_settings(directory, socket_directory)
+        yield make_settings(directory, socket_directory, token=token)
 
 
 def build_client(settings: Settings) -> TestClient:
@@ -238,3 +238,13 @@ def wait_until_processed(client: TestClient, document_id: str, timeout_seconds: 
         return document if stats["queued"] == 0 and stats["processing"] == 0 else None
 
     return wait_for(settled, timeout_seconds)
+
+
+@dataclass(frozen=True)
+class Answer:
+    status: int
+    body: Any
+
+
+def capture_answer(response: httpx2.Response) -> Answer:
+    return Answer(response.status_code, response.json())

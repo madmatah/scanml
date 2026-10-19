@@ -1,9 +1,12 @@
 """Runs the unittest tests of a directory in parallel processes, for scripts/check.sh.
 
 The tests of the scripts spend their time starting processes, one after the other on a single core: shared out between
-processes, one per core, they take the time of the slowest share. Each share runs in a process of its own, as
-`python3 -m unittest` would run its tests. A run fails when a share fails, or when unittest reports fewer tests than the
-share was given, so that a share that stops early never passes.
+processes, one per core, they take the time of the slowest share. A class whose setUpClass is not unittest's, an
+inherited one included, goes whole to one share, so that its setup, which builds what its tests read, runs once rather
+than in every process that takes one of its tests; the other tests go one by one, so that a class whose tests each set
+up their own spreads across the processes. Each share runs in a process of its own, as `python3 -m unittest` would run
+its tests. A run fails when a share fails, or when unittest reports fewer tests than the share was given, so that a
+share that stops early never passes.
 
 Standard library only:
     python3 scripts/lib/parallel_tests.py DIRECTORY
@@ -12,6 +15,7 @@ Standard library only:
 from __future__ import annotations
 
 import argparse
+import inspect
 import os
 import re
 import subprocess
@@ -27,6 +31,7 @@ from pathlib import Path
 _RAN_LINE = re.compile(r"^Ran (\d+) tests? in ", re.MULTILINE)
 _SKIPPED_FIELD = re.compile(r"\bskipped=(\d+)")
 _NO_TESTS_EXIT_CODE = 5
+_TEST_CASE_CLASS_SETUP = inspect.getattr_static(unittest.TestCase, "setUpClass")
 
 
 @dataclass(frozen=True)
@@ -59,19 +64,30 @@ def _iterate_tests(suite: unittest.TestSuite) -> Iterator[unittest.TestCase]:
             yield test
 
 
-def _list_test_ids(directory: Path) -> list[str]:
+def _has_class_setup(test: unittest.TestCase) -> bool:
+    return inspect.getattr_static(type(test), "setUpClass") is not _TEST_CASE_CLASS_SETUP
+
+
+def _list_test_groups(directory: Path) -> list[tuple[str, ...]]:
     loader = unittest.TestLoader()
     suite = loader.discover(str(directory), top_level_dir=str(directory))
     if loader.errors:
         # The loader keeps each import's traceback as text, where typeshed types the list as exceptions:
         # https://github.com/python/typeshed/blob/main/stdlib/unittest/loader.pyi
         raise _DiscoveryFailed("\n".join(str(error) for error in loader.errors))
-    return [test.id() for test in _iterate_tests(suite)]
+    groups: dict[str, list[str]] = {}
+    for test in _iterate_tests(suite):
+        group = test.id().rpartition(".")[0] if _has_class_setup(test) else test.id()
+        groups.setdefault(group, []).append(test.id())
+    return [tuple(test_ids) for test_ids in groups.values()]
 
 
-def share_out(test_ids: Sequence[str], process_count: int) -> list[tuple[str, ...]]:
-    share_count = max(1, min(process_count, len(test_ids)))
-    return [tuple(test_ids[index::share_count]) for index in range(share_count)]
+def share_out(test_groups: Sequence[tuple[str, ...]], process_count: int) -> list[tuple[str, ...]]:
+    share_count = max(1, min(process_count, len(test_groups)))
+    return [
+        tuple(test_id for test_ids in test_groups[index::share_count] for test_id in test_ids)
+        for index in range(share_count)
+    ]
 
 
 def _run_share(directory: Path, test_ids: tuple[str, ...]) -> _ShareRun:
@@ -88,14 +104,14 @@ def _run_share(directory: Path, test_ids: tuple[str, ...]) -> _ShareRun:
 def _run_tests(directory: Path, process_count: int) -> int:
     started_seconds = time.monotonic()
     try:
-        test_ids = _list_test_ids(directory)
+        test_groups = _list_test_groups(directory)
     except _DiscoveryFailed as exc:
         print(f"cannot import the tests of {directory}:\n{exc}", file=sys.stderr)
         return 1
-    if not test_ids:
+    if not test_groups:
         print(f"Ran 0 tests: {directory} holds none\n\nNO TESTS RAN", file=sys.stderr)
         return _NO_TESTS_EXIT_CODE
-    shares = share_out(test_ids, process_count)
+    shares = share_out(test_groups, process_count)
     with ThreadPoolExecutor(max_workers=len(shares)) as executor:
         share_runs = list(executor.map(lambda share: _run_share(directory, share), shares))
     failed_runs = [run for run in share_runs if run.exit_code != 0 or run.run_count != len(run.test_ids)]
@@ -114,7 +130,7 @@ def _run_tests(directory: Path, process_count: int) -> int:
     summary = f"Ran {run_count} {test_noun} in {elapsed_seconds:.3f}s, in {len(shares)} {process_noun}"
     print(f"{summary}\n", file=sys.stderr)
     if failed_runs:
-        unreported_count = len(test_ids) - run_count
+        unreported_count = sum(len(share) for share in shares) - run_count
         unreported = f", {unreported_count} tests unreported" if unreported_count else ""
         print(f"FAILED ({len(failed_runs)} of {len(shares)} processes{unreported})", file=sys.stderr)
         return 1

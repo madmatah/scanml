@@ -260,9 +260,10 @@ them with the standard library only, the `python3` of the sandbox's image and th
   review checks it. No lint sees an assertion in `setUp`, nor a skip.
 - **No timeout:** `unittest` times out no test and no hook.
 - **The gate runs the tests of the scripts in parallel** (`scripts/lib/parallel_tests.py`), in one process per core,
-  each test in one of them, since they spend their time starting processes. So a test of the scripts takes no resource
-  of the whole machine that another one could take at the same time, such as a fixed port or a path outside its
-  temporary directory: it takes a port the system gives it, and works in its own directory.
+  since they spend their time starting processes: a class whose `setUpClass` is not unittest's, an inherited one
+  included, whole in one of them, so that its setup runs once, and every other test in any of them. So a test of the
+  scripts takes no resource of the whole machine that another one could take at the same time, such as a fixed port or a
+  path outside its temporary directory: it takes a port the system gives it, and works in its own directory.
 - **The skips allowed** are conditional, with `skipUnless`, `skipIf` or `self.skipTest` and their reason, and only
   these:
   - the engine's environment is missing, such as Pillow outside the worker's environment, since the sandbox's tests also

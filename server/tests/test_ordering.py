@@ -13,6 +13,8 @@ import pytest
 from scanmylib import ordering
 from scanmylib.ordering import (
     SESSION_STEP,
+    Coverage,
+    CoverageJson,
     Layout,
     PageInput,
     PageNumber,
@@ -23,6 +25,9 @@ from scanmylib.ordering import (
     positions_for_order,
     roman_to_int,
 )
+
+#: The numbers of pages 1–3, 7–8 and the spread 10–11.
+COVERAGE_WITH_GAPS = Coverage(ranges=((1, 3), (7, 8), (10, 11)), unnumbered=0)
 
 
 def page(
@@ -73,176 +78,37 @@ class RomanReading(NamedTuple):
     expected_label: str
 
 
-# -- effective number ------------------------------------------------------------
+def placed_by(layout: Layout, ids: Sequence[str] | None = None) -> list[str | None]:
+    ids = layout.reading_order if ids is None else ids
+    return [layout.placements[i].placed_by for i in ids]
 
 
-def test_precedence_manual_detected_hint() -> None:
-    layout = compute_layout(
-        [
-            page("a", manual=5, detected=("7",), hint=9),
-            page("b", detected=("7",), hint=9, ts=1),
-            page("c", hint=9, ts=2),
-        ]
-    )
-    sources = {pid: (p.number.value if p.number else None, p.source) for pid, p in layout.placements.items()}
-    assert sources == {"a": (5, "manual"), "b": (7, "detected"), "c": (9, "hint")}
+def sort_values(layout: Layout, ids: Sequence[str] | None = None) -> list[float | None]:
+    ids = layout.reading_order if ids is None else ids
+    return [layout.placements[i].sort_value for i in ids]
 
 
-def test_manual_number_replaces_a_detected_spread() -> None:
-    layout = compute_layout([page("a", manual=10, detected=("42", "43"))])
-    assert layout.placements["a"].number == PageNumber(10)
+def numbers_and_sources(layout: Layout, ids: Sequence[str]) -> list[tuple[PageNumber | None, str | None]]:
+    return [(layout.placements[i].number, layout.placements[i].source) for i in ids]
 
 
-# -- inference within a session ------------------------------------------------------
-
-
-def test_inference_forward_from_previous_numbered_page() -> None:
-    layout = compute_layout(
-        [
-            page("a", seq=0, detected=("10",)),
-            page("b", seq=1, ts=1),
-            page("c", seq=2, ts=2),
-        ]
-    )
-    assert labels(layout) == ["10", "11", "12"]
-    assert layout.placements["c"].source == "inferred"
-
-
-def test_inference_backward_from_next_numbered_page() -> None:
-    layout = compute_layout(
-        [
-            page("a", seq=0),
-            page("b", seq=1, ts=1),
-            page("c", seq=2, ts=2, detected=("5",)),
-        ]
-    )
-    assert labels(layout, ["a", "b", "c"]) == ["3", "4", "5"]
-
-
-def test_backward_inference_never_goes_below_one() -> None:
-    layout = compute_layout([page("a", seq=0), page("b", seq=1, ts=1, detected=("1",))])
-    assert layout.placements["a"].number is None
-
-
-def test_inference_uses_the_distance_in_seq() -> None:
-    # seq 1 and 2 were deleted (e.g. blurry shots rescanned elsewhere).
-    layout = compute_layout([page("a", seq=0, detected=("10",)), page("b", seq=3, ts=1)])
-    assert layout.placements["b"].number == PageNumber(13)
-
-
-def test_inference_does_not_collide_with_the_next_numbered_page() -> None:
-    # An unnumbered plate between pages 10 and 11 stays unnumbered.
-    layout = compute_layout(
-        [
-            page("p10", seq=0, detected=("10",)),
-            page("plate", seq=1, ts=1),
-            page("p11", seq=2, ts=2, detected=("11",)),
-        ]
-    )
-    assert layout.placements["plate"].number is None
-    assert layout.placements["plate"].in_document
-    assert layout.placements["p11"].duplicate_of is None
-
-
-def test_inference_after_a_spread_continues_after_its_last_page() -> None:
-    layout = compute_layout([page("a", seq=0, detected=("42", "43")), page("b", seq=1, ts=1)])
-    assert layout.placements["b"].number == PageNumber(44)
-
-
-def test_inference_continues_roman_front_matter() -> None:
-    layout = compute_layout([page("a", seq=0, detected=("ix",)), page("b", seq=1, ts=1)])
-    assert layout.placements["b"].number == PageNumber(10, front_matter=True)
-    assert layout.placements["b"].number.label == "x"
-
-
-def test_no_inference_across_sessions_or_without_session() -> None:
-    layout = compute_layout(
-        [
-            page("a", session="s1", seq=0, detected=("10",)),
-            page("b", session="s2", seq=1, ts=1),
-            page("c", session=None, seq=1, ts=2),
-        ]
-    )
-    assert layout.placements["b"].number is None
-    assert layout.placements["c"].number is None
-
-
-def test_excluded_pages_are_not_anchors() -> None:
-    layout = compute_layout([page("a", seq=0, detected=("10",), excluded=True), page("b", seq=1, ts=1)])
-    assert layout.placements["b"].number is None
-
-
-def test_queued_page_with_a_hint_is_an_anchor() -> None:
-    layout = compute_layout([page("a", seq=0, hint=20, status="queued"), page("b", seq=1, ts=1)])
-    assert layout.placements["b"].number == PageNumber(21)
-
-
-def users_roman_book(manual: dict[int, int] | None = None) -> list[PageInput]:
-    """The user's book: 25 pages scanned in one session (seq 1–25), with `manual` numbers by seq.
+def book_with_roman_front_matter(typed: dict[int, int] | None = None) -> list[PageInput]:
+    """25 pages of a book scanned in one session (seq 1–25), with the numbers `typed` by seq.
 
     Cover and unnumbered pages, front matter in roman numerals, then the main
     text; the OCR read "1X" (no number), XV, XXV, garbage instead of the 2, and 3.
     """
     detected = {11: ("1X",), 15: ("XV",), 22: ("XXV",), 24: ("$ x_{0} $",), 25: ("3",)}
-    manual = manual or {}
+    typed = typed or {}
     return [
-        page(f"s{seq}", seq=seq, ts=seq, detected=detected.get(seq, ()), manual=manual.get(seq)) for seq in range(1, 26)
+        page(f"s{seq}", seq=seq, ts=seq, detected=detected.get(seq, ()), manual=typed.get(seq)) for seq in range(1, 26)
     ]
 
 
-def test_users_book_front_matter_then_main_text_in_one_session() -> None:
-    # The two pages between XXV and 3 are the book's pages 1 and 2, not xxvi and xxvii.
-    layout = compute_layout(users_roman_book())
-    scanned = [f"s{seq}" for seq in range(1, 26)]
-    assert labels(layout, scanned) == [int_to_roman(seq) for seq in range(1, 22)] + ["xxv", "1", "2", "3"]
-    assert [layout.placements[i].source for i in ("s23", "s24", "s25")] == ["inferred", "inferred", "detected"]
-    assert layout.reading_order == tuple(scanned)
-    assert placed_by(layout) == ["number"] * 25
-    assert (layout.coverage.label, layout.coverage.unnumbered) == ("1–3", 0)
-
-
-def test_users_manual_numbers_still_win() -> None:
-    # The user typed 1 and 2 on these pages: they keep them, and the order does not change.
-    fixed, automatic = compute_layout(users_roman_book({23: 1, 24: 2})), compute_layout(users_roman_book())
-    for layout, source in ((fixed, "manual"), (automatic, "inferred")):
-        numbers = [(layout.placements[i].number, layout.placements[i].source) for i in ("s23", "s24")]
-        assert numbers == [(PageNumber(1), source), (PageNumber(2), source)]
-    assert fixed.reading_order == automatic.reading_order
-    # A number typed on the page read XXV wins too, and the others follow it: the front matter ends
-    # before it, page 2 comes next, and the page left before page 3 is an extra photo.
-    layout = compute_layout(users_roman_book({22: 1}))
-    assert labels(layout, ["s21", "s22", "s23", "s24", "s25"]) == ["xxi", "1", "2", None, "3"]
-    assert layout.placements["s22"].source == "manual"
-
-
-def session_labels(*detected: str) -> list[str | None]:
+def session_labels(detected: Sequence[str]) -> list[str | None]:
     """Labels of the pages of one session, in seq order, from the number found on each ("": none)."""
     pages = [page(f"s{seq}", seq=seq, ts=seq, detected=(text,) if text else ()) for seq, text in enumerate(detected)]
     return labels(compute_layout(pages), [p.id for p in pages])
-
-
-@pytest.mark.parametrize(
-    ("detected", "expected"),
-    [
-        # From the front matter to the main text, which starts at page 1: counted back from the main text...
-        (["xxv", "", "", "3"], ["xxv", "1", "2", "3"]),
-        (["xxv", "", "", "4-5"], ["xxv", "2", "3", "4–5"]),  # from the first page of a spread
-        # ...the pages that cannot be in it are still front matter.
-        (["xxv", "", "", "2"], ["xxv", "xxvi", "1", "2"]),
-        (["xxv", "", "", "1"], ["xxv", "xxvi", "xxvii", "1"]),
-        # Front matter scanned after the main text: the main text goes on, below its next page; no
-        # roman number is counted back.
-        (["5", "", "ii"], ["5", "6", "ii"]),
-        (["4-5", "", "", "ii", "7"], ["4–5", "6", None, "ii", "7"]),
-        # Nor does an inferred number reach a page numbered in its system on the other side.
-        (["2", "iii", "", "", "4"], ["2", "iii", "iv", "3", "4"]),
-        (["xii", "", "1", "xiii"], ["xii", None, "1", "xiii"]),
-    ],
-)
-def test_inference_does_not_carry_a_numbering_system_across_the_start_of_the_main_text(
-    detected: list[str], expected: list[str | None]
-) -> None:
-    assert session_labels(*detected) == expected
 
 
 def book_scanned_in_order(rng: random.Random, *, skipping: bool) -> tuple[list[PageInput], list[str]]:
@@ -269,14 +135,7 @@ def book_scanned_in_order(rng: random.Random, *, skipping: bool) -> tuple[list[P
     return pages, real
 
 
-@pytest.mark.parametrize("seed", range(300))
-def test_a_book_scanned_in_order_gets_its_page_numbers(seed: int) -> None:
-    # Every page gets its real number when a number found on it or around it tells it: on both sides,
-    # or on one side in its numbering system. After the last number found, nothing tells where the
-    # front matter ends: it goes on. Before the first one, front matter cannot be counted back from
-    # the main text: it stays unnumbered.
-    pages, real = book_scanned_in_order(random.Random(seed), skipping=False)
-    layout = compute_layout(pages)
+def expected_labels(pages: Sequence[PageInput], real: Sequence[str]) -> list[str | None]:
     found = [k for k, p in enumerate(pages) if parse_detected_numbers(p.detected_numbers)]
     expected: list[str | None] = []
     for k, label in enumerate(real):
@@ -285,32 +144,16 @@ def test_a_book_scanned_in_order_gets_its_page_numbers(seed: int) -> None:
             expected.append(label)
         elif before:
             last_found = roman_to_int(real[before[-1]])
-            assert last_found is not None  # the front matter comes first: the last number found is roman
+            if last_found is None:
+                raise ValueError(
+                    "the front matter does not come first: the last number found before the page is not roman"
+                )
             expected.append(int_to_roman(last_found + k - before[-1]))
         elif after and real[after[0]].isdigit() == label.isdigit():
             expected.append(label)
         else:
             expected.append(None)
-    assert labels(layout, [p.id for p in pages]) == expected
-    assert layout.reading_order == tuple(p.id for p in pages)
-    arabic = {int(label) for label in expected if label is not None and label.isdigit()}
-    assert {n for start, end in layout.coverage.ranges for n in range(start, end + 1)} == arabic
-    assert layout.coverage.unnumbered == expected.count(None)
-
-
-@pytest.mark.parametrize("seed", range(300))
-def test_a_book_scanned_in_order_stays_in_order(seed: int) -> None:
-    # Whatever pages were skipped and numbers missed, the numbers found are kept and the inferred
-    # ones keep the pages in the order of the scan: increasing, no duplicates.
-    pages, real = book_scanned_in_order(random.Random(seed), skipping=True)
-    layout = compute_layout(pages)
-    assert layout.reading_order == tuple(p.id for p in pages)
-    naturals = [n.natural for p in pages if (n := layout.placements[p.id].number) is not None]
-    assert naturals == sorted(set(naturals))
-    for p, label in zip(pages, real, strict=True):
-        if parse_detected_numbers(p.detected_numbers) is not None:
-            number = layout.placements[p.id].number
-            assert number is not None and number.label == label
+    return expected
 
 
 def own_number(p: PageInput) -> tuple[PageNumber | None, str | None]:
@@ -355,356 +198,90 @@ def random_session(rng: random.Random) -> list[PageInput]:
     return pages
 
 
-@pytest.mark.parametrize("seed", range(500))
-def test_inferred_numbers_follow_a_neighbor_without_reaching_a_numbered_page(seed: int) -> None:
-    pages = random_session(random.Random(seed))
-    layout = compute_layout(pages)
+class InferenceFindings(NamedTuple):
+    page_ids: list[str]
+    checked_page_ids: list[str]
+    own_number_changed: list[str]
+    not_counted_back_from_the_main_text: list[str]
+    not_marked_inferred: list[str]
+    out_of_range: list[str]
+    on_a_numbered_page: list[str]
+    counted_from_elsewhere: list[str]
+
+
+def check_inference(pages: Sequence[PageInput], layout: Layout) -> InferenceFindings:
     own = {p.id: own_number(p) for p in pages}
     anchors = [
         (p.seq, anchor) for p in pages if (anchor := own[p.id][0]) is not None and p.seq is not None and not p.excluded
     ]
+    findings = InferenceFindings([p.id for p in pages], [], [], [], [], [], [], [])
     for p in pages:
         seq = p.seq
-        assert seq is not None  # random_session numbers every page
+        if seq is None:
+            continue
+        findings.checked_page_ids.append(p.id)
         number, source = layout.placements[p.id].number, layout.placements[p.id].source
-        if own[p.id][0] is not None:  # manual numbers win, then the ones found, then the hints
-            assert (number, source) == own[p.id]
+        if own[p.id][0] is not None:
+            if (number, source) != own[p.id]:
+                findings.own_number_changed.append(p.id)
             continue
         before = [(s, n) for s, n in anchors if s < seq]
         after = [(s, n) for s, n in anchors if s > seq]
         previous = before[-1][1] if before else None
         following = after[0][1] if after else None
         if previous is not None and following is not None and previous.front_matter and not following.front_matter:
-            # Between front matter and the main text, which starts at page 1: counted back from the main
-            # text, unless that reaches page 0 or a page of the main text scanned before.
             value = following.value - (after[0][0] - seq)
-            if value > next((n.last for _, n in reversed(before) if not n.front_matter), 0):
-                assert number == PageNumber(value)
+            main_text_before = next((n.last for _, n in reversed(before) if not n.front_matter), 0)
+            if value > main_text_before and number != PageNumber(value):
+                findings.not_counted_back_from_the_main_text.append(p.id)
         if number is None:
             continue
-        assert source == "inferred"
-        assert number.value >= 1 and (not number.front_matter or number.value <= 399)
-        # Strictly between the nearest pages numbered in its system: never on a numbered page.
+        if source != "inferred":
+            findings.not_marked_inferred.append(p.id)
+        if number.value < 1 or (number.front_matter and number.value > 399):
+            findings.out_of_range.append(p.id)
         lower = [n for _, n in before if n.front_matter == number.front_matter]
         upper = [n for _, n in after if n.front_matter == number.front_matter]
-        assert not lower or lower[-1].last < number.value
-        assert not upper or number.value < upper[0].value
-        # Counted on from the previous numbered page, or back from the next one: the latter only
-        # without a previous one, or between front matter and the main text.
+        if (lower and lower[-1].last >= number.value) or (upper and number.value >= upper[0].value):
+            findings.on_a_numbered_page.append(p.id)
         forward = previous is not None and number == PageNumber(
             previous.last + seq - before[-1][0], front_matter=previous.front_matter
         )
         backward = following is not None and number == PageNumber(
             following.value - (after[0][0] - seq), front_matter=following.front_matter
         )
-        assert forward or (
-            backward
-            and following is not None
-            and (previous is None or (previous.front_matter and not following.front_matter))
+        backward_allowed = following is not None and (
+            previous is None or (previous.front_matter and not following.front_matter)
         )
+        if not forward and not (backward and backward_allowed):
+            findings.counted_from_elsewhere.append(p.id)
+    return findings
 
 
-# -- reading order ------------------------------------------------------------------
+class SessionReading(NamedTuple):
+    labels: list[str | None]
+    expected_labels: list[str | None]
 
 
-def test_out_of_order_sessions_are_merged_by_number() -> None:
-    # Pages 6–10 were scanned first, pages 1–5 in a later session.
-    first = [page(f"p{n}", session="first", seq=n - 6, ts=100 + n, detected=(str(n),)) for n in range(6, 11)]
-    second = [page(f"p{n}", session="second", seq=n - 1, ts=200 + n, detected=(str(n),)) for n in range(1, 6)]
-    layout = compute_layout(first + second)
-    assert labels(layout) == [str(n) for n in range(1, 11)]
-    assert layout.coverage.label == "1–10"
+class ComparedLayouts(NamedTuple):
+    typed_layout: Layout
+    inferred_layout: Layout
 
 
-def test_roman_front_matter_comes_first_and_is_not_in_the_coverage() -> None:
-    layout = compute_layout(
-        [
-            page("p2", detected=("2",), ts=1),
-            page("p1", detected=("1",), ts=2),
-            page("pii", detected=("ii",), ts=3),
-            page("pi", detected=("i",), ts=4),
-        ]
-    )
-    assert labels(layout) == ["i", "ii", "1", "2"]
-    assert layout.coverage.ranges == ((1, 2),)
+class BookScannedInOrder(NamedTuple):
+    scan_order: tuple[str, ...]
+    reading_order: tuple[str, ...]
+    labels: list[str | None]
+    expected_labels: list[str | None]
+    coverage: Coverage
 
 
-def test_unnumbered_pages_come_last_by_capture_time() -> None:
-    layout = compute_layout(
-        [
-            page("u2", session=None, ts=50),
-            page("n2", detected=("2",), ts=10),
-            page("u1", session=None, ts=40),
-            page("n1", detected=("1",), ts=20),
-        ]
-    )
-    assert layout.reading_order == ("n1", "n2", "u1", "u2")
-    assert layout.numbered
-    assert layout.coverage.unnumbered == 2
-
-
-def test_document_without_numbers_is_ordered_by_session_then_seq() -> None:
-    layout = compute_layout(
-        [
-            page("x0", session="x", seq=0, ts=50),
-            page("x1", session="x", seq=1, ts=45),  # clock oddity: seq wins inside a session
-            page("y1", session="y", seq=1, ts=12),
-            page("y0", session="y", seq=0, ts=10),
-        ]
-    )
-    assert not layout.numbered
-    assert layout.reading_order == ("y0", "y1", "x0", "x1")
-    assert layout.coverage.ranges == ()
-    assert layout.coverage.unnumbered == 4
-
-
-# -- duplicates and groups ------------------------------------------------------------
-
-
-def test_the_most_recent_capture_wins() -> None:
-    layout = compute_layout(
-        [
-            page("old", session="a", detected=("7",), ts=10),
-            page("new", session="b", detected=("7",), ts=20),
-        ]
-    )
-    assert layout.reading_order == ("new",)
-    assert layout.placements["old"].duplicate_of == "new"
-    assert not layout.placements["old"].in_document
-
-
-def test_excluded_and_unfinished_pages_do_not_compete() -> None:
-    layout = compute_layout(
-        [
-            page("done", detected=("7",), ts=10),
-            page("excluded", detected=("7",), ts=20, excluded=True),
-            page("queued", hint=7, ts=30, status="queued"),
-        ]
-    )
-    assert layout.reading_order == ("done",)
-    assert all(p.duplicate_of is None for p in layout.placements.values())
-
-
-def test_front_matter_and_body_numbers_do_not_collide() -> None:
-    layout = compute_layout([page("roman", detected=("v",)), page("arabic", detected=("5",), ts=1)])
-    assert set(layout.reading_order) == {"roman", "arabic"}
-
-
-def test_full_order_groups_pages_after_the_reading_order() -> None:
-    layout = compute_layout(
-        [
-            page("dup", detected=("1",), ts=1),
-            page("ok", detected=("1",), ts=9),
-            page("excl", detected=("2",), ts=2, excluded=True),
-            page("err", ts=4, status="error"),
-            page("queued", ts=3, status="queued"),
-            page("proc", ts=5, status="processing"),
-        ]
-    )
-    assert layout.order == ("ok", "queued", "err", "proc", "excl", "dup")
-    assert [layout.placements[i].rank for i in layout.order] == list(range(6))
-
-
-# -- coverage ---------------------------------------------------------------------------
-
-
-def test_coverage_ranges_gaps_and_labels() -> None:
-    pages = [page(f"p{n}", detected=(str(n),), ts=n) for n in (1, 2, 3, 7, 8)]
-    pages.append(page("spread", detected=("10", "11"), ts=20))
-    coverage = compute_layout(pages).coverage
-    assert coverage.ranges == ((1, 3), (7, 8), (10, 11))
-    assert coverage.gaps == ((4, 6), (9, 9))
-    assert coverage.label == "1–3, 7–8, 10–11"
-    assert coverage.missing_label == "4–6, 9"
-    assert (coverage.min, coverage.max) == (1, 11)
-    assert coverage.to_json()["gaps"] == [[4, 6], [9, 9]]
-
-
-def test_coverage_of_an_empty_document() -> None:
-    layout = compute_layout([])
-    assert layout.order == ()
-    assert layout.coverage.to_json() == {
-        "ranges": [],
-        "label": "",
-        "gaps": [],
-        "min": None,
-        "max": None,
-        "unnumbered": 0,
-    }
-
-
-# -- placement on the number line -------------------------------------------------------------
-
-
-def placed_by(layout: Layout, ids: Sequence[str] | None = None) -> list[str | None]:
-    ids = layout.reading_order if ids is None else ids
-    return [layout.placements[i].placed_by for i in ids]
-
-
-def test_front_matter_scanned_before_page_one_opens_the_document() -> None:
-    # Title page, preface... (20 pages without number), then pages 1–5, in one session.
-    front = [page(f"f{i}", seq=i, ts=i) for i in range(20)]
-    body = [page(f"p{n}", seq=19 + n, ts=19 + n, detected=(str(n),)) for n in range(1, 6)]
-    layout = compute_layout(body + front)
-    assert layout.reading_order == tuple(f"f{i}" for i in range(20)) + tuple(f"p{n}" for n in range(1, 6))
-    assert placed_by(layout) == ["session"] * 20 + ["number"] * 5
-    assert layout.placements["f19"].sort_value == pytest.approx(1 - SESSION_STEP)
-    assert layout.placements["f0"].sort_value == pytest.approx(1 - 20 * SESSION_STEP)
-    # Numbers, labels and coverage are those of today.
-    assert labels(layout) == [None] * 20 + ["1", "2", "3", "4", "5"]
-    assert (layout.coverage.label, layout.coverage.unnumbered) == ("1–5", 20)
-
-
-def test_an_unnumbered_plate_stays_after_the_page_scanned_before_it() -> None:
-    layout = compute_layout(
-        [
-            page("p13", seq=2, ts=2, detected=("13",)),
-            page("plate", seq=1, ts=1),
-            page("p12", seq=0, ts=0, detected=("12",)),
-        ]
-    )
-    assert layout.reading_order == ("p12", "plate", "p13")
-    plate = layout.placements["plate"]
-    assert (plate.number, plate.placed_by) == (None, "session")
-    assert plate.sort_value == pytest.approx(12 + SESSION_STEP)
-    assert layout.placements["p12"].sort_value == 12
-
-
-def test_unnumbered_pages_scanned_in_their_own_session_come_last() -> None:
-    layout = compute_layout(
-        [
-            page("p1", session="book", seq=0, ts=10, detected=("1",)),
-            page("p2", session="book", seq=1, ts=11, detected=("2",)),
-            page("u2", session="loose", seq=1, ts=1),
-            page("u1", session="loose", seq=0, ts=2),  # seq wins inside a session
-        ]
-    )
-    assert layout.reading_order == ("p1", "p2", "u1", "u2")
-    assert placed_by(layout) == ["number", "number", "unplaced", "unplaced"]
-    assert layout.placements["u1"].sort_value is None
-
-
-def test_session_steps_without_seq_follow_the_capture_order() -> None:
-    layout = compute_layout(
-        [
-            page("p5", ts=0, detected=("5",)),
-            page("b", ts=2),
-            page("a", ts=1),
-            page("p6", ts=3, detected=("6",)),
-        ]
-    )
-    assert layout.reading_order == ("p5", "a", "b", "p6")
-    assert layout.placements["b"].sort_value == pytest.approx(5 + 2 * SESSION_STEP)
-
-
-def test_roman_front_matter_sits_before_page_one_on_the_number_line() -> None:
-    layout = compute_layout(
-        [
-            page("p1", session="b", seq=0, ts=10, detected=("1",)),
-            page("ii", session="a", seq=0, ts=1, detected=("ii",)),
-            page("plate", session="a", seq=1, ts=2),
-            page("iii", session="a", seq=2, ts=3, detected=("iii",)),
-        ]
-    )
-    assert labels(layout) == ["ii", None, "iii", "1"]
-    values = [layout.placements[i].sort_value for i in layout.reading_order]
-    assert values == pytest.approx([2 - 10_000, 2 - 10_000 + SESSION_STEP, 3 - 10_000, 1])
-
-
-def test_a_spread_is_placed_by_its_first_page() -> None:
-    layout = compute_layout(
-        [
-            page("spread", seq=0, detected=("42", "43")),
-            page("plate", seq=1, ts=1),
-            page("p44", seq=2, ts=2, detected=("44",)),
-            page("p41", session="other", ts=3, detected=("41",)),
-        ]
-    )
-    assert labels(layout) == ["41", "42–43", None, "44"]
-    assert layout.placements["spread"].sort_value == 42
-    assert layout.placements["plate"].sort_value == pytest.approx(42 + SESSION_STEP)
-
-
-def test_a_position_moves_the_page_but_keeps_its_number_and_the_coverage() -> None:
-    layout = compute_layout(
-        [
-            page("p1", detected=("1",), ts=1),
-            page("p2", detected=("2",), ts=2),
-            page("p3", detected=("3",), ts=3, position=1.5),
-        ]
-    )
-    assert layout.reading_order == ("p1", "p3", "p2")
-    moved = layout.placements["p3"]
-    assert (moved.number, moved.source, moved.placed_by, moved.sort_value) == (PageNumber(3), "detected", "manual", 1.5)
-    assert layout.coverage.label == "1–3"
-
-
-def test_equal_places_are_ordered_by_capture_time() -> None:
-    layout = compute_layout(
-        [
-            page("late", session="a", detected=("4",), ts=20),
-            page("early", session="b", ts=10, position=4.0),
-        ]
-    )
-    assert layout.reading_order == ("early", "late")
-
-
-def test_duplicates_do_not_depend_on_positions() -> None:
-    layout = compute_layout(
-        [
-            page("old", session="a", detected=("7",), ts=10, position=0.5),
-            page("p6", session="b", seq=0, detected=("6",), ts=19),
-            page("new", session="b", seq=1, detected=("7",), ts=20),
-        ]
-    )
-    old = layout.placements["old"]
-    assert (old.duplicate_of, old.in_document, old.placed_by, old.sort_value) == ("new", False, None, None)
-    assert layout.reading_order == ("p6", "new")
-    assert placed_by(layout) == ["number", "number"]
-
-
-def test_a_rescanned_page_still_anchors_the_pages_scanned_after_it() -> None:
-    # Page 12 was scanned again later: the plate scanned after the first shot still follows page 12.
-    layout = compute_layout(
-        [
-            page("p11", session="a", seq=0, ts=0, detected=("11",)),
-            page("old12", session="a", seq=1, ts=1, detected=("12",)),
-            page("plate", session="a", seq=2, ts=2),
-            page("p13", session="a", seq=3, ts=3, detected=("13",)),
-            page("new12", session="b", seq=0, ts=10, detected=("12",)),
-        ]
-    )
-    assert layout.placements["old12"].duplicate_of == "new12"
-    assert layout.reading_order == ("p11", "new12", "plate", "p13")
-
-
-def test_pages_waiting_for_ocr_anchor_their_session_but_excluded_pages_do_not() -> None:
-    def plate_value(status: str, excluded: bool) -> float | None:
-        layout = compute_layout(
-            [
-                page("p11", seq=0, detected=("11",)),
-                page("p12", seq=1, ts=1, detected=("12",), status=status, excluded=excluded),
-                page("plate", seq=2, ts=2),
-                page("p13", seq=3, ts=3, detected=("13",)),
-            ]
-        )
-        return layout.placements["plate"].sort_value
-
-    assert plate_value("queued", excluded=False) == pytest.approx(12 + SESSION_STEP)  # e.g. being reprocessed
-    assert plate_value("done", excluded=True) == pytest.approx(11 + 2 * SESSION_STEP)
-
-
-def test_a_page_with_a_position_anchors_the_rest_of_its_session() -> None:
-    layout = compute_layout(
-        [
-            page("p1", session="a", seq=0, detected=("1",)),
-            page("p2", session="a", seq=1, ts=1, detected=("2",)),
-            page("map", session="b", seq=0, ts=5, position=1.5),
-            page("legend", session="b", seq=1, ts=6),
-        ]
-    )
-    assert layout.reading_order == ("p1", "map", "legend", "p2")
-    assert placed_by(layout) == ["number", "manual", "session", "number"]
+class BookScannedSkippingPages(NamedTuple):
+    scan_order: tuple[str, ...]
+    reading_order: tuple[str, ...]
+    naturals: list[int]
+    labels_of_the_numbers_found: list[str | None]
+    real_labels_of_the_numbers_found: list[str]
 
 
 # -- positions for an order chosen by the user ----------------------------------------------
@@ -1264,3 +841,871 @@ class TestTheOrdering:
 
             def test_should_be_its_lowercase_roman_numeral(self, label: str) -> None:
                 assert label == "xii"
+
+    class TestTheComputeLayoutFunction:
+        class TestWhenPagesHaveATypedAFoundOrAHintedNumber:
+            @pytest.fixture
+            def layout(self) -> Layout:
+                return compute_layout(
+                    [
+                        page("a", manual=5, detected=("7",), hint=9),
+                        page("b", detected=("7",), hint=9, ts=1),
+                        page("c", hint=9, ts=2),
+                    ]
+                )
+
+            def test_should_take_the_typed_number_then_the_one_found_then_the_hint(self, layout: Layout) -> None:
+                assert numbers_and_sources(layout, ["a", "b", "c"]) == [
+                    (PageNumber(5), "manual"),
+                    (PageNumber(7), "detected"),
+                    (PageNumber(9), "hint"),
+                ]
+
+        class TestWhenANumberIsTypedOnASpread:
+            @pytest.fixture
+            def layout(self) -> Layout:
+                return compute_layout([page("a", manual=10, detected=("42", "43"))])
+
+            def test_should_replace_the_spread(self, layout: Layout) -> None:
+                assert layout.placements["a"].number == PageNumber(10)
+
+        class TestWhenPagesFollowANumberedPageInTheirSession:
+            @pytest.fixture
+            def layout(self) -> Layout:
+                return compute_layout(
+                    [
+                        page("a", seq=0, detected=("10",)),
+                        page("b", seq=1, ts=1),
+                        page("c", seq=2, ts=2),
+                    ]
+                )
+
+            def test_should_count_on_from_it(self, layout: Layout) -> None:
+                assert labels(layout) == ["10", "11", "12"]
+
+            def test_should_mark_their_numbers_as_inferred(self, layout: Layout) -> None:
+                assert [layout.placements[i].source for i in ("b", "c")] == ["inferred", "inferred"]
+
+        class TestWhenPagesComeBeforeTheFirstNumberedPageOfTheirSession:
+            @pytest.fixture
+            def layout(self) -> Layout:
+                return compute_layout(
+                    [
+                        page("a", seq=0),
+                        page("b", seq=1, ts=1),
+                        page("c", seq=2, ts=2, detected=("5",)),
+                    ]
+                )
+
+            def test_should_count_back_from_it(self, layout: Layout) -> None:
+                assert labels(layout, ["a", "b", "c"]) == ["3", "4", "5"]
+
+        class TestWhenCountingBackWouldGoBelowPage1:
+            @pytest.fixture
+            def layout(self) -> Layout:
+                return compute_layout([page("a", seq=0), page("b", seq=1, ts=1, detected=("1",))])
+
+            def test_should_leave_the_page_unnumbered(self, layout: Layout) -> None:
+                assert layout.placements["a"].number is None
+
+        class TestWhenShotsWereDeletedBetweenTwoPagesOfASession:
+            @pytest.fixture
+            def layout(self) -> Layout:
+                # Shots 1 and 2 went, say blurry ones scanned again elsewhere.
+                return compute_layout([page("a", seq=0, detected=("10",)), page("b", seq=3, ts=1)])
+
+            def test_should_count_the_distance_in_shots(self, layout: Layout) -> None:
+                assert layout.placements["b"].number == PageNumber(13)
+
+        class TestWhenAnUnnumberedPlateLiesBetweenTwoConsecutivePages:
+            @pytest.fixture
+            def layout(self) -> Layout:
+                return compute_layout(
+                    [
+                        page("p10", seq=0, detected=("10",)),
+                        page("plate", seq=1, ts=1),
+                        page("p11", seq=2, ts=2, detected=("11",)),
+                    ]
+                )
+
+            def test_should_leave_the_plate_unnumbered_rather_than_give_it_the_number_of_the_next_page(
+                self, layout: Layout
+            ) -> None:
+                assert layout.placements["plate"].number is None
+
+            def test_should_keep_the_plate_in_the_document(self, layout: Layout) -> None:
+                assert layout.placements["plate"].in_document
+
+            def test_should_not_take_the_next_page_for_a_duplicate(self, layout: Layout) -> None:
+                assert layout.placements["p11"].duplicate_of is None
+
+        class TestWhenTheNumberedPageBeforeIsASpread:
+            @pytest.fixture
+            def layout(self) -> Layout:
+                return compute_layout([page("a", seq=0, detected=("42", "43")), page("b", seq=1, ts=1)])
+
+            def test_should_count_on_from_its_last_page(self, layout: Layout) -> None:
+                assert layout.placements["b"].number == PageNumber(44)
+
+        class TestWhenTheNumberedPageBeforeIsFrontMatter:
+            @pytest.fixture
+            def layout(self) -> Layout:
+                return compute_layout([page("a", seq=0, detected=("ix",)), page("b", seq=1, ts=1)])
+
+            def test_should_count_on_in_the_front_matter(self, layout: Layout) -> None:
+                assert layout.placements["b"].number == PageNumber(10, front_matter=True)
+
+            def test_should_label_the_page_in_roman_numerals(self, layout: Layout) -> None:
+                assert labels(layout, ["b"]) == ["x"]
+
+        class TestWhenTheNumberedPageWasScannedInAnotherSessionOrWithoutOne:
+            @pytest.fixture
+            def layout(self) -> Layout:
+                return compute_layout(
+                    [
+                        page("a", session="s1", seq=0, detected=("10",)),
+                        page("b", session="s2", seq=1, ts=1),
+                        page("c", session=None, seq=1, ts=2),
+                    ]
+                )
+
+            def test_should_leave_the_page_of_another_session_unnumbered(self, layout: Layout) -> None:
+                assert layout.placements["b"].number is None
+
+            def test_should_leave_the_page_without_a_session_unnumbered(self, layout: Layout) -> None:
+                assert layout.placements["c"].number is None
+
+        class TestWhenTheNumberedPageBeforeIsExcluded:
+            @pytest.fixture
+            def layout(self) -> Layout:
+                return compute_layout([page("a", seq=0, detected=("10",), excluded=True), page("b", seq=1, ts=1)])
+
+            def test_should_not_count_from_it(self, layout: Layout) -> None:
+                assert layout.placements["b"].number is None
+
+        class TestWhenThePageBeforeWaitsForOcrWithAHint:
+            @pytest.fixture
+            def layout(self) -> Layout:
+                return compute_layout([page("a", seq=0, hint=20, status="queued"), page("b", seq=1, ts=1)])
+
+            def test_should_count_on_from_the_hint(self, layout: Layout) -> None:
+                assert layout.placements["b"].number == PageNumber(21)
+
+        class TestWhenABookIsScannedFromItsFrontMatterIntoItsMainTextInOneSession:
+            @pytest.fixture
+            def layout(self) -> Layout:
+                return compute_layout(book_with_roman_front_matter())
+
+            def test_should_number_the_two_pages_between_xxv_and_3_as_pages_1_and_2_not_xxvi_and_xxvii(
+                self, layout: Layout
+            ) -> None:
+                scanned = [f"s{seq}" for seq in range(1, 26)]
+                front_matter = "i ii iii iv v vi vii viii ix x xi xii xiii xiv xv xvi xvii xviii xix xx xxi xxv".split()
+                assert labels(layout, scanned) == [*front_matter, "1", "2", "3"]
+
+            def test_should_mark_the_numbers_of_those_two_pages_as_inferred_and_that_of_page_3_as_found(
+                self, layout: Layout
+            ) -> None:
+                sources = [layout.placements[i].source for i in ("s23", "s24", "s25")]
+                assert sources == ["inferred", "inferred", "detected"]
+
+            def test_should_keep_the_pages_in_the_order_of_the_scan(self, layout: Layout) -> None:
+                assert layout.reading_order == tuple(f"s{seq}" for seq in range(1, 26))
+
+            def test_should_place_every_page_by_its_number(self, layout: Layout) -> None:
+                assert placed_by(layout) == ["number"] * 25
+
+            def test_should_cover_pages_1_to_3_and_count_no_page_as_unnumbered(self, layout: Layout) -> None:
+                assert (layout.coverage.label, layout.coverage.unnumbered) == ("1–3", 0)
+
+        class TestWhenTheUserTypedTheNumbersItWouldInfer:
+            @pytest.fixture
+            def compared_layouts(self) -> ComparedLayouts:
+                return ComparedLayouts(
+                    typed_layout=compute_layout(book_with_roman_front_matter({23: 1, 24: 2})),
+                    inferred_layout=compute_layout(book_with_roman_front_matter()),
+                )
+
+            def test_should_keep_the_typed_numbers(self, compared_layouts: ComparedLayouts) -> None:
+                assert numbers_and_sources(compared_layouts.typed_layout, ["s23", "s24"]) == [
+                    (PageNumber(1), "manual"),
+                    (PageNumber(2), "manual"),
+                ]
+
+            def test_should_infer_the_same_numbers_without_them(self, compared_layouts: ComparedLayouts) -> None:
+                assert numbers_and_sources(compared_layouts.inferred_layout, ["s23", "s24"]) == [
+                    (PageNumber(1), "inferred"),
+                    (PageNumber(2), "inferred"),
+                ]
+
+            def test_should_keep_the_same_order(self, compared_layouts: ComparedLayouts) -> None:
+                assert compared_layouts.typed_layout.reading_order == compared_layouts.inferred_layout.reading_order
+
+        class TestWhenTheUserTypedPage1OnThePageReadAsXxv:
+            @pytest.fixture
+            def layout(self) -> Layout:
+                return compute_layout(book_with_roman_front_matter({22: 1}))
+
+            def test_should_end_the_front_matter_before_it_count_on_from_it_and_leave_an_extra_photo_before_page_3(
+                self, layout: Layout
+            ) -> None:
+                assert labels(layout, ["s21", "s22", "s23", "s24", "s25"]) == ["xxi", "1", "2", None, "3"]
+
+            def test_should_keep_the_typed_number(self, layout: Layout) -> None:
+                assert layout.placements["s22"].source == "manual"
+
+        class TestWhenTheNumberingSystemChangesWithinASession:
+            class TestWhenTheFrontMatterLeadsIntoTheMainText:
+                @pytest.fixture(
+                    params=[
+                        (["xxv", "", "", "3"], ["xxv", "1", "2", "3"]),
+                        (["xxv", "", "", "4-5"], ["xxv", "2", "3", "4–5"]),
+                    ],
+                    ids=["up to a page", "up to a spread"],
+                )
+                def session_reading(self, request: pytest.FixtureRequest) -> SessionReading:
+                    detected, expected = request.param
+                    return SessionReading(labels=session_labels(detected), expected_labels=expected)
+
+                def test_should_count_back_from_the_main_text_which_starts_at_page_1(
+                    self, session_reading: SessionReading
+                ) -> None:
+                    assert session_reading.labels == session_reading.expected_labels
+
+            class TestWhenTheMainTextCannotHoldThePagesBeforeIt:
+                @pytest.fixture(
+                    params=[
+                        (["xxv", "", "", "2"], ["xxv", "xxvi", "1", "2"]),
+                        (["xxv", "", "", "1"], ["xxv", "xxvi", "xxvii", "1"]),
+                    ],
+                    ids=["before page 2", "before page 1"],
+                )
+                def session_reading(self, request: pytest.FixtureRequest) -> SessionReading:
+                    detected, expected = request.param
+                    return SessionReading(labels=session_labels(detected), expected_labels=expected)
+
+                def test_should_count_on_the_front_matter_for_them(self, session_reading: SessionReading) -> None:
+                    assert session_reading.labels == session_reading.expected_labels
+
+            class TestWhenTheFrontMatterIsScannedAfterTheMainText:
+                @pytest.fixture(
+                    params=[
+                        (["5", "", "ii"], ["5", "6", "ii"]),
+                        (["4-5", "", "", "ii", "7"], ["4–5", "6", None, "ii", "7"]),
+                    ],
+                    ids=["after a page", "after a spread"],
+                )
+                def session_reading(self, request: pytest.FixtureRequest) -> SessionReading:
+                    detected, expected = request.param
+                    return SessionReading(labels=session_labels(detected), expected_labels=expected)
+
+                def test_should_count_on_the_main_text_below_its_next_page_and_count_back_no_roman_number(
+                    self, session_reading: SessionReading
+                ) -> None:
+                    assert session_reading.labels == session_reading.expected_labels
+
+            class TestWhenAPageNumberedInTheSameSystemLiesOnTheOtherSide:
+                @pytest.fixture(
+                    params=[
+                        (["2", "iii", "", "", "4"], ["2", "iii", "iv", "3", "4"]),
+                        (["xii", "", "1", "xiii"], ["xii", None, "1", "xiii"]),
+                    ],
+                    ids=["front matter within the main text", "the main text within front matter"],
+                )
+                def session_reading(self, request: pytest.FixtureRequest) -> SessionReading:
+                    detected, expected = request.param
+                    return SessionReading(labels=session_labels(detected), expected_labels=expected)
+
+                def test_should_infer_no_number_that_reaches_it(self, session_reading: SessionReading) -> None:
+                    assert session_reading.labels == session_reading.expected_labels
+
+        class TestWhenABookIsScannedInOrderAndTheOcrMissesSomeNumbers:
+            @pytest.fixture(scope="class", params=range(300), ids=lambda seed: f"seed {seed}")
+            @classmethod
+            def scanned_book(cls, request: pytest.FixtureRequest) -> BookScannedInOrder:
+                pages, real = book_scanned_in_order(random.Random(request.param), skipping=False)
+                layout = compute_layout(pages)
+                scan_order = tuple(p.id for p in pages)
+                return BookScannedInOrder(
+                    scan_order=scan_order,
+                    reading_order=layout.reading_order,
+                    labels=labels(layout, scan_order),
+                    expected_labels=expected_labels(pages, real),
+                    coverage=layout.coverage,
+                )
+
+            def test_should_give_each_page_its_real_number_when_a_number_found_on_it_or_around_it_tells_it(
+                self, scanned_book: BookScannedInOrder
+            ) -> None:
+                assert scanned_book.labels == scanned_book.expected_labels
+
+            def test_should_keep_the_pages_in_the_order_of_the_scan(self, scanned_book: BookScannedInOrder) -> None:
+                assert scanned_book.reading_order == scanned_book.scan_order
+
+            def test_should_cover_the_numbers_of_the_main_text_it_gives(self, scanned_book: BookScannedInOrder) -> None:
+                covered = {number for start, end in scanned_book.coverage.ranges for number in range(start, end + 1)}
+                numbers_given = {
+                    int(label) for label in scanned_book.expected_labels if label is not None and label.isdigit()
+                }
+                assert covered == numbers_given
+
+            def test_should_count_the_pages_it_leaves_unnumbered(self, scanned_book: BookScannedInOrder) -> None:
+                assert scanned_book.coverage.unnumbered == scanned_book.expected_labels.count(None)
+
+        class TestWhenABookIsScannedInOrderSkippingPagesAndTheOcrMissesSomeNumbers:
+            @pytest.fixture(scope="class", params=range(300), ids=lambda seed: f"seed {seed}")
+            @classmethod
+            def scanned_book(cls, request: pytest.FixtureRequest) -> BookScannedSkippingPages:
+                pages, real = book_scanned_in_order(random.Random(request.param), skipping=True)
+                layout = compute_layout(pages)
+                numbers = [layout.placements[p.id].number for p in pages]
+                found = [parse_detected_numbers(p.detected_numbers) is not None for p in pages]
+                return BookScannedSkippingPages(
+                    scan_order=tuple(p.id for p in pages),
+                    reading_order=layout.reading_order,
+                    naturals=[number.natural for number in numbers if number is not None],
+                    labels_of_the_numbers_found=[
+                        label_of(number) for number, is_found in zip(numbers, found, strict=True) if is_found
+                    ],
+                    real_labels_of_the_numbers_found=[
+                        label for label, is_found in zip(real, found, strict=True) if is_found
+                    ],
+                )
+
+            def test_should_keep_the_pages_in_the_order_of_the_scan(
+                self, scanned_book: BookScannedSkippingPages
+            ) -> None:
+                assert scanned_book.reading_order == scanned_book.scan_order
+
+            def test_should_number_the_pages_in_increasing_order_without_duplicates(
+                self, scanned_book: BookScannedSkippingPages
+            ) -> None:
+                assert scanned_book.naturals == sorted(set(scanned_book.naturals))
+
+            def test_should_keep_the_numbers_found(self, scanned_book: BookScannedSkippingPages) -> None:
+                assert scanned_book.labels_of_the_numbers_found == scanned_book.real_labels_of_the_numbers_found
+
+        class TestWhenASessionHoldsNumbersOfEveryKindInAnyOrder:
+            @pytest.fixture(scope="class", params=range(500), ids=lambda seed: f"seed {seed}")
+            @classmethod
+            def findings(cls, request: pytest.FixtureRequest) -> InferenceFindings:
+                pages = random_session(random.Random(request.param))
+                return check_inference(pages, compute_layout(pages))
+
+            def test_should_check_every_page_of_the_session(self, findings: InferenceFindings) -> None:
+                assert findings.checked_page_ids == findings.page_ids
+
+            def test_should_keep_the_number_of_a_page_typed_then_found_then_hinted(
+                self, findings: InferenceFindings
+            ) -> None:
+                assert findings.own_number_changed == []
+
+            def test_should_count_back_from_the_main_text_after_front_matter_unless_it_reaches_0_or_earlier_main_text(
+                self, findings: InferenceFindings
+            ) -> None:
+                assert findings.not_counted_back_from_the_main_text == []
+
+            def test_should_mark_the_numbers_it_infers_as_inferred(self, findings: InferenceFindings) -> None:
+                assert findings.not_marked_inferred == []
+
+            def test_should_infer_no_number_below_1_nor_a_roman_number_above_399(
+                self, findings: InferenceFindings
+            ) -> None:
+                assert findings.out_of_range == []
+
+            def test_should_infer_a_number_strictly_between_the_nearest_pages_numbered_in_its_system_never_on_one(
+                self, findings: InferenceFindings
+            ) -> None:
+                assert findings.on_a_numbered_page == []
+
+            def test_should_count_on_from_the_page_before_or_back_from_the_next_only_with_none_or_front_matter_before(
+                self, findings: InferenceFindings
+            ) -> None:
+                assert findings.counted_from_elsewhere == []
+
+        class TestWhenTheSessionsWereScannedOutOfOrder:
+            @pytest.fixture
+            def layout(self) -> Layout:
+                # Pages 6–10 were scanned first, pages 1–5 in a later session.
+                first = [
+                    page(f"p{n}", session="first", seq=n - 6, ts=100 + n, detected=(str(n),)) for n in range(6, 11)
+                ]
+                second = [
+                    page(f"p{n}", session="second", seq=n - 1, ts=200 + n, detected=(str(n),)) for n in range(1, 6)
+                ]
+                return compute_layout(first + second)
+
+            def test_should_merge_them_by_number(self, layout: Layout) -> None:
+                assert labels(layout) == [str(n) for n in range(1, 11)]
+
+            def test_should_cover_every_number(self, layout: Layout) -> None:
+                assert layout.coverage.label == "1–10"
+
+        class TestWhenTheDocumentHasRomanFrontMatter:
+            @pytest.fixture
+            def layout(self) -> Layout:
+                return compute_layout(
+                    [
+                        page("p2", detected=("2",), ts=1),
+                        page("p1", detected=("1",), ts=2),
+                        page("pii", detected=("ii",), ts=3),
+                        page("pi", detected=("i",), ts=4),
+                    ]
+                )
+
+            def test_should_put_the_front_matter_first(self, layout: Layout) -> None:
+                assert labels(layout) == ["i", "ii", "1", "2"]
+
+            def test_should_leave_the_front_matter_out_of_the_coverage(self, layout: Layout) -> None:
+                assert layout.coverage.ranges == ((1, 2),)
+
+        class TestWhenSomePagesHaveNeitherANumberNorASession:
+            @pytest.fixture
+            def layout(self) -> Layout:
+                return compute_layout(
+                    [
+                        page("u2", session=None, ts=50),
+                        page("n2", detected=("2",), ts=10),
+                        page("u1", session=None, ts=40),
+                        page("n1", detected=("1",), ts=20),
+                    ]
+                )
+
+            def test_should_put_them_last_by_capture_time(self, layout: Layout) -> None:
+                assert layout.reading_order == ("n1", "n2", "u1", "u2")
+
+            def test_should_count_the_document_as_numbered(self, layout: Layout) -> None:
+                assert layout.numbered
+
+            def test_should_count_them_as_unnumbered(self, layout: Layout) -> None:
+                assert layout.coverage.unnumbered == 2
+
+        class TestWhenNoPageHasANumber:
+            @pytest.fixture
+            def layout(self) -> Layout:
+                return compute_layout(
+                    [
+                        page("x0", session="x", seq=0, ts=50),
+                        page("x1", session="x", seq=1, ts=45),  # a clock oddity
+                        page("y1", session="y", seq=1, ts=12),
+                        page("y0", session="y", seq=0, ts=10),
+                    ]
+                )
+
+            def test_should_count_the_document_as_not_numbered(self, layout: Layout) -> None:
+                assert not layout.numbered
+
+            def test_should_order_the_sessions_by_capture_time_and_their_pages_by_shot_whatever_the_clock_says(
+                self, layout: Layout
+            ) -> None:
+                assert layout.reading_order == ("y0", "y1", "x0", "x1")
+
+            def test_should_cover_no_number(self, layout: Layout) -> None:
+                assert layout.coverage.ranges == ()
+
+            def test_should_count_every_page_as_unnumbered(self, layout: Layout) -> None:
+                assert layout.coverage.unnumbered == 4
+
+        class TestWhenTwoPagesHaveTheSameNumber:
+            @pytest.fixture
+            def layout(self) -> Layout:
+                return compute_layout(
+                    [
+                        page("old", session="a", detected=("7",), ts=10),
+                        page("new", session="b", detected=("7",), ts=20),
+                    ]
+                )
+
+            def test_should_keep_the_most_recent_capture(self, layout: Layout) -> None:
+                assert layout.reading_order == ("new",)
+
+            def test_should_mark_the_older_one_as_its_duplicate(self, layout: Layout) -> None:
+                assert layout.placements["old"].duplicate_of == "new"
+
+            def test_should_leave_the_older_one_out_of_the_document(self, layout: Layout) -> None:
+                assert not layout.placements["old"].in_document
+
+        class TestWhenThePagesSharingANumberAreExcludedOrWaitForOcr:
+            @pytest.fixture
+            def layout(self) -> Layout:
+                return compute_layout(
+                    [
+                        page("done", detected=("7",), ts=10),
+                        page("excluded", detected=("7",), ts=20, excluded=True),
+                        page("queued", hint=7, ts=30, status="queued"),
+                    ]
+                )
+
+            def test_should_keep_the_page_that_is_done_in_the_document(self, layout: Layout) -> None:
+                assert layout.reading_order == ("done",)
+
+            def test_should_mark_no_page_as_a_duplicate(self, layout: Layout) -> None:
+                assert [placement.duplicate_of for placement in layout.placements.values()] == [None, None, None]
+
+        class TestWhenFrontMatterAndTheMainTextShareAValue:
+            @pytest.fixture
+            def layout(self) -> Layout:
+                return compute_layout([page("roman", detected=("v",)), page("arabic", detected=("5",), ts=1)])
+
+            def test_should_keep_both_pages(self, layout: Layout) -> None:
+                assert set(layout.reading_order) == {"roman", "arabic"}
+
+        class TestWhenPagesAreDuplicatedExcludedOrNotDone:
+            @pytest.fixture
+            def layout(self) -> Layout:
+                return compute_layout(
+                    [
+                        page("dup", detected=("1",), ts=1),
+                        page("ok", detected=("1",), ts=9),
+                        page("excl", detected=("2",), ts=2, excluded=True),
+                        page("err", ts=4, status="error"),
+                        page("queued", ts=3, status="queued"),
+                        page("proc", ts=5, status="processing"),
+                    ]
+                )
+
+            def test_should_list_the_reading_order_then_the_pages_not_done_excluded_and_duplicated_each_by_capture_time(
+                self, layout: Layout
+            ) -> None:
+                assert layout.order == ("ok", "queued", "err", "proc", "excl", "dup")
+
+            def test_should_rank_each_page_by_its_place_in_that_list(self, layout: Layout) -> None:
+                assert [layout.placements[i].rank for i in layout.order] == list(range(6))
+
+        class TestWhenNumbersAreMissingBetweenPagesAndASpread:
+            @pytest.fixture
+            def layout(self) -> Layout:
+                pages = [page(f"p{n}", detected=(str(n),), ts=n) for n in (1, 2, 3, 7, 8)]
+                return compute_layout([*pages, page("spread", detected=("10", "11"), ts=20)])
+
+            def test_should_cover_the_ranges_of_the_numbers_present_both_pages_of_the_spread_included(
+                self, layout: Layout
+            ) -> None:
+                assert layout.coverage.ranges == ((1, 3), (7, 8), (10, 11))
+
+        class TestWhenTheDocumentHasNoPage:
+            @pytest.fixture
+            def layout(self) -> Layout:
+                return compute_layout([])
+
+            def test_should_order_no_page(self, layout: Layout) -> None:
+                assert layout.order == ()
+
+        class TestWhenUnnumberedPagesAreScannedBeforePage1InItsSession:
+            @pytest.fixture
+            def layout(self) -> Layout:
+                # A title page, a preface... 20 pages without a number, then pages 1–5, in one session.
+                front = [page(f"f{i}", seq=i, ts=i) for i in range(20)]
+                body = [page(f"p{n}", seq=19 + n, ts=19 + n, detected=(str(n),)) for n in range(1, 6)]
+                return compute_layout(body + front)
+
+            def test_should_open_the_document_with_them(self, layout: Layout) -> None:
+                assert layout.reading_order == tuple(f"f{i}" for i in range(20)) + tuple(f"p{n}" for n in range(1, 6))
+
+            def test_should_place_them_by_their_session(self, layout: Layout) -> None:
+                assert placed_by(layout) == ["session"] * 20 + ["number"] * 5
+
+            def test_should_place_the_last_one_a_session_step_before_page_1(self, layout: Layout) -> None:
+                assert layout.placements["f19"].sort_value == pytest.approx(1 - SESSION_STEP)
+
+            def test_should_place_the_first_one_20_session_steps_before_page_1(self, layout: Layout) -> None:
+                assert layout.placements["f0"].sort_value == pytest.approx(1 - 20 * SESSION_STEP)
+
+            def test_should_leave_them_unnumbered(self, layout: Layout) -> None:
+                assert labels(layout) == [None] * 20 + ["1", "2", "3", "4", "5"]
+
+            def test_should_count_them_as_unnumbered_outside_the_coverage(self, layout: Layout) -> None:
+                assert (layout.coverage.label, layout.coverage.unnumbered) == ("1–5", 20)
+
+        class TestWhenAnUnnumberedPlateIsScannedAfterAPage:
+            @pytest.fixture
+            def layout(self) -> Layout:
+                return compute_layout(
+                    [
+                        page("p13", seq=2, ts=2, detected=("13",)),
+                        page("plate", seq=1, ts=1),
+                        page("p12", seq=0, ts=0, detected=("12",)),
+                    ]
+                )
+
+            def test_should_keep_the_plate_after_that_page(self, layout: Layout) -> None:
+                assert layout.reading_order == ("p12", "plate", "p13")
+
+            def test_should_place_the_plate_by_its_session_without_a_number(self, layout: Layout) -> None:
+                plate = layout.placements["plate"]
+                assert (plate.number, plate.placed_by) == (None, "session")
+
+            def test_should_place_the_plate_a_session_step_after_that_page(self, layout: Layout) -> None:
+                assert layout.placements["plate"].sort_value == pytest.approx(12 + SESSION_STEP)
+
+            def test_should_place_the_page_at_its_number(self, layout: Layout) -> None:
+                assert layout.placements["p12"].sort_value == 12
+
+        class TestWhenUnnumberedPagesAreScannedInASessionOfTheirOwn:
+            @pytest.fixture
+            def layout(self) -> Layout:
+                return compute_layout(
+                    [
+                        page("p1", session="book", seq=0, ts=10, detected=("1",)),
+                        page("p2", session="book", seq=1, ts=11, detected=("2",)),
+                        page("u2", session="loose", seq=1, ts=1),
+                        page("u1", session="loose", seq=0, ts=2),
+                    ]
+                )
+
+            def test_should_put_them_last_in_the_order_of_their_shots(self, layout: Layout) -> None:
+                assert layout.reading_order == ("p1", "p2", "u1", "u2")
+
+            def test_should_leave_them_unplaced(self, layout: Layout) -> None:
+                assert placed_by(layout) == ["number", "number", "unplaced", "unplaced"]
+
+            def test_should_give_them_no_place_on_the_number_line(self, layout: Layout) -> None:
+                assert layout.placements["u1"].sort_value is None
+
+        class TestWhenTheShotsOfASessionHaveNoSeq:
+            @pytest.fixture
+            def layout(self) -> Layout:
+                return compute_layout(
+                    [
+                        page("p5", ts=0, detected=("5",)),
+                        page("b", ts=2),
+                        page("a", ts=1),
+                        page("p6", ts=3, detected=("6",)),
+                    ]
+                )
+
+            def test_should_place_the_unnumbered_pages_in_the_order_of_their_capture(self, layout: Layout) -> None:
+                assert layout.reading_order == ("p5", "a", "b", "p6")
+
+            def test_should_count_the_session_steps_in_captures(self, layout: Layout) -> None:
+                assert layout.placements["b"].sort_value == pytest.approx(5 + 2 * SESSION_STEP)
+
+        class TestWhenFrontMatterWithAPlateIsScannedApartFromPage1:
+            @pytest.fixture
+            def layout(self) -> Layout:
+                return compute_layout(
+                    [
+                        page("p1", session="b", seq=0, ts=10, detected=("1",)),
+                        page("ii", session="a", seq=0, ts=1, detected=("ii",)),
+                        page("plate", session="a", seq=1, ts=2),
+                        page("iii", session="a", seq=2, ts=3, detected=("iii",)),
+                    ]
+                )
+
+            def test_should_order_the_front_matter_and_its_plate_before_page_1(self, layout: Layout) -> None:
+                assert labels(layout) == ["ii", None, "iii", "1"]
+
+            def test_should_place_the_front_matter_before_page_1_on_the_number_line(self, layout: Layout) -> None:
+                assert sort_values(layout) == pytest.approx([2 - 10_000, 2 - 10_000 + SESSION_STEP, 3 - 10_000, 1])
+
+        class TestWhenAPlateIsScannedAfterASpread:
+            @pytest.fixture
+            def layout(self) -> Layout:
+                return compute_layout(
+                    [
+                        page("spread", seq=0, detected=("42", "43")),
+                        page("plate", seq=1, ts=1),
+                        page("p44", seq=2, ts=2, detected=("44",)),
+                        page("p41", session="other", ts=3, detected=("41",)),
+                    ]
+                )
+
+            def test_should_order_the_spread_by_its_first_page(self, layout: Layout) -> None:
+                assert labels(layout) == ["41", "42–43", None, "44"]
+
+            def test_should_place_the_spread_at_its_first_page(self, layout: Layout) -> None:
+                assert layout.placements["spread"].sort_value == 42
+
+            def test_should_place_the_plate_a_session_step_after_the_first_page_of_the_spread(
+                self, layout: Layout
+            ) -> None:
+                assert layout.placements["plate"].sort_value == pytest.approx(42 + SESSION_STEP)
+
+        class TestWhenAPageHasAPosition:
+            @pytest.fixture
+            def layout(self) -> Layout:
+                return compute_layout(
+                    [
+                        page("p1", detected=("1",), ts=1),
+                        page("p2", detected=("2",), ts=2),
+                        page("p3", detected=("3",), ts=3, position=1.5),
+                    ]
+                )
+
+            def test_should_put_the_page_at_its_position(self, layout: Layout) -> None:
+                assert layout.reading_order == ("p1", "p3", "p2")
+
+            def test_should_keep_its_number_and_place_it_by_its_position(self, layout: Layout) -> None:
+                moved = layout.placements["p3"]
+                assert (moved.number, moved.source, moved.placed_by, moved.sort_value) == (
+                    PageNumber(3),
+                    "detected",
+                    "manual",
+                    1.5,
+                )
+
+            def test_should_keep_the_coverage(self, layout: Layout) -> None:
+                assert layout.coverage.label == "1–3"
+
+        class TestWhenTwoPagesHaveTheSamePlace:
+            @pytest.fixture
+            def layout(self) -> Layout:
+                return compute_layout(
+                    [
+                        page("late", session="a", detected=("4",), ts=20),
+                        page("early", session="b", ts=10, position=4.0),
+                    ]
+                )
+
+            def test_should_order_them_by_capture_time(self, layout: Layout) -> None:
+                assert layout.reading_order == ("early", "late")
+
+        class TestWhenADuplicateHasAPosition:
+            @pytest.fixture
+            def layout(self) -> Layout:
+                return compute_layout(
+                    [
+                        page("old", session="a", detected=("7",), ts=10, position=0.5),
+                        page("p6", session="b", seq=0, detected=("6",), ts=19),
+                        page("new", session="b", seq=1, detected=("7",), ts=20),
+                    ]
+                )
+
+            def test_should_still_take_it_for_a_duplicate_and_leave_it_unplaced(self, layout: Layout) -> None:
+                old = layout.placements["old"]
+                assert (old.duplicate_of, old.in_document, old.placed_by, old.sort_value) == ("new", False, None, None)
+
+            def test_should_order_the_other_pages_by_number(self, layout: Layout) -> None:
+                assert layout.reading_order == ("p6", "new")
+
+            def test_should_place_the_other_pages_by_their_number(self, layout: Layout) -> None:
+                assert placed_by(layout) == ["number", "number"]
+
+        class TestWhenAPageIsScannedAgainLater:
+            @pytest.fixture
+            def layout(self) -> Layout:
+                return compute_layout(
+                    [
+                        page("p11", session="a", seq=0, ts=0, detected=("11",)),
+                        page("old12", session="a", seq=1, ts=1, detected=("12",)),
+                        page("plate", session="a", seq=2, ts=2),
+                        page("p13", session="a", seq=3, ts=3, detected=("13",)),
+                        page("new12", session="b", seq=0, ts=10, detected=("12",)),
+                    ]
+                )
+
+            def test_should_take_the_first_shot_for_a_duplicate(self, layout: Layout) -> None:
+                assert layout.placements["old12"].duplicate_of == "new12"
+
+            def test_should_keep_the_plate_scanned_after_the_first_shot_after_that_page(self, layout: Layout) -> None:
+                assert layout.reading_order == ("p11", "new12", "plate", "p13")
+
+        class TestWhenThePageBeforeAPlateWaitsForOcr:
+            @pytest.fixture
+            def layout(self) -> Layout:
+                return compute_layout(
+                    [
+                        page("p11", seq=0, detected=("11",)),
+                        page("p12", seq=1, ts=1, detected=("12",), status="queued"),
+                        page("plate", seq=2, ts=2),
+                        page("p13", seq=3, ts=3, detected=("13",)),
+                    ]
+                )
+
+            def test_should_still_place_the_plate_after_it_since_it_may_be_read_again(self, layout: Layout) -> None:
+                assert layout.placements["plate"].sort_value == pytest.approx(12 + SESSION_STEP)
+
+        class TestWhenThePageBeforeAPlateIsExcluded:
+            @pytest.fixture
+            def layout(self) -> Layout:
+                return compute_layout(
+                    [
+                        page("p11", seq=0, detected=("11",)),
+                        page("p12", seq=1, ts=1, detected=("12",), excluded=True),
+                        page("plate", seq=2, ts=2),
+                        page("p13", seq=3, ts=3, detected=("13",)),
+                    ]
+                )
+
+            def test_should_place_the_plate_after_the_page_before_the_excluded_one(self, layout: Layout) -> None:
+                assert layout.placements["plate"].sort_value == pytest.approx(11 + 2 * SESSION_STEP)
+
+        class TestWhenAPageWithAPositionComesBeforeOthersOfItsSession:
+            @pytest.fixture
+            def layout(self) -> Layout:
+                return compute_layout(
+                    [
+                        page("p1", session="a", seq=0, detected=("1",)),
+                        page("p2", session="a", seq=1, ts=1, detected=("2",)),
+                        page("map", session="b", seq=0, ts=5, position=1.5),
+                        page("legend", session="b", seq=1, ts=6),
+                    ]
+                )
+
+            def test_should_keep_them_after_it(self, layout: Layout) -> None:
+                assert layout.reading_order == ("p1", "map", "legend", "p2")
+
+            def test_should_place_them_by_their_session(self, layout: Layout) -> None:
+                assert placed_by(layout) == ["number", "manual", "session", "number"]
+
+    class TestTheCoverageGapsProperty:
+        class TestWhenNumbersAreMissingBetweenTheRanges:
+            @pytest.fixture
+            def gaps(self) -> tuple[tuple[int, int], ...]:
+                return COVERAGE_WITH_GAPS.gaps
+
+            def test_should_give_the_ranges_of_the_missing_numbers(self, gaps: tuple[tuple[int, int], ...]) -> None:
+                assert gaps == ((4, 6), (9, 9))
+
+    class TestTheCoverageLabelProperty:
+        class TestWhenNumbersAreMissingBetweenTheRanges:
+            @pytest.fixture
+            def label(self) -> str:
+                return COVERAGE_WITH_GAPS.label
+
+            def test_should_list_the_ranges(self, label: str) -> None:
+                assert label == "1–3, 7–8, 10–11"
+
+    class TestTheCoverageMissingLabelProperty:
+        class TestWhenNumbersAreMissingBetweenTheRanges:
+            @pytest.fixture
+            def missing_label(self) -> str:
+                return COVERAGE_WITH_GAPS.missing_label
+
+            def test_should_list_the_missing_ranges_and_numbers(self, missing_label: str) -> None:
+                assert missing_label == "4–6, 9"
+
+    class TestTheCoverageMinAndMaxProperties:
+        class TestWhenNumbersAreMissingBetweenTheRanges:
+            @pytest.fixture
+            def bounds(self) -> tuple[int | None, int | None]:
+                return (COVERAGE_WITH_GAPS.min, COVERAGE_WITH_GAPS.max)
+
+            def test_should_give_the_first_and_the_last_number_covered(
+                self, bounds: tuple[int | None, int | None]
+            ) -> None:
+                assert bounds == (1, 11)
+
+    class TestTheCoverageToJsonMethod:
+        class TestWhenNumbersAreMissingBetweenTheRanges:
+            @pytest.fixture
+            def coverage_json(self) -> CoverageJson:
+                return COVERAGE_WITH_GAPS.to_json()
+
+            def test_should_give_the_gaps_as_lists(self, coverage_json: CoverageJson) -> None:
+                assert coverage_json["gaps"] == [[4, 6], [9, 9]]
+
+        class TestWhenTheDocumentHasNoPage:
+            @pytest.fixture
+            def coverage_json(self) -> CoverageJson:
+                return compute_layout([]).coverage.to_json()
+
+            def test_should_give_no_range_no_bound_and_no_unnumbered_page(self, coverage_json: CoverageJson) -> None:
+                assert coverage_json == {
+                    "ranges": [],
+                    "label": "",
+                    "gaps": [],
+                    "min": None,
+                    "max": None,
+                    "unnumbered": 0,
+                }

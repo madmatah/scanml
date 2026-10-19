@@ -6,6 +6,10 @@
 
 <!-- The solution in broad strokes: what it is made of, not how each line works. If the branch is stacked on another, name its pull request. -->
 
+## Screenshots
+
+<!-- The screens a visible change or fix changes, before and after; a screenshot can also show that a change works, even one that does not touch the UI. They are public: invented data only, never a real library, a phone's screen capture or production. "None" when nothing shows. -->
+
 ## How to test
 
 <!-- Steps for the reviewer: what to run, what to try, what to look for. -->
@@ -13,7 +17,7 @@
 <details>
 <summary>How it was tested</summary>
 
-<!-- What the author ran and observed: the tests added, the manual checks, captures of anything visible. -->
+<!-- What the author ran and observed: the tests added, the manual checks. -->
 
 </details>
 

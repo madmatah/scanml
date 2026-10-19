@@ -71,8 +71,35 @@ fun LibraryScreen(
     LaunchedEffect(viewModel, lifecycleOwner) {
         lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) { viewModel.keepUpToDate() }
     }
+    LibraryContent(
+        state = state,
+        update = update,
+        onOpenDocument = onOpenDocument,
+        onScanDocument = onScanDocument,
+        onNewDocument = onNewDocument,
+        onOpenSettings = onOpenSettings,
+        onRefresh = viewModel::refresh,
+        onInstallUpdate = viewModel::installUpdate,
+        onCancelUpdate = viewModel::cancelUpdate,
+    )
+}
 
+/** Apart from the view model, so that a test draws the library from invented state. */
+@Composable
+internal fun LibraryContent(
+    state: LibraryUiState,
+    update: UpdateState,
+    onOpenDocument: (String) -> Unit,
+    onScanDocument: (String) -> Unit,
+    onNewDocument: () -> Unit,
+    onOpenSettings: () -> Unit,
+    onRefresh: () -> Unit,
+    onInstallUpdate: () -> Unit,
+    onCancelUpdate: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     Scaffold(
+        modifier = modifier,
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.app_name)) },
@@ -93,7 +120,7 @@ fun LibraryScreen(
     ) { padding ->
         PullToRefreshBox(
             isRefreshing = state.refreshing,
-            onRefresh = viewModel::refresh,
+            onRefresh = onRefresh,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding),
@@ -110,7 +137,7 @@ fun LibraryScreen(
                 // After the PC's card: a PC that refuses the token comes first.
                 if (update is UpdateState.WithUpdate) {
                     item(key = "update") {
-                        UpdateBanner(update, onInstall = viewModel::installUpdate, onCancel = viewModel::cancelUpdate)
+                        UpdateBanner(update, onInstall = onInstallUpdate, onCancel = onCancelUpdate)
                     }
                 }
                 if (state.documents.isEmpty()) {

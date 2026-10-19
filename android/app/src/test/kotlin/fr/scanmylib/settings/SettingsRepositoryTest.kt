@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import fr.scanmylib.expectFailure
 import fr.scanmylib.model.ScanSource
 import fr.scanmylib.model.ScannerMode
+import fr.scanmylib.model.ThemeMode
 import java.io.File
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
@@ -67,9 +68,28 @@ class SettingsRepositoryTest {
     }
 
     @Test
+    fun `the theme follows the phone until the user chooses one`() = runTest {
+        val settings = SettingsRepository(dataStore())
+        assertEquals(ThemeMode.SAME_AS_PHONE, settings.current().themeMode)
+
+        settings.setThemeMode(ThemeMode.DARK)
+        assertEquals(ThemeMode.DARK, settings.current().themeMode)
+    }
+
+    @Test
+    fun `ScanMyLib's colors stay until the user asks for the wallpaper's`() = runTest {
+        val settings = SettingsRepository(dataStore())
+        assertFalse(settings.current().usesWallpaperColors)
+
+        settings.setUsesWallpaperColors(true)
+        assertTrue(settings.current().usesWallpaperColors)
+    }
+
+    @Test
     fun `stored names are read back, unknown ones give the default`() {
         ScannerMode.entries.forEach { assertEquals(it, storedEnum(it.name, ScannerMode.DEFAULT)) }
         ScanSource.entries.forEach { assertEquals(it, storedEnum(it.name, ScanSource.DEFAULT)) }
+        ThemeMode.entries.forEach { assertEquals(it, storedEnum(it.name, ThemeMode.DEFAULT)) }
         assertEquals(ScannerMode.CROP_ONLY, storedEnum(null, ScannerMode.DEFAULT))
         assertEquals(ScannerMode.CROP_ONLY, storedEnum("SCANNER_MODE_FULL", ScannerMode.DEFAULT))
         assertEquals(ScanSource.GOOGLE_SCANNER, storedEnum("camera", ScanSource.DEFAULT))

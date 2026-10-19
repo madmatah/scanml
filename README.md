@@ -86,6 +86,10 @@ newer, signed with the same key), then hands it to Android, which asks to confir
 ScanMyLib to install apps, on a page of its settings; the install goes on when you come back.
 **Settings › Check for updates** asks the PC at once.
 
+**Appearance.** The app follows the phone's light or dark mode; **Settings › Theme** keeps it **Light** or **Dark**
+instead. On Android 12 and later, **Settings › Wallpaper colors** replaces ScanMyLib's colors with the wallpaper's. On
+Android 14 and later, the app follows the contrast chosen in the phone's accessibility settings.
+
 The phone and the PC must be on the same network. Away from it, the app keeps the pages and sends them once the PC is
 reachable again. To send pages from elsewhere, use a VPN (WireGuard, Tailscale…) rather than exposing the port to the
 Internet.

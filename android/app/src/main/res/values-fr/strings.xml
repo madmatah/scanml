@@ -194,6 +194,13 @@
     <string name="settings_scanner_mode_filters_help">Recadrage, plus des filtres (noir et blanc, amélioration automatique…) qui modifient les couleurs et le contraste.</string>
     <string name="settings_scanner_mode_full">Complète — filtres et effacement des doigts et taches</string>
     <string name="settings_scanner_mode_full_help">Filtres, plus l’effacement automatique des doigts et des taches, qui peut aussi effacer des détails de la page.</string>
+    <string name="settings_section_appearance">Apparence</string>
+    <string name="settings_theme">Thème</string>
+    <string name="theme_mode_same_as_phone">Comme le téléphone</string>
+    <string name="theme_mode_light">Clair</string>
+    <string name="theme_mode_dark">Sombre</string>
+    <string name="settings_wallpaper_colors">Couleurs du fond d’écran</string>
+    <string name="settings_wallpaper_colors_help">Remplace les couleurs de ScanMyLib par celles de votre fond d’écran.</string>
     <string name="settings_section_about">À propos</string>
     <string name="settings_version">ScanMyLib pour Android %1$s</string>
     <string name="settings_about">Les pages vont directement à votre PC, qui en lit le texte (OCR).</string>

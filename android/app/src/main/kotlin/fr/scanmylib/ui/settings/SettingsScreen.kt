@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -43,6 +44,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalContext
@@ -60,11 +62,13 @@ import fr.scanmylib.diagnostics.CrashReportDialog
 import fr.scanmylib.diagnostics.CrashReporter
 import fr.scanmylib.model.ScanSource
 import fr.scanmylib.model.ScannerMode
+import fr.scanmylib.model.ThemeMode
 import fr.scanmylib.ui.components.BackButton
 import fr.scanmylib.ui.components.UpdateBanner
 import fr.scanmylib.ui.components.connectionCheckMessage
 import fr.scanmylib.ui.components.descriptionRes
 import fr.scanmylib.ui.components.labelRes
+import fr.scanmylib.ui.theme.canUseWallpaperColors
 import fr.scanmylib.update.UpdateState
 
 @Composable
@@ -100,6 +104,8 @@ fun SettingsScreen(
         onDeleteKeptCopies = viewModel::deleteKeptCopies,
         onDefaultCamera = viewModel::setDefaultCamera,
         onScannerMode = viewModel::setScannerMode,
+        onThemeMode = viewModel::setThemeMode,
+        onUsesWallpaperColors = viewModel::setUsesWallpaperColors,
         onCheckForUpdate = viewModel::checkForUpdate,
         onInstallUpdate = viewModel::installUpdate,
         onCancelUpdate = viewModel::cancelUpdate,
@@ -121,12 +127,15 @@ internal fun SettingsContent(
     onDeleteKeptCopies: () -> Unit,
     onDefaultCamera: (ScanSource) -> Unit,
     onScannerMode: (ScannerMode) -> Unit,
+    onThemeMode: (ThemeMode) -> Unit,
+    onUsesWallpaperColors: (Boolean) -> Unit,
     onCheckForUpdate: () -> Unit,
     onInstallUpdate: () -> Unit,
     onCancelUpdate: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var confirmingUnpair by rememberSaveable { mutableStateOf(false) }
+    var isChoosingTheme by rememberSaveable { mutableStateOf(false) }
     val settings = state.settings
     val server = settings?.server
 
@@ -239,6 +248,22 @@ internal fun SettingsContent(
             }
 
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            SectionHeader(R.string.settings_section_appearance)
+            ListItem(
+                headlineContent = { Text(stringResource(R.string.settings_theme)) },
+                supportingContent = { Text(stringResource((settings?.themeMode ?: ThemeMode.DEFAULT).labelRes())) },
+                modifier = Modifier.clickable(role = Role.Button) { isChoosingTheme = true },
+            )
+            if (canUseWallpaperColors) {
+                SwitchItem(
+                    title = R.string.settings_wallpaper_colors,
+                    description = R.string.settings_wallpaper_colors_help,
+                    checked = settings?.usesWallpaperColors ?: false,
+                    onCheckedChange = onUsesWallpaperColors,
+                )
+            }
+
+            HorizontalDivider(Modifier.padding(vertical = 8.dp))
             SectionHeader(R.string.settings_section_about)
             ListItem(
                 headlineContent = { Text(stringResource(R.string.settings_version, BuildConfig.VERSION_NAME)) },
@@ -296,6 +321,17 @@ internal fun SettingsContent(
         }
     }
 
+    if (isChoosingTheme) {
+        ThemeDialog(
+            selected = settings?.themeMode ?: ThemeMode.DEFAULT,
+            onSelect = { mode ->
+                isChoosingTheme = false
+                onThemeMode(mode)
+            },
+            onClose = { isChoosingTheme = false },
+        )
+    }
+
     if (confirmingUnpair) {
         AlertDialog(
             onDismissRequest = { confirmingUnpair = false },
@@ -348,6 +384,45 @@ private fun RadioItem(
 }
 
 private const val DISABLED_ALPHA = 0.38f
+
+@Composable
+private fun ThemeDialog(
+    selected: ThemeMode,
+    onSelect: (ThemeMode) -> Unit,
+    onClose: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    AlertDialog(
+        onDismissRequest = onClose,
+        modifier = modifier,
+        title = { Text(stringResource(R.string.settings_theme)) },
+        text = {
+            Column(Modifier.selectableGroup()) {
+                ThemeMode.entries.forEach { mode ->
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 56.dp)
+                            .selectable(selected = mode == selected, role = Role.RadioButton) { onSelect(mode) },
+                    ) {
+                        RadioButton(selected = mode == selected, onClick = null)
+                        Text(stringResource(mode.labelRes()), style = MaterialTheme.typography.bodyLarge)
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onClose) { Text(stringResource(R.string.cancel)) } },
+    )
+}
+
+@StringRes
+private fun ThemeMode.labelRes(): Int = when (this) {
+    ThemeMode.SAME_AS_PHONE -> R.string.theme_mode_same_as_phone
+    ThemeMode.LIGHT -> R.string.theme_mode_light
+    ThemeMode.DARK -> R.string.theme_mode_dark
+}
 
 @StringRes
 private fun ScannerMode.labelRes(): Int = when (this) {

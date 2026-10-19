@@ -11,6 +11,7 @@ import fr.scanmylib.library.LibraryRepository
 import fr.scanmylib.model.ScanSource
 import fr.scanmylib.model.ScannerMode
 import fr.scanmylib.model.ServerConfig
+import fr.scanmylib.model.ThemeMode
 import fr.scanmylib.pairing.ConnectionCheck
 import fr.scanmylib.pairing.PairingManager
 import fr.scanmylib.pairing.checkConnection
@@ -107,6 +108,14 @@ class SettingsViewModel(
     /** The camera "Scan" opens: Google's scanner or the app's camera. */
     fun setDefaultCamera(camera: ScanSource) {
         viewModelScope.launch { save { settings.setDefaultCamera(camera) } }
+    }
+
+    fun setThemeMode(mode: ThemeMode) {
+        viewModelScope.launch { save { settings.setThemeMode(mode) } }
+    }
+
+    fun setUsesWallpaperColors(enabled: Boolean) {
+        viewModelScope.launch { save { settings.setUsesWallpaperColors(enabled) } }
     }
 
     /** Writes a setting; returns false if it could not be written. */

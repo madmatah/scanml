@@ -136,9 +136,9 @@ rule applies to it. The older files move to the structure area by area, each are
   the debug variant: each draws a screen from its state, with invented data, in the light or the dark theme, or one of
   their high-contrast variants, records it as a PNG under `android/app/build/outputs/roborazzi/`, and asserts what the
   screen shows. A change to a screen draws that screen in one. A test that needs Android's framework to compose, such as
-  the theme's choice of colors, lives there too, without a picture. The pictures stay out of the code's history: they
-  show the screens to whoever checks a change, and a pull request publishes those of a visible change
-  (`.claude/skills/pull-request/SKILL.md` > Show a visible change).
+  the theme's choice of colors or what a tap on a screen does, lives there too, without a picture. The pictures stay out
+  of the code's history: they show the screens to whoever checks a change, and a pull request publishes those of a
+  visible change (`.claude/skills/pull-request/SKILL.md` > Show a visible change).
 - **Unit tests of the scripts:** `scripts/tests/`, with `unittest` and the host's `python3`, on the modules of
   `scripts/lib/` and on `scripts/release.py`, against throwaway repositories where git is needed.
 - **Integration tests of the scripts:** `scripts/integration_tests/`, with `unittest` and the host's `python3`, which
@@ -371,12 +371,14 @@ kotlinx-coroutines-test.
   generic screen, such as `RobolectricDeviceQualifiers.MediumPhone`. Its `@Before` draws the screen in its row's theme,
   `ScanMyLibTheme(dark = …)`, or `ScanMyLibTheme(dark = …, contrast = Contrast.HIGH)`, through the rule of
   `createComposeRule` (`androidx.compose.ui.test.junit4.v2`), and records it with
-  `captureRoboImage("build/outputs/roborazzi/<screen>-<situation>-<theme>.png")`; its tests assert what the screen
-  shows.
+  `captureRoboImage("build/outputs/roborazzi/<screen>-<situation>-<theme>.png")`, or, when a dialog is open in a window
+  of its own, `captureScreenRoboImage(…)` once `waitForIdle()` has drawn it; its tests assert what the screen shows.
   Robolectric runs offline, on the image of Android that Gradle resolves and verifies (`robolectricAndroidAll` in
   `android/app/build.gradle.kts`).
 - **A test without a picture** in `android/app/src/testDebug/` is a group under
-  `@RunWith(RobolectricTestRunner::class)`, with `@Config(sdk = [36])`.
+  `@RunWith(RobolectricTestRunner::class)`, with `@Config(sdk = [36])`, and the qualifiers of a generic screen when it
+  lays a screen out, so that its layout, and what a tap reaches, match a phone's. Its qualifiers also give the phone's
+  configuration that its situation needs, such as `night` for a dark phone.
 - **A test that asserts nothing passes:** JUnit counts no assertion, so review checks it. ktlint checks no rule of the
   tests.
 - **No skip:** no `@Ignore` and no `Assume`, since the app's tests need nothing that the JVM lacks.

@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import fr.scanmylib.model.ScanSource
 import fr.scanmylib.model.ScannerMode
 import fr.scanmylib.model.ServerConfig
+import fr.scanmylib.model.ThemeMode
 import java.io.IOException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
@@ -33,6 +34,8 @@ data class AppSettings(
     val defaultCamera: ScanSource,
     /** Google's scanner failed to start on this phone, and has not started since. */
     val googleScannerUnavailable: Boolean,
+    val themeMode: ThemeMode,
+    val usesWallpaperColors: Boolean,
 )
 
 /**
@@ -54,6 +57,8 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
                 defaultCamera = storedEnum(preferences[SCAN_SOURCE], ScanSource.DEFAULT)
                     .takeIf { it.isCamera } ?: ScanSource.DEFAULT,
                 googleScannerUnavailable = preferences[GOOGLE_SCANNER_UNAVAILABLE] ?: false,
+                themeMode = storedEnum(preferences[THEME_MODE], ThemeMode.DEFAULT),
+                usesWallpaperColors = preferences[WALLPAPER_COLORS] ?: false,
             )
         }
         .distinctUntilChanged()
@@ -108,6 +113,14 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         dataStore.edit { it[GOOGLE_SCANNER_UNAVAILABLE] = unavailable }
     }
 
+    suspend fun setThemeMode(mode: ThemeMode) {
+        dataStore.edit { it[THEME_MODE] = mode.name }
+    }
+
+    suspend fun setUsesWallpaperColors(enabled: Boolean) {
+        dataStore.edit { it[WALLPAPER_COLORS] = enabled }
+    }
+
     private fun serverOf(preferences: Preferences): ServerConfig? {
         val url = preferences[SERVER_URL]?.toHttpUrlOrNull() ?: return null
         val token = preferences[TOKEN] ?: return null
@@ -124,6 +137,8 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         /** The default camera (named after the source of the last run, which it replaced). */
         val SCAN_SOURCE = stringPreferencesKey("scan_source")
         val GOOGLE_SCANNER_UNAVAILABLE = booleanPreferencesKey("google_scanner_unavailable")
+        val THEME_MODE = stringPreferencesKey("theme_mode")
+        val WALLPAPER_COLORS = booleanPreferencesKey("wallpaper_colors")
 
         /** Server whose documents are cached; kept when unpairing, to detect a change of server. */
         val LIBRARY_SERVER_URL = stringPreferencesKey("library_server_url")

@@ -192,6 +192,13 @@
     <string name="settings_scanner_mode_filters_help">Cropping, plus filters (black and white, automatic enhancement…) that change colors and contrast.</string>
     <string name="settings_scanner_mode_full">Full — filters plus finger and stain removal</string>
     <string name="settings_scanner_mode_full_help">Filters, plus automatic removal of fingers and stains, which can also erase page details.</string>
+    <string name="settings_section_appearance">Appearance</string>
+    <string name="settings_theme">Theme</string>
+    <string name="theme_mode_same_as_phone">Same as the phone</string>
+    <string name="theme_mode_light">Light</string>
+    <string name="theme_mode_dark">Dark</string>
+    <string name="settings_wallpaper_colors">Wallpaper colors</string>
+    <string name="settings_wallpaper_colors_help">Use your wallpaper’s colors in place of ScanMyLib’s.</string>
     <string name="settings_section_about">About</string>
     <string name="settings_version">ScanMyLib for Android %1$s</string>
     <string name="settings_about">The pages go straight to your PC, which reads their text (OCR).</string>

@@ -2,7 +2,9 @@ package fr.scanmylib.ui.theme
 
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import kotlin.properties.Delegates
 import org.junit.Assert.assertEquals
@@ -73,6 +75,32 @@ class ThemeTest {
             @Test
             fun `should lift cards two surface levels from the background, since one is too close to see`() {
                 assertEquals(colors.surfaceContainer, cardColor)
+            }
+        }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36])
+        class WhenAThemeInsideTheWallpaperColorsForcesTheDarkColors {
+            @get:Rule
+            val compose = createComposeRule()
+
+            private lateinit var colors: ColorScheme
+            private lateinit var wallpaperDarkColors: ColorScheme
+
+            @Before
+            fun drawTheThemeInside() {
+                compose.setContent {
+                    wallpaperDarkColors = dynamicDarkColorScheme(LocalContext.current)
+                    ScanMyLibTheme(dark = false, usesWallpaperColors = true) {
+                        ScanMyLibTheme(dark = true) { colors = MaterialTheme.colorScheme }
+                    }
+                }
+                compose.waitForIdle()
+            }
+
+            @Test
+            fun `should keep the wallpaper's colors, so that the camera matches the app`() {
+                assertEquals(wallpaperDarkColors.primary, colors.primary)
             }
         }
     }

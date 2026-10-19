@@ -102,7 +102,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import androidx.core.view.WindowCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.Observer
 import androidx.lifecycle.compose.LifecycleEventEffect
@@ -114,6 +113,7 @@ import fr.scanmylib.R
 import fr.scanmylib.library.StagedPage
 import fr.scanmylib.model.ScanSource
 import fr.scanmylib.ui.components.LocalImage
+import fr.scanmylib.ui.theme.LightSystemBarIcons
 import fr.scanmylib.ui.theme.ScanMyLibTheme
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
@@ -769,24 +769,6 @@ private fun KeepScreenOn() {
     DisposableEffect(view) {
         view.keepScreenOn = true
         onDispose { view.keepScreenOn = false }
-    }
-}
-
-/** Light status and navigation bar icons over the black screen, restored when leaving. */
-@Composable
-private fun LightSystemBarIcons() {
-    val window = LocalActivity.current?.window ?: return
-    val view = LocalView.current
-    DisposableEffect(window, view) {
-        val bars = WindowCompat.getInsetsController(window, view)
-        val lightStatusBars = bars.isAppearanceLightStatusBars
-        val lightNavigationBars = bars.isAppearanceLightNavigationBars
-        bars.isAppearanceLightStatusBars = false
-        bars.isAppearanceLightNavigationBars = false
-        onDispose {
-            bars.isAppearanceLightStatusBars = lightStatusBars
-            bars.isAppearanceLightNavigationBars = lightNavigationBars
-        }
     }
 }
 

@@ -75,6 +75,8 @@ android {
         // Framework calls (android.util.Log...) do nothing in JVM unit tests instead of throwing,
         // so that view models can be tested.
         unitTests.isReturnDefaultValues = true
+        // The screenshot tests draw the screens with the app's resources: strings, drawables and themes.
+        unitTests.isIncludeAndroidResources = true
     }
 
     lint {
@@ -108,6 +110,37 @@ room {
 
 val ktlint: Configuration = configurations.create("ktlint")
 
+// The image of Android that Robolectric runs the screenshot tests on, resolved and verified by Gradle like
+// any other dependency: Robolectric runs offline and reads it from robolectricDependencyDir, never
+// downloading it itself.
+val robolectricAndroidAll: Configuration = configurations.create("robolectricAndroidAll")
+val robolectricDependencyDir = layout.buildDirectory.dir("robolectric")
+val syncRobolectricAndroidAll = tasks.register<Sync>("syncRobolectricAndroidAll") {
+    from(robolectricAndroidAll)
+    into(robolectricDependencyDir)
+}
+
+val screenshotsDir = layout.buildDirectory.dir("outputs/roborazzi")
+
+// The screenshot tests run with the debug variant's unit tests (src/testDebug).
+tasks.withType<Test>().named { it == "testDebugUnitTest" }.configureEach {
+    inputs.files(syncRobolectricAndroidAll)
+        .withPropertyName("robolectricAndroidAll")
+        .withNormalizer(ClasspathNormalizer::class)
+    // Declared, so that a run taken from the build cache brings back the pictures of its inputs, and cleared first, so
+    // that no picture of an earlier revision stays among them.
+    val screenshots = screenshotsDir
+    outputs.dir(screenshots).withPropertyName("screenshots")
+    doFirst { screenshots.get().asFile.deleteRecursively() }
+    systemProperty("robolectric.offline", "true")
+    systemProperty("robolectric.dependency.dir", robolectricDependencyDir.get().asFile.absolutePath)
+    // Android 16 reads raw file descriptors through the JDK's jdk.internal.access, which Java 21 exports to no unnamed
+    // module: without it, Robolectric fails to set up every test.
+    jvmArgs("--add-exports=java.base/jdk.internal.access=ALL-UNNAMED")
+    // The pictures are never committed, so there are no references to compare them with: every run records them.
+    systemProperty("roborazzi.test.record", "true")
+}
+
 dependencies {
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
@@ -137,6 +170,13 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.okhttp.mockwebserver)
+    // The screenshot tests (src/testDebug) run on the debug variant, whose manifest declares the activity
+    // that the Compose test rule starts (ui-test-manifest).
+    testDebugImplementation(libs.androidx.compose.ui.test.junit4)
+    testDebugImplementation(libs.robolectric)
+    testDebugImplementation(libs.roborazzi)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
+    robolectricAndroidAll(libs.robolectric.android.all)
 
     ktlint(libs.ktlint.cli) {
         attributes {

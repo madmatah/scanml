@@ -19,6 +19,10 @@ kotlinxSerialization = "1.11.0"
 okhttp = "5.5.0"
 playServicesCodeScanner = "16.1.0"
 playServicesDocumentScanner = "16.0.0"
+robolectric = "4.17"
+# The image of Android 16 (API 36, targetSdk) that Robolectric 4.17 runs the tests on.
+robolectricAndroidAll = "16-robolectric-13921718-i7"
+roborazzi = "1.76.0"
 
 [libraries]
 # Build classpath (see the root build file).
@@ -54,9 +58,14 @@ play-services-mlkit-document-scanner = { module = "com.google.android.gms:play-s
 ktlint-cli = { module = "com.pinterest.ktlint:ktlint-cli", version.ref = "ktlint" }
 
 # Tests
+androidx-compose-ui-test-junit4 = { module = "androidx.compose.ui:ui-test-junit4" }
+androidx-compose-ui-test-manifest = { module = "androidx.compose.ui:ui-test-manifest" }
 junit = { module = "junit:junit", version.ref = "junit" }
 kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "kotlinxCoroutines" }
 okhttp-mockwebserver = { module = "com.squareup.okhttp3:mockwebserver3", version.ref = "okhttp" }
+robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
+robolectric-android-all = { module = "org.robolectric:android-all-instrumented", version.ref = "robolectricAndroidAll" }
+roborazzi = { module = "io.github.takahirom.roborazzi:roborazzi", version.ref = "roborazzi" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

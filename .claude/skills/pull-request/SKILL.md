@@ -51,9 +51,13 @@ may be back in the main checkout between two calls, where a rebase or a commit w
    visible change in a browser" says, and try a change to the `ocr` service on the development stack with
    `cd <worktree> && scripts/verify-sandbox.sh`. For a change under `ocr/`, also run the sandbox's tests with the
    engine's environment, as `CLAUDE.md` > Commands shows.
-2. Run `/expert-review` on the branch, or `/expert-review <base>...HEAD` when it is stacked.
-3. Settle each finding as `CLAUDE.md` > Workflow, "Review before pushing" says, folding each fix into its commit as
-   [Fold review fixes](#fold-review-fixes) shows.
+2. Run `/expert-review` on the branch, or `/expert-review <base>...HEAD` when it is stacked. While it reads the
+   worktree, run nothing that moves the worktree between commits, such as `git rebase --exec`: the experts would read
+   another revision than the one under review.
+3. Settle each finding as `CLAUDE.md` > Workflow, "Review before pushing" says, committing each fix as a `fixup!`
+   commit, as [Fold review fixes](#fold-review-fixes) shows. Before you fold them, review the fixes alone:
+   `/expert-review <the commit before the first fix>...HEAD`, which picks the experts of the domains they touch. Then
+   fold them.
 4. If the review returns while experts are still running, its message says how to finish it when their reports arrive.
 
 ## Push and open the pull request

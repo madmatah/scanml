@@ -16,6 +16,7 @@ import types
 import unittest
 from collections.abc import Mapping, Sequence
 from contextlib import redirect_stderr, redirect_stdout
+from dataclasses import dataclass
 from pathlib import Path
 from typing import ClassVar
 from unittest import mock
@@ -23,21 +24,33 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
 import stack
 
-DEV_ENV = """\
+DEVELOPMENT_STACK_ENV = """\
 # A development stack.
 COMPOSE_PROJECT_NAME=scanmylib-dev
 IMAGE_PREFIX=scanmylib-dev
 
-DATA_DIR={dev}
-SANDBOX_DIR={prod}/sandbox
-ANDROID_DIR={dev}/android
-ANDROID_KEYSTORE_DIR={prod}/android/keystore
-LIBRARY_DIR={dev}/library
+DATA_DIR={development_data_dir}
+SANDBOX_DIR={production_data_dir}/sandbox
+ANDROID_DIR={development_data_dir}/android
+ANDROID_KEYSTORE_DIR={production_data_dir}/android/keystore
+LIBRARY_DIR={development_data_dir}/library
 API_PORT=8770
 PUBLIC_URL=http://192.168.1.10:8770
 OCR_SERVICE=ocr-fake
 APP_VARIANT=dev
 """
+
+
+@dataclass(frozen=True)
+class Layout:
+    base: Path
+    production_data_dir: Path
+    development_data_dir: Path
+    home: Path
+    primary: Path
+    library: Path
+    worktree: Path
+    env: Mapping[str, str]
 
 
 def make_directory(test: unittest.TestCase) -> Path:
@@ -62,6 +75,177 @@ def make_home(test: unittest.TestCase) -> Path:
 
 def build_container(working_dir: str) -> stack.JsonObject:
     return {"Name": "/scanmylib-api-1", "Config": {"Labels": {stack.WORKING_DIR_LABEL: working_dir}}}
+
+
+def make_layout(test: unittest.TestCase) -> Layout:
+    base = make_directory(test)
+    production_data_dir, development_data_dir = base / "prod", base / "prod-dev"
+    home = base / "home"
+    primary = home / "Dev" / "scanmylib"
+    library = home / "Documents" / "ScanMyLib"
+    primary.mkdir(parents=True)
+    fake_home(test, home)
+    (primary / ".env").write_text(
+        f"COMPOSE_PROJECT_NAME=scanmylib\nIMAGE_PREFIX=scanmylib\nDATA_DIR={production_data_dir}\n"
+        f"SANDBOX_DIR={production_data_dir}/sandbox\nANDROID_DIR={production_data_dir}/android\n"
+        f"LIBRARY_DIR={library}\nAPI_PORT=8765\nSANDBOX_SETUP_DIR={production_data_dir}/sandbox\n"
+    )
+    env = dict(
+        line.split("=", 1)
+        for line in DEVELOPMENT_STACK_ENV.format(
+            development_data_dir=development_data_dir, production_data_dir=production_data_dir
+        ).splitlines()
+        if line and not line.startswith("#")
+    )
+    return Layout(base, production_data_dir, development_data_dir, home, primary, library, base / "worktree", env)
+
+
+def build_resolved_compose_config(layout: Layout, **changes: object) -> stack.JsonObject:
+    development_data_dir, production_data_dir = layout.development_data_dir, layout.production_data_dir
+    worktree = layout.worktree
+    created = {"create_host_path": True}
+    config: stack.JsonObject = {
+        "name": "scanmylib-dev",
+        "networks": {"default": {"name": "scanmylib-dev_default", "ipam": {}}},
+        "x-ocr-env": {"HOME": "/tmp/home"},
+        "services": {
+            "api": {
+                "build": {
+                    "context": f"{worktree}/server",
+                    "dockerfile": "Dockerfile",
+                    "target": "runtime",
+                    "args": {"UID": "1000"},
+                    "additional_contexts": {"project": str(worktree)},
+                },
+                "image": "scanmylib-dev-api:latest",
+                "cap_drop": ["ALL"],
+                "security_opt": ["no-new-privileges:true"],
+                "read_only": True,
+                "ports": [{"target": 8765, "published": "8770"}],
+                "tmpfs": ["/tmp:size=512m,mode=1777"],
+                "networks": {"default": None},
+                "volumes": [
+                    {
+                        "type": "bind",
+                        "source": f"{development_data_dir}/library",
+                        "target": "/library",
+                        "bind": created,
+                    },
+                    {"type": "bind", "source": f"{development_data_dir}/state", "target": "/state", "bind": created},
+                    {
+                        "type": "bind",
+                        "source": f"{development_data_dir}/run",
+                        "target": "/run/scanmylib",
+                        "bind": created,
+                    },
+                    {
+                        "type": "bind",
+                        "source": f"{development_data_dir}/app",
+                        "target": "/app-dist",
+                        "read_only": True,
+                        "bind": created,
+                    },
+                ],
+            },
+            "ocr": {
+                "build": {"context": f"{worktree}/ocr", "dockerfile": "Dockerfile"},
+                "image": "scanmylib-dev-ocr:latest",
+                "network_mode": "none",
+                "devices": [{"source": "nvidia.com/gpu=all", "target": "nvidia.com/gpu=all", "permissions": "rwm"}],
+                "volumes": [
+                    {
+                        "type": "bind",
+                        "source": f"{production_data_dir}/sandbox",
+                        "target": "/opt/sandbox",
+                        "read_only": True,
+                        "bind": created,
+                    },
+                    {
+                        "type": "bind",
+                        "source": f"{development_data_dir}/run",
+                        "target": "/run/scanmylib",
+                        "bind": created,
+                    },
+                    {
+                        "type": "bind",
+                        "source": f"{development_data_dir}/ocr-cache",
+                        "target": "/var/cache/ocr",
+                        "bind": created,
+                    },
+                ],
+            },
+            "ocr-fake": {
+                "image": "scanmylib-dev-api:latest",
+                "pull_policy": "never",
+                "profiles": ["fake-ocr"],
+                "network_mode": "none",
+            },
+            "ocr-setup": {
+                "build": {"context": f"{worktree}/ocr", "dockerfile": "Dockerfile"},
+                "image": "scanmylib-dev-ocr:latest",
+                "volumes": [
+                    {
+                        "type": "bind",
+                        "source": "/nonexistent/SANDBOX_SETUP_DIR",
+                        "target": "/opt/sandbox",
+                        "bind": {},
+                    }
+                ],
+            },
+        },
+    }
+    config.update(changes)
+    return config
+
+
+def build_resolved_compose_config_with_settings(
+    layout: Layout, service: str = "api", **settings: object
+) -> stack.JsonObject:
+    config = build_resolved_compose_config(layout)
+    config["services"][service].update(settings)
+    return config
+
+
+def build_resolved_compose_config_with_bind_mount(
+    layout: Layout, source: str, read_only: bool = False, service: str = "api", create: bool = True
+) -> stack.JsonObject:
+    config = build_resolved_compose_config(layout)
+    config["services"][service]["volumes"].append(
+        {
+            "type": "bind",
+            "source": source,
+            "target": "/x",
+            "read_only": read_only,
+            "bind": {"create_host_path": True} if create else {},
+        }
+    )
+    return config
+
+
+def find_problems(
+    layout: Layout,
+    config: stack.JsonObject | None = None,
+    env: Mapping[str, str] | None = None,
+    containers: Sequence[stack.JsonObject] = (),
+    raw: stack.JsonObject | None = None,
+    compose_file: str | None = None,
+) -> list[str]:
+    checkout = stack.production_checkout(list(containers))
+    production = stack.production_identity(checkout, list(containers))
+    config = config or build_resolved_compose_config(layout)
+    return stack.isolation_problems(
+        dict(env or layout.env), config, raw or config, production, str(layout.worktree), compose_file
+    )
+
+
+def mentions(problems: list[str], text: str) -> bool:
+    return any(text in problem for problem in problems)
+
+
+def run_check_paths(*arguments: str) -> tuple[int, str]:
+    errors = io.StringIO()
+    with mock.patch("sys.stdin", io.StringIO("[]")), redirect_stderr(errors):
+        return stack.main(["check-paths", *arguments]), errors.getvalue()
 
 
 class TheReadEnvFunctionWhenTheFileKeepsToTheStrictFormat(unittest.TestCase):
@@ -292,452 +476,750 @@ class TheMainFunctionWhenAskedForProductionsCheckout(unittest.TestCase):
         self.assertEqual(self.printed.strip(), f"{self.home}/prod")
 
 
-class IsolationTest(unittest.TestCase):
-    """isolation_problems() on configurations shaped like `docker compose config --format json`."""
+class TheIsolationProblemsFunctionWhenTheStackIsTheDevelopmentOne(unittest.TestCase):
+    def setUp(self) -> None:
+        self.problems = find_problems(make_layout(self))
+
+    def test_should_find_none(self) -> None:
+        self.assertEqual(self.problems, [])
+
+
+class TheIsolationProblemsFunctionWhenTheStackTakesWhatProductionOwns(unittest.TestCase):
+    def setUp(self) -> None:
+        layout = make_layout(self)
+        configs = {
+            "production's project": build_resolved_compose_config(layout, name="scanmylib"),
+            "an image of production's": build_resolved_compose_config_with_settings(layout, image="scanmylib-api:dev"),
+            "a port range that holds production's port": build_resolved_compose_config_with_settings(
+                layout, ports=[{"target": 8765, "published": "8760-8770"}]
+            ),
+        }
+        self.expected_problems = {
+            "production's project": "the project is production's",
+            "an image of production's": "the image scanmylib-api:dev is production's",
+            "a port range that holds production's port": "publishes port 8765",
+        }
+        self.problems = {row: find_problems(layout, config=config) for row, config in configs.items()}
+
+    def test_should_refuse_it(self) -> None:
+        for row, expected in self.expected_problems.items():
+            with self.subTest(row):
+                self.assertTrue(mentions(self.problems[row], expected), self.problems[row])
+
+
+class TheIsolationProblemsFunctionWhenAnImageOfProductionsIsWrittenInAnotherForm(unittest.TestCase):
+    images: ClassVar[tuple[str, ...]] = (
+        "docker.io/library/scanmylib-api:latest",
+        "docker.io/scanmylib-api",
+        "index.docker.io/library/scanmylib-api:latest",
+    )
 
     def setUp(self) -> None:
-        directory = tempfile.TemporaryDirectory()
-        self.addCleanup(directory.cleanup)
-        self.base = Path(os.path.realpath(directory.name))
-        self.prod = self.base / "prod"
-        self.dev = self.base / "prod-dev"
-        self.home = self.base / "home"
-        self.primary = self.home / "Dev" / "scanmylib"
-        self.library = self.home / "Documents" / "ScanMyLib"
-        self.worktree = self.base / "worktree"
-        self.primary.mkdir(parents=True)
-        fake_home(self, self.home)
-        (self.primary / ".env").write_text(
-            f"COMPOSE_PROJECT_NAME=scanmylib\nIMAGE_PREFIX=scanmylib\nDATA_DIR={self.prod}\n"
-            f"SANDBOX_DIR={self.prod}/sandbox\nANDROID_DIR={self.prod}/android\nLIBRARY_DIR={self.library}\n"
-            f"API_PORT=8765\nSANDBOX_SETUP_DIR={self.prod}/sandbox\n"
-        )
-        self.env = dict(
-            line.split("=", 1)
-            for line in DEV_ENV.format(dev=self.dev, prod=self.prod).splitlines()
-            if line and not line.startswith("#")
-        )
-
-    def config(self, **changes: object) -> stack.JsonObject:
-        dev, prod, worktree = self.dev, self.prod, self.worktree
-        created = {"create_host_path": True}
-        config: stack.JsonObject = {
-            "name": "scanmylib-dev",
-            "networks": {"default": {"name": "scanmylib-dev_default", "ipam": {}}},
-            "x-ocr-env": {"HOME": "/tmp/home"},
-            "services": {
-                "api": {
-                    "build": {
-                        "context": f"{worktree}/server",
-                        "dockerfile": "Dockerfile",
-                        "target": "runtime",
-                        "args": {"UID": "1000"},
-                        "additional_contexts": {"project": str(worktree)},
-                    },
-                    "image": "scanmylib-dev-api:latest",
-                    "cap_drop": ["ALL"],
-                    "security_opt": ["no-new-privileges:true"],
-                    "read_only": True,
-                    "ports": [{"target": 8765, "published": "8770"}],
-                    "tmpfs": ["/tmp:size=512m,mode=1777"],
-                    "networks": {"default": None},
-                    "volumes": [
-                        {"type": "bind", "source": f"{dev}/library", "target": "/library", "bind": created},
-                        {"type": "bind", "source": f"{dev}/state", "target": "/state", "bind": created},
-                        {"type": "bind", "source": f"{dev}/run", "target": "/run/scanmylib", "bind": created},
-                        {
-                            "type": "bind",
-                            "source": f"{dev}/app",
-                            "target": "/app-dist",
-                            "read_only": True,
-                            "bind": created,
-                        },
-                    ],
-                },
-                "ocr": {
-                    "build": {"context": f"{worktree}/ocr", "dockerfile": "Dockerfile"},
-                    "image": "scanmylib-dev-ocr:latest",
-                    "network_mode": "none",
-                    "devices": [{"source": "nvidia.com/gpu=all", "target": "nvidia.com/gpu=all", "permissions": "rwm"}],
-                    "volumes": [
-                        {
-                            "type": "bind",
-                            "source": f"{prod}/sandbox",
-                            "target": "/opt/sandbox",
-                            "read_only": True,
-                            "bind": created,
-                        },
-                        {"type": "bind", "source": f"{dev}/run", "target": "/run/scanmylib", "bind": created},
-                        {"type": "bind", "source": f"{dev}/ocr-cache", "target": "/var/cache/ocr", "bind": created},
-                    ],
-                },
-                "ocr-fake": {
-                    "image": "scanmylib-dev-api:latest",
-                    "pull_policy": "never",
-                    "profiles": ["fake-ocr"],
-                    "network_mode": "none",
-                },
-                "ocr-setup": {
-                    "build": {"context": f"{worktree}/ocr", "dockerfile": "Dockerfile"},
-                    "image": "scanmylib-dev-ocr:latest",
-                    "volumes": [
-                        {
-                            "type": "bind",
-                            "source": "/nonexistent/SANDBOX_SETUP_DIR",
-                            "target": "/opt/sandbox",
-                            "bind": {},
-                        }
-                    ],
-                },
-            },
+        layout = make_layout(self)
+        self.problems = {
+            image: find_problems(layout, config=build_resolved_compose_config_with_settings(layout, image=image))
+            for image in self.images
         }
-        config.update(changes)
-        return config
 
-    def problems(
-        self,
-        config: stack.JsonObject | None = None,
-        env: dict[str, str] | None = None,
-        containers: Sequence[stack.JsonObject] = (),
-        raw: stack.JsonObject | None = None,
-        compose_file: str | None = None,
-    ) -> list[str]:
-        checkout = stack.production_checkout(list(containers))
-        production = stack.production_identity(checkout, list(containers))
-        config = config or self.config()
-        return stack.isolation_problems(
-            env or self.env, config, raw or config, production, str(self.worktree), compose_file
+    def test_should_refuse_it_since_docker_reads_it_as_production_s(self) -> None:
+        for image in self.images:
+            with self.subTest(image):
+                self.assertTrue(
+                    mentions(self.problems[image], f"the image {image} is production's"), self.problems[image]
+                )
+
+
+class TheIsolationProblemsFunctionWhenAnImageIsNotOneOfTheStacksOwn(unittest.TestCase):
+    images: ClassVar[tuple[str, ...]] = (
+        "scanmylib-dev-api:dev",
+        "scanmylib-dev-other:latest",
+        "docker.io/library/scanmylib-dev-api:latest",
+        "busybox:latest",
+    )
+
+    def setUp(self) -> None:
+        layout = make_layout(self)
+        self.problems = {
+            image: find_problems(layout, config=build_resolved_compose_config_with_settings(layout, image=image))
+            for image in self.images
+        }
+
+    def test_should_refuse_it(self) -> None:
+        for image in self.images:
+            with self.subTest(image):
+                self.assertTrue(mentions(self.problems[image], "is not one of the stack's own"), self.problems[image])
+
+
+class TheIsolationProblemsFunctionWhenTheImagePrefixIsNotLowercaseLettersDigitsAndHyphens(unittest.TestCase):
+    prefixes: ClassVar[tuple[str, ...]] = (
+        "docker.io/library/scanmylib",
+        "docker.io/scanmylib",
+        "index.docker.io/library/scanmylib",
+        "Scanmylib-dev",
+        "scanmylib.dev",
+    )
+
+    def setUp(self) -> None:
+        layout = make_layout(self)
+        self.problems = {
+            prefix: find_problems(layout, env={**layout.env, "IMAGE_PREFIX": prefix}) for prefix in self.prefixes
+        }
+
+    def test_should_refuse_it(self) -> None:
+        for prefix in self.prefixes:
+            with self.subTest(prefix):
+                self.assertTrue(
+                    mentions(self.problems[prefix], "may only contain lowercase letters"), self.problems[prefix]
+                )
+
+
+class TheIsolationProblemsFunctionWhenABindMountUsesAHostPathNoStackMayUse(unittest.TestCase):
+    def setUp(self) -> None:
+        layout = make_layout(self)
+        sources = {
+            "production's DATA_DIR": (str(layout.production_data_dir), "is production's DATA_DIR"),
+            "a directory inside production's DATA_DIR": (
+                f"{layout.production_data_dir}/state",
+                "is inside production's DATA_DIR",
+            ),
+            "the parent of production's DATA_DIR": (
+                str(layout.production_data_dir.parent),
+                "contains production's DATA_DIR",
+            ),
+            "production's LIBRARY_DIR": (str(layout.library), "is production's LIBRARY_DIR"),
+            "production's checkout": (str(layout.primary), "is production's checkout"),
+            "production's signing key": (
+                f"{layout.production_data_dir}/android/keystore",
+                "production's signing key directory",
+            ),
+            "production's SANDBOX_DIR, read-write": (
+                f"{layout.production_data_dir}/sandbox",
+                "is production's SANDBOX_DIR",
+            ),
+            "/run": ("/run", "system directory"),
+            "the Docker socket": ("/var/run/docker.sock", "system directory"),
+            "the data of Docker": ("/var/lib/docker", "system directory"),
+            "/etc": ("/etc", "system directory"),
+            "root's home directory": ("/root/.ssh", "system directory"),
+            "/tmp": ("/tmp", "is or contains /tmp"),
+            "the home directory": (str(layout.home), "contains your home directory"),
+            "a directory inside the home directory": (f"{layout.home}/.ssh", "is inside your home directory"),
+            "the root directory": ("/", "contains your home directory"),
+        }
+        self.expected_problems = {row: expected for row, (_, expected) in sources.items()}
+        self.problems = {
+            row: find_problems(layout, config=build_resolved_compose_config_with_bind_mount(layout, source))
+            for row, (source, _) in sources.items()
+        }
+
+    def test_should_refuse_it(self) -> None:
+        for row, expected in self.expected_problems.items():
+            with self.subTest(row):
+                self.assertTrue(mentions(self.problems[row], expected), self.problems[row])
+
+
+class TheIsolationProblemsFunctionWhenHomePointsElsewhere(unittest.TestCase):
+    def setUp(self) -> None:
+        layout = make_layout(self)
+        elsewhere = layout.base / "elsewhere-home"
+        self.enterContext(mock.patch.dict(os.environ, {"HOME": str(elsewhere)}))
+        self.data_dirs = {
+            "in the home directory of the password database": f"{layout.home}/dev",
+            "in $HOME": f"{elsewhere}/dev",
+        }
+        self.problems = {
+            row: find_problems(layout, env={**layout.env, "DATA_DIR": data_dir})
+            for row, data_dir in self.data_dirs.items()
+        }
+
+    def test_should_refuse_a_data_dir_in_either_home_directory(self) -> None:
+        for row in self.data_dirs:
+            with self.subTest(row):
+                self.assertTrue(mentions(self.problems[row], "is inside your home directory"), self.problems[row])
+
+
+class TheIsolationProblemsFunctionWhenABindMountLiesOutsideTheStacksDataDir(unittest.TestCase):
+    mounts: ClassVar[Mapping[str, bool]] = types.MappingProxyType({"read-write": False, "read-only": True})
+
+    def setUp(self) -> None:
+        layout = make_layout(self)
+        elsewhere = f"{layout.base}/elsewhere"
+        self.problems = {
+            row: find_problems(
+                layout, config=build_resolved_compose_config_with_bind_mount(layout, elsewhere, read_only=read_only)
+            )
+            for row, read_only in self.mounts.items()
+        }
+
+    def test_should_refuse_it(self) -> None:
+        for row in self.mounts:
+            with self.subTest(row):
+                self.assertTrue(mentions(self.problems[row], "is not inside the stack's DATA_DIR"), self.problems[row])
+
+
+class TheIsolationProblemsFunctionWhenAPathOfTheEnvLiesOutsideTheStacksDataDir(unittest.TestCase):
+    def setUp(self) -> None:
+        layout = make_layout(self)
+        paths = {
+            "LIBRARY_DIR in /tmp": ("LIBRARY_DIR", "/tmp"),
+            "LIBRARY_DIR elsewhere": ("LIBRARY_DIR", f"{layout.base}/library2"),
+            "ANDROID_DIR elsewhere": ("ANDROID_DIR", f"{layout.base}/android"),
+            "SANDBOX_SETUP_DIR elsewhere": ("SANDBOX_SETUP_DIR", f"{layout.base}/sandbox"),
+            "SANDBOX_DIR in /tmp": ("SANDBOX_DIR", "/tmp"),
+            "ANDROID_KEYSTORE_DIR elsewhere": ("ANDROID_KEYSTORE_DIR", f"{layout.base}/keys"),
+            "LIBRARY_DIR in the home directory": ("LIBRARY_DIR", f"{layout.home}/.ssh"),
+        }
+        self.keys = {row: key for row, (key, _) in paths.items()}
+        self.problems = {
+            row: find_problems(layout, env={**layout.env, key: value}) for row, (key, value) in paths.items()
+        }
+
+    def test_should_refuse_it_naming_its_key(self) -> None:
+        for row, key in self.keys.items():
+            with self.subTest(row):
+                self.assertTrue(mentions(self.problems[row], f"{key} in .env"), self.problems[row])
+
+
+class TheIsolationProblemsFunctionWhenTheDataDirCannotBeTheStacksOwn(unittest.TestCase):
+    def setUp(self) -> None:
+        layout = make_layout(self)
+        data_dirs = {
+            "/tmp": ("/tmp", "is or contains /tmp"),
+            "a system directory": ("/var/tmp/dev", "system directory"),
+            "the home directory": (f"{layout.home}/scanmylib-dev", "is inside your home directory"),
+            "a relative path": ("relative/dev", "not an absolute path"),
+        }
+        self.expected_problems = {row: expected for row, (_, expected) in data_dirs.items()}
+        self.problems = {
+            row: find_problems(layout, env={**layout.env, "DATA_DIR": data_dir})
+            for row, (data_dir, _) in data_dirs.items()
+        }
+
+    def test_should_refuse_it(self) -> None:
+        for row, expected in self.expected_problems.items():
+            with self.subTest(row):
+                self.assertTrue(mentions(self.problems[row], expected), self.problems[row])
+
+
+class TheIsolationProblemsFunctionWhenTheEnvHasNoDataDir(unittest.TestCase):
+    def setUp(self) -> None:
+        layout = make_layout(self)
+        env = {key: value for key, value in layout.env.items() if key != "DATA_DIR"}
+        self.problems = find_problems(layout, env=env)
+
+    def test_should_refuse_it(self) -> None:
+        self.assertTrue(mentions(self.problems, "no DATA_DIR in .env"), self.problems)
+
+
+class TheIsolationProblemsFunctionWhenABindMountSharesProductionsModelsReadOnly(unittest.TestCase):
+    def setUp(self) -> None:
+        layout = make_layout(self)
+        config = build_resolved_compose_config_with_bind_mount(
+            layout, f"{layout.production_data_dir}/sandbox/models", read_only=True
+        )
+        self.problems = find_problems(layout, config=config)
+
+    def test_should_find_none(self) -> None:
+        self.assertEqual(self.problems, [])
+
+
+class TheIsolationProblemsFunctionWhenABindMountSharesProductionsDataDirReadOnly(unittest.TestCase):
+    def setUp(self) -> None:
+        layout = make_layout(self)
+        self.problems = find_problems(
+            layout,
+            config=build_resolved_compose_config_with_bind_mount(
+                layout, str(layout.production_data_dir), read_only=True
+            ),
         )
 
-    def assert_refused(
+    def test_should_refuse_it_as_production_s_data_dir(self) -> None:
+        self.assertTrue(mentions(self.problems, "is production's DATA_DIR"), self.problems)
+
+    def test_should_refuse_it_as_a_directory_that_holds_production_s_sandbox_since_only_the_models_are_shared(
         self,
-        pattern: str,
-        *,
-        config: stack.JsonObject | None = None,
-        env: dict[str, str] | None = None,
-        containers: Sequence[stack.JsonObject] = (),
-        raw: stack.JsonObject | None = None,
-        compose_file: str | None = None,
     ) -> None:
-        problems = self.problems(config, env, containers, raw, compose_file)
-        self.assertTrue(any(pattern in problem for problem in problems), problems)
+        self.assertTrue(mentions(self.problems, "contains production's SANDBOX_DIR"), self.problems)
 
-    def service(self, name: str = "api", **settings: object) -> stack.JsonObject:
-        config = self.config()
-        config["services"][name].update(settings)
-        return config
 
-    def test_the_development_stack_shares_nothing(self) -> None:
-        self.assertEqual(self.problems(), [])
-
-    def test_production_project_images_and_ports(self) -> None:
-        self.assert_refused("the project is production's", config=self.config(name="scanmylib"))
-        self.assert_refused(
-            "the image scanmylib-api:dev is production's", config=self.service(image="scanmylib-api:dev")
-        )
-        self.assert_refused(
-            "publishes port 8765", config=self.service(ports=[{"target": 8765, "published": "8760-8770"}])
+class TheIsolationProblemsFunctionWhenABindMountThatDockerNeverCreatesIsMissing(unittest.TestCase):
+    def setUp(self) -> None:
+        layout = make_layout(self)
+        self.problems = find_problems(
+            layout, config=build_resolved_compose_config_with_bind_mount(layout, "/nonexistent/x", create=False)
         )
 
-    def test_image_names_as_docker_reads_them(self) -> None:
-        for image in (
-            "docker.io/library/scanmylib-api:latest",
-            "docker.io/scanmylib-api",
-            "index.docker.io/library/scanmylib-api:latest",
-        ):
-            with self.subTest(image=image):
-                self.assert_refused(f"the image {image} is production's", config=self.service(image=image))
-        for image in (
-            "scanmylib-dev-api:dev",
-            "scanmylib-dev-other:latest",
-            "docker.io/library/scanmylib-dev-api:latest",
-            "busybox:latest",
-        ):
-            with self.subTest(image=image):
-                self.assert_refused("is not one of the stack's own", config=self.service(image=image))
-        for prefix in (
-            "docker.io/library/scanmylib",
-            "docker.io/scanmylib",
-            "index.docker.io/library/scanmylib",
-            "Scanmylib-dev",
-            "scanmylib.dev",
-        ):
-            with self.subTest(prefix=prefix):
-                self.assert_refused("may only contain lowercase letters", env={**self.env, "IMAGE_PREFIX": prefix})
+    def test_should_find_none_since_docker_never_mounts_it_as_the_placeholder_of_ocr_setup(self) -> None:
+        self.assertEqual(self.problems, [])
 
-    def bind(self, source: str, read_only: bool = False, service: str = "api", create: bool = True) -> stack.JsonObject:
-        config = self.config()
-        config["services"][service]["volumes"].append(
-            {
-                "type": "bind",
-                "source": source,
-                "target": "/x",
-                "read_only": read_only,
-                "bind": {"create_host_path": True} if create else {},
-            }
-        )
-        return config
 
-    def test_host_paths_of_production(self) -> None:
-        cases = [
-            (str(self.prod), "is production's DATA_DIR"),
-            (f"{self.prod}/state", "is inside production's DATA_DIR"),
-            (str(self.prod.parent), "contains production's DATA_DIR"),
-            (str(self.library), "is production's LIBRARY_DIR"),
-            (str(self.primary), "is production's checkout"),
-            (f"{self.prod}/android/keystore", "production's signing key directory"),
-            (f"{self.prod}/sandbox", "is production's SANDBOX_DIR"),  # read-write
-            ("/run", "system directory"),
-            ("/var/run/docker.sock", "system directory"),
-            ("/var/lib/docker", "system directory"),
-            ("/etc", "system directory"),
-            ("/tmp", "is or contains /tmp"),
-            (str(self.home), "contains your home directory"),
-            (f"{self.home}/.ssh", "is inside your home directory"),
-            ("/", "contains your home directory"),
-        ]
-        for source, expected in cases:
-            with self.subTest(source=source):
-                self.assert_refused(expected, config=self.bind(source))
-
-    def test_home_from_the_password_database_and_home_variable(self) -> None:
-        # $HOME points elsewhere: both home directories are refused.
-        elsewhere = self.base / "elsewhere-home"
-        with mock.patch.dict(os.environ, {"HOME": str(elsewhere)}):
-            for data_dir in (f"{self.home}/dev", f"{elsewhere}/dev"):
-                with self.subTest(data_dir=data_dir):
-                    self.assert_refused("is inside your home directory", env={**self.env, "DATA_DIR": data_dir})
-
-    def test_every_other_path_is_inside_the_stack_s_data_dir(self) -> None:
-        self.assert_refused("is not inside the stack's DATA_DIR", config=self.bind(f"{self.base}/elsewhere"))
-        self.assert_refused(
-            "is not inside the stack's DATA_DIR", config=self.bind(f"{self.base}/elsewhere", read_only=True)
-        )
-        for key, value in [
-            ("LIBRARY_DIR", "/tmp"),
-            ("LIBRARY_DIR", f"{self.base}/library2"),
-            ("ANDROID_DIR", f"{self.base}/android"),
-            ("SANDBOX_SETUP_DIR", f"{self.base}/sandbox"),
-            ("SANDBOX_DIR", "/tmp"),
-            ("ANDROID_KEYSTORE_DIR", f"{self.base}/keys"),
-            ("LIBRARY_DIR", f"{self.home}/.ssh"),
-        ]:
-            with self.subTest(key=key, value=value):
-                self.assert_refused(f"{key} in .env", env={**self.env, key: value})
-        for value, expected in [
-            ("/tmp", "is or contains /tmp"),
-            ("/var/tmp/dev", "system directory"),
-            (f"{self.home}/scanmylib-dev", "is inside your home directory"),
-            ("relative/dev", "not an absolute path"),
-        ]:
-            with self.subTest(data_dir=value):
-                self.assert_refused(expected, env={**self.env, "DATA_DIR": value})
-        self.assert_refused(
-            "no DATA_DIR in .env", env={key: value for key, value in self.env.items() if key != "DATA_DIR"}
+class TheIsolationProblemsFunctionWhenABindMountThatDockerCreatesIsMissing(unittest.TestCase):
+    def setUp(self) -> None:
+        layout = make_layout(self)
+        self.problems = find_problems(
+            layout, config=build_resolved_compose_config_with_bind_mount(layout, f"{layout.base}/missing", create=True)
         )
 
-    def test_production_sandbox_is_shared_read_only_only(self) -> None:
-        self.assertEqual(self.problems(config=self.bind(f"{self.prod}/sandbox/models", read_only=True)), [])
-        self.assert_refused("is production's DATA_DIR", config=self.bind(str(self.prod), read_only=True))
-        self.assert_refused("contains production's SANDBOX_DIR", config=self.bind(str(self.prod), read_only=True))
+    def test_should_refuse_it_outside_the_stack_s_data_dir(self) -> None:
+        self.assertTrue(mentions(self.problems, "is not inside the stack's DATA_DIR"), self.problems)
 
-    def test_a_bind_mount_docker_would_never_create(self) -> None:
-        # The placeholder of ocr-setup: no such path, and docker compose does not create it.
-        self.assertEqual(self.problems(config=self.bind("/nonexistent/x", create=False)), [])
-        self.assert_refused("is not inside the stack's DATA_DIR", config=self.bind(f"{self.base}/missing", create=True))
-        # A path this user cannot see may exist for the Docker daemon.
-        if os.getuid() != 0 and not os.access("/root", os.X_OK):
-            self.assert_refused("system directory", config=self.bind("/root/.ssh", create=False))
 
-    def test_paths_from_the_running_production_containers(self) -> None:
-        elsewhere = self.dev / "moved-library"
+@unittest.skipIf(os.getuid() == 0, "root sees inside a directory that no one may read")
+class TheIsolationProblemsFunctionWhenABindMountLiesWhereThisUserCannotSee(unittest.TestCase):
+    def setUp(self) -> None:
+        layout = make_layout(self)
+        unreadable_directory = layout.base / "unreadable"
+        unreadable_directory.mkdir()
+        unreadable_directory.chmod(0o000)
+        self.addCleanup(unreadable_directory.chmod, 0o755)
+        self.problems = find_problems(
+            layout,
+            config=build_resolved_compose_config_with_bind_mount(layout, f"{unreadable_directory}/x", create=False),
+        )
+
+    def test_should_check_it_as_a_path_that_exists_since_it_may_exist_for_the_docker_daemon(self) -> None:
+        self.assertTrue(mentions(self.problems, "is not inside the stack's DATA_DIR"), self.problems)
+
+
+class TheIsolationProblemsFunctionWhenProductionsContainersRun(unittest.TestCase):
+    def setUp(self) -> None:
+        layout = make_layout(self)
+        moved_library = layout.development_data_dir / "moved-library"
         container = {
             "Name": "/scanmylib-api-1",
             "Config": {
                 "Image": "scanmylib-api:latest",
-                "Labels": {"com.docker.compose.project": "scanmylib", stack.WORKING_DIR_LABEL: str(self.primary)},
+                "Labels": {"com.docker.compose.project": "scanmylib", stack.WORKING_DIR_LABEL: str(layout.primary)},
             },
-            "Mounts": [{"Type": "bind", "Source": str(elsewhere), "Destination": "/library"}],
+            "Mounts": [{"Type": "bind", "Source": str(moved_library), "Destination": "/library"}],
             "HostConfig": {"PortBindings": {"8765/tcp": [{"HostIp": "", "HostPort": "9999"}]}},
         }
-        self.assert_refused(
-            "mount /library of scanmylib-api-1", config=self.bind(str(elsewhere)), containers=[container]
+        self.problems_of_the_mount = find_problems(
+            layout,
+            config=build_resolved_compose_config_with_bind_mount(layout, str(moved_library)),
+            containers=[container],
         )
-        self.assert_refused(
-            "publishes port 9999",
-            config=self.service(ports=[{"target": 8765, "published": "9999"}]),
+        self.problems_of_the_port = find_problems(
+            layout,
+            config=build_resolved_compose_config_with_settings(layout, ports=[{"target": 8765, "published": "9999"}]),
             containers=[container],
         )
 
-    def test_production_checkout_from_its_containers(self) -> None:
-        # Production runs from another checkout: that one is production's, whatever ~/Dev holds.
-        moved = self.base / "moved-checkout"
+    def test_should_refuse_a_path_they_mount(self) -> None:
+        self.assertTrue(
+            mentions(self.problems_of_the_mount, "mount /library of scanmylib-api-1"), self.problems_of_the_mount
+        )
+
+    def test_should_refuse_a_port_they_publish(self) -> None:
+        self.assertTrue(mentions(self.problems_of_the_port, "publishes port 9999"), self.problems_of_the_port)
+
+
+class TheIsolationProblemsFunctionWhenProductionRunsFromAnotherCheckout(unittest.TestCase):
+    def setUp(self) -> None:
+        layout = make_layout(self)
+        moved = layout.base / "moved-checkout"
         moved.mkdir()
-        (moved / ".env").write_text(f"COMPOSE_PROJECT_NAME=scanmylib\nDATA_DIR={self.base}/moved-data\n")
+        (moved / ".env").write_text(f"COMPOSE_PROJECT_NAME=scanmylib\nDATA_DIR={layout.base}/moved-data\n")
         container = {"Name": "/scanmylib-api-1", "Config": {"Labels": {stack.WORKING_DIR_LABEL: str(moved)}}}
-        self.assert_refused("is production's checkout", config=self.bind(str(moved)), containers=[container])
-        self.assert_refused(
-            "is production's DATA_DIR", env={**self.env, "DATA_DIR": f"{self.base}/moved-data"}, containers=[container]
+        self.problems_of_the_checkout = find_problems(
+            layout, config=build_resolved_compose_config_with_bind_mount(layout, str(moved)), containers=[container]
+        )
+        self.problems_of_the_data_dir = find_problems(
+            layout, env={**layout.env, "DATA_DIR": f"{layout.base}/moved-data"}, containers=[container]
         )
 
-    def test_paths_the_scripts_use(self) -> None:
-        for key, value, expected in [
-            ("DATA_DIR", str(self.prod), "DATA_DIR in .env"),
-            ("ANDROID_DIR", f"{self.prod}/android", "ANDROID_DIR in .env"),
-            ("SANDBOX_SETUP_DIR", f"{self.prod}/sandbox", "SANDBOX_SETUP_DIR in .env"),
-            ("ANDROID_KEYSTORE_DIR", str(self.prod / "android"), "ANDROID_KEYSTORE_DIR in .env"),
-            ("SANDBOX_DIR", str(self.prod), "SANDBOX_DIR in .env"),
-            ("LIBRARY_DIR", "relative/library", "not an absolute path"),
-        ]:
-            with self.subTest(key=key):
-                self.assert_refused(expected, env={**self.env, key: value})
+    def test_should_refuse_that_checkout_as_production_s_whatever_dev_scanmylib_holds(self) -> None:
+        self.assertTrue(
+            mentions(self.problems_of_the_checkout, "is production's checkout"), self.problems_of_the_checkout
+        )
 
-    def test_variants_and_services(self) -> None:
-        self.assert_refused("only production builds the release app", env={**self.env, "APP_VARIANT": "release"})
-        self.assert_refused("expected ocr or ocr-fake", env={**self.env, "OCR_SERVICE": "other"})
-        self.assert_refused(".env says 'scanmylib-dev2'", env={**self.env, "COMPOSE_PROJECT_NAME": "scanmylib-dev2"})
+    def test_should_refuse_the_data_dir_of_its_env(self) -> None:
+        self.assertTrue(
+            mentions(self.problems_of_the_data_dir, "is production's DATA_DIR"), self.problems_of_the_data_dir
+        )
 
-    def test_settings_outside_the_allowlist(self) -> None:
-        refused_settings: list[tuple[stack.JsonObject, str]] = [
-            ({"privileged": True}, "privileged is not allowed"),
-            ({"cap_add": ["SYS_ADMIN"]}, "cap_add is not allowed"),
-            ({"volumes_from": ["container:scanmylib-api-1"]}, "volumes_from is not allowed"),
-            ({"use_api_socket": True}, "use_api_socket is not allowed"),
-            ({"pid": "host"}, "pid is not allowed"),
-            ({"ipc": "host"}, "ipc is not allowed"),
-            ({"uts": "host"}, "uts is not allowed"),
-            ({"userns_mode": "host"}, "userns_mode is not allowed"),
-            ({"cgroup": "host"}, "cgroup is not allowed"),
-            ({"labels": {"com.docker.compose.project": "scanmylib"}}, "labels is not allowed"),
-            ({"env_file": [{"path": "/home/x/.env"}]}, "env_file is not allowed"),
-            ({"label_file": ["/home/x/labels"]}, "label_file is not allowed"),
-            ({"network_mode": "host"}, "network_mode host"),
-            ({"network_mode": "container:scanmylib-ocr-1"}, "network_mode container:scanmylib-ocr-1"),
-            ({"network_mode": "scanmylib_default"}, "network_mode scanmylib_default"),
-            ({"network_mode": "bridge"}, "network_mode bridge"),
-            ({"network_mode": "service:api"}, "network_mode service:api"),
-            ({"network_mode": "service:missing"}, "network_mode service:missing"),
-            ({"networks": {"elsewhere": None}}, "the network elsewhere is not one of the stack's"),
-            ({"security_opt": ["seccomp=unconfined"]}, "security_opt seccomp=unconfined"),
-            ({"security_opt": ["apparmor=unconfined"]}, "security_opt apparmor=unconfined"),
-            ({"devices": [{"source": "/dev/sda", "target": "/dev/sda", "permissions": "rwm"}]}, "device /dev/sda"),
-            ({"devices": [{"source": "nvidia.com/gpu=all", "target": "/dev/x"}]}, "device nvidia.com/gpu=all"),
-            ({"container_name": "scanmylib-api-1"}, "container_name scanmylib-api-1"),
-        ]
-        for settings, expected in refused_settings:
-            with self.subTest(settings=settings):
-                self.assert_refused(expected, config=self.service(**settings))
 
-    def test_network_mode_of_the_stack(self) -> None:
-        for network_mode in ("none", "service:ocr"):
-            with self.subTest(network_mode=network_mode):
-                self.assertEqual(self.problems(config=self.service(network_mode=network_mode)), [])
+class TheIsolationProblemsFunctionWhenAPathTheScriptsUseIsNotTheStacksOwn(unittest.TestCase):
+    def setUp(self) -> None:
+        layout = make_layout(self)
+        paths = {
+            "production's DATA_DIR": ("DATA_DIR", str(layout.production_data_dir), "DATA_DIR in .env"),
+            "production's ANDROID_DIR": ("ANDROID_DIR", f"{layout.production_data_dir}/android", "ANDROID_DIR in .env"),
+            "production's sandbox to set up": (
+                "SANDBOX_SETUP_DIR",
+                f"{layout.production_data_dir}/sandbox",
+                "SANDBOX_SETUP_DIR in .env",
+            ),
+            "a directory holding production's signing key": (
+                "ANDROID_KEYSTORE_DIR",
+                str(layout.production_data_dir / "android"),
+                "ANDROID_KEYSTORE_DIR in .env",
+            ),
+            "a directory holding production's sandbox": (
+                "SANDBOX_DIR",
+                str(layout.production_data_dir),
+                "SANDBOX_DIR in .env",
+            ),
+            "a relative LIBRARY_DIR": ("LIBRARY_DIR", "relative/library", "not an absolute path"),
+        }
+        self.expected_problems = {row: expected for row, (_, _, expected) in paths.items()}
+        self.problems = {
+            row: find_problems(layout, env={**layout.env, key: value}) for row, (key, value, _) in paths.items()
+        }
 
-    def test_settings_that_only_the_configuration_without_interpolation_shows(self) -> None:
-        # docker compose config merges env_file into environment: only the raw configuration
-        # (--no-interpolate) still has it.
-        raw = self.config()
-        raw["services"]["api"]["env_file"] = [{"path": f"{self.home}/.aws/credentials", "required": True}]
-        self.assert_refused("service api: env_file is not allowed", raw=raw)
-        self.assert_refused("no configuration without interpolation", raw={"services": {}})
+    def test_should_refuse_it(self) -> None:
+        for row, expected in self.expected_problems.items():
+            with self.subTest(row):
+                self.assertTrue(mentions(self.problems[row], expected), self.problems[row])
 
-    def test_include_in_the_compose_file(self) -> None:
-        compose = self.base / "compose.yaml"
-        for text in (
-            "include:\n  - path: x.yaml\n    env_file: /home/x/.env\n",
-            '{"include": ["x.yaml"]}',
-            "name: x\n'include' :\n  - x.yaml\n",
-        ):
-            with self.subTest(text=text):
-                compose.write_text(text)
-                self.assert_refused("include is not allowed", compose_file=str(compose))
+
+class TheIsolationProblemsFunctionWhenTheEnvAsksForTheReleaseApp(unittest.TestCase):
+    def setUp(self) -> None:
+        layout = make_layout(self)
+        self.problems = find_problems(layout, env={**layout.env, "APP_VARIANT": "release"})
+
+    def test_should_refuse_it_since_only_production_builds_the_release_app(self) -> None:
+        self.assertTrue(mentions(self.problems, "only production builds the release app"), self.problems)
+
+
+class TheIsolationProblemsFunctionWhenTheEnvNamesAnUnknownOcrService(unittest.TestCase):
+    def setUp(self) -> None:
+        layout = make_layout(self)
+        self.problems = find_problems(layout, env={**layout.env, "OCR_SERVICE": "other"})
+
+    def test_should_refuse_it_naming_the_ocr_services(self) -> None:
+        self.assertTrue(mentions(self.problems, "expected ocr or ocr-fake"), self.problems)
+
+
+class TheIsolationProblemsFunctionWhenTheEnvNamesAnotherProjectThanDockerComposeResolves(unittest.TestCase):
+    def setUp(self) -> None:
+        layout = make_layout(self)
+        self.problems = find_problems(layout, env={**layout.env, "COMPOSE_PROJECT_NAME": "scanmylib-dev2"})
+
+    def test_should_refuse_it_naming_the_project_of_the_env(self) -> None:
+        self.assertTrue(mentions(self.problems, ".env says 'scanmylib-dev2'"), self.problems)
+
+
+class TheIsolationProblemsFunctionWhenAServiceSettingIsOutsideTheAllowlist(unittest.TestCase):
+    settings: ClassVar[Mapping[str, tuple[stack.JsonObject, str]]] = types.MappingProxyType(
+        {
+            "privileged": ({"privileged": True}, "privileged is not allowed"),
+            "cap_add": ({"cap_add": ["SYS_ADMIN"]}, "cap_add is not allowed"),
+            "volumes_from": ({"volumes_from": ["container:scanmylib-api-1"]}, "volumes_from is not allowed"),
+            "use_api_socket": ({"use_api_socket": True}, "use_api_socket is not allowed"),
+            "pid": ({"pid": "host"}, "pid is not allowed"),
+            "ipc": ({"ipc": "host"}, "ipc is not allowed"),
+            "uts": ({"uts": "host"}, "uts is not allowed"),
+            "userns_mode": ({"userns_mode": "host"}, "userns_mode is not allowed"),
+            "cgroup": ({"cgroup": "host"}, "cgroup is not allowed"),
+            "labels": ({"labels": {"com.docker.compose.project": "scanmylib"}}, "labels is not allowed"),
+            "env_file": ({"env_file": [{"path": "/home/x/.env"}]}, "env_file is not allowed"),
+            "label_file": ({"label_file": ["/home/x/labels"]}, "label_file is not allowed"),
+            "the host's network": ({"network_mode": "host"}, "network_mode host"),
+            "a container's network": (
+                {"network_mode": "container:scanmylib-ocr-1"},
+                "network_mode container:scanmylib-ocr-1",
+            ),
+            "production's network": ({"network_mode": "scanmylib_default"}, "network_mode scanmylib_default"),
+            "the bridge network": ({"network_mode": "bridge"}, "network_mode bridge"),
+            "the network of the service itself": ({"network_mode": "service:api"}, "network_mode service:api"),
+            "the network of a missing service": ({"network_mode": "service:missing"}, "network_mode service:missing"),
+            "a network of another stack": (
+                {"networks": {"elsewhere": None}},
+                "the network elsewhere is not one of the stack's",
+            ),
+            "no seccomp profile": ({"security_opt": ["seccomp=unconfined"]}, "security_opt seccomp=unconfined"),
+            "no AppArmor profile": ({"security_opt": ["apparmor=unconfined"]}, "security_opt apparmor=unconfined"),
+            "a device of the host": (
+                {"devices": [{"source": "/dev/sda", "target": "/dev/sda", "permissions": "rwm"}]},
+                "device /dev/sda",
+            ),
+            "the GPU at another path": (
+                {"devices": [{"source": "nvidia.com/gpu=all", "target": "/dev/x"}]},
+                "device nvidia.com/gpu=all",
+            ),
+            "production's container name": ({"container_name": "scanmylib-api-1"}, "container_name scanmylib-api-1"),
+        }
+    )
+
+    def setUp(self) -> None:
+        layout = make_layout(self)
+        self.problems = {
+            row: find_problems(layout, config=build_resolved_compose_config_with_settings(layout, **settings))
+            for row, (settings, _) in self.settings.items()
+        }
+
+    def test_should_refuse_it(self) -> None:
+        for row, (_, expected) in self.settings.items():
+            with self.subTest(row):
+                self.assertTrue(mentions(self.problems[row], expected), self.problems[row])
+
+
+class TheIsolationProblemsFunctionWhenTheNetworkModeIsTheStacksOwn(unittest.TestCase):
+    network_modes: ClassVar[tuple[str, ...]] = ("none", "service:ocr")
+
+    def setUp(self) -> None:
+        layout = make_layout(self)
+        self.problems = {
+            network_mode: find_problems(
+                layout, config=build_resolved_compose_config_with_settings(layout, network_mode=network_mode)
+            )
+            for network_mode in self.network_modes
+        }
+
+    def test_should_find_none(self) -> None:
+        for network_mode in self.network_modes:
+            with self.subTest(network_mode):
+                self.assertEqual(self.problems[network_mode], [])
+
+
+class TheIsolationProblemsFunctionWhenOnlyTheConfigurationWithoutInterpolationShowsASetting(unittest.TestCase):
+    def setUp(self) -> None:
+        layout = make_layout(self)
+        raw = build_resolved_compose_config(layout)
+        raw["services"]["api"]["env_file"] = [{"path": f"{layout.home}/.aws/credentials", "required": True}]
+        self.problems = find_problems(layout, raw=raw)
+
+    def test_should_refuse_it_since_docker_compose_config_merges_it_into_another_setting(self) -> None:
+        self.assertTrue(mentions(self.problems, "service api: env_file is not allowed"), self.problems)
+
+
+class TheIsolationProblemsFunctionWhenTheConfigurationWithoutInterpolationIsMissing(unittest.TestCase):
+    def setUp(self) -> None:
+        layout = make_layout(self)
+        self.problems = find_problems(layout, raw={"services": {}})
+
+    def test_should_refuse_the_stack(self) -> None:
+        self.assertTrue(mentions(self.problems, "no configuration without interpolation"), self.problems)
+
+
+class TheIsolationProblemsFunctionWhenTheComposeFileIncludesAnother(unittest.TestCase):
+    compose_files: ClassVar[Mapping[str, str]] = types.MappingProxyType(
+        {
+            "in block style, with an env_file": "include:\n  - path: x.yaml\n    env_file: /home/x/.env\n",
+            "in flow style": '{"include": ["x.yaml"]}',
+            "quoted, after another key": "name: x\n'include' :\n  - x.yaml\n",
+        }
+    )
+
+    def setUp(self) -> None:
+        layout = make_layout(self)
+        self.problems: dict[str, list[str]] = {}
+        for index, (row, text) in enumerate(self.compose_files.items()):
+            compose = layout.base / f"compose-{index}.yaml"
+            compose.write_text(text)
+            self.problems[row] = find_problems(layout, compose_file=str(compose))
+
+    def test_should_refuse_it_since_its_env_file_feeds_host_files_into_what_it_includes(self) -> None:
+        for row in self.compose_files:
+            with self.subTest(row):
+                self.assertTrue(mentions(self.problems[row], "include is not allowed"), self.problems[row])
+
+
+class TheIsolationProblemsFunctionWhenTheComposeFileOnlyMentionsInclude(unittest.TestCase):
+    def setUp(self) -> None:
+        layout = make_layout(self)
+        compose = layout.base / "compose.yaml"
         compose.write_text("# include: a comment\nservices:\n  api:\n    command: [sh, -c, 'echo include']\n")
-        self.assertEqual(self.problems(compose_file=str(compose)), [])
+        self.problems = find_problems(layout, compose_file=str(compose))
 
-    def test_build_settings(self) -> None:
-        server = f"{self.worktree}/server"
-        for build, expected in [
-            ({"context": "/home/someone"}, "build context /home/someone is not inside the project directory"),
-            ({"context": "https://example.com/repo.git"}, "is not inside the project directory"),
-            ({"context": server, "additional_contexts": {"x": "/etc"}}, "build additional context x /etc"),
-            ({"context": server, "additional_contexts": {"x": "docker-image://scanmylib-api"}}, "additional context x"),
-            ({"context": server, "ssh": ["default"]}, "build setting ssh"),
-            ({"context": server, "tags": ["scanmylib-api:latest"]}, "build setting tags"),
-            ({"context": server, "secrets": ["token"]}, "build setting secrets"),
-            ({"context": server, "network": "host"}, "build setting network"),
-        ]:
-            with self.subTest(build=build):
-                self.assert_refused(expected, config=self.service(build=build))
+    def test_should_find_none(self) -> None:
+        self.assertEqual(self.problems, [])
 
-    def test_networks_volumes_and_top_level_settings(self) -> None:
-        self.assert_refused("network default", config=self.config(networks={"default": {"name": "scanmylib_default"}}))
-        self.assert_refused(
-            "network default",
-            config=self.config(networks={"default": {"name": "scanmylib-dev_default", "external": True}}),
-        )
-        self.assert_refused(
-            "driver and driver_opts",
-            config=self.config(
-                volumes={
-                    "data": {
-                        "name": "scanmylib-dev_data",
-                        "driver_opts": {"type": "none", "o": "bind", "device": str(self.home)},
-                    }
-                }
+
+class TheIsolationProblemsFunctionWhenABuildSettingIsNotAllowed(unittest.TestCase):
+    def setUp(self) -> None:
+        layout = make_layout(self)
+        server = f"{layout.worktree}/server"
+        builds: dict[str, tuple[stack.JsonObject, str]] = {
+            "a context in the home directory": (
+                {"context": "/home/someone"},
+                "build context /home/someone is not inside the project directory",
             ),
-        )
-        for network in ({"driver": "macvlan", "driver_opts": {"parent": "eth0"}}, {"driver": "ipvlan"}):
-            with self.subTest(network=network):
-                self.assert_refused(
-                    "network default: driver and driver_opts",
-                    config=self.config(networks={"default": {"name": "scanmylib-dev_default", **network}}),
-                )
-        self.assert_refused(
-            "volume data (scanmylib_data) is not the stack's own",
-            config=self.config(volumes={"data": {"name": "scanmylib_data"}}),
-        )
-        self.assert_refused(
-            "secrets (top level)", config=self.config(secrets={"token": {"file": f"{self.prod}/state/token"}})
-        )
-        self.assert_refused(
-            "npipe mount", config=self.service(volumes=[{"type": "npipe", "source": "x", "target": "/x"}])
-        )
-
-    def test_production_env_that_breaks_the_format_is_an_error(self) -> None:
-        (self.primary / ".env").write_text("DATA_DIR=/data/x # comment\n")
-        with self.assertRaisesRegex(stack.EnvError, "production's .env"):
-            self.problems()
-
-    def check_paths(self, *args: str) -> tuple[int, str]:
-        errors = io.StringIO()
-        with mock.patch("sys.stdin", io.StringIO("[]")), redirect_stderr(errors):
-            return stack.main(["check-paths", *args]), errors.getvalue()
-
-    def test_check_paths_command(self) -> None:
-        # build-apk.sh without .env (CI): production's paths and the home directory are refused,
-        # except inside GitHub's RUNNER_TEMP, which the runner keeps in its home directory.
-        self.assertEqual(self.check_paths(f"DATA_DIR={self.base}/ci", f"ANDROID_DIR={self.base}/ci/a"), (0, ""))
-        status, errors = self.check_paths(f"DATA_DIR={self.base}/ci", f"ANDROID_DIR={self.prod}/android")
-        self.assertEqual(status, 1)
-        self.assertIn(f"ANDROID_DIR: {self.prod}/android is production's ANDROID_DIR", errors)
-        status, errors = self.check_paths(f"DATA_DIR={self.home}/ci", f"ANDROID_DIR={self.home}/.config")
-        self.assertEqual(status, 1)
-        self.assertIn("DATA_DIR: ", errors)
-        self.assertIn(f"ANDROID_DIR: {self.home}/.config is inside your home directory", errors)
-        runner_temp = f"{self.home}/work/_temp"
-        self.assertEqual(
-            self.check_paths(
-                "--runner-temp", runner_temp, f"DATA_DIR={runner_temp}/ci", f"ANDROID_DIR={runner_temp}/ci/android"
+            "a remote context": ({"context": "https://example.com/repo.git"}, "is not inside the project directory"),
+            "an additional context in /etc": (
+                {"context": server, "additional_contexts": {"x": "/etc"}},
+                "build additional context x /etc",
             ),
-            (0, ""),
+            "an additional context from an image": (
+                {"context": server, "additional_contexts": {"x": "docker-image://scanmylib-api"}},
+                "additional context x",
+            ),
+            "ssh": ({"context": server, "ssh": ["default"]}, "build setting ssh"),
+            "tags": ({"context": server, "tags": ["scanmylib-api:latest"]}, "build setting tags"),
+            "secrets": ({"context": server, "secrets": ["token"]}, "build setting secrets"),
+            "a network": ({"context": server, "network": "host"}, "build setting network"),
+        }
+        self.expected_problems = {row: expected for row, (_, expected) in builds.items()}
+        self.problems = {
+            row: find_problems(layout, config=build_resolved_compose_config_with_settings(layout, build=build))
+            for row, (build, _) in builds.items()
+        }
+
+    def test_should_refuse_it(self) -> None:
+        for row, expected in self.expected_problems.items():
+            with self.subTest(row):
+                self.assertTrue(mentions(self.problems[row], expected), self.problems[row])
+
+
+class TheIsolationProblemsFunctionWhenANetworkAVolumeOrATopLevelSettingIsNotTheStacksOwn(unittest.TestCase):
+    def setUp(self) -> None:
+        layout = make_layout(self)
+        configs = {
+            "production's network": (
+                build_resolved_compose_config(layout, networks={"default": {"name": "scanmylib_default"}}),
+                "network default",
+            ),
+            "an external network": (
+                build_resolved_compose_config(
+                    layout, networks={"default": {"name": "scanmylib-dev_default", "external": True}}
+                ),
+                "network default",
+            ),
+            "a volume that binds a host path": (
+                build_resolved_compose_config(
+                    layout,
+                    volumes={
+                        "data": {
+                            "name": "scanmylib-dev_data",
+                            "driver_opts": {"type": "none", "o": "bind", "device": str(layout.home)},
+                        }
+                    },
+                ),
+                "driver and driver_opts",
+            ),
+            "a macvlan network": (
+                build_resolved_compose_config(
+                    layout,
+                    networks={
+                        "default": {
+                            "name": "scanmylib-dev_default",
+                            "driver": "macvlan",
+                            "driver_opts": {"parent": "eth0"},
+                        }
+                    },
+                ),
+                "network default: driver and driver_opts",
+            ),
+            "an ipvlan network": (
+                build_resolved_compose_config(
+                    layout, networks={"default": {"name": "scanmylib-dev_default", "driver": "ipvlan"}}
+                ),
+                "network default: driver and driver_opts",
+            ),
+            "production's volume": (
+                build_resolved_compose_config(layout, volumes={"data": {"name": "scanmylib_data"}}),
+                "volume data (scanmylib_data) is not the stack's own",
+            ),
+            "a top-level secret": (
+                build_resolved_compose_config(
+                    layout, secrets={"token": {"file": f"{layout.production_data_dir}/state/token"}}
+                ),
+                "secrets (top level)",
+            ),
+            "an npipe mount": (
+                build_resolved_compose_config_with_settings(
+                    layout, volumes=[{"type": "npipe", "source": "x", "target": "/x"}]
+                ),
+                "npipe mount",
+            ),
+        }
+        self.expected_problems = {row: expected for row, (_, expected) in configs.items()}
+        self.problems = {row: find_problems(layout, config=config) for row, (config, _) in configs.items()}
+
+    def test_should_refuse_it(self) -> None:
+        for row, expected in self.expected_problems.items():
+            with self.subTest(row):
+                self.assertTrue(mentions(self.problems[row], expected), self.problems[row])
+
+
+class TheProductionIdentityFunctionWhenProductionsEnvBreaksTheFormat(unittest.TestCase):
+    def setUp(self) -> None:
+        layout = make_layout(self)
+        (layout.primary / ".env").write_text("DATA_DIR=/data/x # comment\n")
+        self.identify_production = functools.partial(stack.production_identity, layout.primary, [])
+
+    def test_should_refuse_it_since_production_is_to_be_fixed_first(self) -> None:
+        self.assertRaisesRegex(stack.EnvError, "production's .env", self.identify_production)
+
+
+class TheMainFunctionWhenAskedToCheckPathsOfTheirOwn(unittest.TestCase):
+    def setUp(self) -> None:
+        layout = make_layout(self)
+        self.exit_code, self.error_text = run_check_paths(
+            f"DATA_DIR={layout.base}/ci", f"ANDROID_DIR={layout.base}/ci/a"
         )
-        status, errors = self.check_paths(
-            "--runner-temp", runner_temp, f"DATA_DIR={runner_temp}/ci", f"ANDROID_DIR={self.home}/.config"
+
+    def test_should_accept_them_without_a_word(self) -> None:
+        self.assertEqual((self.exit_code, self.error_text), (0, ""))
+
+
+class TheMainFunctionWhenAskedToCheckAPathOfProductions(unittest.TestCase):
+    def setUp(self) -> None:
+        self.layout = make_layout(self)
+        self.exit_code, self.error_text = run_check_paths(
+            f"DATA_DIR={self.layout.base}/ci", f"ANDROID_DIR={self.layout.production_data_dir}/android"
         )
-        self.assertIn(f"ANDROID_DIR: {self.home}/.config is inside your home directory", errors)
-        status, errors = self.check_paths("--runner-temp", str(self.home), f"DATA_DIR={self.home}/ci")
-        self.assertEqual(status, 1)
-        self.assertIn("RUNNER_TEMP: ", errors)
+
+    def test_should_refuse_it_naming_it_as_production_s(self) -> None:
+        self.assertEqual(self.exit_code, 1)
+        self.assertIn(
+            f"ANDROID_DIR: {self.layout.production_data_dir}/android is production's ANDROID_DIR", self.error_text
+        )
+
+
+class TheMainFunctionWhenAskedToCheckPathsInTheHomeDirectory(unittest.TestCase):
+    def setUp(self) -> None:
+        self.layout = make_layout(self)
+        self.exit_code, self.error_text = run_check_paths(
+            f"DATA_DIR={self.layout.home}/ci", f"ANDROID_DIR={self.layout.home}/.config"
+        )
+
+    def test_should_refuse_the_data_dir(self) -> None:
+        self.assertEqual(self.exit_code, 1)
+        self.assertIn("DATA_DIR: ", self.error_text)
+
+    def test_should_refuse_the_android_dir_saying_it_is_inside_the_home_directory(self) -> None:
+        self.assertIn(f"ANDROID_DIR: {self.layout.home}/.config is inside your home directory", self.error_text)
+
+
+class TheMainFunctionWhenAskedToCheckPathsInsideTheRunnerTemp(unittest.TestCase):
+    def setUp(self) -> None:
+        layout = make_layout(self)
+        runner_temp = f"{layout.home}/work/_temp"
+        self.exit_code, self.error_text = run_check_paths(
+            "--runner-temp", runner_temp, f"DATA_DIR={runner_temp}/ci", f"ANDROID_DIR={runner_temp}/ci/android"
+        )
+
+    def test_should_accept_them_since_github_s_runner_keeps_its_temporary_directory_in_its_home_directory(
+        self,
+    ) -> None:
+        self.assertEqual((self.exit_code, self.error_text), (0, ""))
+
+
+class TheMainFunctionWhenAskedToCheckAPathOfTheHomeDirectoryOutsideTheRunnerTemp(unittest.TestCase):
+    def setUp(self) -> None:
+        self.layout = make_layout(self)
+        runner_temp = f"{self.layout.home}/work/_temp"
+        self.exit_code, self.error_text = run_check_paths(
+            "--runner-temp", runner_temp, f"DATA_DIR={runner_temp}/ci", f"ANDROID_DIR={self.layout.home}/.config"
+        )
+
+    def test_should_refuse_it_saying_it_is_inside_the_home_directory(self) -> None:
+        self.assertEqual(self.exit_code, 1)
+        self.assertIn(f"ANDROID_DIR: {self.layout.home}/.config is inside your home directory", self.error_text)
+
+
+class TheMainFunctionWhenTheRunnerTempIsTheHomeDirectory(unittest.TestCase):
+    def setUp(self) -> None:
+        layout = make_layout(self)
+        self.exit_code, self.error_text = run_check_paths(
+            "--runner-temp", str(layout.home), f"DATA_DIR={layout.home}/ci"
+        )
+
+    def test_should_refuse_the_runner_temp(self) -> None:
+        self.assertEqual(self.exit_code, 1)
+        self.assertIn("RUNNER_TEMP: ", self.error_text)
 
 
 class TheComposeCommandProblemsFunctionWhenTheCommandStaysInTheStack(unittest.TestCase):

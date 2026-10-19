@@ -275,7 +275,7 @@ them with the standard library only, the `python3` of the sandbox's image and th
   these:
   - the engine's environment is missing, such as Pillow outside the worker's environment, since the sandbox's tests also
     run without it;
-  - the tests run as root, which writes where a test expects a refusal;
+  - the tests run as root, which reads or writes where a test expects it cannot;
   - no real docker CLI is there to resolve a configuration;
   - the temporary directory lies in the home directory, which the scripts refuse;
   - port 8770 is taken, by a running development stack.

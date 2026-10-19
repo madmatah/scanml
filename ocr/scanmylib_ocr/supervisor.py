@@ -70,11 +70,14 @@ def parse_flag(query: dict[str, list[str]], name: str, default: bool) -> bool:
 def read_manifest(settings: Settings) -> dict[str, Any]:
     try:
         with open(os.path.join(settings.sandbox_dir, "MANIFEST.json"), encoding="utf-8") as manifest:
-            versions: dict[str, Any] = json.load(manifest)
-            return versions
+            versions = json.load(manifest)
     except (OSError, ValueError) as exc:
         log.warning("cannot read the sandbox manifest: %s", exc)
         return {}
+    if not isinstance(versions, dict):
+        log.warning("the sandbox manifest is not a JSON object")
+        return {}
+    return versions
 
 
 class Supervisor:

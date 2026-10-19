@@ -16,11 +16,11 @@ import sys
 import tempfile
 import types
 import unittest
-from collections.abc import Callable, Mapping
+from collections.abc import Mapping
 from pathlib import Path
 from typing import ClassVar
 
-from git_environment import build_git_environment
+from git_environment import build_git_environment, read_head, run_git
 
 SCRIPTS = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(SCRIPTS))
@@ -58,6 +58,81 @@ SUBJECTS_WITHOUT_NOTES = ("docs: explain the setup", "build(scripts): pin a tool
 
 def parse_changes(*subjects: str) -> list[Change]:
     return [Change.parse(COMMIT, subject, "") for subject in subjects]
+
+
+def commit_nothing(repository: Path, message: str) -> str:
+    run_git(repository, "commit", "--quiet", "--allow-empty", "--message", message)
+    return read_head(repository)
+
+
+def commit_everything(repository: Path, message: str) -> None:
+    run_git(repository, "commit", "--quiet", "--all", "--message", message)
+
+
+def append_a_blank_line_to_the_changelog(repository: Path) -> None:
+    with (repository / "CHANGELOG.md").open("a") as changelog:
+        changelog.write("\n")
+
+
+def replace_in_the_changelog(repository: Path, old: str, new: str) -> None:
+    changelog = repository / "CHANGELOG.md"
+    changelog.write_text(changelog.read_text().replace(old, new))
+
+
+def make_repository(test_case: type[unittest.TestCase]) -> Path:
+    repository = Path(test_case.enterClassContext(tempfile.TemporaryDirectory(prefix="scanmylib-release-")))
+    run_git(repository, "init", "--quiet", "--initial-branch=main")
+    (repository / "VERSION").write_text("0.2.3\n")
+    (repository / "CHANGELOG.md").write_text(CHANGELOG)
+    run_git(repository, "add", "VERSION", "CHANGELOG.md")
+    run_git(repository, "commit", "--quiet", "--message", "chore(release): 0.2.3")
+    run_git(repository, "tag", "--annotate", "v0.2.3", "--message", "ScanMyLib 0.2.3")
+    return repository
+
+
+def run_release(repository: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, str(SCRIPTS / "release.py"), *arguments],
+        cwd=repository,
+        env=build_git_environment(os.environ),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def run_release_commit(repository: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
+    # main as fetched from origin, which --commit prepares the release on.
+    run_git(repository, "update-ref", "refs/remotes/origin/main", "main")
+    return run_release(repository, "--commit", *arguments)
+
+
+def prepare_release(repository: Path, *edits: str) -> None:
+    run_git(repository, "switch", "--quiet", "-c", "release/v0.3.0")
+    run_release_commit(repository).check_returncode()
+    # As the suggestions of a release pull request on GitHub do.
+    for old, new in zip(edits[0::2], edits[1::2], strict=True):
+        replace_in_the_changelog(repository, old, new)
+        commit_everything(repository, "Update CHANGELOG.md")
+    run_git(repository, "switch", "--quiet", "main")
+
+
+def merge_release(repository: Path, branch: str) -> None:
+    run_git(repository, "switch", "--quiet", "main")
+    # As "Rebase and merge" does on GitHub.
+    run_git(repository, "cherry-pick", "main.." + branch)
+
+
+def run_to_publish(repository: Path, ref: str = "HEAD") -> subprocess.CompletedProcess[str]:
+    return run_release(repository, "--ref", ref, "--to-publish", str(repository / ".git" / "notes.md"))
+
+
+def read_notes(repository: Path) -> str:
+    return (repository / ".git" / "notes.md").read_text()
+
+
+def read_today() -> str:
+    return datetime.datetime.now(datetime.UTC).date().isoformat()
 
 
 class TheChangeParseMethodWhenTheSubjectFollowsConventionalCommits(unittest.TestCase):
@@ -449,154 +524,322 @@ class TheReleaseBaseFunctionWhenTheTrailerDoesNotStartItsLine(unittest.TestCase)
         self.assertIsNone(self.base)
 
 
-class CommandTest(unittest.TestCase):
-    def setUp(self) -> None:
-        directory = tempfile.TemporaryDirectory(prefix="scanmylib-release-")
-        self.addCleanup(directory.cleanup)
-        self.repository = Path(directory.name)
-        self.git("init", "--quiet", "--initial-branch=main")
-        (self.repository / "VERSION").write_text("0.2.3\n")
-        (self.repository / "CHANGELOG.md").write_text(CHANGELOG)
-        self.git("add", "VERSION", "CHANGELOG.md")
-        self.git("commit", "--quiet", "--message", "chore(release): 0.2.3")
-        self.git("tag", "--annotate", "v0.2.3", "--message", "ScanMyLib 0.2.3")
+def make_repository_with_a_feature(test_case: type[unittest.TestCase]) -> Path:
+    repository = make_repository(test_case)
+    commit_nothing(repository, "fix(android): a crash")
+    commit_nothing(repository, "feat(android): scan from the card")
+    commit_nothing(repository, "docs: explain the card")
+    return repository
 
-    def git(self, *args: str) -> str:
-        return subprocess.run(
-            ["git", *args],
-            cwd=self.repository,
-            env=build_git_environment(os.environ),
-            check=True,
-            capture_output=True,
-            text=True,
-        ).stdout
 
-    def commit(self, message: str) -> str:
-        self.git("commit", "--quiet", "--allow-empty", "--message", message)
-        return self.git("rev-parse", "HEAD").strip()
+class TheMainFunctionWhenAFeatureFollowsTheLastRelease(unittest.TestCase):
+    release_run: ClassVar[subprocess.CompletedProcess[str]]
+    today: ClassVar[str]
+    status: ClassVar[str]
 
-    def release(self, *args: str) -> subprocess.CompletedProcess[str]:
-        if "--commit" in args:
-            self.git("update-ref", "refs/remotes/origin/main", "main")  # main as fetched from origin
-        return subprocess.run(
-            [sys.executable, str(SCRIPTS / "release.py"), *args],
-            cwd=self.repository,
-            env=build_git_environment(os.environ),
-            capture_output=True,
-            text=True,
-            check=False,
-        )
+    @classmethod
+    def setUpClass(cls) -> None:
+        repository = make_repository_with_a_feature(cls)
+        cls.release_run = run_release(repository)
+        cls.today = read_today()
+        cls.status = run_git(repository, "status", "--porcelain")
 
-    def today(self) -> str:
-        return datetime.datetime.now(datetime.UTC).date().isoformat()
+    def test_should_exit_with_zero(self) -> None:
+        self.assertEqual(self.release_run.returncode, 0, self.release_run.stderr)
 
-    def test_the_next_release_and_its_notes(self) -> None:
-        self.commit("fix(android): a crash")
-        self.commit("feat(android): scan from the card")
-        self.commit("docs: explain the card")
-        result = self.release()
-        self.assertEqual(result.returncode, 0, result.stderr)
+    def test_should_say_the_last_release_the_commits_since_and_the_next_release_then_its_heading(self) -> None:
         self.assertEqual(
-            result.stdout.splitlines()[:5],
+            self.release_run.stdout.splitlines()[:5],
             [
                 "Last release: 0.2.3 (v0.2.3)",
                 "Commits since: 3 (1 feature, 1 fix, 1 other change)",
                 "Next release: 0.3.0, a minor release (new features)",
                 "",
-                f"## [0.3.0] - {self.today()}",
+                f"## [0.3.0] - {self.today}",
             ],
         )
-        self.assertIn("### Added\n\n- App: scan from the card\n\n### Fixed\n\n- App: a crash\n", result.stdout)
-        self.assertRegex(result.stdout, r"Not in the changelog .*:\n- `[0-9a-f]{12}` docs: explain the card\n$")
-        self.assertEqual(self.release("--version-only").stdout, "0.3.0\n")
-        self.assertTrue(self.release("--notes-only").stdout.startswith("### Added\n"))
-        self.assertEqual(self.release("--bump", "major", "--version-only").stdout, "1.0.0\n")
+
+    def test_should_draft_the_feature_and_the_fix(self) -> None:
         self.assertIn(
-            "a major release (--bump major; the commits give a minor release)", self.release("--bump", "major").stdout
+            "### Added\n\n- App: scan from the card\n\n### Fixed\n\n- App: a crash\n", self.release_run.stdout
         )
-        self.assertIn("a patch release", self.release("--ref", "HEAD~2").stdout)
-        self.assertEqual(self.git("status", "--porcelain"), "", "it changes nothing")
 
-    def test_a_breaking_change_before_1_0(self) -> None:
-        self.commit("refactor(server)!: move the routes")
-        result = self.release()
-        self.assertIn("Next release: 0.3.0, a minor release (breaking changes, before 1.0)", result.stdout)
-        self.assertIn("### Changed\n\n- **Breaking:** Server: move the routes\n", result.stdout)
+    def test_should_list_last_the_commits_left_out_of_the_changelog(self) -> None:
+        self.assertRegex(
+            self.release_run.stdout, r"Not in the changelog .*:\n- `[0-9a-f]{12}` docs: explain the card\n$"
+        )
 
-    def test_odd_commits_are_named(self) -> None:
-        self.commit("Update things")
-        result = self.release("--version-only")
-        self.assertEqual(result.stdout, "0.2.4\n")
-        self.assertIn("not a Conventional Commit, released as a patch", result.stderr)
-        self.assertIn("Update things", result.stderr)
+    def test_should_change_nothing_in_the_checkout(self) -> None:
+        self.assertEqual(self.status, "")
 
-    def test_refusals(self) -> None:
-        result = self.release()
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("nothing to release", result.stderr)
-        self.commit("feat: a")
-        self.commit("fixup! feat: a")
-        result = self.release()
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("commits still to fold", result.stderr)
-        self.assertEqual(result.stdout, "")
-        # Unless they reached main for good: main's history is never rewritten.
-        result = self.release("--allow-unfolded")
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("released as it is, not folded", result.stderr)
-        self.assertNotIn("not a Conventional Commit", result.stderr)
-        self.assertRegex(result.stdout, r"\n- `[0-9a-f]{12}` fixup! feat: a\n")
-        self.assertIn("Next release: 0.3.0", result.stdout)
-        # VERSION changed without a release commit, or tags not fetched.
-        self.git("reset", "--quiet", "--hard", "v0.2.3")
-        (self.repository / "VERSION").write_text("0.3.0\n")
-        self.git("commit", "--quiet", "--all", "--message", "build: set VERSION by hand")
-        result = self.release()
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("no tag v0.3.0 nor a release commit 'chore(release): 0.3.0'", result.stderr)
-        result = self.release("--ref", "nonexistent")
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("error:", result.stderr)
 
-    def test_commit(self) -> None:
-        self.commit("fix(android): a crash")
-        base = self.commit("feat(android): scan from the card")
-        self.git("switch", "--quiet", "-c", "release/v0.3.0")
-        result = self.release("--commit")
-        self.assertEqual(result.returncode, 0, result.stderr)
+class TheMainFunctionWhenAFeatureFollowsTheLastReleaseWhenAskedForTheVersionOnly(unittest.TestCase):
+    release_run: ClassVar[subprocess.CompletedProcess[str]]
+    status: ClassVar[str]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        repository = make_repository_with_a_feature(cls)
+        cls.release_run = run_release(repository, "--version-only")
+        cls.status = run_git(repository, "status", "--porcelain")
+
+    def test_should_print_the_next_version_alone(self) -> None:
+        self.assertEqual(self.release_run.stdout, "0.3.0\n")
+
+    def test_should_change_nothing_in_the_checkout(self) -> None:
+        self.assertEqual(self.status, "")
+
+
+class TheMainFunctionWhenAFeatureFollowsTheLastReleaseWhenAskedForTheNotesOnly(unittest.TestCase):
+    release_run: ClassVar[subprocess.CompletedProcess[str]]
+    status: ClassVar[str]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        repository = make_repository_with_a_feature(cls)
+        cls.release_run = run_release(repository, "--notes-only")
+        cls.status = run_git(repository, "status", "--porcelain")
+
+    def test_should_print_the_notes_without_their_heading(self) -> None:
+        self.assertTrue(self.release_run.stdout.startswith("### Added\n"), self.release_run.stdout)
+
+    def test_should_change_nothing_in_the_checkout(self) -> None:
+        self.assertEqual(self.status, "")
+
+
+class TheMainFunctionWhenAFeatureFollowsTheLastReleaseWhenAskedForAMajorRelease(unittest.TestCase):
+    version_run: ClassVar[subprocess.CompletedProcess[str]]
+    release_run: ClassVar[subprocess.CompletedProcess[str]]
+    status: ClassVar[str]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        repository = make_repository_with_a_feature(cls)
+        cls.version_run = run_release(repository, "--bump", "major", "--version-only")
+        cls.release_run = run_release(repository, "--bump", "major")
+        cls.status = run_git(repository, "status", "--porcelain")
+
+    def test_should_release_the_next_major_version(self) -> None:
+        self.assertEqual(self.version_run.stdout, "1.0.0\n")
+
+    def test_should_say_the_increment_was_chosen_over_the_one_the_commits_give(self) -> None:
+        self.assertIn("a major release (--bump major; the commits give a minor release)", self.release_run.stdout)
+
+    def test_should_change_nothing_in_the_checkout(self) -> None:
+        self.assertEqual(self.status, "")
+
+
+class TheMainFunctionWhenAFeatureFollowsTheLastReleaseWhenGivenAnEarlierRef(unittest.TestCase):
+    release_run: ClassVar[subprocess.CompletedProcess[str]]
+    status: ClassVar[str]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        repository = make_repository_with_a_feature(cls)
+        cls.release_run = run_release(repository, "--ref", "HEAD~2")
+        cls.status = run_git(repository, "status", "--porcelain")
+
+    def test_should_release_the_commits_up_to_that_ref(self) -> None:
+        self.assertIn("a patch release", self.release_run.stdout)
+
+    def test_should_change_nothing_in_the_checkout(self) -> None:
+        self.assertEqual(self.status, "")
+
+
+class TheMainFunctionWhenABreakingChangeComesBeforeVersionOne(unittest.TestCase):
+    release_run: ClassVar[subprocess.CompletedProcess[str]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        repository = make_repository(cls)
+        commit_nothing(repository, "refactor(server)!: move the routes")
+        cls.release_run = run_release(repository)
+
+    def test_should_release_a_minor_version_saying_why(self) -> None:
+        self.assertIn("Next release: 0.3.0, a minor release (breaking changes, before 1.0)", self.release_run.stdout)
+
+    def test_should_draft_the_change_as_breaking_under_changed(self) -> None:
+        self.assertIn("### Changed\n\n- **Breaking:** Server: move the routes\n", self.release_run.stdout)
+
+
+class TheMainFunctionWhenACommitDoesNotFollowConventionalCommits(unittest.TestCase):
+    release_run: ClassVar[subprocess.CompletedProcess[str]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        repository = make_repository(cls)
+        commit_nothing(repository, "Update things")
+        cls.release_run = run_release(repository, "--version-only")
+
+    def test_should_release_a_patch(self) -> None:
+        self.assertEqual(self.release_run.stdout, "0.2.4\n")
+
+    def test_should_warn_that_it_does_not_follow_conventional_commits(self) -> None:
+        self.assertIn("not a Conventional Commit, released as a patch", self.release_run.stderr)
+
+    def test_should_name_it(self) -> None:
+        self.assertIn("Update things", self.release_run.stderr)
+
+
+class TheMainFunctionWhenNothingFollowsTheLastRelease(unittest.TestCase):
+    release_run: ClassVar[subprocess.CompletedProcess[str]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.release_run = run_release(make_repository(cls))
+
+    def test_should_refuse_since_there_is_nothing_to_release(self) -> None:
+        self.assertEqual(self.release_run.returncode, 1)
+        self.assertIn("nothing to release", self.release_run.stderr)
+
+
+class TheMainFunctionWhenCommitsAreStillToFold(unittest.TestCase):
+    release_run: ClassVar[subprocess.CompletedProcess[str]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        repository = make_repository(cls)
+        commit_nothing(repository, "feat: a")
+        commit_nothing(repository, "fixup! feat: a")
+        cls.release_run = run_release(repository)
+
+    def test_should_refuse_until_they_are_folded(self) -> None:
+        self.assertEqual(self.release_run.returncode, 1)
+        self.assertIn("commits still to fold", self.release_run.stderr)
+
+    def test_should_print_nothing(self) -> None:
+        self.assertEqual(self.release_run.stdout, "")
+
+
+class TheMainFunctionWhenCommitsStillToFoldReachedMainForGood(unittest.TestCase):
+    release_run: ClassVar[subprocess.CompletedProcess[str]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        repository = make_repository(cls)
+        commit_nothing(repository, "feat: a")
+        commit_nothing(repository, "fixup! feat: a")
+        cls.release_run = run_release(repository, "--allow-unfolded")
+
+    def test_should_release_them_as_they_are_since_main_s_history_is_never_rewritten(self) -> None:
+        self.assertEqual(self.release_run.returncode, 0, self.release_run.stderr)
+
+    def test_should_warn_that_they_are_released_unfolded(self) -> None:
+        self.assertIn("released as it is, not folded", self.release_run.stderr)
+
+    def test_should_not_warn_that_they_do_not_follow_conventional_commits(self) -> None:
+        self.assertNotIn("not a Conventional Commit", self.release_run.stderr)
+
+    def test_should_list_them_as_left_out_of_the_changelog(self) -> None:
+        self.assertRegex(self.release_run.stdout, r"\n- `[0-9a-f]{12}` fixup! feat: a\n")
+
+    def test_should_release_the_version_the_other_commits_give(self) -> None:
+        self.assertIn("Next release: 0.3.0", self.release_run.stdout)
+
+
+class TheMainFunctionWhenVersionIsSetWithoutAReleaseCommit(unittest.TestCase):
+    release_run: ClassVar[subprocess.CompletedProcess[str]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        repository = make_repository(cls)
+        (repository / "VERSION").write_text("0.3.0\n")
+        commit_everything(repository, "build: set VERSION by hand")
+        cls.release_run = run_release(repository)
+
+    def test_should_refuse_saying_there_is_neither_its_tag_nor_its_release_commit(self) -> None:
+        self.assertEqual(self.release_run.returncode, 1)
+        self.assertIn("no tag v0.3.0 nor a release commit 'chore(release): 0.3.0'", self.release_run.stderr)
+
+
+class TheMainFunctionWhenTheRefDoesNotExist(unittest.TestCase):
+    release_run: ClassVar[subprocess.CompletedProcess[str]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.release_run = run_release(make_repository(cls), "--ref", "nonexistent")
+
+    def test_should_refuse_with_an_error_that_names_it(self) -> None:
+        self.assertEqual(self.release_run.returncode, 1)
+        self.assertIn("error:", self.release_run.stderr)
+        self.assertIn("nonexistent", self.release_run.stderr)
+
+
+class TheMainFunctionWhenAskedToCommitTheRelease(unittest.TestCase):
+    commit_run: ClassVar[subprocess.CompletedProcess[str]]
+    base: ClassVar[str]
+    today: ClassVar[str]
+    message: ClassVar[str]
+    parent: ClassVar[str]
+    committed_files: ClassVar[list[str]]
+    status: ClassVar[str]
+    version: ClassVar[str]
+    changelog: ClassVar[str]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        repository = make_repository(cls)
+        commit_nothing(repository, "fix(android): a crash")
+        cls.base = commit_nothing(repository, "feat(android): scan from the card")
+        run_git(repository, "switch", "--quiet", "-c", "release/v0.3.0")
+        cls.commit_run = run_release_commit(repository)
+        cls.today = read_today()
+        cls.message = run_git(repository, "log", "-1", "--format=%B")
+        cls.parent = run_git(repository, "rev-parse", "HEAD~1").strip()
+        cls.committed_files = run_git(repository, "show", "--name-only", "--format=", "HEAD").split()
+        cls.status = run_git(repository, "status", "--porcelain")
+        cls.version = (repository / "VERSION").read_text()
+        cls.changelog = (repository / "CHANGELOG.md").read_text()
+
+    def test_should_exit_with_zero(self) -> None:
+        self.assertEqual(self.commit_run.returncode, 0, self.commit_run.stderr)
+
+    def test_should_say_in_its_message_why_and_the_commit_its_notes_were_written_on(self) -> None:
         self.assertEqual(
-            self.git("log", "-1", "--format=%B").rstrip("\n").split("\n\n"),
+            self.message.rstrip("\n").split("\n\n"),
             [
                 "chore(release): 0.3.0",
                 "Release 0.3.0 (a minor release): 1 feature, 1 fix since v0.2.3. Its notes are its section of "
                 "CHANGELOG.md.",
-                f"Release-Base: {base}",
+                f"Release-Base: {self.base}",
             ],
         )
-        self.assertEqual(self.git("rev-parse", "HEAD~1").strip(), base)
-        self.assertEqual(self.git("show", "--name-only", "--format=", "HEAD").split(), ["CHANGELOG.md", "VERSION"])
-        self.assertEqual(self.git("status", "--porcelain"), "")
-        self.assertEqual((self.repository / "VERSION").read_text(), "0.3.0\n")
-        changelog = (self.repository / "CHANGELOG.md").read_text()
+
+    def test_should_commit_on_the_commit_its_notes_were_written_on(self) -> None:
+        self.assertEqual(self.parent, self.base)
+
+    def test_should_commit_the_changelog_and_version_alone(self) -> None:
+        self.assertEqual(self.committed_files, ["CHANGELOG.md", "VERSION"])
+
+    def test_should_leave_nothing_uncommitted(self) -> None:
+        self.assertEqual(self.status, "")
+
+    def test_should_write_the_next_version_to_version(self) -> None:
+        self.assertEqual(self.version, "0.3.0\n")
+
+    def test_should_add_the_section_of_the_release_after_unreleased(self) -> None:
         self.assertIn(
-            f"## [Unreleased]\n\n## [0.3.0] - {self.today()}\n\n### Added\n\n- App: scan from the card\n\n"
+            f"## [Unreleased]\n\n## [0.3.0] - {self.today}\n\n### Added\n\n- App: scan from the card\n\n"
             "### Fixed\n\n- App: a crash\n\n## [0.2.3] - 2026-10-15\n",
-            changelog,
+            self.changelog,
         )
+
+    def test_should_link_the_section_to_the_comparison_with_the_last_release(self) -> None:
         self.assertIn(
             "[unreleased]: https://github.com/example/project/compare/v0.3.0...HEAD\n"
             "[0.3.0]: https://github.com/example/project/compare/v0.2.3...v0.3.0\n",
-            changelog,
+            self.changelog,
         )
-        # The pull request's description: what merging it does, then the notes it publishes.
+
+    def test_should_print_the_description_of_its_pull_request_what_merging_it_does_then_its_notes(self) -> None:
         self.assertEqual(
-            result.stdout,
+            self.commit_run.stdout,
             "\n".join(
                 [
                     "Merging this pull request publishes ScanMyLib 0.3.0: `.github/workflows/release.yml` tags "
                     "`v0.3.0` and creates the GitHub release with the notes below. Merge nothing else before it.",
                     "",
-                    f"## [0.3.0](https://github.com/example/project/compare/v0.2.3...v0.3.0) - {self.today()}",
+                    f"## [0.3.0](https://github.com/example/project/compare/v0.2.3...v0.3.0) - {self.today}",
                     "",
                     "### Added",
                     "",
@@ -610,344 +853,815 @@ class CommandTest(unittest.TestCase):
             ),
         )
 
-    def test_the_description_follows_the_edited_notes(self) -> None:
-        self.commit("feat(android): scan from the card")
-        self.git("switch", "--quiet", "-c", "release/v0.3.0")
-        first = self.release("--commit").stdout
-        changelog = self.repository / "CHANGELOG.md"
-        changelog.write_text(changelog.read_text().replace("scan from the card", "scan straight from the card"))
-        self.git("commit", "--quiet", "--all", "--amend", "--no-edit")
-        result = self.release("--description")
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout, first.replace("scan from the card", "scan straight from the card"))
-        self.assertEqual(self.release("--description", "--ref", "HEAD").stdout, result.stdout)
-        result = self.release("--description", "--ref", "nonexistent")
-        self.assertEqual((result.returncode, result.stdout), (1, ""))
-        self.assertIn("error:", result.stderr)
-        # Not for a section without entries, nor for a version released already.
-        changelog.write_text(changelog.read_text().replace("- App: scan straight from the card\n", ""))
-        self.git("commit", "--quiet", "--all", "--amend", "--no-edit")
-        result = self.release("--description")
-        self.assertEqual((result.returncode, result.stdout), (1, ""))
-        self.assertIn("the section [0.3.0] of CHANGELOG.md has no entry", result.stderr)
-        result = self.release("--description", "--ref", "v0.2.3")
-        self.assertEqual((result.returncode, result.stdout), (1, ""))
-        self.assertIn("0.2.3 is released already", result.stderr)
 
-    def test_commit_with_an_increment_chosen_by_hand(self) -> None:
-        (self.repository / "VERSION").write_text("0.2.99\n")
-        self.git("commit", "--quiet", "--all", "--message", "chore(release): 0.2.99")
-        self.git("tag", "--annotate", "v0.2.99", "--message", "ScanMyLib 0.2.99")
-        (self.repository / "CHANGELOG.md").write_text(CHANGELOG.replace("v0.2.3...HEAD", "v0.2.99...HEAD"))
-        self.git("commit", "--quiet", "--all", "--message", "fix: a crash")
-        self.git("switch", "--quiet", "-c", "release")
-        result = self.release("--commit")
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("0.2.100 is past what VERSION allows", result.stderr)
-        result = self.release("--bump", "minor", "--commit")
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn(
-            "Release 0.3.0 (a minor release chosen by hand): 1 fix since v0.2.99.", self.git("log", "-1", "--format=%B")
+def make_repository_released_at_0_2_99(test_case: type[unittest.TestCase]) -> Path:
+    repository = make_repository(test_case)
+    (repository / "VERSION").write_text("0.2.99\n")
+    commit_everything(repository, "chore(release): 0.2.99")
+    run_git(repository, "tag", "--annotate", "v0.2.99", "--message", "ScanMyLib 0.2.99")
+    (repository / "CHANGELOG.md").write_text(CHANGELOG.replace("v0.2.3...HEAD", "v0.2.99...HEAD"))
+    commit_everything(repository, "fix: a crash")
+    run_git(repository, "switch", "--quiet", "-c", "release")
+    return repository
+
+
+class TheMainFunctionWhenAskedToCommitAPatchPastWhatVersionAllows(unittest.TestCase):
+    commit_run: ClassVar[subprocess.CompletedProcess[str]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.commit_run = run_release_commit(make_repository_released_at_0_2_99(cls))
+
+    def test_should_refuse_it(self) -> None:
+        self.assertEqual(self.commit_run.returncode, 1)
+        self.assertIn("0.2.100 is past what VERSION allows", self.commit_run.stderr)
+
+
+class TheMainFunctionWhenAskedToCommitAnIncrementChosenByHand(unittest.TestCase):
+    commit_run: ClassVar[subprocess.CompletedProcess[str]]
+    message: ClassVar[str]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        repository = make_repository_released_at_0_2_99(cls)
+        cls.commit_run = run_release_commit(repository, "--bump", "minor")
+        cls.message = run_git(repository, "log", "-1", "--format=%B")
+
+    def test_should_exit_with_zero(self) -> None:
+        self.assertEqual(self.commit_run.returncode, 0, self.commit_run.stderr)
+
+    def test_should_say_in_its_message_that_the_increment_was_chosen_by_hand(self) -> None:
+        self.assertIn("Release 0.3.0 (a minor release chosen by hand): 1 fix since v0.2.99.", self.message)
+
+
+class TheMainFunctionWhenAskedToCommitOnABranchThatHoldsAnotherCommit(unittest.TestCase):
+    commit_run: ClassVar[subprocess.CompletedProcess[str]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        repository = make_repository(cls)
+        commit_nothing(repository, "feat: a")
+        run_git(repository, "switch", "--quiet", "-c", "release")
+        commit_nothing(repository, "docs: a note")
+        cls.commit_run = run_release_commit(repository)
+
+    def test_should_refuse_since_rebase_and_merge_would_rewrite_the_commit_its_notes_are_written_on(self) -> None:
+        self.assertEqual(self.commit_run.returncode, 1)
+        self.assertIn("is not in origin/main", self.commit_run.stderr)
+
+
+class TheMainFunctionWhenAskedToCommitOnMain(unittest.TestCase):
+    commit_run: ClassVar[subprocess.CompletedProcess[str]]
+    subject: ClassVar[str]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        repository = make_repository(cls)
+        commit_nothing(repository, "feat: a")
+        cls.commit_run = run_release_commit(repository)
+        cls.subject = run_git(repository, "log", "-1", "--format=%s")
+
+    def test_should_refuse_asking_for_a_branch_of_its_own(self) -> None:
+        self.assertEqual(self.commit_run.returncode, 1)
+        self.assertIn("prepare the release on its own branch, not on main", self.commit_run.stderr)
+
+    def test_should_print_nothing(self) -> None:
+        self.assertEqual(self.commit_run.stdout, "")
+
+    def test_should_commit_nothing(self) -> None:
+        self.assertEqual(self.subject, "feat: a\n")
+
+
+class TheMainFunctionWhenAskedToCommitAnotherRefThanHead(unittest.TestCase):
+    commit_run: ClassVar[subprocess.CompletedProcess[str]]
+    subject: ClassVar[str]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        repository = make_repository(cls)
+        commit_nothing(repository, "feat: a")
+        run_git(repository, "switch", "--quiet", "-c", "release")
+        cls.commit_run = run_release_commit(repository, "--ref", "HEAD~1")
+        cls.subject = run_git(repository, "log", "-1", "--format=%s")
+
+    def test_should_refuse_since_it_prepares_head(self) -> None:
+        self.assertEqual(self.commit_run.returncode, 1)
+        self.assertIn("--commit prepares HEAD", self.commit_run.stderr)
+
+    def test_should_print_nothing(self) -> None:
+        self.assertEqual(self.commit_run.stdout, "")
+
+    def test_should_commit_nothing(self) -> None:
+        self.assertEqual(self.subject, "feat: a\n")
+
+
+class TheMainFunctionWhenAskedToCommitWithChangesInTheCheckout(unittest.TestCase):
+    commit_run: ClassVar[subprocess.CompletedProcess[str]]
+    subject: ClassVar[str]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        repository = make_repository(cls)
+        commit_nothing(repository, "feat: a")
+        run_git(repository, "switch", "--quiet", "-c", "release")
+        (repository / "VERSION").write_text("9.9.9\n")
+        cls.commit_run = run_release_commit(repository)
+        cls.subject = run_git(repository, "log", "-1", "--format=%s")
+
+    def test_should_refuse_asking_to_commit_or_stash_them(self) -> None:
+        self.assertEqual(self.commit_run.returncode, 1)
+        self.assertIn("commit or stash", self.commit_run.stderr)
+
+    def test_should_print_nothing(self) -> None:
+        self.assertEqual(self.commit_run.stdout, "")
+
+    def test_should_commit_nothing(self) -> None:
+        self.assertEqual(self.subject, "feat: a\n")
+
+
+class _TheMainFunctionWhenAskedForTheDescriptionOfNotesEditedAfterTheReleaseCommit(unittest.TestCase):
+    repository: ClassVar[Path]
+    first_description: ClassVar[str]
+    description_run: ClassVar[subprocess.CompletedProcess[str]]
+    head_description_run: ClassVar[subprocess.CompletedProcess[str]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.repository = make_repository(cls)
+        commit_nothing(cls.repository, "feat(android): scan from the card")
+        run_git(cls.repository, "switch", "--quiet", "-c", "release/v0.3.0")
+        commit_run = run_release_commit(cls.repository)
+        commit_run.check_returncode()
+        cls.first_description = commit_run.stdout
+        replace_in_the_changelog(cls.repository, "scan from the card", "scan straight from the card")
+        run_git(cls.repository, "commit", "--quiet", "--all", "--amend", "--no-edit")
+        cls.description_run = run_release(cls.repository, "--description")
+        cls.head_description_run = run_release(cls.repository, "--description", "--ref", "HEAD")
+
+
+class TheMainFunctionWhenAskedForTheDescriptionOfNotesEditedAfterTheReleaseCommit(
+    _TheMainFunctionWhenAskedForTheDescriptionOfNotesEditedAfterTheReleaseCommit
+):
+    def test_should_exit_with_zero(self) -> None:
+        self.assertEqual(self.description_run.returncode, 0, self.description_run.stderr)
+
+    def test_should_describe_the_release_from_its_edited_notes(self) -> None:
+        self.assertEqual(
+            self.description_run.stdout,
+            self.first_description.replace("scan from the card", "scan straight from the card"),
         )
 
-    def test_a_release_is_prepared_on_main_as_on_origin(self) -> None:
-        # Rebase and merge rewrites the commits of a pull request: the commit the notes are
-        # written on must be one of main's.
-        self.commit("feat: a")
-        self.git("switch", "--quiet", "-c", "release")
-        self.commit("docs: a note")
-        result = self.release("--commit")
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("is not in origin/main", result.stderr)
+    def test_should_describe_head_unless_given_another_ref(self) -> None:
+        self.assertEqual(self.description_run.stdout, self.head_description_run.stdout)
 
-    def test_commit_refusals(self) -> None:
-        self.commit("feat: a")
-        refusals: list[tuple[str, Callable[[], object], tuple[str, ...], str]] = [
-            ("on main", lambda: None, (), "prepare the release on its own branch, not on main"),
-            (
-                "another commit",
-                lambda: self.git("switch", "--quiet", "-c", "release"),
-                ("--ref", "HEAD~1"),
-                "--commit prepares HEAD",
-            ),
-            ("changes", lambda: (self.repository / "VERSION").write_text("9.9.9\n"), (), "commit or stash"),
-        ]
-        for name, prepare, args, expected in refusals:
-            with self.subTest(name):
-                prepare()
-                result = self.release("--commit", *args)
-                self.assertEqual(result.returncode, 1)
-                self.assertIn(expected, result.stderr)
-                self.assertEqual(result.stdout, "")
-        self.assertEqual(self.git("log", "-1", "--format=%s"), "feat: a\n")
 
-    def merge_release(self, branch: str) -> None:
-        """Merges the release branch into main as "Rebase and merge" does: its commits replayed on main."""
-        self.git("switch", "--quiet", "main")
-        self.git("cherry-pick", "main.." + branch)
+class TheMainFunctionWhenAskedForTheDescriptionOfNotesEditedAfterTheReleaseCommitWhenTheEditRemovesEveryEntry(
+    _TheMainFunctionWhenAskedForTheDescriptionOfNotesEditedAfterTheReleaseCommit
+):
+    emptied_description_run: ClassVar[subprocess.CompletedProcess[str]]
 
-    def head(self) -> str:
-        return self.git("rev-parse", "HEAD").strip()
+    @classmethod
+    def setUpClass(cls) -> None:
+        super().setUpClass()
+        replace_in_the_changelog(cls.repository, "- App: scan straight from the card\n", "")
+        run_git(cls.repository, "commit", "--quiet", "--all", "--amend", "--no-edit")
+        cls.emptied_description_run = run_release(cls.repository, "--description")
 
-    def prepare_release(self, *edits: str) -> None:
-        """A release branch from main: its release commit, then commits that only edit CHANGELOG.md."""
-        self.git("switch", "--quiet", "-c", "release/v0.3.0")
-        self.assertEqual(self.release("--commit").returncode, 0)
-        changelog = self.repository / "CHANGELOG.md"
-        for old, new in zip(edits[0::2], edits[1::2], strict=True):
-            changelog.write_text(changelog.read_text().replace(old, new))
-            self.git("commit", "--quiet", "--all", "--message", "Update CHANGELOG.md")  # a suggestion, on GitHub
-        self.git("switch", "--quiet", "main")
+    def test_should_refuse_since_the_release_would_publish_nothing(self) -> None:
+        self.assertEqual(self.emptied_description_run.returncode, 1)
+        self.assertIn("the section [0.3.0] of CHANGELOG.md has no entry", self.emptied_description_run.stderr)
 
-    def test_completing_a_release_after_a_merge_in_between(self) -> None:
-        self.commit("feat(android): scan from the card")
-        self.prepare_release()
-        self.commit("fix(server): a leak")  # merged while the release pull request was open
-        self.merge_release("release/v0.3.0")
-        self.assertEqual(self.git("log", "-1", "--format=%s"), "chore(release): 0.3.0\n")
-        result = self.release()
-        self.assertEqual(result.returncode, 0, result.stderr)
+    def test_should_print_nothing(self) -> None:
+        self.assertEqual(self.emptied_description_run.stdout, "")
+
+
+class TheMainFunctionWhenAskedForTheDescriptionOfAReleasedVersion(unittest.TestCase):
+    description_run: ClassVar[subprocess.CompletedProcess[str]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.description_run = run_release(make_repository(cls), "--description", "--ref", "v0.2.3")
+
+    def test_should_refuse_since_it_is_released_already(self) -> None:
+        self.assertEqual(self.description_run.returncode, 1)
+        self.assertIn("0.2.3 is released already", self.description_run.stderr)
+
+    def test_should_print_nothing(self) -> None:
+        self.assertEqual(self.description_run.stdout, "")
+
+
+class TheMainFunctionWhenAskedForTheDescriptionOfARefThatDoesNotExist(unittest.TestCase):
+    description_run: ClassVar[subprocess.CompletedProcess[str]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.description_run = run_release(make_repository(cls), "--description", "--ref", "nonexistent")
+
+    def test_should_refuse_with_an_error_that_names_it(self) -> None:
+        self.assertEqual(self.description_run.returncode, 1)
+        self.assertIn("error:", self.description_run.stderr)
+        self.assertIn("nonexistent", self.description_run.stderr)
+
+    def test_should_print_nothing(self) -> None:
+        self.assertEqual(self.description_run.stdout, "")
+
+
+class _TheMainFunctionWhenAFixIsMergedBeforeTheRelease(unittest.TestCase):
+    repository: ClassVar[Path]
+    release_run: ClassVar[subprocess.CompletedProcess[str]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.repository = make_repository(cls)
+        commit_nothing(cls.repository, "feat(android): scan from the card")
+        prepare_release(cls.repository)
+        commit_nothing(cls.repository, "fix(server): a leak")
+        merge_release(cls.repository, "release/v0.3.0")
+        cls.release_run = run_release(cls.repository)
+
+
+class TheMainFunctionWhenAFixIsMergedBeforeTheRelease(_TheMainFunctionWhenAFixIsMergedBeforeTheRelease):
+    def test_should_exit_with_zero(self) -> None:
+        self.assertEqual(self.release_run.returncode, 0, self.release_run.stderr)
+
+    def test_should_say_the_release_is_to_complete_and_count_the_commits_its_notes_miss(self) -> None:
         self.assertEqual(
-            result.stdout.splitlines()[:2],
+            self.release_run.stdout.splitlines()[:2],
             [
                 "Release to complete: 0.3.0 (VERSION, not tagged: its release commit could not be published)",
                 "Commits its notes miss: 1 (1 fix)",
             ],
         )
-        self.assertIn("### Fixed\n\n- Server: a leak\n", result.stdout)
-        result = self.release("--bump", "patch")
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("no --bump", result.stderr)
-        base = self.head()
-        self.git("switch", "--quiet", "-c", "release/v0.3.0-complete")
-        result = self.release("--commit")
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertTrue(result.stdout.startswith("Merging this pull request publishes ScanMyLib 0.3.0"), result.stdout)
-        self.assertIn("### Added\n\n- App: scan from the card\n\n### Fixed\n\n- Server: a leak\n", result.stdout)
-        self.assertEqual(
-            self.git("log", "-1", "--format=%s%n%(trailers:key=Release-Base,valueonly)").split(),
-            ["chore(release):", "0.3.0", base],
+
+    def test_should_draft_the_fix_its_notes_miss(self) -> None:
+        self.assertIn("### Fixed\n\n- Server: a leak\n", self.release_run.stdout)
+
+
+class TheMainFunctionWhenAFixIsMergedBeforeTheReleaseWhenAskedForAnotherIncrement(
+    _TheMainFunctionWhenAFixIsMergedBeforeTheRelease
+):
+    bump_run: ClassVar[subprocess.CompletedProcess[str]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        super().setUpClass()
+        cls.bump_run = run_release(cls.repository, "--bump", "patch")
+
+    def test_should_refuse_since_a_completed_release_keeps_its_version(self) -> None:
+        self.assertEqual(self.bump_run.returncode, 1)
+        self.assertIn("no --bump", self.bump_run.stderr)
+
+
+class _TheMainFunctionWhenAFixIsMergedBeforeTheReleaseWhenItsCompletionIsCommitted(
+    _TheMainFunctionWhenAFixIsMergedBeforeTheRelease
+):
+    base: ClassVar[str]
+    completion_run: ClassVar[subprocess.CompletedProcess[str]]
+    message_fields: ClassVar[list[str]]
+    committed_files: ClassVar[list[str]]
+    changelog: ClassVar[str]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        super().setUpClass()
+        cls.base = read_head(cls.repository)
+        run_git(cls.repository, "switch", "--quiet", "-c", "release/v0.3.0-complete")
+        cls.completion_run = run_release_commit(cls.repository)
+        cls.message_fields = run_git(
+            cls.repository, "log", "-1", "--format=%s%n%(trailers:key=Release-Base,valueonly)"
+        ).split()
+        cls.committed_files = run_git(cls.repository, "show", "--name-only", "--format=", "HEAD").split()
+        cls.changelog = (cls.repository / "CHANGELOG.md").read_text()
+
+
+class TheMainFunctionWhenAFixIsMergedBeforeTheReleaseWhenItsCompletionIsCommitted(
+    _TheMainFunctionWhenAFixIsMergedBeforeTheReleaseWhenItsCompletionIsCommitted
+):
+    def test_should_exit_with_zero(self) -> None:
+        self.assertEqual(self.completion_run.returncode, 0, self.completion_run.stderr)
+
+    def test_should_print_the_description_of_its_pull_request(self) -> None:
+        self.assertTrue(
+            self.completion_run.stdout.startswith("Merging this pull request publishes ScanMyLib 0.3.0"),
+            self.completion_run.stdout,
         )
-        self.assertEqual(self.git("show", "--name-only", "--format=", "HEAD").split(), ["CHANGELOG.md"])
-        changelog = (self.repository / "CHANGELOG.md").read_text()
+
+    def test_should_print_every_note_of_the_release(self) -> None:
         self.assertIn(
-            "### Added\n\n- App: scan from the card\n\n### Fixed\n\n- Server: a leak\n\n## [0.2.3]", changelog
+            "### Added\n\n- App: scan from the card\n\n### Fixed\n\n- Server: a leak\n", self.completion_run.stdout
         )
-        # Once merged, the release can be published as it is: it waits for its workflow.
-        self.merge_release("release/v0.3.0-complete")
-        result = self.release()
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("can be published as it is", result.stderr)
 
-    def test_completing_leaves_out_what_the_notes_need_not_list(self) -> None:
-        self.commit("feat(android): scan from the card")
-        self.prepare_release("scan from the card", "scan straight from the card")
-        self.commit("docs: explain the card")
-        self.commit("fix(server): a leak")
-        self.merge_release("release/v0.3.0")
-        result = self.release()
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("Commits its notes miss: 2 (1 fix, 1 other change)", result.stdout)
-        self.assertIn("### Fixed\n\n- Server: a leak\n", result.stdout)
-        self.assertNotIn("Update CHANGELOG.md", result.stdout + result.stderr)
-        self.assertRegex(result.stdout, r"Not in the changelog .*:\n- `[0-9a-f]{12}` docs: explain the card\n$")
+    def test_should_commit_a_release_commit_written_on_main(self) -> None:
+        self.assertEqual(self.message_fields, ["chore(release):", "0.3.0", self.base])
 
-    def test_a_release_that_can_be_published_is_not_completed(self) -> None:
-        self.commit("feat(android): scan from the card")
-        self.prepare_release()
-        # Merged in between: a commit the notes need not list, and an edit of the changelog alone,
-        # whatever its type.
-        self.commit("test(server): cover the route")
-        with (self.repository / "CHANGELOG.md").open("a") as changelog:
-            changelog.write("\n")
-        self.git("commit", "--quiet", "--all", "--message", "fix: the notes of 0.2.3")
-        self.merge_release("release/v0.3.0")
-        release_commit = self.head()
-        # After it, a commit of the next release (or its tag is not fetched yet).
-        self.commit("feat(server): a later feature")
-        result = self.release()
-        self.assertEqual(result.returncode, 1)
-        self.assertIn(f"the release 0.3.0 can be published as it is, on {release_commit[:12]}", result.stderr)
-        self.assertIn("git fetch --tags origin", result.stderr)
+    def test_should_commit_the_changelog_alone_since_the_release_keeps_its_version(self) -> None:
+        self.assertEqual(self.committed_files, ["CHANGELOG.md"])
 
-    def test_completing_a_release_whose_section_has_no_entry(self) -> None:
-        # Its entries removed in its pull request (a heading left alone), then other commits merged:
-        # the section is written again from the release's commits.
-        self.commit("feat(android): scan from the card")
-        self.commit("fix(server): a crash")
-        self.prepare_release("- App: scan from the card\n\n### Fixed\n\n- Server: a crash\n", "")
-        self.merge_release("release/v0.3.0")
-        self.commit("docs: explain the card")
-        self.commit("fix(web): a later fix")
-        result = self.release()
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("Commits since v0.2.3: 4 (1 feature, 2 fixes, 1 other change)", result.stdout)
+    def test_should_add_the_fix_to_the_section_of_the_release(self) -> None:
+        self.assertIn(
+            "### Added\n\n- App: scan from the card\n\n### Fixed\n\n- Server: a leak\n\n## [0.2.3]", self.changelog
+        )
+
+
+class TheMainFunctionWhenAFixIsMergedBeforeTheReleaseWhenItsCompletionIsCommittedWhenItIsMerged(
+    _TheMainFunctionWhenAFixIsMergedBeforeTheReleaseWhenItsCompletionIsCommitted
+):
+    completed_release_run: ClassVar[subprocess.CompletedProcess[str]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        super().setUpClass()
+        merge_release(cls.repository, "release/v0.3.0-complete")
+        cls.completed_release_run = run_release(cls.repository)
+
+    def test_should_refuse_since_the_release_can_be_published_as_it_is_and_waits_for_its_workflow(self) -> None:
+        self.assertEqual(self.completed_release_run.returncode, 1)
+        self.assertIn("can be published as it is", self.completed_release_run.stderr)
+
+
+class TheMainFunctionWhenAFixAndOtherChangesAreMergedBeforeAReleaseWhoseNotesWereEdited(unittest.TestCase):
+    release_run: ClassVar[subprocess.CompletedProcess[str]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        repository = make_repository(cls)
+        commit_nothing(repository, "feat(android): scan from the card")
+        prepare_release(repository, "scan from the card", "scan straight from the card")
+        commit_nothing(repository, "docs: explain the card")
+        commit_nothing(repository, "fix(server): a leak")
+        merge_release(repository, "release/v0.3.0")
+        cls.release_run = run_release(repository)
+
+    def test_should_exit_with_zero(self) -> None:
+        self.assertEqual(self.release_run.returncode, 0, self.release_run.stderr)
+
+    def test_should_count_the_commits_its_notes_miss_without_the_edits_of_its_notes(self) -> None:
+        self.assertIn("Commits its notes miss: 2 (1 fix, 1 other change)", self.release_run.stdout)
+
+    def test_should_draft_the_fix(self) -> None:
+        self.assertIn("### Fixed\n\n- Server: a leak\n", self.release_run.stdout)
+
+    def test_should_never_mention_the_edits_of_its_notes(self) -> None:
+        self.assertNotIn("Update CHANGELOG.md", self.release_run.stdout + self.release_run.stderr)
+
+    def test_should_list_the_other_change_as_left_out_of_the_changelog(self) -> None:
+        self.assertRegex(
+            self.release_run.stdout, r"Not in the changelog .*:\n- `[0-9a-f]{12}` docs: explain the card\n$"
+        )
+
+
+class TheMainFunctionWhenOnlyChangesItsNotesNeedNotListAreMergedBeforeTheRelease(unittest.TestCase):
+    release_commit: ClassVar[str]
+    release_run: ClassVar[subprocess.CompletedProcess[str]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        repository = make_repository(cls)
+        commit_nothing(repository, "feat(android): scan from the card")
+        prepare_release(repository)
+        commit_nothing(repository, "test(server): cover the route")
+        append_a_blank_line_to_the_changelog(repository)
+        commit_everything(repository, "fix: the notes of 0.2.3")
+        merge_release(repository, "release/v0.3.0")
+        cls.release_commit = read_head(repository)
+        commit_nothing(repository, "feat(server): a later feature")
+        cls.release_run = run_release(repository)
+
+    def test_should_refuse_since_the_release_can_be_published_as_it_is_on_its_release_commit(self) -> None:
+        self.assertEqual(self.release_run.returncode, 1)
+        self.assertIn(
+            f"the release 0.3.0 can be published as it is, on {self.release_commit[:12]}", self.release_run.stderr
+        )
+
+    def test_should_say_how_to_fetch_its_tag_in_case_it_is_published_already(self) -> None:
+        self.assertIn("git fetch --tags origin", self.release_run.stderr)
+
+
+class _TheMainFunctionWhenTheSectionOfAMergedReleaseHasNoEntry(unittest.TestCase):
+    repository: ClassVar[Path]
+    release_run: ClassVar[subprocess.CompletedProcess[str]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.repository = make_repository(cls)
+        commit_nothing(cls.repository, "feat(android): scan from the card")
+        commit_nothing(cls.repository, "fix(server): a crash")
+        prepare_release(cls.repository, "- App: scan from the card\n\n### Fixed\n\n- Server: a crash\n", "")
+        merge_release(cls.repository, "release/v0.3.0")
+        commit_nothing(cls.repository, "docs: explain the card")
+        commit_nothing(cls.repository, "fix(web): a later fix")
+        cls.release_run = run_release(cls.repository)
+
+
+class TheMainFunctionWhenTheSectionOfAMergedReleaseHasNoEntry(_TheMainFunctionWhenTheSectionOfAMergedReleaseHasNoEntry):
+    def test_should_exit_with_zero(self) -> None:
+        self.assertEqual(self.release_run.returncode, 0, self.release_run.stderr)
+
+    def test_should_count_the_commits_since_the_last_release(self) -> None:
+        self.assertIn("Commits since v0.2.3: 4 (1 feature, 2 fixes, 1 other change)", self.release_run.stdout)
+
+    def test_should_draft_the_section_again_from_those_commits(self) -> None:
         self.assertIn(
             "Its section of CHANGELOG.md, written again:\n\n### Added\n\n- App: scan from the card\n\n"
             "### Fixed\n\n- Server: a crash\n- Web UI: a later fix\n",
-            result.stdout,
+            self.release_run.stdout,
         )
-        self.git("switch", "--quiet", "-c", "release/v0.3.0-complete")
-        result = self.release("--commit")
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("### Fixed\n\n- Server: a crash\n- Web UI: a later fix\n", result.stdout)
-        changelog = (self.repository / "CHANGELOG.md").read_text()
+
+
+class TheMainFunctionWhenTheSectionOfAMergedReleaseHasNoEntryWhenItsCompletionIsCommitted(
+    _TheMainFunctionWhenTheSectionOfAMergedReleaseHasNoEntry
+):
+    completion_run: ClassVar[subprocess.CompletedProcess[str]]
+    changelog: ClassVar[str]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        super().setUpClass()
+        run_git(cls.repository, "switch", "--quiet", "-c", "release/v0.3.0-complete")
+        cls.completion_run = run_release_commit(cls.repository)
+        cls.changelog = (cls.repository / "CHANGELOG.md").read_text()
+
+    def test_should_exit_with_zero(self) -> None:
+        self.assertEqual(self.completion_run.returncode, 0, self.completion_run.stderr)
+
+    def test_should_print_the_notes_written_again(self) -> None:
+        self.assertIn("### Fixed\n\n- Server: a crash\n- Web UI: a later fix\n", self.completion_run.stdout)
+
+    def test_should_write_the_section_again_in_place(self) -> None:
         self.assertRegex(
-            changelog,
+            self.changelog,
             r"## \[0\.3\.0\] - \d{4}-\d\d-\d\d\n\n### Added\n\n- App: scan from the card\n\n"
             r"### Fixed\n\n- Server: a crash\n- Web UI: a later fix\n\n## \[0\.2\.3\]",
         )
 
-    def test_completing_a_release_whose_section_is_missing(self) -> None:
-        self.commit("feat(android): scan from the card")
-        self.prepare_release("## [0.3.0] - ", "## 0.3.0 - ")
-        self.merge_release("release/v0.3.0")
-        self.commit("fix(server): a leak")
-        self.git("switch", "--quiet", "-c", "release/v0.3.0-complete")
-        result = self.release("--commit")
-        self.assertEqual(result.returncode, 0, result.stderr)
-        changelog = (self.repository / "CHANGELOG.md").read_text()
+
+class TheMainFunctionWhenTheCompletionOfAMergedReleaseThatLostItsSectionIsCommitted(unittest.TestCase):
+    completion_run: ClassVar[subprocess.CompletedProcess[str]]
+    changelog: ClassVar[str]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        repository = make_repository(cls)
+        commit_nothing(repository, "feat(android): scan from the card")
+        prepare_release(repository, "## [0.3.0] - ", "## 0.3.0 - ")
+        merge_release(repository, "release/v0.3.0")
+        commit_nothing(repository, "fix(server): a leak")
+        run_git(repository, "switch", "--quiet", "-c", "release/v0.3.0-complete")
+        cls.completion_run = run_release_commit(repository)
+        cls.changelog = (repository / "CHANGELOG.md").read_text()
+
+    def test_should_exit_with_zero(self) -> None:
+        self.assertEqual(self.completion_run.returncode, 0, self.completion_run.stderr)
+
+    def test_should_write_the_section_again_after_unreleased(self) -> None:
         self.assertRegex(
-            changelog,
+            self.changelog,
             r"## \[Unreleased\]\n\n## \[0\.3\.0\] - \d{4}-\d\d-\d\d\n\n### Added\n\n"
             r"- App: scan from the card\n\n### Fixed\n\n- Server: a leak\n\n## 0\.3\.0 - ",
         )
 
-    def test_a_release_merged_alone_waits_for_its_workflow(self) -> None:
-        self.commit("feat(android): scan from the card")
-        self.prepare_release()
-        self.merge_release("release/v0.3.0")
-        result = self.release()
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("can be published as it is", result.stderr)
-        self.assertIn(".github/workflows/release.yml publishes it", result.stderr)
 
-    def to_publish(self, ref: str = "HEAD") -> subprocess.CompletedProcess[str]:
-        return self.release("--ref", ref, "--to-publish", str(self.repository / ".git" / "notes.md"))
+class TheMainFunctionWhenTheReleaseIsMergedAlone(unittest.TestCase):
+    release_run: ClassVar[subprocess.CompletedProcess[str]]
 
-    def published(self, ref: str = "HEAD") -> tuple[str, str]:
-        """The version --to-publish publishes and the commit it tags."""
-        result = self.to_publish(ref)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        version, commit = result.stdout.split()
-        return version, commit
+    @classmethod
+    def setUpClass(cls) -> None:
+        repository = make_repository(cls)
+        commit_nothing(repository, "feat(android): scan from the card")
+        prepare_release(repository)
+        merge_release(repository, "release/v0.3.0")
+        cls.release_run = run_release(repository)
 
-    def notes(self) -> str:
-        return (self.repository / ".git" / "notes.md").read_text()
+    def test_should_refuse_since_it_can_be_published_as_it_is(self) -> None:
+        self.assertEqual(self.release_run.returncode, 1)
+        self.assertIn("can be published as it is", self.release_run.stderr)
 
-    def test_publishing_a_merged_release(self) -> None:
-        self.commit("feat(android): scan from the card")
-        self.commit("fix(server): a leak")
-        self.prepare_release()
-        self.merge_release("release/v0.3.0")
-        release_commit = self.head()
-        self.assertEqual(self.published(), ("0.3.0", release_commit))
-        self.assertEqual(self.notes(), "### Added\n\n- App: scan from the card\n\n### Fixed\n\n- Server: a leak\n")
-        # Run again once tagged (the GitHub release failed): it is still to finish.
-        self.git("tag", "--annotate", "v0.3.0", "--message", "ScanMyLib 0.3.0")
-        self.assertEqual(self.published(), ("0.3.0", release_commit))
-        # A later change to the changelog publishes nothing.
-        with (self.repository / "CHANGELOG.md").open("a") as changelog:
-            changelog.write("\n")
-        self.git("commit", "--quiet", "--all", "--message", "docs: fix the changelog")
-        result = self.to_publish()
-        self.assertEqual((result.returncode, result.stdout), (0, ""), result.stderr)
-        self.assertIn("nothing to publish", result.stderr)
-        self.assertEqual(self.published(release_commit), ("0.3.0", release_commit))
+    def test_should_say_that_its_workflow_publishes_it(self) -> None:
+        self.assertIn(".github/workflows/release.yml publishes it", self.release_run.stderr)
 
-    def test_publishing_refuses_a_release_with_commits_merged_in_between(self) -> None:
-        self.commit("feat(android): scan from the card")
-        self.prepare_release()
-        self.commit("fix(server): a leak")
-        self.merge_release("release/v0.3.0")
-        result = self.to_publish()
-        self.assertEqual((result.returncode, result.stdout), (1, ""))
+
+class _TheMainFunctionWhenAskedToPublishAMergedRelease(unittest.TestCase):
+    repository: ClassVar[Path]
+    release_commit: ClassVar[str]
+    publication_run: ClassVar[subprocess.CompletedProcess[str]]
+    notes: ClassVar[str]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.repository = make_repository(cls)
+        commit_nothing(cls.repository, "feat(android): scan from the card")
+        commit_nothing(cls.repository, "fix(server): a leak")
+        prepare_release(cls.repository)
+        merge_release(cls.repository, "release/v0.3.0")
+        cls.release_commit = read_head(cls.repository)
+        cls.publication_run = run_to_publish(cls.repository)
+        cls.notes = read_notes(cls.repository)
+
+
+class TheMainFunctionWhenAskedToPublishAMergedRelease(_TheMainFunctionWhenAskedToPublishAMergedRelease):
+    def test_should_publish_its_version_on_its_release_commit(self) -> None:
+        self.assertEqual(
+            (self.publication_run.returncode, self.publication_run.stdout.split()),
+            (0, ["0.3.0", self.release_commit]),
+            self.publication_run.stderr,
+        )
+
+    def test_should_write_its_notes(self) -> None:
+        self.assertEqual(self.notes, "### Added\n\n- App: scan from the card\n\n### Fixed\n\n- Server: a leak\n")
+
+
+class _TheMainFunctionWhenAskedToPublishAMergedReleaseWhenItIsTagged(_TheMainFunctionWhenAskedToPublishAMergedRelease):
+    tagged_publication_run: ClassVar[subprocess.CompletedProcess[str]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        super().setUpClass()
+        run_git(cls.repository, "tag", "--annotate", "v0.3.0", "--message", "ScanMyLib 0.3.0")
+        cls.tagged_publication_run = run_to_publish(cls.repository)
+
+
+class TheMainFunctionWhenAskedToPublishAMergedReleaseWhenItIsTagged(
+    _TheMainFunctionWhenAskedToPublishAMergedReleaseWhenItIsTagged
+):
+    def test_should_still_publish_it_on_its_release_commit_so_that_a_failed_github_release_is_finished(self) -> None:
+        self.assertEqual(
+            (self.tagged_publication_run.returncode, self.tagged_publication_run.stdout.split()),
+            (0, ["0.3.0", self.release_commit]),
+            self.tagged_publication_run.stderr,
+        )
+
+
+class TheMainFunctionWhenAskedToPublishAMergedReleaseWhenItIsTaggedWhenALaterCommitEditsTheChangelog(
+    _TheMainFunctionWhenAskedToPublishAMergedReleaseWhenItIsTagged
+):
+    later_publication_run: ClassVar[subprocess.CompletedProcess[str]]
+    release_commit_publication_run: ClassVar[subprocess.CompletedProcess[str]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        super().setUpClass()
+        append_a_blank_line_to_the_changelog(cls.repository)
+        commit_everything(cls.repository, "docs: fix the changelog")
+        cls.later_publication_run = run_to_publish(cls.repository)
+        cls.release_commit_publication_run = run_to_publish(cls.repository, cls.release_commit)
+
+    def test_should_publish_nothing_from_the_later_commit(self) -> None:
+        self.assertEqual(
+            (self.later_publication_run.returncode, self.later_publication_run.stdout),
+            (0, ""),
+            self.later_publication_run.stderr,
+        )
+
+    def test_should_say_there_is_nothing_to_publish(self) -> None:
+        self.assertIn("nothing to publish", self.later_publication_run.stderr)
+
+    def test_should_still_publish_the_release_from_its_release_commit(self) -> None:
+        self.assertEqual(
+            (self.release_commit_publication_run.returncode, self.release_commit_publication_run.stdout.split()),
+            (0, ["0.3.0", self.release_commit]),
+            self.release_commit_publication_run.stderr,
+        )
+
+
+class _TheMainFunctionWhenAskedToPublishAReleaseMergedAfterAFix(unittest.TestCase):
+    repository: ClassVar[Path]
+    publication_run: ClassVar[subprocess.CompletedProcess[str]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.repository = make_repository(cls)
+        commit_nothing(cls.repository, "feat(android): scan from the card")
+        prepare_release(cls.repository)
+        commit_nothing(cls.repository, "fix(server): a leak")
+        merge_release(cls.repository, "release/v0.3.0")
+        cls.publication_run = run_to_publish(cls.repository)
+
+
+class TheMainFunctionWhenAskedToPublishAReleaseMergedAfterAFix(
+    _TheMainFunctionWhenAskedToPublishAReleaseMergedAfterAFix
+):
+    def test_should_refuse_naming_the_fix_its_notes_miss_and_the_commit_they_were_written_on(self) -> None:
+        self.assertEqual(self.publication_run.returncode, 1)
         self.assertRegex(
-            result.stderr,
+            self.publication_run.stderr,
             r"miss features, fixes or breaking changes merged after [0-9a-f]{12}, the "
             r"commit they were written on:\n  [0-9a-f]{12} fix\(server\): a leak\n",
         )
-        self.assertIn("completes the release 0.3.0", result.stderr)
-        # Completed in a pull request of its own, it is published with all its notes.
-        self.git("switch", "--quiet", "-c", "release/v0.3.0-complete")
-        self.assertEqual(self.release("--commit").returncode, 0)
-        self.merge_release("release/v0.3.0-complete")
-        self.assertEqual(self.published(), ("0.3.0", self.head()))
-        self.assertEqual(self.notes(), "### Added\n\n- App: scan from the card\n\n### Fixed\n\n- Server: a leak\n")
 
-    def test_publishing_the_notes_edited_after_the_release_commit(self) -> None:
-        # Edited in its pull request (suggestions, on GitHub), with commits the notes need not list
-        # and an edit of the changelog alone merged in between: published with the edited notes.
-        self.commit("feat(android): scan from the card")
-        self.prepare_release("scan from the card", "scan straight from the card")
-        self.commit("docs: explain the card")
-        with (self.repository / "CHANGELOG.md").open("a") as changelog:
-            changelog.write("\n")
-        self.git("commit", "--quiet", "--all", "--message", "fix: the notes of 0.2.3")
-        self.merge_release("release/v0.3.0")
-        edited = self.head()
-        self.assertEqual(self.published(), ("0.3.0", edited))
-        self.assertEqual(self.notes(), "### Added\n\n- App: scan straight from the card\n")
-        # Later commits belong to the next release, whatever they change.
-        self.commit("feat(server): a later feature")
-        with (self.repository / "CHANGELOG.md").open("a") as changelog:
-            changelog.write("\n")
-        self.git("commit", "--quiet", "--all", "--message", "Update CHANGELOG.md")
-        self.assertEqual(self.published(), ("0.3.0", edited))
+    def test_should_say_that_a_run_on_main_completes_it(self) -> None:
+        self.assertIn("completes the release 0.3.0", self.publication_run.stderr)
 
-    def test_a_commit_after_the_release_commit_belongs_to_the_next_release(self) -> None:
-        # Pushed to the release branch after its release commit, or merged with it.
-        self.commit("feat(android): scan from the card")
-        self.prepare_release()
-        self.git("switch", "--quiet", "release/v0.3.0")
-        release_commit = self.head()
-        self.commit("fix(server): a last-minute leak")
-        self.git("switch", "--quiet", "-c", "side", "HEAD~2")
-        self.commit("fix(server): another leak")
-        self.git("switch", "--quiet", "release/v0.3.0")
-        self.git("merge", "--quiet", "--no-ff", "--no-edit", "side")
-        self.assertEqual(self.published(), ("0.3.0", release_commit))
+    def test_should_print_nothing(self) -> None:
+        self.assertEqual(self.publication_run.stdout, "")
 
-    def test_publishing_refuses_an_empty_section_until_it_is_written(self) -> None:
-        self.commit("feat(android): scan from the card")
-        self.prepare_release("### Added\n\n- App: scan from the card\n\n", "")
-        self.merge_release("release/v0.3.0")
-        result = self.to_publish()
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("the section [0.3.0] of CHANGELOG.md has no entry, or is missing", result.stderr)
-        # A pull request that only writes the section publishes the release.
-        changelog = self.repository / "CHANGELOG.md"
-        changelog.write_text(
-            changelog.read_text()
-            .replace("## [0.3.0] - ", "## [0.3.0] - ", 1)
-            .replace("\n## [0.2.3]", "### Added\n\n- App: scan from the card\n\n## [0.2.3]", 1)
+
+class TheMainFunctionWhenAskedToPublishAReleaseMergedAfterAFixWhenItsCompletionIsMerged(
+    _TheMainFunctionWhenAskedToPublishAReleaseMergedAfterAFix
+):
+    completion: ClassVar[str]
+    completed_publication_run: ClassVar[subprocess.CompletedProcess[str]]
+    notes: ClassVar[str]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        super().setUpClass()
+        run_git(cls.repository, "switch", "--quiet", "-c", "release/v0.3.0-complete")
+        run_release_commit(cls.repository).check_returncode()
+        merge_release(cls.repository, "release/v0.3.0-complete")
+        cls.completion = read_head(cls.repository)
+        cls.completed_publication_run = run_to_publish(cls.repository)
+        cls.notes = read_notes(cls.repository)
+
+    def test_should_publish_it_on_its_completion(self) -> None:
+        self.assertEqual(
+            (self.completed_publication_run.returncode, self.completed_publication_run.stdout.split()),
+            (0, ["0.3.0", self.completion]),
+            self.completed_publication_run.stderr,
         )
-        self.git("commit", "--quiet", "--all", "--message", "docs: write the notes of 0.3.0")
-        self.assertEqual(self.published(), ("0.3.0", self.head()))
-        self.assertEqual(self.notes(), "### Added\n\n- App: scan from the card\n")
 
-    def test_publishing_refuses_anything_but_a_release(self) -> None:
-        self.commit("feat: a")
-        (self.repository / "VERSION").write_text("0.3.0\n")
-        self.git("commit", "--quiet", "--all", "--message", "build: set VERSION by hand")
-        result = self.to_publish()
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("no release commit 'chore(release): 0.3.0'", result.stderr)
-        changelog = self.repository / "CHANGELOG.md"
-        changelog.write_text(
-            changelog.read_text().replace("## [0.2.3]", "## [0.3.0] - 2026-10-20\n\n### Added\n\n- A\n\n## [0.2.3]")
+    def test_should_write_every_note_of_the_release(self) -> None:
+        self.assertEqual(self.notes, "### Added\n\n- App: scan from the card\n\n### Fixed\n\n- Server: a leak\n")
+
+
+class _TheMainFunctionWhenAskedToPublishAReleaseWhoseNotesWereEditedInItsPullRequest(unittest.TestCase):
+    repository: ClassVar[Path]
+    last_edit: ClassVar[str]
+    publication_run: ClassVar[subprocess.CompletedProcess[str]]
+    notes: ClassVar[str]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.repository = make_repository(cls)
+        commit_nothing(cls.repository, "feat(android): scan from the card")
+        prepare_release(cls.repository, "scan from the card", "scan straight from the card")
+        commit_nothing(cls.repository, "docs: explain the card")
+        append_a_blank_line_to_the_changelog(cls.repository)
+        commit_everything(cls.repository, "fix: the notes of 0.2.3")
+        merge_release(cls.repository, "release/v0.3.0")
+        cls.last_edit = read_head(cls.repository)
+        cls.publication_run = run_to_publish(cls.repository)
+        cls.notes = read_notes(cls.repository)
+
+
+class TheMainFunctionWhenAskedToPublishAReleaseWhoseNotesWereEditedInItsPullRequest(
+    _TheMainFunctionWhenAskedToPublishAReleaseWhoseNotesWereEditedInItsPullRequest
+):
+    def test_should_publish_it_on_the_last_edit_despite_the_commits_its_notes_need_not_list_merged_before_it(
+        self,
+    ) -> None:
+        self.assertEqual(
+            (self.publication_run.returncode, self.publication_run.stdout.split()),
+            (0, ["0.3.0", self.last_edit]),
+            self.publication_run.stderr,
         )
-        self.git("commit", "--quiet", "--all", "--message", "chore(release): 0.3.0")  # by hand: no trailer
-        result = self.to_publish()
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("has no 'Release-Base' trailer", result.stderr)
-        # A version tagged before release commits had a Release-Base: nothing to publish.
-        self.git("reset", "--quiet", "--hard", "v0.2.3")
-        with (self.repository / "CHANGELOG.md").open("a") as changelog_file:
-            changelog_file.write("\n")
-        self.git("commit", "--quiet", "--all", "--message", "docs: start the changelog")
-        result = self.to_publish()
-        self.assertEqual((result.returncode, result.stdout), (0, ""), result.stderr)
+
+    def test_should_write_the_edited_notes(self) -> None:
+        self.assertEqual(self.notes, "### Added\n\n- App: scan straight from the card\n")
+
+
+class TheMainFunctionWhenAskedToPublishAReleaseWhoseNotesWereEditedInItsPullRequestWhenLaterCommitsFollow(
+    _TheMainFunctionWhenAskedToPublishAReleaseWhoseNotesWereEditedInItsPullRequest
+):
+    later_publication_run: ClassVar[subprocess.CompletedProcess[str]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        super().setUpClass()
+        commit_nothing(cls.repository, "feat(server): a later feature")
+        append_a_blank_line_to_the_changelog(cls.repository)
+        commit_everything(cls.repository, "Update CHANGELOG.md")
+        cls.later_publication_run = run_to_publish(cls.repository)
+
+    def test_should_still_publish_it_on_its_last_edit_since_later_commits_belong_to_the_next_release(self) -> None:
+        self.assertEqual(
+            (self.later_publication_run.returncode, self.later_publication_run.stdout.split()),
+            (0, ["0.3.0", self.last_edit]),
+            self.later_publication_run.stderr,
+        )
+
+
+class TheMainFunctionWhenAskedToPublishAReleaseBranchWithCommitsAfterItsReleaseCommit(unittest.TestCase):
+    release_commit: ClassVar[str]
+    publication_run: ClassVar[subprocess.CompletedProcess[str]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        repository = make_repository(cls)
+        commit_nothing(repository, "feat(android): scan from the card")
+        prepare_release(repository)
+        run_git(repository, "switch", "--quiet", "release/v0.3.0")
+        cls.release_commit = read_head(repository)
+        commit_nothing(repository, "fix(server): a last-minute leak")
+        run_git(repository, "switch", "--quiet", "-c", "side", "HEAD~2")
+        commit_nothing(repository, "fix(server): another leak")
+        run_git(repository, "switch", "--quiet", "release/v0.3.0")
+        run_git(repository, "merge", "--quiet", "--no-ff", "--no-edit", "side")
+        cls.publication_run = run_to_publish(repository)
+
+    def test_should_publish_it_on_its_release_commit_since_later_commits_belong_to_the_next_release(self) -> None:
+        self.assertEqual(
+            (self.publication_run.returncode, self.publication_run.stdout.split()),
+            (0, ["0.3.0", self.release_commit]),
+            self.publication_run.stderr,
+        )
+
+
+class _TheMainFunctionWhenAskedToPublishAReleaseWhoseSectionHasNoEntry(unittest.TestCase):
+    repository: ClassVar[Path]
+    publication_run: ClassVar[subprocess.CompletedProcess[str]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.repository = make_repository(cls)
+        commit_nothing(cls.repository, "feat(android): scan from the card")
+        prepare_release(cls.repository, "### Added\n\n- App: scan from the card\n\n", "")
+        merge_release(cls.repository, "release/v0.3.0")
+        cls.publication_run = run_to_publish(cls.repository)
+
+
+class TheMainFunctionWhenAskedToPublishAReleaseWhoseSectionHasNoEntry(
+    _TheMainFunctionWhenAskedToPublishAReleaseWhoseSectionHasNoEntry
+):
+    def test_should_refuse_until_the_section_is_written(self) -> None:
+        self.assertEqual(self.publication_run.returncode, 1)
+        self.assertIn("the section [0.3.0] of CHANGELOG.md has no entry, or is missing", self.publication_run.stderr)
+
+
+class TheMainFunctionWhenAskedToPublishAReleaseWhoseSectionHasNoEntryWhenAPullRequestWritesIt(
+    _TheMainFunctionWhenAskedToPublishAReleaseWhoseSectionHasNoEntry
+):
+    writing_commit: ClassVar[str]
+    written_publication_run: ClassVar[subprocess.CompletedProcess[str]]
+    notes: ClassVar[str]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        super().setUpClass()
+        replace_in_the_changelog(cls.repository, "\n## [0.2.3]", "### Added\n\n- App: scan from the card\n\n## [0.2.3]")
+        commit_everything(cls.repository, "docs: write the notes of 0.3.0")
+        cls.writing_commit = read_head(cls.repository)
+        cls.written_publication_run = run_to_publish(cls.repository)
+        cls.notes = read_notes(cls.repository)
+
+    def test_should_publish_the_release_on_that_commit(self) -> None:
+        self.assertEqual(
+            (self.written_publication_run.returncode, self.written_publication_run.stdout.split()),
+            (0, ["0.3.0", self.writing_commit]),
+            self.written_publication_run.stderr,
+        )
+
+    def test_should_write_the_notes_of_the_section(self) -> None:
+        self.assertEqual(self.notes, "### Added\n\n- App: scan from the card\n")
+
+
+class TheMainFunctionWhenAskedToPublishAVersionSetByHand(unittest.TestCase):
+    publication_run: ClassVar[subprocess.CompletedProcess[str]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        repository = make_repository(cls)
+        commit_nothing(repository, "feat: a")
+        (repository / "VERSION").write_text("0.3.0\n")
+        commit_everything(repository, "build: set VERSION by hand")
+        cls.publication_run = run_to_publish(repository)
+
+    def test_should_refuse_since_no_release_commit_set_it(self) -> None:
+        self.assertEqual(self.publication_run.returncode, 1)
+        self.assertIn("no release commit 'chore(release): 0.3.0'", self.publication_run.stderr)
+
+
+class TheMainFunctionWhenAskedToPublishAReleaseCommitWrittenByHand(unittest.TestCase):
+    publication_run: ClassVar[subprocess.CompletedProcess[str]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        repository = make_repository(cls)
+        commit_nothing(repository, "feat: a")
+        (repository / "VERSION").write_text("0.3.0\n")
+        commit_everything(repository, "build: set VERSION by hand")
+        replace_in_the_changelog(repository, "## [0.2.3]", "## [0.3.0] - 2026-10-20\n\n### Added\n\n- A\n\n## [0.2.3]")
+        commit_everything(repository, "chore(release): 0.3.0")
+        cls.publication_run = run_to_publish(repository)
+
+    def test_should_refuse_since_it_has_no_release_base_trailer(self) -> None:
+        self.assertEqual(self.publication_run.returncode, 1)
+        self.assertIn("has no 'Release-Base' trailer", self.publication_run.stderr)
+
+
+class TheMainFunctionWhenAskedToPublishAfterAVersionTaggedBeforeReleaseCommitsHadATrailer(unittest.TestCase):
+    publication_run: ClassVar[subprocess.CompletedProcess[str]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        repository = make_repository(cls)
+        append_a_blank_line_to_the_changelog(repository)
+        commit_everything(repository, "docs: start the changelog")
+        cls.publication_run = run_to_publish(repository)
+
+    def test_should_publish_nothing(self) -> None:
+        self.assertEqual(
+            (self.publication_run.returncode, self.publication_run.stdout), (0, ""), self.publication_run.stderr
+        )
 
 
 class WorkflowTest(unittest.TestCase):

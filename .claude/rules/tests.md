@@ -6,6 +6,7 @@ paths:
   - "ocr/tests/**"
   - "ocr/bench/**"
   - "android/app/src/test/**"
+  - "android/app/src/testDebug/**"
   - "scripts/tests/**"
   - "scripts/integration_tests/**"
   - "scripts/e2e_test.py"
@@ -131,6 +132,12 @@ rule applies to it. The older files move to the structure area by area, each are
   the tests that need an engine's environment skip without it.
 - **Unit tests of the app:** `android/app/src/test/`, with JUnit on the JVM: view models, the upload queue and the
   client of the PC, against fakes and a mock web server.
+- **Screenshot tests of the app:** `android/app/src/testDebug/`, with JUnit, Robolectric and Roborazzi on the JVM, on
+  the debug variant: each draws a screen from its state, with invented data, in the light or the dark theme, records it
+  as a PNG under `android/app/build/outputs/roborazzi/`, and asserts what the screen shows. A change to a screen draws
+  that screen in one. The pictures stay out of the code's history: they show the screens to whoever checks a change,
+  and a pull request publishes those of a visible change (`.claude/skills/pull-request/SKILL.md` > Show a visible
+  change).
 - **Unit tests of the scripts:** `scripts/tests/`, with `unittest` and the host's `python3`, on the modules of
   `scripts/lib/` and on `scripts/release.py`, against throwaway repositories where git is needed.
 - **Integration tests of the scripts:** `scripts/integration_tests/`, with `unittest` and the host's `python3`, which
@@ -321,7 +328,8 @@ describe('The reading order', () => {
 
 ## JUnit
 
-The app's tests, in `android/app/src/test/`, run on JUnit 4, on the JVM, with kotlinx-coroutines-test.
+The app's tests, in `android/app/src/test/` and `android/app/src/testDebug/`, run on JUnit 4, on the JVM, with
+kotlinx-coroutines-test.
 
 - **Its words:** a group is a class nested in its parent's, without `inner`, under `@RunWith(Enclosed::class)`, which
   runs the public nested classes of a class, skips the abstract ones, and never runs a test of the class itself: a class
@@ -352,8 +360,18 @@ The app's tests, in `android/app/src/test/`, run on JUnit 4, on the JVM, with ko
   inside `runTest`.
 - **A suspending act runs in `runTest`, in its hook,** on a test dispatcher: its body times out after 60 seconds, and
   JUnit 4 times out no hook.
-- **Tables:** a parameterized group is a nested class under `@RunWith(Parameterized::class)`, whose `@Before` runs the
-  act for its row, each row named by `@Parameters(name = …)`.
+- **Tables:** a parameterized group is a nested class under `@RunWith(Parameterized::class)`, or
+  `@RunWith(ParameterizedRobolectricTestRunner::class)` for a screenshot test, whose `@Before` runs the act for its row,
+  each row named by `@Parameters(name = …)`, or by `@ParameterizedRobolectricTestRunner.Parameters(name = …)` for that
+  runner.
+- **A screenshot test** is a group under `@RunWith(ParameterizedRobolectricTestRunner::class)`, whose rows are the
+  themes, with `@GraphicsMode(GraphicsMode.Mode.NATIVE)` and `@Config(sdk = [36], qualifiers = …)`, the qualifiers
+  naming a generic screen, such as `RobolectricDeviceQualifiers.MediumPhone`. Its `@Before` draws the screen in its
+  row's theme, `ScanMyLibTheme(dark = …)`, through the rule of `createComposeRule`
+  (`androidx.compose.ui.test.junit4.v2`), and records it with
+  `captureRoboImage("build/outputs/roborazzi/<screen>-<situation>-<theme>.png")`; its tests assert what the screen
+  shows. Robolectric runs offline, on the image of Android that Gradle resolves and verifies (`robolectricAndroidAll` in
+  `android/app/build.gradle.kts`).
 - **A test that asserts nothing passes:** JUnit counts no assertion, so review checks it. ktlint checks no rule of the
   tests.
 - **No skip:** no `@Ignore` and no `Assume`, since the app's tests need nothing that the JVM lacks.

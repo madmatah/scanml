@@ -133,7 +133,7 @@ Production runs on this machine, from the main checkout, `~/Dev/scanmylib`, and 
 
 - `scripts/check.sh [AREA...]`: the gate, in this order: `lint` (Ruff, mypy, zizmor, ShellCheck, shfmt and Biome),
   `scripts` (unit tests of the scripts), `web` (the web UI's unit tests), `server` (the api's tests), `ocr` (the
-  sandbox's unit tests, no models), `android` (the app's unit tests, lint and ktlint), `integration` (integration tests
+  sandbox's unit tests, no models), `android` (the app's tests, lint and ktlint), `integration` (integration tests
   of the scripts). Given areas, it checks only those; `--last-commit`, those that read what the last commit changes.
 - `scripts/check.sh --fix`: formats every language and applies the linters' safe fixes: ktlint formats the app in
   place, the other formatters only the files git tracks (`git add` a new file first); read `git diff` before running

@@ -58,15 +58,16 @@ paths:
 - **Never weaken what the lockfile or the registry settings guarantee,** nor any other pin of a download. What is
   checked against a hash stays so:
   - the api's Python packages, by `server/requirements.lock` and `server/requirements-test.lock`, installed with
-    `pip install --require-hashes --no-deps`;
+    `pip install --require-hashes --no-deps --only-binary :all:`: a package built from its source would fetch its build
+    dependencies without checking their hashes;
   - the app's libraries and Gradle plugins, by `android/gradle/verification-metadata.xml`, with their versions in
     `android/gradle/libs.versions.toml`;
   - the Gradle distribution, by the `distributionSha256Sum` of `android/gradle/wrapper/gradle-wrapper.properties`;
   - the signing tools, by the SHA-256 sums of `scripts/build-apk.sh`;
   - KaTeX, by its SHA-512 in `scripts/vendor-katex.sh`;
   - the Python tools of the gate, by `scripts/lint/requirements.lock`, installed with
-    `pip install --require-hashes --no-deps`, and Biome, by `server/scanmylib/web/package-lock.json`, installed with
-    `npm ci --ignore-scripts`;
+    `pip install --require-hashes --no-deps --only-binary :all:`, and Biome, by
+    `server/scanmylib/web/package-lock.json`, installed with `npm ci --ignore-scripts`;
   - ShellCheck and shfmt, by the image digests of `scripts/check.sh`.
 
   The rest is pinned by version, commit or tag, or checked as it downloads, and never loosened further: the Android SDK

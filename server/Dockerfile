@@ -6,6 +6,9 @@
 #   project  the repository's VERSION file (see below)
 #   runtime  the production image (default, last stage): non-root, no build
 #            tools, runs with a read-only root filesystem and a tmpfs /tmp.
+#
+# Wheels only: building a package from its source would fetch its build
+# dependencies without checking their hashes.
 FROM python:3.12-slim-bookworm AS base
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -17,7 +20,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 FROM base AS deps
 COPY requirements.lock /tmp/requirements.lock
 RUN python -m venv /opt/venv \
- && pip install --require-hashes --no-deps -r /tmp/requirements.lock \
+ && pip install --require-hashes --no-deps --only-binary :all: -r /tmp/requirements.lock \
  && rm /tmp/requirements.lock
 
 
@@ -25,7 +28,7 @@ FROM deps AS test
 ARG UID=1000
 ARG GID=1000
 COPY requirements-test.lock /tmp/requirements-test.lock
-RUN pip install --require-hashes --no-deps -r /tmp/requirements-test.lock \
+RUN pip install --require-hashes --no-deps --only-binary :all: -r /tmp/requirements-test.lock \
  && rm /tmp/requirements-test.lock
 WORKDIR /src
 COPY pyproject.toml ./

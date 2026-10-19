@@ -7,16 +7,13 @@ Standard library and git only:
 from __future__ import annotations
 
 import io
-import os
-import subprocess
 import sys
 import tempfile
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
-from unittest import mock
 
-from git_environment import build_git_environment
+from git_environment import isolated_git_environment, run_git
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
 import commit_areas
@@ -57,13 +54,9 @@ AREAS_OF_EACH_PATH = {
 }
 
 
-def git(repository: Path, *args: str) -> None:
-    subprocess.run(["git", *args], cwd=repository, check=True, capture_output=True)
-
-
 def commit(repository: Path, message: str) -> None:
-    git(repository, "add", "--all")
-    git(repository, "commit", "--quiet", "--message", message)
+    run_git(repository, "add", "--all")
+    run_git(repository, "commit", "--quiet", "--message", message)
 
 
 def read_printed_areas(repository: Path) -> list[str]:
@@ -75,13 +68,11 @@ def read_printed_areas(repository: Path) -> list[str]:
 
 def build_repository(test: unittest.TestCase) -> Path:
     # commit_areas.py runs git in the test's process, with its environment.
-    isolated_environment = mock.patch.dict(os.environ, build_git_environment(os.environ), clear=True)
-    isolated_environment.start()
-    test.addCleanup(isolated_environment.stop)
+    test.enterContext(isolated_git_environment())
     directory = tempfile.TemporaryDirectory(prefix="scanmylib-areas-")
     test.addCleanup(directory.cleanup)
     repository = Path(directory.name)
-    git(repository, "init", "--quiet", "--initial-branch=main")
+    run_git(repository, "init", "--quiet", "--initial-branch=main")
     (repository / "docs").mkdir()
     (repository / "docs" / "guide.md").write_text("# Guide\n")
     (repository / "scripts").mkdir()

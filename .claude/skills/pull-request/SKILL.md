@@ -1,6 +1,6 @@
 ---
 name: pull-request
-description: Takes a change to ScanMyLib from a new branch to a merged pull request, in a worktree with its own development stack, and reviews someone else's pull request. Use when starting a piece of work, before pushing a branch, when opening or updating a pull request, after its base branch changes or is merged, or when the user asks to review a pull request. A release is prepared by the release skill instead.
+description: Takes a change to ScanMyLib from a new branch to a merged pull request, in a worktree with its own development stack, and reviews someone else's pull request. Use when starting a piece of work, before pushing a branch, when opening or updating a pull request, when showing screenshots of a change in its pull request, after its base branch changes or is merged, or when the user asks to review a pull request. A release is prepared by the release skill instead.
 ---
 
 # Pull request
@@ -71,6 +71,29 @@ may be back in the main checkout between two calls, where a rebase or a commit w
    `cd <worktree> && gh pr create --base <branch> --title "<title>" --body-file <file>`. Without a terminal, `gh` needs
    both the title and the body.
 4. Make sure CI (`scripts/check.sh` on GitHub Actions, one job per area) passes on it: `gh pr checks <number> --watch`.
+
+## Show a visible change
+
+A change that a screen shows, of the app or of the web UI, shows itself in its pull request, so that the reviewer sees
+what it does without building it.
+
+1. Take each screen that the change changes, of the app or of the web UI, after the change and, when it existed, before
+   it. Name each PNG for what it shows, such as `library-reading-dark-before.png` and `library-reading-dark-after.png`.
+   They are published on a public branch, so they show invented data only, never a phone's screen capture, production
+   or the user's library (`.claude/rules/repository.md` > No real document names and > No personal information).
+2. Take the "before" on `<base>`, in a worktree of its own (`git worktree add --detach <path> <base>`, then
+   `scripts/dev-env.sh` there): the app's screenshot test of the screen, or the web UI on the development stack, whose
+   slot `scripts/dev.sh up` there takes over; take the slot back with `scripts/dev.sh up` in `<worktree>`, and remove
+   that worktree. A branch that changes the database's schema shows its "after" only, since `<base>`'s api refuses the
+   development stack's newer database.
+3. Once the pull request is open, publish them:
+   `cd <worktree> && ${CLAUDE_SKILL_DIR}/scripts/publish_screenshots.py <number> <picture>...`. It commits them on the
+   `pr-screenshots` branch of origin, under `pr-<number>/`, without touching the worktree, and prints a Markdown image
+   for each, linked by that commit, so that a later publication never changes what the description shows.
+4. Put the images in the body's "Screenshots", and update the pull request:
+   `cd <worktree> && gh api -X PATCH 'repos/{owner}/{repo}/pulls/<number>' -F body=@<file>`, where `gh` fills in
+   `{owner}` and `{repo}`: `gh pr edit` fails on the GraphQL fields of GitHub's retired Projects (classic).
+5. If the script warns that the branch is heavy, tell the user: the maintainer cleans it with `/clean-pr-screenshots`.
 
 ## Fold review fixes
 

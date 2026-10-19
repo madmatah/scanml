@@ -254,10 +254,13 @@ def complete_release(changelog: str, version: str, body: str) -> str:
     of its subsection (created in Keep a Changelog's order if missing)."""
     lines = changelog.split("\n")
     added: dict[str, list[str]] = {}
+    heading: str | None = None
     for line in body.split("\n"):
         if line.startswith("### "):
             heading = line
         elif line.strip():
+            if heading is None:
+                raise ReleaseError(f"an entry to add comes before any subsection: {line}")
             added.setdefault(heading, []).append(line)
     for heading, entries in added.items():
         start, end = _section_lines(lines, version)

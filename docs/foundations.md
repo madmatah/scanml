@@ -235,7 +235,7 @@ Each row names a rule, the rules file that states it, and what enforces it.
 | The rules of the web UI: layout, `const`, strict equality, named exports (`.claude/rules/web.md`) | Biome, in `scripts/check.sh lint` |
 | Part of the rules of the api's tests: a broad exception asserted with its message, its raising call alone in its block, no assertion in an `except` (`.claude/rules/tests.md` > pytest) | Ruff's PT011, PT012 and PT017, in `scripts/check.sh lint` |
 | Part of the rules of the web UI's tests: assertions in tests only, no test focused or skipped by its name, no hook twice in a group, five levels at most (`.claude/rules/tests.md` > node:test) | Biome, in `scripts/check.sh lint` |
-| Part of the rules of continuous integration: actions pinned to commits, the jobs' permissions and credentials, no template injection (`.claude/rules/configuration.md` > Continuous integration) | zizmor, in `scripts/check.sh lint` |
+| Part of the rules of continuous integration: actions pinned to commits, the jobs' permissions and credentials, no template injection (`.claude/rules/configuration.md` > Continuous integration) | zizmor, in `scripts/check.sh lint`; the unit tests of the workflows, in `scripts/check.sh scripts`, for the actions they may use, their permissions, their secrets, `pull_request_target` and what the release workflow runs |
 | A commit footer holds only what tools read (`CLAUDE.md` > Workflow) | `attribution` in `.claude/settings.json`, which keeps Claude Code's own commit trailers and pull request line out |
 | Every rule no tool can check: architecture, conventions, tests as specification… | `/expert-review` ([Code review](#code-review)), before every pull request |
 
@@ -351,13 +351,13 @@ says, and that file says how tests are written.
 ### Test levels
 
 - **The unit tests run in the gate,** so that they are fast, need no GPU and can never reach production: those of the
-  api, the web UI and the sandbox in containers without network, those of the scripts' modules on the host's `python3`,
-  with the standard library only. The api's tests use a fake sandbox that speaks the real protocol on a real Unix
-  socket, so that the client and its limits are tested as they run.
+  api, the web UI and the sandbox in containers without network, those of the scripts' modules and of the workflows on
+  the host's `python3`, with the standard library only. The api's tests use a fake sandbox that speaks the real protocol
+  on a real Unix socket, so that the client and its limits are tested as they run.
 - **The integration tests of the scripts run the scripts themselves against a stand-in for docker,** because the guards
   they test must refuse what production owns without any container being built or started. They run apart from the
-  unit tests of the scripts' modules, in an area of the gate of their own, since a whole script and the processes it
-  starts cost far more than a call to a module.
+  unit tests of the scripts' modules and of the workflows, in an area of the gate of their own, since a whole script
+  and the processes it starts cost far more than a call to a module.
 - **The end-to-end test and the isolation check need a running stack,** so they run against the development stack, or
   production after a deployment, outside the gate.
 - **The benchmarks need the real engine and the GPU,** so they run by hand, outside the gate.

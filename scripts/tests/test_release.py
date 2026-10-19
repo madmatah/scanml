@@ -1,5 +1,4 @@
-"""The next release from the commits since the last one (scripts/release.py), and the workflows that publish it
-(.github/workflows/).
+"""The next release from the commits since the last one (scripts/release.py).
 
 Standard library and git only:
     python3 -m unittest discover -s scripts/tests
@@ -1662,64 +1661,6 @@ class TheMainFunctionWhenAskedToPublishAfterAVersionTaggedBeforeReleaseCommitsHa
         self.assertEqual(
             (self.publication_run.returncode, self.publication_run.stdout), (0, ""), self.publication_run.stderr
         )
-
-
-class WorkflowTest(unittest.TestCase):
-    """The release workflow is the only one that writes to the repository, and runs nothing else."""
-
-    WORKFLOWS = SCRIPTS.parent / ".github" / "workflows"
-    #: Any permission that writes, quoted or not, comments included.
-    WRITES = r"[\"']?[a-z-]+[\"']?\s*:\s*[\"']?write\b[\"']?|\bwrite-all\b"
-
-    def test_what_counts_as_writing(self) -> None:
-        for text in (
-            'contents: "write"',
-            "pull-requests:\twrite",
-            "permissions: write-all",
-            "contents: write  # x",
-            "contents: 'write'",
-            '"contents": write',
-            "'pull-requests': write",
-            "contents : write",
-            'permissions: {"contents": write}',
-        ):
-            with self.subTest(text):
-                self.assertTrue(re.findall(self.WRITES, text))
-        self.assertEqual(re.findall(self.WRITES, "contents: read\n# it writes nothing\n"), [])
-
-    def test_only_the_release_workflow_writes(self) -> None:
-        workflows = sorted(self.WORKFLOWS.glob("*.y*ml"))
-        self.assertEqual([workflow.name for workflow in workflows], ["ci.yml", "release.yml"])
-        for workflow in workflows:
-            with self.subTest(workflow.name):
-                text = workflow.read_text()
-                self.assertNotIn("secrets.", text)
-                self.assertNotRegex(text, r"\bpull_request_target\b")
-                for action in re.findall(r"^\s*(?:- )?uses: (\S+)", text, re.MULTILINE):
-                    self.assertRegex(action, r"^actions/checkout@[0-9a-f]{40}$|^actions/cache@[0-9a-f]{40}$")
-                writes = re.findall(self.WRITES, text)
-                if workflow.name == "release.yml":
-                    self.assertEqual(writes, ["contents: write"])
-                else:
-                    self.assertEqual(writes, [])
-                    self.assertRegex(text, r"\npermissions:\n  contents: read\n")
-
-    def test_the_release_workflow(self) -> None:
-        text = (self.WORKFLOWS / "release.yml").read_text()
-        on = text.split("\non:\n", 1)[1].split("\n\n", 1)[0]
-        self.assertEqual(on, "  push:\n    branches: [main]\n    paths: [VERSION, CHANGELOG.md]")
-        self.assertIn("\npermissions: {}\n", text)
-        self.assertIn("persist-credentials: false", text)
-        # scripts/release.py reads the history and the tags.
-        self.assertIn("fetch-depth: 0", text)
-        self.assertEqual(
-            re.findall(r"uses: (\S+)", text), ["actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"]
-        )
-        self.assertIn('python3 scripts/release.py --ref "$COMMIT" --to-publish', text)
-        # It tags the commit release.py names, never the push's head.
-        self.assertIn('read -r version target <<< "$release"', text)
-        self.assertIn('-f object="$target"', text)
-        self.assertEqual(text.count("$COMMIT"), 1)
 
 
 if __name__ == "__main__":

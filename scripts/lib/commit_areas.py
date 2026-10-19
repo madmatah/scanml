@@ -32,7 +32,7 @@ PATH_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("CHANGELOG.md", ()),
     ("LICENSE", ()),
     (".github/pull_request_template.md", ()),
-    # scripts/tests/test_release.py reads the workflows.
+    # scripts/tests/test_workflows.py reads the workflows.
     (".github/workflows/", ("lint", "scripts")),
     ("android/", ("android",)),
     ("ocr/", ("lint", "ocr")),

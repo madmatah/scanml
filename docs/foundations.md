@@ -53,6 +53,7 @@ These constraints drive the choices in this document:
 | CameraX, ML Kit document scanner and code scanner | 1.6.2, 16.0.0, 16.1.0 | The app's camera, Google's document scanner and the QR code reader |
 | OkHttp, Coil | 5.5.0, 3.6.3 | The app's client of the PC, and its images |
 | JUnit | 4.13.2 | The app's unit tests |
+| Robolectric, Roborazzi | 4.17, 1.76.0 | The app's screenshot tests, which draw its screens on the JVM |
 | Bash | — | The scripts that install, develop, check and deploy |
 | ShellCheck, shfmt | 0.11.0, 3.14.1 | Lint and formatting of the shell scripts |
 | ktlint | 1.8.0 | Formatting and lint of the app's Kotlin, in Android Studio's style with trailing commas |

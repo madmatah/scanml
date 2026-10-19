@@ -107,6 +107,7 @@ Tools that build and test the project, run in containers and never shipped.
 | Gradle, Android Gradle Plugin | The app's build | Apache-2.0 | https://gradle.org, https://developer.android.com/build |
 | Android SDK | The app's build and signing tools | Android Software Development Kit License | https://developer.android.com/studio |
 | JUnit 4, kotlinx-coroutines-test, OkHttp MockWebServer | The app's unit tests | EPL-1.0, Apache-2.0, Apache-2.0 | https://junit.org/junit4 |
+| Robolectric and its image of Android 16, Roborazzi, Compose UI test | The app's screenshot tests | MIT; Apache-2.0 for the image of Android, Roborazzi and Compose UI test | https://robolectric.org, https://github.com/takahirom/roborazzi, https://developer.android.com/jetpack/androidx/releases/compose-ui |
 | uv 0.13.0 | Compiles the api's locks (`server/README.md`) and the lock of the gate's Python tools (`README.md` > Development) | MIT or Apache-2.0 | https://github.com/astral-sh/uv |
 | Ruff | Formats and lints the Python; installed from `scripts/lint/requirements.lock` | MIT | https://github.com/astral-sh/ruff |
 | mypy, and librt, ast-serialize, pathspec, mypy-extensions, typing-extensions | Checks the types of the Python; installed from `scripts/lint/requirements.lock` | MIT; pathspec MPL-2.0; typing-extensions PSF-2.0 | https://github.com/python/mypy |

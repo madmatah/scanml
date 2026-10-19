@@ -1,4 +1,4 @@
-"""Fixtures: a fake OCR sandbox on a real Unix socket and the app wired to it."""
+"""Fixtures: a fake OCR sandbox on a real Unix socket."""
 
 from __future__ import annotations
 
@@ -6,11 +6,10 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
 
 from scanmylib.config import Settings
 from scanmylib.devtools.fake_ocr import FakeOcrServer
-from support import build_client, locate_socket, make_settings, serving_fake_ocr, temporary_socket_directory
+from support import locate_socket, make_settings, serving_fake_ocr, temporary_socket_directory
 
 
 @pytest.fixture
@@ -28,14 +27,3 @@ def fake_ocr(socket_dir: Path) -> Iterator[FakeOcrServer]:
 @pytest.fixture
 def settings(tmp_path: Path, socket_dir: Path) -> Settings:
     return make_settings(tmp_path, socket_dir)
-
-
-@pytest.fixture
-def client(settings: Settings, fake_ocr: FakeOcrServer) -> Iterator[TestClient]:
-    with build_client(settings) as test_client:
-        yield test_client
-
-
-@pytest.fixture
-def library_dir(settings: Settings) -> Path:
-    return settings.library_dir

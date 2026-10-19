@@ -87,11 +87,51 @@ fun SettingsScreen(
             snackbarHostState.showSnackbar(resources.getString(R.string.message_setting_not_saved))
         }
     }
+    SettingsContent(
+        state = state,
+        update = update,
+        snackbarHostState = snackbarHostState,
+        onBack = onBack,
+        onChangeServer = onChangeServer,
+        onTestConnection = viewModel::testConnection,
+        onUnpair = viewModel::unpair,
+        onWifiOnly = viewModel::setWifiOnly,
+        onKeepLocalCopies = viewModel::setKeepLocalCopies,
+        onDeleteKeptCopies = viewModel::deleteKeptCopies,
+        onDefaultCamera = viewModel::setDefaultCamera,
+        onScannerMode = viewModel::setScannerMode,
+        onCheckForUpdate = viewModel::checkForUpdate,
+        onInstallUpdate = viewModel::installUpdate,
+        onCancelUpdate = viewModel::cancelUpdate,
+    )
+}
+
+/** Apart from the view model, so that a test draws the settings from invented state. */
+@Composable
+internal fun SettingsContent(
+    state: SettingsUiState,
+    update: UpdateState,
+    snackbarHostState: SnackbarHostState,
+    onBack: () -> Unit,
+    onChangeServer: () -> Unit,
+    onTestConnection: () -> Unit,
+    onUnpair: () -> Unit,
+    onWifiOnly: (Boolean) -> Unit,
+    onKeepLocalCopies: (Boolean) -> Unit,
+    onDeleteKeptCopies: () -> Unit,
+    onDefaultCamera: (ScanSource) -> Unit,
+    onScannerMode: (ScannerMode) -> Unit,
+    onCheckForUpdate: () -> Unit,
+    onInstallUpdate: () -> Unit,
+    onCancelUpdate: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     var confirmingUnpair by rememberSaveable { mutableStateOf(false) }
     val settings = state.settings
     val server = settings?.server
 
     Scaffold(
+        modifier = modifier,
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.settings_title)) },
@@ -119,7 +159,7 @@ fun SettingsScreen(
                 )
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(horizontal = 16.dp)) {
-                OutlinedButton(onClick = viewModel::testConnection, enabled = server != null && !state.testing) {
+                OutlinedButton(onClick = onTestConnection, enabled = server != null && !state.testing) {
                     Text(stringResource(R.string.settings_test_connection))
                 }
                 OutlinedButton(onClick = onChangeServer) {
@@ -140,13 +180,13 @@ fun SettingsScreen(
                 title = R.string.settings_wifi_only,
                 description = R.string.settings_wifi_only_help,
                 checked = settings?.wifiOnly ?: false,
-                onCheckedChange = viewModel::setWifiOnly,
+                onCheckedChange = onWifiOnly,
             )
             SwitchItem(
                 title = R.string.settings_keep_copies,
                 description = R.string.settings_keep_copies_help,
                 checked = settings?.keepLocalCopies ?: false,
-                onCheckedChange = viewModel::setKeepLocalCopies,
+                onCheckedChange = onKeepLocalCopies,
             )
             val copies = state.keptCopies
             if (copies.count > 0) {
@@ -156,7 +196,7 @@ fun SettingsScreen(
                         Text(pluralStringResource(R.plurals.settings_kept_copies, copies.count, copies.count, size))
                     },
                     trailingContent = {
-                        TextButton(onClick = viewModel::deleteKeptCopies) { Text(stringResource(R.string.delete)) }
+                        TextButton(onClick = onDeleteKeptCopies) { Text(stringResource(R.string.delete)) }
                     },
                 )
             }
@@ -174,7 +214,7 @@ fun SettingsScreen(
                         description = if (enabled) camera.descriptionRes() else R.string.camera_none_on_phone,
                         selected = settings?.defaultCamera == camera,
                         enabled = enabled,
-                        onSelect = { viewModel.setDefaultCamera(camera) },
+                        onSelect = { onDefaultCamera(camera) },
                     )
                 }
             }
@@ -193,7 +233,7 @@ fun SettingsScreen(
                         title = mode.labelRes(),
                         description = mode.descriptionRes(),
                         selected = settings?.scannerMode == mode,
-                        onSelect = { viewModel.setScannerMode(mode) },
+                        onSelect = { onScannerMode(mode) },
                     )
                 }
             }
@@ -223,13 +263,13 @@ fun SettingsScreen(
                 modifier = Modifier.clickable(
                     enabled = server != null,
                     role = Role.Button,
-                    onClick = viewModel::checkForUpdate,
+                    onClick = onCheckForUpdate,
                 ),
             )
             UpdateBanner(
                 update,
-                onInstall = viewModel::installUpdate,
-                onCancel = viewModel::cancelUpdate,
+                onInstall = onInstallUpdate,
+                onCancel = onCancelUpdate,
                 modifier = Modifier.padding(horizontal = 16.dp),
             )
             val crashReports = remember(context) { CrashReporter.reports(context) }
@@ -265,7 +305,7 @@ fun SettingsScreen(
                 TextButton(
                     onClick = {
                         confirmingUnpair = false
-                        viewModel.unpair()
+                        onUnpair()
                     },
                 ) {
                     Text(stringResource(R.string.settings_unpair_confirm))

@@ -168,8 +168,7 @@ def running_api(directory: Path) -> Iterator[RunningApi]:
 
 def create_document(client: TestClient, title: str = "Sample Café Guide", **fields: object) -> str:
     document_id = new_id()
-    response = client.put(f"/api/documents/{document_id}", json={"title": title, **fields}, headers=AUTH)
-    assert response.status_code == 201, response.text
+    client.put(f"/api/documents/{document_id}", json={"title": title, **fields}, headers=AUTH).raise_for_status()
     return document_id
 
 

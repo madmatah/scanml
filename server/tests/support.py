@@ -1,18 +1,27 @@
-"""Helpers shared by the tests: images, uploads, waiting for the OCR loop."""
+"""Helpers shared by the tests: images, uploads, the api on a fake OCR sandbox, waiting for the OCR loop."""
 
 from __future__ import annotations
 
 import io
+import shutil
 import struct
+import tempfile
 import time
 import uuid
 import zlib
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import httpx2
 from fastapi.testclient import TestClient
 from PIL import Image
+
+from scanmylib.app import create_app
+from scanmylib.config import Settings
+from scanmylib.devtools.fake_ocr import FakeOcrServer
 
 TOKEN = "test-token-0123456789abcdefghijklmnopqrstuvwxyz"
 AUTH = {"Authorization": f"Bearer {TOKEN}"}
@@ -89,6 +98,72 @@ def mpo(width: int, height: int) -> bytes:
 def page_image(number: int, variant: int = 0) -> bytes:
     """Scan that the fake OCR reads as page `number` (variant: see fake_ocr)."""
     return jpeg(1200 + variant, 1000 + number)
+
+
+@dataclass(frozen=True)
+class RunningApi:
+    client: TestClient
+    fake_ocr: FakeOcrServer
+    settings: Settings
+
+
+def locate_socket(socket_directory: Path) -> Path:
+    return socket_directory / "ocr.sock"
+
+
+def make_settings(directory: Path, socket_directory: Path) -> Settings:
+    return Settings(
+        library_dir=directory / "library",
+        library_host_path="/home/user/Documents/ScanMyLib",
+        state_dir=directory / "state",
+        ocr_socket=locate_socket(socket_directory),
+        public_url="http://192.168.1.10:8765",
+        apk_path=directory / "app" / "scanmylib.apk",
+        web_dir=directory / "web",
+        token=TOKEN,
+        assemble_delay_s=0.05,
+        ocr_retry_max_s=0.2,
+    )
+
+
+@contextmanager
+def temporary_socket_directory() -> Iterator[Path]:
+    # Unix socket paths are limited to ~107 bytes: pytest's tmp_path can be longer.
+    path = Path(tempfile.mkdtemp(prefix="sml-", dir="/tmp"))
+    try:
+        yield path
+    finally:
+        shutil.rmtree(path, ignore_errors=True)
+
+
+@contextmanager
+def serving_fake_ocr(socket_path: Path) -> Iterator[FakeOcrServer]:
+    server = FakeOcrServer(socket_path)
+    server.start()
+    try:
+        yield server
+    finally:
+        server.stop()
+
+
+@contextmanager
+def preparing_settings(directory: Path) -> Iterator[Settings]:
+    with temporary_socket_directory() as socket_directory:
+        yield make_settings(directory, socket_directory)
+
+
+def build_client(settings: Settings) -> TestClient:
+    return TestClient(create_app(settings))
+
+
+@contextmanager
+def running_api(directory: Path) -> Iterator[RunningApi]:
+    with (
+        preparing_settings(directory) as settings,
+        serving_fake_ocr(settings.ocr_socket) as fake_ocr,
+        build_client(settings) as client,
+    ):
+        yield RunningApi(client, fake_ocr, settings)
 
 
 def create_document(client: TestClient, title: str = "Sample Café Guide", **fields: object) -> str:

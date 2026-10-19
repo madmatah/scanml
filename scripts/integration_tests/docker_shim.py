@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""A stand-in for the docker CLI, for the tests of the scripts (test_scripts.py).
+"""A stand-in for the docker CLI, for the integration tests of the scripts (installation_support.py).
 
 Usage: docker_shim.py CONFIG [docker arguments...], through a `docker` wrapper that the tests put
 first in PATH. CONFIG is a JSON file:

@@ -86,8 +86,8 @@ Production runs on this machine, from the main checkout, `~/Dev/scanmylib`, and 
 - **The dev app:** `scripts/build-apk.sh` builds "ScanMyLib (dev)" (`fr.scanmylib.dev`), which installs next to the
   production app, from the Pairing tab of the development stack. The production app is built only by
   `scripts/deploy.sh --apk`.
-- **Check a visible change in a browser** before calling it done: load the web UI on the development stack, exercise the
-  change, and read the console. The gate cannot see what is drawn.
+- **Check a visible change** before calling it done: the web UI in a browser on the development stack, reading its
+  console; the app in its screenshot tests (`.claude/rules/tests.md` > Levels). The gate cannot see what is drawn.
 - **Commits:** commit as you like while the work is in progress. Before pushing, rewrite the branch into atomic commits
   that each hold one reason to change, with its tests and documents, and pass `scripts/check.sh --last-commit`, the
   areas it touches; the last one passes `scripts/check.sh`. The header of a message follows Conventional Commits,

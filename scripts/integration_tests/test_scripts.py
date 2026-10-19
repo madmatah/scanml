@@ -1630,6 +1630,13 @@ class SetupAndVerifyTest(ScriptsTestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("install a published release: HEAD", result.stderr)
 
+    def test_setup_refuses_changes_git_status_hides(self) -> None:
+        self.git(self.primary, "update-index", "--skip-worktree", "compose.yaml")
+        (self.primary / "compose.yaml").write_text("services: {}\n")
+        result = self.run_script(self.primary, "setup.sh")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("assume-unchanged or skip-worktree could hide changes: compose.yaml", result.stderr)
+
     def test_verify_sandbox_passes_on_an_isolated_sandbox(self) -> None:
         self.rules(sandbox_rules(f"{self.prod}/sandbox", str(self.prod)))
         result = self.run_script(

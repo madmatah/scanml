@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # ScanMyLib — first installation of production, in production's checkout (~/Dev/scanmylib, as
-# long as no production container names another: scripts/lib/stack.py), clean, on a published
-# release (git checkout vX.Y.Z: HEAD is the commit of that tag on origin). Once production exists
-# (its containers or its database), it refuses: new releases are deployed with scripts/deploy.sh,
-# the only way production changes afterwards; a worktree runs the development stack instead
-# (scripts/dev-env.sh, scripts/dev.sh).
+# long as no production container names another: scripts/lib/stack.py), clean (untracked files
+# included, and no file marked assume-unchanged or skip-worktree, as in scripts/deploy.sh), on a
+# published release (git checkout vX.Y.Z: HEAD is the commit of that tag on origin). Once
+# production exists (its containers or its database), it refuses: new releases are deployed with
+# scripts/deploy.sh, the only way production changes afterwards; a worktree runs the development
+# stack instead (scripts/dev-env.sh, scripts/dev.sh).
 #
 # Everything runs in Docker containers: nothing is installed on the system.
 #   1. writes .env from .env.example with production's identity (COMPOSE_PROJECT_NAME=scanmylib...),
@@ -41,6 +42,9 @@ For a development stack here: scripts/dev-env.sh, then scripts/dev.sh up."
 fi
 release_error=$(release_problem "$ROOT") || die "install a published release: $release_error"
 [[ -z $(git status --porcelain --untracked-files=all) ]] || die "install from a clean checkout (git status)"
+hidden=$(hidden_changes "$ROOT")
+[[ -z $hidden ]] || die "files marked assume-unchanged or skip-worktree could hide changes: \
+$(tr '\n' ' ' <<< "$hidden")(git update-index --no-assume-unchanged --no-skip-worktree FILE)"
 docker info --format '{{.ServerVersion}}' > /dev/null 2>&1 || die "cannot reach Docker"
 
 # Production exists once its containers or its database do: deploy.sh takes over from there.

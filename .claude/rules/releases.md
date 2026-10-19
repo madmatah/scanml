@@ -30,9 +30,8 @@ chooses.
 - **Production runs published releases only, from a clean checkout:** `scripts/deploy.sh`, `scripts/setup.sh` and the
   release build of `scripts/build-apk.sh` refuse a HEAD that is not the commit of the tag `vVERSION` on `origin`, and
   the `up` of `scripts/prod.sh` a HEAD that is not the commit of the tag `vVERSION` among the checkout's own tags, which
-  a deployment checked on `origin`. All of them refuse uncommitted or untracked files; all but `scripts/setup.sh` also
-  refuse files marked assume-unchanged or skip-worktree, whose changes `git status` hides. The release app's versionCode
-  comes from `VERSION`, so an app built from a later commit of `main` would have the same one, and phones would not
-  install it.
+  a deployment checked on `origin`. All of them refuse uncommitted or untracked files, and files marked assume-unchanged
+  or skip-worktree, whose changes `git status` hides. The release app's versionCode comes from `VERSION`, so an app
+  built from a later commit of `main` would have the same one, and phones would not install it.
 - **Development builds are versioned from git,** as a pre-release of the next patch (`scripts/lib/version.py`), and the
   dev app's versionCode is the time of its build, so that each build installs over the previous one.

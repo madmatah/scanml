@@ -9,6 +9,7 @@ paths:
   - "android/app/src/testDebug/**"
   - "scripts/tests/**"
   - "scripts/integration_tests/**"
+  - "scripts/lib/parallel_tests.py"
   - "scripts/e2e_test.py"
   - "scripts/verify-sandbox.sh"
   - "server/pyproject.toml"
@@ -63,7 +64,9 @@ rule applies to it. The older files move to the structure area by area, each are
 - **A sequence of steps nests:** each `When …` group continues from the state its parent left.
   - A cheap sequence continues in hooks that run before each test, each level adding one step.
   - A costly sequence runs whole in one hook that runs once, which captures a copy at each step, and its nested groups
-    hold no hook and read those captures.
+    hold no hook and read those captures; where the section of its test framework has each group replay the sequence
+    instead, as [unittest](#unittest) does for the tests of the scripts, each group's hook that runs once takes its own
+    step after its parent's.
   - A chain never mixes the two: a hook that runs once builds only on the ancestors' hooks that run once, since it runs
     before an ancestor's hook that runs before each test: it builds on what an earlier test left, or on nothing, and the
     ancestor's hook then rebuilds that state under every test.
@@ -237,17 +240,21 @@ them with the standard library only, the `python3` of the sandbox's image and th
   is a method named `test_should_…`, the hook before each test `setUp`, and the hook that runs once the class method
   `setUpClass`.
 - **What the act produces is an attribute** that `setUp` sets on `self`, or `setUpClass` on `cls`, named for what it is.
-- **A sequence nests by inheritance:** a parent situation's arrangement and act live in the `setUp` of a base `TestCase`
+- **A sequence nests by inheritance:** a parent situation's arrangement and act live in the hook of a base `TestCase`
   that holds no test, of which the loader runs nothing, named as the situation's class with a leading underscore
   (`_TheXWhenA`). The parent situation's own tests sit in a class of the situation's name that extends it and adds no
-  step (`TheXWhenA`), and each child, named for both situations (`TheXWhenAWhenB`), extends it too, its `setUp` calling
-  `super().setUp()` first, then taking its own step. A `TestCase` that holds tests is never a base, since the loader
-  runs its tests again in every subclass.
+  step (`TheXWhenA`), and each child, named for both situations (`TheXWhenAWhenB`), extends it too, its hook calling
+  its parent's first, `super().setUp()` or `super().setUpClass()`, then taking its own step. A `TestCase` that holds
+  tests is never a base, since the loader runs its tests again in every subclass. The hook is:
+  - `setUp` for a cheap sequence;
+  - `setUpClass` for a costly sequence in the tests of the scripts: each class replays its whole chain once, in the one
+    process the gate runs it in, where `setUpModule` would run the sequence in every process that takes a test of its
+    module; and each step is written once, as [JUnit](#junit)'s step functions are.
 - **`setUpClass` runs once per class, an inherited one included,** and calls its parent's only through
-  `super().setUpClass()`. So a costly act whose tests sit in one class runs in that class's `setUpClass`, and one whose
-  captures the classes of several situations read runs in `setUpModule`, the only hook at a file's top level, which
-  keeps them on the base `TestCase` those classes extend, as one declared `ClassVar` holding a frozen dataclass or a
-  `NamedTuple` of the captures.
+  `super().setUpClass()`. So a costly act whose tests sit in one class runs in that class's `setUpClass`. A costly
+  sequence of the OCR sandbox's tests, which run in one process, runs whole in `setUpModule`, the only hook at a file's
+  top level, which keeps its captures on the base `TestCase` the classes of its situations extend, as one declared
+  `ClassVar` holding a frozen dataclass or a `NamedTuple` of them, and those classes hold no hook.
 - **Teardown is registered with `addCleanup`, `addClassCleanup` or `unittest.addModuleCleanup`, as soon as the hook
   holds what it releases:** `tearDown`, `tearDownClass` and `tearDownModule` do not run when their hook fails, and the
   act runs in the hook.
@@ -272,6 +279,9 @@ them with the standard library only, the `python3` of the sandbox's image and th
   - no real docker CLI is there to resolve a configuration;
   - the temporary directory lies in the home directory, which the scripts refuse;
   - port 8770 is taken, by a running development stack.
+- **In the tests of the scripts, a class with a `setUpClass` skips with a class decorator,** `skipIf` or `skipUnless`,
+  never from its hook: their gate counts the tests of each share, and the tests of a class whose `setUpClass` raised
+  `SkipTest` as tests that unittest did not report, and fails.
 
 For example:
 

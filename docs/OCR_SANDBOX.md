@@ -50,7 +50,7 @@ Always answers immediately (never blocks on a running job).
   "busy": false,                  // a page is being processed right now
   "queue": 0,                     // requests waiting
   "processed": 12,                // pages parsed successfully since container start
-  "versions": { ... },            // content of /opt/sandbox/MANIFEST.json
+  "versions": { ... },            // content of /opt/sandbox/MANIFEST.json ({} when missing, unreadable or not an object)
   "gpu": { "name": "NVIDIA GeForce RTX 3090", "memory_used_mb": 5120, "memory_total_mb": 24576 }  // or null
 }
 ```

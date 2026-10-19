@@ -24,7 +24,7 @@ from scanmylib_ocr.gpu import GpuMonitor
 from scanmylib_ocr.manager import EngineManager
 from scanmylib_ocr.protocol import BAD_IMAGE
 from scanmylib_ocr.runtime import EngineFailure, EngineStartError
-from scanmylib_ocr.supervisor import Supervisor, UnixHTTPServer
+from scanmylib_ocr.supervisor import Supervisor, UnixHTTPServer, read_manifest
 
 JPEG = b"\xff\xd8\xff\xe0" + b"\x00" * 64
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 64
@@ -340,6 +340,25 @@ class IdleUnloadTest(SupervisorTest):
         self.assertEqual(self.health()["engine"]["state"], "ready")
         self.wait_for_state("idle", timeout=3)
         self.assertEqual(self.events, ["start", "parse:p", "stop"])
+
+
+class ManifestTest(unittest.TestCase):
+    def test_versions_are_the_manifest_only_when_it_is_a_json_object(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            settings = replace(Settings.from_env({}), sandbox_dir=tmp)
+
+            def write(content: object) -> None:
+                with open(os.path.join(tmp, "MANIFEST.json"), "w") as manifest:
+                    json.dump(content, manifest)
+
+            with self.subTest("missing"), self.assertLogs("scanmylib_ocr", "WARNING"):
+                self.assertEqual(read_manifest(settings), {})
+            for content in (["model"], "model", None):
+                with self.subTest(content=content), self.assertLogs("scanmylib_ocr", "WARNING"):
+                    write(content)
+                    self.assertEqual(read_manifest(settings), {})
+            write(MANIFEST)
+            self.assertEqual(read_manifest(settings), MANIFEST)
 
 
 class SocketTest(unittest.TestCase):

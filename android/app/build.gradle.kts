@@ -110,7 +110,7 @@ room {
 
 val ktlint: Configuration = configurations.create("ktlint")
 
-// The image of Android that Robolectric runs the screenshot tests on, resolved and verified by Gradle like
+// The image of Android that Robolectric runs the tests of src/testDebug on, resolved and verified by Gradle like
 // any other dependency: Robolectric runs offline and reads it from robolectricDependencyDir, never
 // downloading it itself.
 val robolectricAndroidAll: Configuration = configurations.create("robolectricAndroidAll")
@@ -170,8 +170,8 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.okhttp.mockwebserver)
-    // The screenshot tests (src/testDebug) run on the debug variant, whose manifest declares the activity
-    // that the Compose test rule starts (ui-test-manifest).
+    // The screenshot tests and the other tests of src/testDebug run on the debug variant, whose manifest
+    // declares the activity that the Compose test rule starts (ui-test-manifest).
     testDebugImplementation(libs.androidx.compose.ui.test.junit4)
     testDebugImplementation(libs.robolectric)
     testDebugImplementation(libs.roborazzi)

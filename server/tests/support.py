@@ -248,3 +248,11 @@ class Answer:
 
 def capture_answer(response: httpx2.Response) -> Answer:
     return Answer(response.status_code, response.json())
+
+
+def select_reading_order(document: dict[str, Any]) -> list[dict[str, Any]]:
+    return [page for page in document["pages"] if page["in_document"]]
+
+
+def list_labels(document: dict[str, Any]) -> list[str | None]:
+    return [page["page_label"] for page in select_reading_order(document)]

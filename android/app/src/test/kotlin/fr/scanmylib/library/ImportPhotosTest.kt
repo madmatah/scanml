@@ -1,143 +1,283 @@
 package fr.scanmylib.library
 
-import fr.scanmylib.expectFailure
 import java.io.File
 import java.io.FileNotFoundException
 import java.io.IOException
 import java.time.Instant
-import kotlinx.coroutines.Job
+import kotlin.properties.Delegates
+import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import org.junit.experimental.runners.Enclosed
 import org.junit.rules.TemporaryFolder
+import org.junit.runner.RunWith
 
+@RunWith(Enclosed::class)
 class ImportPhotosTest {
+    @RunWith(Enclosed::class)
+    class TheImportPhotosFunction {
+        class WhenSomePhotosCannotBeRead {
+            @get:Rule
+            val folder = TemporaryFolder()
 
-    @get:Rule
-    val folder = TemporaryFolder()
+            private lateinit var importCounts: PhotoImportResult
+            private lateinit var pageContents: List<String>
+            private lateinit var captureTimes: List<Instant>
+            private lateinit var leftovers: Leftovers
 
-    private val document = "6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b"
-    private val importedAt = Instant.parse("2026-10-12T18:30:00Z")
+            @Before
+            fun importThePhotos() = runTest {
+                val staging = StagingArea(resolveStagingRoot(folder))
+                importCounts = importInto(
+                    staging,
+                    listOf(
+                        PickedPhoto("page 2", at(20)),
+                        // Exceptions a content provider passes across the binder, not only IOException.
+                        PickedPhoto("cloud only", providerError = IllegalStateException("not downloaded")),
+                        PickedPhoto("page 1", at(10)),
+                        PickedPhoto("deleted since", providerError = FileNotFoundException("no such photo")),
+                        PickedPhoto("revoked", providerError = SecurityException("permission revoked")),
+                    ),
+                )
+                val pages = staging.pages(DOCUMENT)
+                pageContents = pages.map { it.file.readText() }
+                captureTimes = pages.map { it.capturedAt }
+                leftovers = listLeftovers(resolveStagingRoot(folder))
+            }
 
-    private val root get() = File(folder.root, "staging")
+            @Test
+            fun `should import the others, and count the photos left out`() {
+                assertEquals(PhotoImportResult(added = 2, unreadable = 3), importCounts)
+            }
 
-    private fun at(seconds: Long): Instant = Instant.parse("2026-10-12T18:00:00Z").plusSeconds(seconds)
+            @Test
+            fun `should add the photos it imports in the order they were taken`() {
+                assertEquals(listOf("page 1", "page 2"), pageContents)
+            }
 
-    /** A photo chosen in the picker: its content and EXIF time, or the error its provider throws. */
-    private data class Photo(val content: String, val takenAt: Instant? = null, val error: Exception? = null)
+            @Test
+            fun `should date each page at the time its photo was taken`() {
+                assertEquals(listOf(at(10), at(20)), captureTimes)
+            }
 
-    private suspend fun import(
-        staging: StagingArea,
-        photos: List<Photo>,
-        check: (File) -> PhotoRejection? = { null },
-        onProgress: (Int) -> Unit = {},
-        copy: (Photo, File) -> Unit = { photo, target ->
-            photo.error?.let { throw it }
-            target.writeText(photo.content)
-        },
-    ): PhotoImportResult = importPhotos(
-        documentId = document,
-        photos = photos,
-        staging = staging,
-        importedAt = importedAt,
-        copy = copy,
-        check = check,
-        takenAt = { file -> photos.first { it.content == file.readText() }.takenAt },
-        onProgress = onProgress,
-    )
+            @Test
+            fun `should leave no copy behind`() {
+                assertEquals(emptyList<File>(), leftovers.copies)
+            }
+        }
 
-    private fun leftovers(): List<File> = File(root, "$document/incoming").listFiles().orEmpty().toList()
+        class WhenTheServerWouldRefuseSomePhotos {
+            @get:Rule
+            val folder = TemporaryFolder()
 
-    @Test
-    fun `an unreadable photo is left out, the others are imported in the order they were taken`() = runTest {
-        val staging = StagingArea(root)
-        val result = import(
-            staging,
-            listOf(
-                Photo("page 2", at(20)),
-                // Exceptions a content provider passes across the binder, not only IOException.
-                Photo("cloud only", error = IllegalStateException("not downloaded")),
-                Photo("page 1", at(10)),
-                Photo("deleted since", error = FileNotFoundException("no such photo")),
-                Photo("revoked", error = SecurityException("permission revoked")),
-            ),
-        )
+            private lateinit var importCounts: PhotoImportResult
+            private lateinit var pageContents: List<String>
+            private lateinit var captureTimes: List<Instant>
+            private lateinit var leftovers: Leftovers
 
-        assertEquals(PhotoImportResult(added = 2, unreadable = 3), result)
-        assertEquals(listOf("page 1", "page 2"), staging.pages(document).map { it.file.readText() })
-        assertEquals(listOf(at(10), at(20)), staging.pages(document).map { it.capturedAt })
-        assertEquals(emptyList<File>(), leftovers())
-    }
+            @Before
+            fun importThePhotos() = runTest {
+                val staging = StagingArea(resolveStagingRoot(folder))
+                val rejections = mapOf(
+                    "heic" to PhotoRejection.UNSUPPORTED_FORMAT,
+                    "gif" to PhotoRejection.UNSUPPORTED_FORMAT,
+                    "panorama" to PhotoRejection.TOO_LARGE,
+                )
+                importCounts = importInto(
+                    staging,
+                    listOf(PickedPhoto("heic"), PickedPhoto("page"), PickedPhoto("panorama"), PickedPhoto("gif")),
+                    check = { file -> rejections[file.readText()] },
+                )
+                val pages = staging.pages(DOCUMENT)
+                pageContents = pages.map { it.file.readText() }
+                captureTimes = pages.map { it.capturedAt }
+                leftovers = listLeftovers(resolveStagingRoot(folder))
+            }
 
-    @Test
-    fun `photos the server would refuse are left out and counted`() = runTest {
-        val staging = StagingArea(root)
-        val result = import(
-            staging,
-            listOf(Photo("heic"), Photo("page"), Photo("panorama"), Photo("gif")),
-            check = { file ->
-                when (file.readText()) {
-                    "heic", "gif" -> PhotoRejection.UNSUPPORTED_FORMAT
-                    "panorama" -> PhotoRejection.TOO_LARGE
-                    else -> null
+            @Test
+            fun `should leave them out, and count them by reason`() {
+                assertEquals(PhotoImportResult(added = 1, unsupported = 2, tooLarge = 1), importCounts)
+            }
+
+            @Test
+            fun `should add only the photo the server accepts`() {
+                assertEquals(listOf("page"), pageContents)
+            }
+
+            @Test
+            fun `should date a photo without a time at the time of the import`() {
+                assertEquals(listOf(IMPORTED_AT), captureTimes)
+            }
+
+            @Test
+            fun `should leave no copy behind`() {
+                assertEquals(emptyList<File>(), leftovers.copies)
+            }
+        }
+
+        class WhenNoPhotoCanBeRead {
+            @get:Rule
+            val folder = TemporaryFolder()
+
+            private lateinit var importThePhotos: suspend () -> PhotoImportResult
+
+            @Before
+            fun keepTheImport() {
+                val staging = StagingArea(resolveStagingRoot(folder))
+                val photos = listOf(PickedPhoto("a"), PickedPhoto("b"))
+                importThePhotos = { importInto(staging, photos, copy = failForWantOfSpace) }
+            }
+
+            @Test
+            fun `should fail with the cause, such as a full storage, rather than leave every photo out`() = runTest {
+                val failure = runCatching { importThePhotos() }.exceptionOrNull()
+                assertTrue("$failure", failure is IOException)
+                assertEquals(NO_SPACE_LEFT, failure?.message)
+            }
+        }
+
+        class WhenNoPhotoCanBeReadAndTheImportIsOver {
+            @get:Rule
+            val folder = TemporaryFolder()
+
+            private lateinit var stagedPages: List<StagedPage>
+            private lateinit var leftovers: Leftovers
+
+            @Before
+            fun importThePhotos() = runTest {
+                val staging = StagingArea(resolveStagingRoot(folder))
+                val photos = listOf(PickedPhoto("a"), PickedPhoto("b"))
+                runCatching { importInto(staging, photos, copy = failForWantOfSpace) }
+                stagedPages = staging.pages(DOCUMENT)
+                leftovers = listLeftovers(resolveStagingRoot(folder))
+            }
+
+            @Test
+            fun `should add no page`() {
+                assertEquals(emptyList<StagedPage>(), stagedPages)
+            }
+
+            @Test
+            fun `should leave no copy behind`() {
+                assertEquals(emptyList<File>(), leftovers.copies)
+            }
+        }
+
+        class WhenOnePhotoOfThreeCannotBeRead {
+            @get:Rule
+            val folder = TemporaryFolder()
+
+            private lateinit var progress: List<Int>
+
+            @Before
+            fun importThePhotos() = runTest {
+                val reported = mutableListOf<Int>()
+                importInto(
+                    StagingArea(resolveStagingRoot(folder)),
+                    listOf(
+                        PickedPhoto("a"),
+                        PickedPhoto("unreadable", providerError = IOException("gone")),
+                        PickedPhoto("c"),
+                    ),
+                    onProgress = { reported += it },
+                )
+                progress = reported.toList()
+            }
+
+            @Test
+            fun `should count every photo in the progress, imported or not`() {
+                assertEquals(listOf(1, 2, 3), progress)
+            }
+        }
+
+        class WhenTheImportIsCanceled {
+            @get:Rule
+            val folder = TemporaryFolder()
+
+            private var isCanceled by Delegates.notNull<Boolean>()
+            private lateinit var stagedPages: List<StagedPage>
+            private lateinit var leftovers: Leftovers
+
+            @Before
+            fun cancelTheImport() = runTest {
+                val staging = StagingArea(resolveStagingRoot(folder))
+                val photoCopiedAsTheUserCancels = "b"
+                val importing = launch {
+                    val importJob = coroutineContext.job
+                    importInto(
+                        staging,
+                        listOf(PickedPhoto("a"), PickedPhoto(photoCopiedAsTheUserCancels), PickedPhoto("c")),
+                        copy = { photo, target ->
+                            target.writeText(photo.content)
+                            if (photo.content == photoCopiedAsTheUserCancels) importJob.cancel()
+                        },
+                    )
                 }
-            },
-        )
+                importing.join()
+                isCanceled = importing.isCancelled
+                stagedPages = staging.pages(DOCUMENT)
+                leftovers = listLeftovers(resolveStagingRoot(folder))
+            }
 
-        assertEquals(PhotoImportResult(added = 1, unsupported = 2, tooLarge = 1), result)
-        // Undated: the time of the import.
-        assertEquals(listOf("page" to importedAt), staging.pages(document).map { it.file.readText() to it.capturedAt })
-        assertEquals(emptyList<File>(), leftovers())
-    }
+            @Test
+            fun `should end as canceled`() {
+                assertTrue(isCanceled)
+            }
 
-    @Test
-    fun `when no photo can be read at all, the import fails with the cause and leaves nothing`() = runTest {
-        val staging = StagingArea(root)
-        val error = expectFailure<IOException> {
-            import(
-                staging,
-                listOf(Photo("a"), Photo("b")),
-                copy = { _, _ -> throw IOException("write failed: ENOSPC (No space left on device)") },
-            )
+            @Test
+            fun `should add no page`() {
+                assertEquals(emptyList<StagedPage>(), stagedPages)
+            }
+
+            @Test
+            fun `should leave no copy behind`() {
+                assertEquals(emptyList<File>(), leftovers.copies)
+            }
         }
-        assertTrue(error.message!!.contains("ENOSPC"))
-        assertTrue(staging.pages(document).isEmpty())
-        assertEquals(emptyList<File>(), leftovers())
-    }
-
-    @Test
-    fun `the progress counts every photo, imported or not`() = runTest {
-        val progress = mutableListOf<Int>()
-        import(
-            StagingArea(root),
-            listOf(Photo("a"), Photo("unreadable", error = IOException("gone")), Photo("c")),
-            onProgress = { progress += it },
-        )
-        assertEquals(listOf(1, 2, 3), progress)
-    }
-
-    @Test
-    fun `a canceled import leaves nothing behind`() = runTest {
-        val staging = StagingArea(root)
-        lateinit var job: Job
-        job = launch {
-            import(
-                staging,
-                listOf(Photo("a"), Photo("b"), Photo("c")),
-                copy = { photo, target ->
-                    target.writeText(photo.content)
-                    // The user cancels while the second photo is being copied.
-                    if (photo.content == "b") job.cancel()
-                },
-            )
-        }
-        job.join()
-
-        assertTrue(job.isCancelled)
-        assertTrue(staging.pages(document).isEmpty())
-        assertEquals(emptyList<File>(), leftovers())
     }
 }
+
+private const val DOCUMENT = "6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b"
+private const val NO_SPACE_LEFT = "write failed: ENOSPC (No space left on device)"
+private val IMPORTED_AT: Instant = Instant.parse("2026-10-12T18:30:00Z")
+
+/** A listing that may be missing, held in a non-null value so that a test fails when no hook ran. */
+private data class Leftovers(val copies: List<File>?)
+
+private data class PickedPhoto(val content: String, val takenAt: Instant? = null, val providerError: Exception? = null)
+
+private fun at(seconds: Long): Instant = Instant.parse("2026-10-12T18:00:00Z").plusSeconds(seconds)
+
+private fun resolveStagingRoot(folder: TemporaryFolder) = File(folder.root, "staging")
+
+private fun listLeftovers(stagingRoot: File): Leftovers =
+    Leftovers(File(stagingRoot, "$DOCUMENT/incoming").listFiles()?.toList())
+
+private fun copyPhoto(photo: PickedPhoto, target: File) {
+    photo.providerError?.let { throw it }
+    target.writeText(photo.content)
+}
+
+private val failForWantOfSpace: suspend (PickedPhoto, File) -> Unit = { _, _ -> throw IOException(NO_SPACE_LEFT) }
+
+private suspend fun importInto(
+    staging: StagingArea,
+    photos: List<PickedPhoto>,
+    check: (File) -> PhotoRejection? = { null },
+    onProgress: (Int) -> Unit = {},
+    copy: suspend (PickedPhoto, File) -> Unit = ::copyPhoto,
+): PhotoImportResult = importPhotos(
+    documentId = DOCUMENT,
+    photos = photos,
+    staging = staging,
+    importedAt = IMPORTED_AT,
+    copy = copy,
+    check = check,
+    takenAt = { file -> photos.first { it.content == file.readText() }.takenAt },
+    onProgress = onProgress,
+)

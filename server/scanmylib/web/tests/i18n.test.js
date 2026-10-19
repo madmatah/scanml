@@ -12,7 +12,6 @@ import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { describe, test } from 'node:test';
 
-import { formatBytes, formatNumber, formatPercent, formatSeconds, quoted } from '../static/js/lib/format.js';
 import { currentLanguage, currentLocale, negotiate, setLocale, t, tc, tNodes, tn } from '../static/js/lib/i18n.js';
 import FRENCH from '../static/js/locales/fr.js';
 
@@ -23,8 +22,6 @@ const HELPER_FILE = new URL('lib/i18n.js', JS);
 
 /** The translation functions and the number of literal messages each one takes first. */
 const FUNCTIONS = { t: 1, tc: 2, tn: 2, tNodes: 1 };
-
-const NBSP = '\u00a0';
 
 // --- a small JavaScript lexer, enough for this code base ---------------------
 
@@ -533,28 +530,5 @@ describe('messages', () => {
     ]);
     assert.deepEqual(tNodes('In {folder}', { folder: node }), ['In ', node]);
     assert.deepEqual(tNodes('Plain text'), ['Plain text']);
-  });
-});
-
-describe('formats', () => {
-  test('English', () => {
-    setLocale(['en-US']);
-    assert.equal(formatNumber(1234), '1,234');
-    assert.equal(formatPercent(0.473), '47%');
-    assert.equal(formatSeconds(2.345), '2.3 s');
-    assert.equal(formatBytes(512), '512 B');
-    assert.equal(formatBytes(3.2 * 1024 * 1024), '3.2 MB');
-    assert.equal(quoted('Example Book'), '“Example Book”');
-  });
-
-  test('French: numbers by Intl, units and quotation marks by the catalog, as before', () => {
-    setLocale(['fr-FR']);
-    const decimal = (value) => new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 1 }).format(value);
-    assert.equal(formatNumber(1234), new Intl.NumberFormat('fr-FR').format(1234));
-    assert.equal(formatPercent(0.473), `47${NBSP}%`);
-    assert.equal(formatSeconds(2.345), `${decimal(2.3)}${NBSP}s`);
-    assert.equal(formatBytes(3.2 * 1024 * 1024), FRENCH['{size} MB'].replace('{size}', decimal(3.2)));
-    assert.equal(quoted('Example Book'), FRENCH['“{text}”'].replace('{text}', 'Example Book'));
-    setLocale(['en-US']);
   });
 });

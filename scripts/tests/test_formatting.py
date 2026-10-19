@@ -7,22 +7,35 @@ Standard library and git only:
 
 from __future__ import annotations
 
+import contextlib
+import functools
 import os
 import stat
 import subprocess
 import sys
 import tempfile
+import types
 import unittest
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 from pathlib import Path
+from typing import ClassVar
 from unittest import mock
 
-from git_environment import build_git_environment
+from git_environment import build_git_environment, run_git
 
 FORMATTING = Path(__file__).resolve().parent.parent / "lib" / "formatting.py"
 sys.path.insert(0, str(FORMATTING.parent))
 import formatting  # noqa: E402 (scripts/lib/formatting.py, found once scripts/lib/ is on the path)
 
 PATHSPECS = ("server/*.py", "scripts/*.py", "scripts/*.sh")
+COMMITTED_FILES = {
+    "scripts/dev.sh": "dev\n",
+    "scripts/lib/common.sh": "common\n",
+    "scripts/lib/stack.py": "stack\n",
+    "server/app.py": "app\n",
+    "server/requirements.lock": "lock\n",
+}
 HIDING_TEXTS = {
     "backspace": "\N{BACKSPACE}",
     "concealing escape sequence": "\N{ESCAPE}[8m",
@@ -50,427 +63,998 @@ HIDING_TEXTS = {
     "noncharacter": chr(0xFDD0),
 }
 CONCEALING_SEQUENCE_OF_8_BITS = b"\x9b8m"
+LARGEST_GROWN_SIZE_BYTES_OF_A_THOUSAND_BYTE_FILE = 2 * 1000 + 64 * 1024
 
 
-class FormattingTest(unittest.TestCase):
-    def setUp(self) -> None:
-        directory = tempfile.TemporaryDirectory(prefix="scanmylib-formatting-")
-        self.addCleanup(directory.cleanup)
-        self.base = Path(directory.name).resolve()
-        self.checkout = self.base / "checkout"
-        self.tree = self.base / "copy" / "tree"
-        self.digests_file = self.base / "copy" / "digests.json"
-        self.elsewhere = self.base / "elsewhere"
-        for path in (self.checkout / "scripts" / "lib", self.tree, self.elsewhere):
-            path.mkdir(parents=True)
-        self.git("init", "--quiet", "--initial-branch=main")
-        self.write("scripts/dev.sh", "dev\n")
-        self.write("scripts/lib/common.sh", "common\n")
-        self.write("scripts/lib/stack.py", "stack\n")
-        self.write("server/app.py", "app\n")
-        self.write("server/requirements.lock", "lock\n")
-        self.git("add", ".")
-        self.git("commit", "--quiet", "--message", "Example")
+@dataclass(frozen=True)
+class Layout:
+    checkout: Path
+    tree: Path
+    digests_file: Path
+    elsewhere: Path
 
-    def git(self, *args: str) -> str:
-        return subprocess.run(
-            ["git", *args],
-            cwd=self.checkout,
-            env=build_git_environment(os.environ),
-            check=True,
-            capture_output=True,
-            text=True,
-        ).stdout
 
-    def write(self, path: str, text: str) -> None:
-        (self.checkout / path).parent.mkdir(parents=True, exist_ok=True)
-        (self.checkout / path).write_text(text)
+class MakeCopyFailed(RuntimeError):
+    pass
 
-    def run_formatting(self, *args: str) -> subprocess.CompletedProcess[bytes]:
-        return subprocess.run(
-            [sys.executable, str(FORMATTING), *args],
-            env=build_git_environment(os.environ),
-            capture_output=True,
-            check=False,
-        )
 
-    def run_make_copy(self) -> subprocess.CompletedProcess[bytes]:
-        return self.run_formatting("make-copy", str(self.checkout), str(self.tree), str(self.digests_file), *PATHSPECS)
+def write_file(root: Path, path: str, text: str) -> None:
+    (root / path).parent.mkdir(parents=True, exist_ok=True)
+    (root / path).write_text(text)
 
-    def make_copy(self) -> list[str]:
-        copy_run = self.run_make_copy()
-        self.assertEqual(copy_run.returncode, 0, copy_run.stderr)
-        return [os.fsdecode(path) for path in copy_run.stdout.split(b"\0") if path]
 
-    def bring_back(self) -> subprocess.CompletedProcess[bytes]:
-        return self.run_formatting("bring-back", str(self.checkout), str(self.tree), str(self.digests_file))
+def make_layout(base: Path) -> Layout:
+    layout = Layout(base / "checkout", base / "copy" / "tree", base / "copy" / "digests.json", base / "elsewhere")
+    for directory in (layout.checkout / "scripts" / "lib", layout.tree, layout.elsewhere):
+        directory.mkdir(parents=True)
+    run_git(layout.checkout, "init", "--quiet", "--initial-branch=main")
+    for path, text in COMMITTED_FILES.items():
+        write_file(layout.checkout, path, text)
+    run_git(layout.checkout, "add", ".")
+    run_git(layout.checkout, "commit", "--quiet", "--message", "Example")
+    return layout
 
-    def format_copy(self, path: str, text: str) -> None:
-        (self.tree / path).parent.mkdir(parents=True, exist_ok=True)
-        (self.tree / path).write_text(text)
 
-    def read(self, path: str) -> str:
-        return (self.checkout / path).read_text()
+def make_temporary_directory(test_case: type[unittest.TestCase]) -> Path:
+    return Path(test_case.enterClassContext(tempfile.TemporaryDirectory(prefix="scanmylib-formatting-"))).resolve()
 
-    def replace_library_with_link(self, root: Path) -> None:
-        library = root / "scripts" / "lib"
-        for path in library.iterdir():
-            path.unlink()
-        library.rmdir()
-        library.symlink_to(self.elsewhere)
 
-    def assert_nothing_came_back(self, refusal: bytes) -> None:
-        bring_back_run = self.bring_back()
-        self.assertEqual(bring_back_run.returncode, 1)
-        self.assertIn(refusal, bring_back_run.stderr)
-        self.assertEqual((self.checkout / "scripts" / "dev.sh").read_bytes(), b"dev\n")
+def run_formatting(*arguments: str) -> subprocess.CompletedProcess[bytes]:
+    return subprocess.run(
+        [sys.executable, str(FORMATTING), *arguments],
+        env=build_git_environment(os.environ),
+        capture_output=True,
+        check=False,
+    )
 
-    def test_the_shell_scripts_are_those_of_the_working_tree_tracked_or_not(self) -> None:
-        self.write("scripts/new.sh", "new\n")
-        self.write("scripts/na\N{LATIN SMALL LETTER I WITH DIAERESIS}ve.sh", "naive\n")
-        (self.checkout / "scripts" / "lib" / "common.sh").unlink()
-        listing_run = self.run_formatting("shell-scripts", str(self.checkout))
-        self.assertEqual(listing_run.returncode, 0, listing_run.stderr)
+
+def run_make_copy(layout: Layout) -> subprocess.CompletedProcess[bytes]:
+    return run_formatting("make-copy", str(layout.checkout), str(layout.tree), str(layout.digests_file), *PATHSPECS)
+
+
+def make_copy(layout: Layout) -> None:
+    copy_run = run_make_copy(layout)
+    if copy_run.returncode != 0:
+        raise MakeCopyFailed(f"make-copy failed: {os.fsdecode(copy_run.stderr)}")
+
+
+def run_bring_back(layout: Layout) -> subprocess.CompletedProcess[bytes]:
+    return run_formatting("bring-back", str(layout.checkout), str(layout.tree), str(layout.digests_file))
+
+
+def read_printed_paths(printed: bytes) -> list[str]:
+    return [os.fsdecode(path) for path in printed.split(b"\0") if path]
+
+
+def replace_library_with_link(root: Path, target: Path) -> None:
+    library = root / "scripts" / "lib"
+    for path in library.iterdir():
+        path.unlink()
+    library.rmdir()
+    library.symlink_to(target)
+
+
+def make_replace_failing_on(name: str) -> Callable[[str | os.PathLike[str], str | os.PathLike[str]], None]:
+    replace = os.replace
+
+    def replace_unless_named(source: str | os.PathLike[str], target: str | os.PathLike[str]) -> None:
+        if Path(target).name == name:
+            raise OSError("disk full")
+        replace(source, target)
+
+    return replace_unless_named
+
+
+def format_two_files(base: Path) -> Layout:
+    layout = make_layout(base)
+    make_copy(layout)
+    write_file(layout.tree, "scripts/dev.sh", "formatted\n")
+    write_file(layout.tree, "server/app.py", "formatted\n")
+    return layout
+
+
+def grow_the_copy_of_a_thousand_byte_file(layout: Layout, size_bytes: int) -> None:
+    line_of_a_hundred_bytes = "#" * 99 + "\n"
+    write_file(layout.checkout, "server/app.py", line_of_a_hundred_bytes * 10)
+    make_copy(layout)
+    full_lines, remainder_bytes = divmod(size_bytes, 100)
+    write_file(layout.tree, "server/app.py", line_of_a_hundred_bytes * full_lines + "#" * (remainder_bytes - 1) + "\n")
+
+
+class TheShellScriptsCommandWhenScriptsAreAddedAndRemovedInTheWorkingTree(unittest.TestCase):
+    listing_run: ClassVar[subprocess.CompletedProcess[bytes]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        layout = make_layout(make_temporary_directory(cls))
+        write_file(layout.checkout, "scripts/new.sh", "new\n")
+        write_file(layout.checkout, "scripts/na\N{LATIN SMALL LETTER I WITH DIAERESIS}ve.sh", "naive\n")
+        (layout.checkout / "scripts" / "lib" / "common.sh").unlink()
+        cls.listing_run = run_formatting("shell-scripts", str(layout.checkout))
+
+    def test_should_exit_with_zero(self) -> None:
+        self.assertEqual(self.listing_run.returncode, 0, self.listing_run.stderr)
+
+    def test_should_list_the_shell_scripts_of_the_working_tree_whether_git_tracks_them_or_not(self) -> None:
         self.assertEqual(
-            sorted(os.fsdecode(path) for path in listing_run.stdout.split(b"\0") if path),
+            sorted(read_printed_paths(self.listing_run.stdout)),
             ["scripts/dev.sh", "scripts/na\N{LATIN SMALL LETTER I WITH DIAERESIS}ve.sh", "scripts/new.sh"],
         )
 
-    def test_git_s_own_message_explains_a_failure(self) -> None:
-        listing_run = self.run_formatting("shell-scripts", str(self.base / "missing"))
-        self.assertEqual(listing_run.returncode, 1)
-        self.assertIn(b"fatal: cannot change to", listing_run.stderr)
-        self.assertNotIn(b"Traceback", listing_run.stderr)
 
-    def test_a_digests_file_that_cannot_be_read_fails_with_a_message_not_a_traceback(self) -> None:
-        bring_back_run = self.bring_back()
-        self.assertEqual(bring_back_run.returncode, 1)
-        self.assertIn(b"digests.json", bring_back_run.stderr)
-        self.assertNotIn(b"Traceback", bring_back_run.stderr)
+class TheShellScriptsCommandWhenTheCheckoutIsMissing(unittest.TestCase):
+    listing_run: ClassVar[subprocess.CompletedProcess[bytes]]
 
-    def test_files_that_git_diff_would_not_show_are_refused(self) -> None:
-        for flag, path in (("--assume-unchanged", "scripts/dev.sh"), ("--skip-worktree", "server/app.py")):
-            with self.subTest(flag=flag):
-                self.git("update-index", flag, path)
-                check_run = self.run_formatting("check-hidden", str(self.checkout), "server", "scripts")
-                self.assertEqual(check_run.returncode, 1)
-                self.assertIn(path.encode(), check_run.stderr)
-                self.git("update-index", flag.replace("--", "--no-", 1), path)
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.listing_run = run_formatting("shell-scripts", str(make_temporary_directory(cls) / "missing"))
 
-    def test_the_copy_holds_the_tracked_files_the_pathspecs_name(self) -> None:
-        self.assertEqual(self.make_copy(), ["scripts/dev.sh", "scripts/lib/common.sh"])
-        copied_files = sorted(str(path.relative_to(self.tree)) for path in self.tree.rglob("*.*"))
+    def test_should_refuse_with_git_s_own_message(self) -> None:
+        self.assertEqual(self.listing_run.returncode, 1)
+        self.assertIn(b"fatal: cannot change to", self.listing_run.stderr)
+
+    def test_should_print_no_traceback(self) -> None:
+        self.assertNotIn(b"Traceback", self.listing_run.stderr)
+
+
+class TheCheckHiddenCommandWhenAFileIsHiddenFromGitDiff(unittest.TestCase):
+    hidden_files: ClassVar[Mapping[str, str]] = types.MappingProxyType(
+        {"--assume-unchanged": "scripts/dev.sh", "--skip-worktree": "server/app.py"}
+    )
+    check_runs: ClassVar[dict[str, subprocess.CompletedProcess[bytes]]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        layout = make_layout(make_temporary_directory(cls))
+        cls.check_runs = {}
+        for flag, path in cls.hidden_files.items():
+            run_git(layout.checkout, "update-index", flag, path)
+            cls.check_runs[flag] = run_formatting("check-hidden", str(layout.checkout), "server", "scripts")
+            run_git(layout.checkout, "update-index", flag.replace("--", "--no-", 1), path)
+
+    def test_should_refuse_it_naming_it_so_that_git_diff_shows_whatever_the_formatters_change(self) -> None:
+        for flag, path in self.hidden_files.items():
+            with self.subTest(flag):
+                self.assertEqual(self.check_runs[flag].returncode, 1)
+                self.assertIn(path.encode(), self.check_runs[flag].stderr)
+
+
+class TheMakeCopyCommandWhenTheWorkingTreeHoldsTheCommittedFiles(unittest.TestCase):
+    copy_run: ClassVar[subprocess.CompletedProcess[bytes]]
+    copied_files: ClassVar[list[str]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        layout = make_layout(make_temporary_directory(cls))
+        cls.copy_run = run_make_copy(layout)
+        cls.copied_files = sorted(str(path.relative_to(layout.tree)) for path in layout.tree.rglob("*.*"))
+
+    def test_should_exit_with_zero(self) -> None:
+        self.assertEqual(self.copy_run.returncode, 0, self.copy_run.stderr)
+
+    def test_should_print_the_shell_scripts_it_copied(self) -> None:
+        self.assertEqual(read_printed_paths(self.copy_run.stdout), ["scripts/dev.sh", "scripts/lib/common.sh"])
+
+    def test_should_copy_the_tracked_files_the_pathspecs_name_and_no_other(self) -> None:
         self.assertEqual(
-            copied_files, ["scripts/dev.sh", "scripts/lib/common.sh", "scripts/lib/stack.py", "server/app.py"]
+            self.copied_files, ["scripts/dev.sh", "scripts/lib/common.sh", "scripts/lib/stack.py", "server/app.py"]
         )
 
-    def test_the_copy_leaves_out_untracked_files_and_says_so(self) -> None:
-        self.write("scripts/local.sh", "local\n")
-        copy_run = self.run_make_copy()
-        self.assertEqual(copy_run.returncode, 0, copy_run.stderr)
-        self.assertFalse((self.tree / "scripts" / "local.sh").exists())
-        self.assertIn(b"scripts/local.sh", copy_run.stderr)
 
-    def test_the_copy_leaves_out_the_files_of_a_tracked_directory_turned_into_a_link_and_says_so(self) -> None:
+class TheMakeCopyCommandWhenAFileIsUntracked(unittest.TestCase):
+    copy_run: ClassVar[subprocess.CompletedProcess[bytes]]
+    is_copied: ClassVar[bool]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        layout = make_layout(make_temporary_directory(cls))
+        write_file(layout.checkout, "scripts/local.sh", "local\n")
+        cls.copy_run = run_make_copy(layout)
+        cls.is_copied = (layout.tree / "scripts" / "local.sh").exists()
+
+    def test_should_exit_with_zero(self) -> None:
+        self.assertEqual(self.copy_run.returncode, 0, self.copy_run.stderr)
+
+    def test_should_leave_it_out_of_the_copy(self) -> None:
+        self.assertFalse(self.is_copied)
+
+    def test_should_say_it_left_it_out(self) -> None:
+        self.assertIn(b"scripts/local.sh", self.copy_run.stderr)
+
+
+class TheMakeCopyCommandWhenATrackedDirectoryIsALink(unittest.TestCase):
+    copy_run: ClassVar[subprocess.CompletedProcess[bytes]]
+    is_copied: ClassVar[bool]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        layout = make_layout(make_temporary_directory(cls))
         for name in ("common.sh", "stack.py"):
-            (self.elsewhere / name).write_text("elsewhere\n")
-        self.replace_library_with_link(self.checkout)
-        copy_run = self.run_make_copy()
-        self.assertEqual(copy_run.returncode, 0, copy_run.stderr)
-        self.assertFalse((self.tree / "scripts" / "lib" / "common.sh").exists())
-        self.assertIn(b"scripts/lib/common.sh", copy_run.stderr)
+            (layout.elsewhere / name).write_text("elsewhere\n")
+        replace_library_with_link(layout.checkout, layout.elsewhere)
+        cls.copy_run = run_make_copy(layout)
+        cls.is_copied = (layout.tree / "scripts" / "lib" / "common.sh").exists()
 
-    def test_a_tracked_link_is_neither_copied_nor_written_through(self) -> None:
-        (self.elsewhere / "target.sh").write_text("target\n")
-        (self.checkout / "scripts" / "linked.sh").symlink_to(self.elsewhere / "target.sh")
-        self.git("add", "scripts/linked.sh")
-        self.git("commit", "--quiet", "--message", "Link")
-        self.make_copy()
-        self.format_copy("scripts/linked.sh", "formatted\n")
-        self.assertEqual(self.bring_back().returncode, 0)
-        self.assertEqual((self.elsewhere / "target.sh").read_text(), "target\n")
+    def test_should_exit_with_zero(self) -> None:
+        self.assertEqual(self.copy_run.returncode, 0, self.copy_run.stderr)
 
-    def test_a_tracked_file_deleted_from_the_working_tree_is_left_out_of_the_copy(self) -> None:
-        (self.checkout / "scripts" / "dev.sh").unlink()
-        self.assertEqual(self.make_copy(), ["scripts/lib/common.sh"])
+    def test_should_leave_its_files_out_of_the_copy(self) -> None:
+        self.assertFalse(self.is_copied)
 
-    def test_a_tracked_file_deleted_from_the_working_tree_is_not_reported_as_left_out(self) -> None:
-        (self.checkout / "scripts" / "dev.sh").unlink()
-        copy_run = self.run_make_copy()
-        self.assertEqual(copy_run.returncode, 0, copy_run.stderr)
-        self.assertNotIn(b"scripts/dev.sh", copy_run.stderr)
+    def test_should_say_it_left_them_out(self) -> None:
+        self.assertIn(b"scripts/lib/common.sh", self.copy_run.stderr)
 
-    def test_what_a_formatter_changes_comes_back(self) -> None:
-        self.make_copy()
-        self.format_copy("scripts/lib/stack.py", "formatted\n")
-        self.assertEqual(self.bring_back().returncode, 0)
-        self.assertEqual(self.read("scripts/lib/stack.py"), "formatted\n")
 
-    def test_a_file_that_comes_back_keeps_its_mode(self) -> None:
-        script = self.checkout / "scripts" / "dev.sh"
+class TheMakeCopyCommandWhenATrackedFileIsDeletedFromTheWorkingTree(unittest.TestCase):
+    copy_run: ClassVar[subprocess.CompletedProcess[bytes]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        layout = make_layout(make_temporary_directory(cls))
+        (layout.checkout / "scripts" / "dev.sh").unlink()
+        cls.copy_run = run_make_copy(layout)
+
+    def test_should_exit_with_zero(self) -> None:
+        self.assertEqual(self.copy_run.returncode, 0, self.copy_run.stderr)
+
+    def test_should_leave_it_out_of_the_copy(self) -> None:
+        self.assertEqual(read_printed_paths(self.copy_run.stdout), ["scripts/lib/common.sh"])
+
+    def test_should_not_report_it_as_left_out(self) -> None:
+        self.assertNotIn(b"scripts/dev.sh", self.copy_run.stderr)
+
+
+class TheBringBackCommandWhenTheDigestsFileCannotBeRead(unittest.TestCase):
+    bring_back_run: ClassVar[subprocess.CompletedProcess[bytes]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        layout = make_layout(make_temporary_directory(cls))
+        cls.bring_back_run = run_bring_back(layout)
+
+    def test_should_refuse_naming_the_digests_file(self) -> None:
+        self.assertEqual(self.bring_back_run.returncode, 1)
+        self.assertIn(b"digests.json", self.bring_back_run.stderr)
+
+    def test_should_print_no_traceback(self) -> None:
+        self.assertNotIn(b"Traceback", self.bring_back_run.stderr)
+
+
+class TheBringBackCommandWhenATrackedFileIsALink(unittest.TestCase):
+    bring_back_run: ClassVar[subprocess.CompletedProcess[bytes]]
+    target: ClassVar[str]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        layout = make_layout(make_temporary_directory(cls))
+        (layout.elsewhere / "target.sh").write_text("target\n")
+        (layout.checkout / "scripts" / "linked.sh").symlink_to(layout.elsewhere / "target.sh")
+        run_git(layout.checkout, "add", "scripts/linked.sh")
+        run_git(layout.checkout, "commit", "--quiet", "--message", "Link")
+        make_copy(layout)
+        write_file(layout.tree, "scripts/linked.sh", "formatted\n")
+        cls.bring_back_run = run_bring_back(layout)
+        cls.target = (layout.elsewhere / "target.sh").read_text()
+
+    def test_should_exit_with_zero(self) -> None:
+        self.assertEqual(self.bring_back_run.returncode, 0, self.bring_back_run.stderr)
+
+    def test_should_never_write_through_the_link(self) -> None:
+        self.assertEqual(self.target, "target\n")
+
+
+class TheBringBackCommandWhenAFormatterChangesAFile(unittest.TestCase):
+    bring_back_run: ClassVar[subprocess.CompletedProcess[bytes]]
+    stack_module: ClassVar[str]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        layout = make_layout(make_temporary_directory(cls))
+        make_copy(layout)
+        write_file(layout.tree, "scripts/lib/stack.py", "formatted\n")
+        cls.bring_back_run = run_bring_back(layout)
+        cls.stack_module = (layout.checkout / "scripts" / "lib" / "stack.py").read_text()
+
+    def test_should_exit_with_zero(self) -> None:
+        self.assertEqual(self.bring_back_run.returncode, 0, self.bring_back_run.stderr)
+
+    def test_should_bring_the_change_back(self) -> None:
+        self.assertEqual(self.stack_module, "formatted\n")
+
+
+class TheBringBackCommandWhenAFormatterChangesAnExecutableFile(unittest.TestCase):
+    bring_back_run: ClassVar[subprocess.CompletedProcess[bytes]]
+    mode: ClassVar[int]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        layout = make_layout(make_temporary_directory(cls))
+        script = layout.checkout / "scripts" / "dev.sh"
         script.chmod(0o755)
-        self.make_copy()
-        self.format_copy("scripts/dev.sh", "formatted\n")
-        self.assertEqual(self.bring_back().returncode, 0)
-        self.assertEqual(stat.S_IMODE(script.stat().st_mode), 0o755)
+        make_copy(layout)
+        write_file(layout.tree, "scripts/dev.sh", "formatted\n")
+        cls.bring_back_run = run_bring_back(layout)
+        cls.mode = stat.S_IMODE(script.stat().st_mode)
 
-    def test_a_file_a_formatter_creates_never_comes_back(self) -> None:
-        self.make_copy()
-        self.format_copy("scripts/test_planted.py", "planted\n")
-        self.assertEqual(self.bring_back().returncode, 0)
-        self.assertFalse((self.checkout / "scripts" / "test_planted.py").exists())
+    def test_should_exit_with_zero(self) -> None:
+        self.assertEqual(self.bring_back_run.returncode, 0, self.bring_back_run.stderr)
 
-    def test_a_file_the_pathspecs_leave_out_never_comes_back(self) -> None:
-        self.make_copy()
-        self.format_copy("server/requirements.lock", "formatted\n")
-        self.assertEqual(self.bring_back().returncode, 0)
-        self.assertEqual(self.read("server/requirements.lock"), "lock\n")
+    def test_should_keep_its_mode(self) -> None:
+        self.assertEqual(self.mode, 0o755)
 
-    def test_nothing_comes_back_once_a_formatter_turns_a_file_into_a_link(self) -> None:
-        (self.elsewhere / "secret").write_text("secret\n")
-        self.make_copy()
-        self.format_copy("scripts/dev.sh", "formatted\n")
-        common = self.tree / "scripts" / "lib" / "common.sh"
+
+class TheBringBackCommandWhenAFormatterCreatesAFile(unittest.TestCase):
+    bring_back_run: ClassVar[subprocess.CompletedProcess[bytes]]
+    is_brought_back: ClassVar[bool]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        layout = make_layout(make_temporary_directory(cls))
+        make_copy(layout)
+        write_file(layout.tree, "scripts/test_planted.py", "planted\n")
+        cls.bring_back_run = run_bring_back(layout)
+        cls.is_brought_back = (layout.checkout / "scripts" / "test_planted.py").exists()
+
+    def test_should_exit_with_zero(self) -> None:
+        self.assertEqual(self.bring_back_run.returncode, 0, self.bring_back_run.stderr)
+
+    def test_should_never_bring_it_back_so_that_nothing_a_formatter_plants_reaches_the_checkout(self) -> None:
+        self.assertFalse(self.is_brought_back)
+
+
+class TheBringBackCommandWhenAFormatterChangesAFileThePathspecsLeaveOut(unittest.TestCase):
+    bring_back_run: ClassVar[subprocess.CompletedProcess[bytes]]
+    lock: ClassVar[str]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        layout = make_layout(make_temporary_directory(cls))
+        make_copy(layout)
+        write_file(layout.tree, "server/requirements.lock", "formatted\n")
+        cls.bring_back_run = run_bring_back(layout)
+        cls.lock = (layout.checkout / "server" / "requirements.lock").read_text()
+
+    def test_should_exit_with_zero(self) -> None:
+        self.assertEqual(self.bring_back_run.returncode, 0, self.bring_back_run.stderr)
+
+    def test_should_never_bring_it_back(self) -> None:
+        self.assertEqual(self.lock, "lock\n")
+
+
+class TheBringBackCommandWhenAFormatterTurnsAFileIntoALink(unittest.TestCase):
+    bring_back_run: ClassVar[subprocess.CompletedProcess[bytes]]
+    dev_script: ClassVar[bytes]
+    common_library: ClassVar[str]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        layout = make_layout(make_temporary_directory(cls))
+        (layout.elsewhere / "secret").write_text("secret\n")
+        make_copy(layout)
+        write_file(layout.tree, "scripts/dev.sh", "formatted\n")
+        common = layout.tree / "scripts" / "lib" / "common.sh"
         common.unlink()
-        common.symlink_to(self.elsewhere / "secret")
-        self.assert_nothing_came_back(b"scripts/lib/common.sh into something other than a file")
-        self.assertEqual(self.read("scripts/lib/common.sh"), "common\n")
+        common.symlink_to(layout.elsewhere / "secret")
+        cls.bring_back_run = run_bring_back(layout)
+        cls.dev_script = (layout.checkout / "scripts" / "dev.sh").read_bytes()
+        cls.common_library = (layout.checkout / "scripts" / "lib" / "common.sh").read_text()
 
-    def test_nothing_comes_back_once_a_formatter_turns_a_file_into_a_directory(self) -> None:
-        self.make_copy()
-        self.format_copy("scripts/dev.sh", "formatted\n")
-        common = self.tree / "scripts" / "lib" / "common.sh"
+    def test_should_refuse_since_the_copy_of_the_file_is_no_longer_a_file(self) -> None:
+        self.assertEqual(self.bring_back_run.returncode, 1)
+        self.assertIn(b"scripts/lib/common.sh into something other than a file", self.bring_back_run.stderr)
+
+    def test_should_bring_back_nothing(self) -> None:
+        self.assertEqual(self.dev_script, b"dev\n")
+
+    def test_should_leave_the_file_of_the_checkout_as_it_was(self) -> None:
+        self.assertEqual(self.common_library, "common\n")
+
+
+class TheBringBackCommandWhenAFormatterTurnsAFileIntoADirectory(unittest.TestCase):
+    bring_back_run: ClassVar[subprocess.CompletedProcess[bytes]]
+    dev_script: ClassVar[bytes]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        layout = make_layout(make_temporary_directory(cls))
+        make_copy(layout)
+        write_file(layout.tree, "scripts/dev.sh", "formatted\n")
+        common = layout.tree / "scripts" / "lib" / "common.sh"
         common.unlink()
         common.mkdir()
-        self.assert_nothing_came_back(b"scripts/lib/common.sh into something other than a file")
+        cls.bring_back_run = run_bring_back(layout)
+        cls.dev_script = (layout.checkout / "scripts" / "dev.sh").read_bytes()
 
-    def test_nothing_comes_back_once_a_formatter_turns_a_directory_into_a_link(self) -> None:
+    def test_should_refuse_since_the_copy_of_the_file_is_no_longer_a_file(self) -> None:
+        self.assertEqual(self.bring_back_run.returncode, 1)
+        self.assertIn(b"scripts/lib/common.sh into something other than a file", self.bring_back_run.stderr)
+
+    def test_should_bring_back_nothing(self) -> None:
+        self.assertEqual(self.dev_script, b"dev\n")
+
+
+class TheBringBackCommandWhenAFormatterTurnsADirectoryIntoALink(unittest.TestCase):
+    bring_back_run: ClassVar[subprocess.CompletedProcess[bytes]]
+    dev_script: ClassVar[bytes]
+    common_library: ClassVar[str]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        layout = make_layout(make_temporary_directory(cls))
         for name in ("common.sh", "stack.py"):
-            (self.elsewhere / name).write_text("elsewhere\n")
-        self.make_copy()
-        self.format_copy("scripts/dev.sh", "formatted\n")
-        self.replace_library_with_link(self.tree)
-        self.assert_nothing_came_back(b"into something other than a file")
-        self.assertEqual(self.read("scripts/lib/common.sh"), "common\n")
+            (layout.elsewhere / name).write_text("elsewhere\n")
+        make_copy(layout)
+        write_file(layout.tree, "scripts/dev.sh", "formatted\n")
+        replace_library_with_link(layout.tree, layout.elsewhere)
+        cls.bring_back_run = run_bring_back(layout)
+        cls.dev_script = (layout.checkout / "scripts" / "dev.sh").read_bytes()
+        cls.common_library = (layout.checkout / "scripts" / "lib" / "common.sh").read_text()
 
-    def test_nothing_comes_back_once_a_file_changes_in_the_checkout_meanwhile(self) -> None:
-        self.make_copy()
-        self.format_copy("scripts/lib/stack.py", "formatted\n")
-        self.format_copy("server/app.py", "formatted\n")
-        self.write("scripts/lib/stack.py", "edited meanwhile\n")
-        bring_back_run = self.bring_back()
-        self.assertEqual(bring_back_run.returncode, 1)
-        self.assertIn(b"scripts/lib/stack.py changed in the checkout", bring_back_run.stderr)
-        self.assertEqual(self.read("scripts/lib/stack.py"), "edited meanwhile\n")
-        self.assertEqual(self.read("server/app.py"), "app\n")
+    def test_should_refuse_since_the_copies_of_its_files_are_no_longer_files(self) -> None:
+        self.assertEqual(self.bring_back_run.returncode, 1)
+        self.assertIn(b"into something other than a file", self.bring_back_run.stderr)
 
-    def test_nothing_comes_back_once_a_file_of_the_checkout_becomes_a_link_meanwhile(self) -> None:
-        (self.elsewhere / "dev.sh").write_text("dev\n")
-        self.make_copy()
-        self.format_copy("scripts/dev.sh", "formatted\n")
-        (self.checkout / "scripts" / "dev.sh").unlink()
-        (self.checkout / "scripts" / "dev.sh").symlink_to(self.elsewhere / "dev.sh")
-        bring_back_run = self.bring_back()
-        self.assertEqual(bring_back_run.returncode, 1)
-        self.assertIn(b"scripts/dev.sh changed in the checkout", bring_back_run.stderr)
-        self.assertEqual((self.elsewhere / "dev.sh").read_text(), "dev\n")
+    def test_should_bring_back_nothing(self) -> None:
+        self.assertEqual(self.dev_script, b"dev\n")
 
-    def test_nothing_comes_back_once_a_directory_of_the_checkout_becomes_a_link_meanwhile(self) -> None:
+    def test_should_leave_the_files_of_the_directory_as_they_were(self) -> None:
+        self.assertEqual(self.common_library, "common\n")
+
+
+class TheBringBackCommandWhenAFileAFormatterChangedChangesInTheCheckoutMeanwhile(unittest.TestCase):
+    bring_back_run: ClassVar[subprocess.CompletedProcess[bytes]]
+    stack_module: ClassVar[str]
+    app_module: ClassVar[str]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        layout = make_layout(make_temporary_directory(cls))
+        make_copy(layout)
+        write_file(layout.tree, "scripts/lib/stack.py", "formatted\n")
+        write_file(layout.tree, "server/app.py", "formatted\n")
+        write_file(layout.checkout, "scripts/lib/stack.py", "edited meanwhile\n")
+        cls.bring_back_run = run_bring_back(layout)
+        cls.stack_module = (layout.checkout / "scripts" / "lib" / "stack.py").read_text()
+        cls.app_module = (layout.checkout / "server" / "app.py").read_text()
+
+    def test_should_refuse_since_the_file_changed_in_the_checkout(self) -> None:
+        self.assertEqual(self.bring_back_run.returncode, 1)
+        self.assertIn(b"scripts/lib/stack.py changed in the checkout", self.bring_back_run.stderr)
+
+    def test_should_keep_the_edit_of_the_checkout(self) -> None:
+        self.assertEqual(self.stack_module, "edited meanwhile\n")
+
+    def test_should_bring_back_nothing(self) -> None:
+        self.assertEqual(self.app_module, "app\n")
+
+
+class TheBringBackCommandWhenAFileOfTheCheckoutBecomesALinkMeanwhile(unittest.TestCase):
+    bring_back_run: ClassVar[subprocess.CompletedProcess[bytes]]
+    target: ClassVar[str]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        layout = make_layout(make_temporary_directory(cls))
+        (layout.elsewhere / "dev.sh").write_text("dev\n")
+        make_copy(layout)
+        write_file(layout.tree, "scripts/dev.sh", "formatted\n")
+        (layout.checkout / "scripts" / "dev.sh").unlink()
+        (layout.checkout / "scripts" / "dev.sh").symlink_to(layout.elsewhere / "dev.sh")
+        cls.bring_back_run = run_bring_back(layout)
+        cls.target = (layout.elsewhere / "dev.sh").read_text()
+
+    def test_should_refuse_since_the_file_changed_in_the_checkout(self) -> None:
+        self.assertEqual(self.bring_back_run.returncode, 1)
+        self.assertIn(b"scripts/dev.sh changed in the checkout", self.bring_back_run.stderr)
+
+    def test_should_never_write_through_the_link(self) -> None:
+        self.assertEqual(self.target, "dev\n")
+
+
+class TheBringBackCommandWhenADirectoryOfTheCheckoutBecomesALinkMeanwhile(unittest.TestCase):
+    bring_back_run: ClassVar[subprocess.CompletedProcess[bytes]]
+    target: ClassVar[str]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        layout = make_layout(make_temporary_directory(cls))
         for name in ("common.sh", "stack.py"):
-            (self.elsewhere / name).write_text(self.read(f"scripts/lib/{name}"))
-        self.make_copy()
-        self.format_copy("scripts/lib/common.sh", "formatted\n")
-        self.replace_library_with_link(self.checkout)
-        bring_back_run = self.bring_back()
-        self.assertEqual(bring_back_run.returncode, 1)
-        self.assertIn(b"scripts/lib/common.sh changed in the checkout", bring_back_run.stderr)
-        self.assertEqual((self.elsewhere / "common.sh").read_text(), "common\n")
+            (layout.elsewhere / name).write_text(COMMITTED_FILES[f"scripts/lib/{name}"])
+        make_copy(layout)
+        write_file(layout.tree, "scripts/lib/common.sh", "formatted\n")
+        replace_library_with_link(layout.checkout, layout.elsewhere)
+        cls.bring_back_run = run_bring_back(layout)
+        cls.target = (layout.elsewhere / "common.sh").read_text()
 
-    @unittest.skipIf(os.geteuid() == 0, "root writes in a read-only directory")
-    def test_nothing_comes_back_once_a_directory_of_the_checkout_cannot_be_written(self) -> None:
-        self.make_copy()
-        self.format_copy("scripts/dev.sh", "formatted\n")
-        self.format_copy("server/app.py", "formatted\n")
-        server = self.checkout / "server"
+    def test_should_refuse_since_the_file_changed_in_the_checkout(self) -> None:
+        self.assertEqual(self.bring_back_run.returncode, 1)
+        self.assertIn(b"scripts/lib/common.sh changed in the checkout", self.bring_back_run.stderr)
+
+    def test_should_never_write_through_the_link(self) -> None:
+        self.assertEqual(self.target, "common\n")
+
+
+@unittest.skipIf(os.geteuid() == 0, "root writes in a read-only directory")
+class TheBringBackCommandWhenADirectoryOfTheCheckoutCannotBeWritten(unittest.TestCase):
+    bring_back_run: ClassVar[subprocess.CompletedProcess[bytes]]
+    dev_script: ClassVar[bytes]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        layout = format_two_files(make_temporary_directory(cls))
+        server = layout.checkout / "server"
         server.chmod(0o555)
-        self.addCleanup(server.chmod, 0o755)
-        self.assert_nothing_came_back(b"server/app.py cannot be written")
+        cls.addClassCleanup(server.chmod, 0o755)
+        cls.bring_back_run = run_bring_back(layout)
+        cls.dev_script = (layout.checkout / "scripts" / "dev.sh").read_bytes()
 
-    @unittest.skipIf(os.geteuid() == 0, "root writes a read-only file")
-    def test_nothing_comes_back_once_a_file_of_the_checkout_cannot_be_written(self) -> None:
-        self.make_copy()
-        self.format_copy("scripts/dev.sh", "formatted\n")
-        self.format_copy("server/app.py", "formatted\n")
-        (self.checkout / "server" / "app.py").chmod(0o444)
-        self.assert_nothing_came_back(b"server/app.py cannot be written")
+    def test_should_refuse_naming_the_file_it_cannot_write(self) -> None:
+        self.assertEqual(self.bring_back_run.returncode, 1)
+        self.assertIn(b"server/app.py cannot be written", self.bring_back_run.stderr)
 
-    def test_a_file_changed_meanwhile_but_left_alone_by_the_formatters_is_kept(self) -> None:
-        self.make_copy()
-        self.write("scripts/dev.sh", "edited meanwhile\n")
-        self.assertEqual(self.bring_back().returncode, 0)
-        self.assertEqual(self.read("scripts/dev.sh"), "edited meanwhile\n")
+    def test_should_bring_back_nothing(self) -> None:
+        self.assertEqual(self.dev_script, b"dev\n")
 
-    def test_nothing_comes_back_once_a_formatter_adds_a_character_a_terminal_does_not_show(self) -> None:
-        for name, hiding_text in HIDING_TEXTS.items():
-            with self.subTest(name=name):
-                self.make_copy()
-                self.format_copy("scripts/dev.sh", "formatted\n")
-                self.format_copy("server/app.py", f"app{hiding_text}\n")
-                self.assert_nothing_came_back(
-                    b"a formatter added to server/app.py a character a terminal does not show"
+
+@unittest.skipIf(os.geteuid() == 0, "root writes a read-only file")
+class TheBringBackCommandWhenAFileOfTheCheckoutCannotBeWritten(unittest.TestCase):
+    bring_back_run: ClassVar[subprocess.CompletedProcess[bytes]]
+    dev_script: ClassVar[bytes]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        layout = format_two_files(make_temporary_directory(cls))
+        (layout.checkout / "server" / "app.py").chmod(0o444)
+        cls.bring_back_run = run_bring_back(layout)
+        cls.dev_script = (layout.checkout / "scripts" / "dev.sh").read_bytes()
+
+    def test_should_refuse_naming_the_file_it_cannot_write(self) -> None:
+        self.assertEqual(self.bring_back_run.returncode, 1)
+        self.assertIn(b"server/app.py cannot be written", self.bring_back_run.stderr)
+
+    def test_should_bring_back_nothing(self) -> None:
+        self.assertEqual(self.dev_script, b"dev\n")
+
+
+class TheBringBackCommandWhenAFileTheFormattersLeftAloneChangesInTheCheckoutMeanwhile(unittest.TestCase):
+    bring_back_run: ClassVar[subprocess.CompletedProcess[bytes]]
+    dev_script: ClassVar[str]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        layout = make_layout(make_temporary_directory(cls))
+        make_copy(layout)
+        write_file(layout.checkout, "scripts/dev.sh", "edited meanwhile\n")
+        cls.bring_back_run = run_bring_back(layout)
+        cls.dev_script = (layout.checkout / "scripts" / "dev.sh").read_text()
+
+    def test_should_exit_with_zero(self) -> None:
+        self.assertEqual(self.bring_back_run.returncode, 0, self.bring_back_run.stderr)
+
+    def test_should_keep_the_edit_of_the_checkout(self) -> None:
+        self.assertEqual(self.dev_script, "edited meanwhile\n")
+
+
+class TheBringBackCommandWhenAFormatterAddsACharacterATerminalDoesNotShow(unittest.TestCase):
+    bring_back_runs: ClassVar[dict[str, subprocess.CompletedProcess[bytes]]]
+    dev_scripts: ClassVar[dict[str, bytes]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        layout = make_layout(make_temporary_directory(cls))
+        cls.bring_back_runs, cls.dev_scripts = {}, {}
+        for row, hiding_text in HIDING_TEXTS.items():
+            make_copy(layout)
+            write_file(layout.tree, "scripts/dev.sh", "formatted\n")
+            write_file(layout.tree, "server/app.py", f"app{hiding_text}\n")
+            cls.bring_back_runs[row] = run_bring_back(layout)
+            cls.dev_scripts[row] = (layout.checkout / "scripts" / "dev.sh").read_bytes()
+
+    def test_should_refuse_each_one_since_a_reader_of_git_diff_would_not_see_it(self) -> None:
+        for row in HIDING_TEXTS:
+            with self.subTest(row):
+                self.assertEqual(self.bring_back_runs[row].returncode, 1)
+                self.assertIn(
+                    b"a formatter added to server/app.py a character a terminal does not show",
+                    self.bring_back_runs[row].stderr,
                 )
 
-    def test_nothing_comes_back_once_a_formatter_changes_a_file_that_holds_a_character_a_terminal_does_not_show(
-        self,
-    ) -> None:
-        for name, hiding_text in HIDING_TEXTS.items():
-            with self.subTest(name=name):
-                self.write("server/app.py", f"app{hiding_text}\nmore\n")
-                self.make_copy()
-                self.format_copy("server/app.py", f"app{hiding_text}\nmore = 1\n")
-                bring_back_run = self.bring_back()
-                self.assertEqual(bring_back_run.returncode, 1)
-                self.assertIn(b"server/app.py holds a character a terminal does not show", bring_back_run.stderr)
-                self.assertEqual(
-                    (self.checkout / "server" / "app.py").read_bytes(), f"app{hiding_text}\nmore\n".encode()
+    def test_should_bring_back_nothing(self) -> None:
+        for row in HIDING_TEXTS:
+            with self.subTest(row):
+                self.assertEqual(self.dev_scripts[row], b"dev\n")
+
+
+class TheBringBackCommandWhenAFormatterChangesAFileThatHoldsACharacterATerminalDoesNotShow(unittest.TestCase):
+    bring_back_runs: ClassVar[dict[str, subprocess.CompletedProcess[bytes]]]
+    app_modules: ClassVar[dict[str, bytes]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        layout = make_layout(make_temporary_directory(cls))
+        cls.bring_back_runs, cls.app_modules = {}, {}
+        for row, hiding_text in HIDING_TEXTS.items():
+            write_file(layout.checkout, "server/app.py", f"app{hiding_text}\nmore\n")
+            make_copy(layout)
+            write_file(layout.tree, "server/app.py", f"app{hiding_text}\nmore = 1\n")
+            cls.bring_back_runs[row] = run_bring_back(layout)
+            cls.app_modules[row] = (layout.checkout / "server" / "app.py").read_bytes()
+
+    def test_should_refuse_each_one_naming_the_file_that_holds_it(self) -> None:
+        for row in HIDING_TEXTS:
+            with self.subTest(row):
+                self.assertEqual(self.bring_back_runs[row].returncode, 1)
+                self.assertIn(
+                    b"server/app.py holds a character a terminal does not show", self.bring_back_runs[row].stderr
                 )
 
-    def test_nothing_comes_back_once_a_formatter_removes_a_character_a_terminal_does_not_show(self) -> None:
-        self.write("server/app.py", "app\N{ZERO WIDTH SPACE}\n")
-        self.make_copy()
-        self.format_copy("server/app.py", "app\n")
-        bring_back_run = self.bring_back()
-        self.assertEqual(bring_back_run.returncode, 1)
-        self.assertIn(b"write it as an escape", bring_back_run.stderr)
-        self.assertEqual(self.read("server/app.py"), "app\N{ZERO WIDTH SPACE}\n")
+    def test_should_leave_the_file_as_it_was(self) -> None:
+        for row, hiding_text in HIDING_TEXTS.items():
+            with self.subTest(row):
+                self.assertEqual(self.app_modules[row], f"app{hiding_text}\nmore\n".encode())
 
-    def test_the_refusal_names_the_line_and_the_code_point_of_a_character_a_terminal_does_not_show(self) -> None:
-        self.make_copy()
-        self.format_copy("scripts/dev.sh", "dev\nmore\N{ZERO WIDTH SPACE}\n")
-        self.assert_nothing_came_back(b"line 2: U+200B")
 
-    def test_nothing_comes_back_once_a_formatter_adds_a_byte_that_is_not_utf_8(self) -> None:
-        self.make_copy()
-        (self.tree / "scripts" / "dev.sh").write_bytes(b"dev" + CONCEALING_SEQUENCE_OF_8_BITS + b"\n")
-        self.assert_nothing_came_back(b"(line 1: byte 0x9B)")
+class TheBringBackCommandWhenAFormatterRemovesACharacterATerminalDoesNotShow(unittest.TestCase):
+    bring_back_run: ClassVar[subprocess.CompletedProcess[bytes]]
+    app_module: ClassVar[str]
 
-    def test_nothing_comes_back_once_a_formatter_changes_a_file_that_holds_a_byte_that_is_not_utf_8(self) -> None:
-        checkout_bytes = b"app" + CONCEALING_SEQUENCE_OF_8_BITS + b"\nmore\n"
-        (self.checkout / "server" / "app.py").write_bytes(checkout_bytes)
-        self.make_copy()
-        (self.tree / "server" / "app.py").write_bytes(b"app" + CONCEALING_SEQUENCE_OF_8_BITS + b"\nmore = 1\n")
-        bring_back_run = self.bring_back()
-        self.assertEqual(bring_back_run.returncode, 1)
-        self.assertIn(b"server/app.py holds a character a terminal does not show", bring_back_run.stderr)
-        self.assertEqual((self.checkout / "server" / "app.py").read_bytes(), checkout_bytes)
+    @classmethod
+    def setUpClass(cls) -> None:
+        layout = make_layout(make_temporary_directory(cls))
+        write_file(layout.checkout, "server/app.py", "app\N{ZERO WIDTH SPACE}\n")
+        make_copy(layout)
+        write_file(layout.tree, "server/app.py", "app\n")
+        cls.bring_back_run = run_bring_back(layout)
+        cls.app_module = (layout.checkout / "server" / "app.py").read_text()
 
-    def test_nothing_comes_back_once_a_formatter_adds_a_carriage_return_to_a_file_without_them(self) -> None:
-        self.make_copy()
-        self.format_copy("scripts/dev.sh", "dev\N{CARRIAGE RETURN}\n")
-        self.assert_nothing_came_back(b"a formatter added to scripts/dev.sh a character a terminal does not show")
+    def test_should_refuse_asking_for_the_character_to_be_written_as_an_escape(self) -> None:
+        self.assertEqual(self.bring_back_run.returncode, 1)
+        self.assertIn(b"write it as an escape", self.bring_back_run.stderr)
 
-    def test_a_carriage_return_inside_a_line_hides_text_even_in_a_file_whose_lines_end_in_one(self) -> None:
-        (self.checkout / "scripts" / "dev.sh").write_bytes(b"dev\r\n")
-        self.make_copy()
-        (self.tree / "scripts" / "dev.sh").write_bytes(b"dev\recho\r\n")
-        bring_back_run = self.bring_back()
-        self.assertEqual(bring_back_run.returncode, 1)
+    def test_should_leave_the_file_as_it_was(self) -> None:
+        self.assertEqual(self.app_module, "app\N{ZERO WIDTH SPACE}\n")
+
+
+class TheBringBackCommandWhenAFormatterAddsACharacterATerminalDoesNotShowOnTheSecondLine(unittest.TestCase):
+    bring_back_run: ClassVar[subprocess.CompletedProcess[bytes]]
+    dev_script: ClassVar[bytes]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        layout = make_layout(make_temporary_directory(cls))
+        make_copy(layout)
+        write_file(layout.tree, "scripts/dev.sh", "dev\nmore\N{ZERO WIDTH SPACE}\n")
+        cls.bring_back_run = run_bring_back(layout)
+        cls.dev_script = (layout.checkout / "scripts" / "dev.sh").read_bytes()
+
+    def test_should_refuse_naming_the_line_and_the_code_point_of_the_character(self) -> None:
+        self.assertEqual(self.bring_back_run.returncode, 1)
+        self.assertIn(b"line 2: U+200B", self.bring_back_run.stderr)
+
+    def test_should_bring_back_nothing(self) -> None:
+        self.assertEqual(self.dev_script, b"dev\n")
+
+
+class TheBringBackCommandWhenAFormatterAddsAByteThatIsNotUtf8(unittest.TestCase):
+    bring_back_run: ClassVar[subprocess.CompletedProcess[bytes]]
+    dev_script: ClassVar[bytes]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        layout = make_layout(make_temporary_directory(cls))
+        make_copy(layout)
+        (layout.tree / "scripts" / "dev.sh").write_bytes(b"dev" + CONCEALING_SEQUENCE_OF_8_BITS + b"\n")
+        cls.bring_back_run = run_bring_back(layout)
+        cls.dev_script = (layout.checkout / "scripts" / "dev.sh").read_bytes()
+
+    def test_should_refuse_naming_the_line_and_the_byte(self) -> None:
+        self.assertEqual(self.bring_back_run.returncode, 1)
+        self.assertIn(b"(line 1: byte 0x9B)", self.bring_back_run.stderr)
+
+    def test_should_bring_back_nothing(self) -> None:
+        self.assertEqual(self.dev_script, b"dev\n")
+
+
+class TheBringBackCommandWhenAFormatterChangesAFileThatHoldsAByteThatIsNotUtf8(unittest.TestCase):
+    checkout_bytes: ClassVar[bytes] = b"app" + CONCEALING_SEQUENCE_OF_8_BITS + b"\nmore\n"
+    bring_back_run: ClassVar[subprocess.CompletedProcess[bytes]]
+    app_module: ClassVar[bytes]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        layout = make_layout(make_temporary_directory(cls))
+        (layout.checkout / "server" / "app.py").write_bytes(cls.checkout_bytes)
+        make_copy(layout)
+        (layout.tree / "server" / "app.py").write_bytes(b"app" + CONCEALING_SEQUENCE_OF_8_BITS + b"\nmore = 1\n")
+        cls.bring_back_run = run_bring_back(layout)
+        cls.app_module = (layout.checkout / "server" / "app.py").read_bytes()
+
+    def test_should_refuse_naming_the_file_that_holds_it(self) -> None:
+        self.assertEqual(self.bring_back_run.returncode, 1)
+        self.assertIn(b"server/app.py holds a character a terminal does not show", self.bring_back_run.stderr)
+
+    def test_should_leave_the_file_as_it_was(self) -> None:
+        self.assertEqual(self.app_module, self.checkout_bytes)
+
+
+class TheBringBackCommandWhenAFormatterAddsACarriageReturnToAFileWithoutThem(unittest.TestCase):
+    bring_back_run: ClassVar[subprocess.CompletedProcess[bytes]]
+    dev_script: ClassVar[bytes]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        layout = make_layout(make_temporary_directory(cls))
+        make_copy(layout)
+        write_file(layout.tree, "scripts/dev.sh", "dev\N{CARRIAGE RETURN}\n")
+        cls.bring_back_run = run_bring_back(layout)
+        cls.dev_script = (layout.checkout / "scripts" / "dev.sh").read_bytes()
+
+    def test_should_refuse_since_a_terminal_does_not_show_it(self) -> None:
+        self.assertEqual(self.bring_back_run.returncode, 1)
         self.assertIn(
-            b"a formatter added to scripts/dev.sh a character a terminal does not show", bring_back_run.stderr
+            b"a formatter added to scripts/dev.sh a character a terminal does not show", self.bring_back_run.stderr
         )
-        self.assertEqual((self.checkout / "scripts" / "dev.sh").read_bytes(), b"dev\r\n")
 
-    def test_nothing_comes_back_once_a_formatter_adds_a_character_outside_ascii(self) -> None:
-        self.make_copy()
-        self.format_copy("scripts/dev.sh", "dev = \N{CYRILLIC SMALL LETTER A}\n")
-        self.assert_nothing_came_back(b"characters outside ASCII")
+    def test_should_bring_back_nothing(self) -> None:
+        self.assertEqual(self.dev_script, b"dev\n")
 
-    def grow_the_copy_of_a_thousand_byte_file_to(self, size_bytes: int) -> subprocess.CompletedProcess[bytes]:
-        line_of_a_hundred_bytes = "#" * 99 + "\n"
-        self.write("server/app.py", line_of_a_hundred_bytes * 10)
-        self.make_copy()
-        full_lines, remainder_bytes = divmod(size_bytes, 100)
-        self.format_copy("server/app.py", line_of_a_hundred_bytes * full_lines + "#" * (remainder_bytes - 1) + "\n")
-        return self.bring_back()
 
-    def test_a_file_grown_to_twice_its_size_and_64_kib_comes_back(self) -> None:
-        self.assertEqual(self.grow_the_copy_of_a_thousand_byte_file_to(2 * 1000 + 64 * 1024).returncode, 0)
+class TheBringBackCommandWhenAFormatterAddsACarriageReturnInsideALineOfAFileWhoseLinesEndInOne(unittest.TestCase):
+    bring_back_run: ClassVar[subprocess.CompletedProcess[bytes]]
+    dev_script: ClassVar[bytes]
 
-    def test_nothing_comes_back_once_a_formatter_grows_a_file_past_twice_its_size_and_64_kib(self) -> None:
-        bring_back_run = self.grow_the_copy_of_a_thousand_byte_file_to(2 * 1000 + 64 * 1024 + 1)
-        self.assertEqual(bring_back_run.returncode, 1)
-        self.assertIn(b"grew server/app.py past twice its size and 64 KiB", bring_back_run.stderr)
+    @classmethod
+    def setUpClass(cls) -> None:
+        layout = make_layout(make_temporary_directory(cls))
+        (layout.checkout / "scripts" / "dev.sh").write_bytes(b"dev\r\n")
+        make_copy(layout)
+        (layout.tree / "scripts" / "dev.sh").write_bytes(b"dev\recho\r\n")
+        cls.bring_back_run = run_bring_back(layout)
+        cls.dev_script = (layout.checkout / "scripts" / "dev.sh").read_bytes()
 
-    def test_nothing_comes_back_once_a_formatter_writes_a_line_far_longer_than_the_file_s(self) -> None:
-        self.make_copy()
-        self.format_copy("scripts/dev.sh", "dev" + " " * 1000 + "; echo\n")
-        self.assert_nothing_came_back(b"a formatter wrote in scripts/dev.sh a line of 1009 characters")
+    def test_should_refuse_since_it_hides_text(self) -> None:
+        self.assertEqual(self.bring_back_run.returncode, 1)
+        self.assertIn(
+            b"a formatter added to scripts/dev.sh a character a terminal does not show", self.bring_back_run.stderr
+        )
 
-    def test_a_formatter_may_keep_a_long_line_the_file_already_had(self) -> None:
-        long_line = "#" * 1500
-        self.write("scripts/dev.sh", f"{long_line}\ndev\n")
-        self.make_copy()
-        self.format_copy("scripts/dev.sh", f"{long_line}\ndev = 1\n")
-        self.assertEqual(self.bring_back().returncode, 0)
-        self.assertEqual(self.read("scripts/dev.sh"), f"{long_line}\ndev = 1\n")
+    def test_should_leave_the_file_as_it_was(self) -> None:
+        self.assertEqual(self.dev_script, b"dev\r\n")
 
-    def test_a_file_the_formatters_leave_unchanged_does_not_hold_back_the_others_for_what_a_terminal_does_not_show(
-        self,
-    ) -> None:
-        self.write("scripts/dev.sh", "dev\N{FORM FEED}\n")
-        self.make_copy()
-        self.format_copy("server/app.py", "formatted\n")
-        self.assertEqual(self.bring_back().returncode, 0)
-        self.assertEqual(self.read("server/app.py"), "formatted\n")
 
-    def test_a_write_that_fails_midway_names_the_files_brought_back_before_it(self) -> None:
-        self.make_copy()
-        self.format_copy("scripts/dev.sh", "formatted\n")
-        self.format_copy("server/app.py", "formatted\n")
-        replace = os.replace
+class TheBringBackCommandWhenAFormatterAddsACharacterOutsideAscii(unittest.TestCase):
+    bring_back_run: ClassVar[subprocess.CompletedProcess[bytes]]
+    dev_script: ClassVar[bytes]
 
-        def fail_on_app_py(source: str | os.PathLike[str], target: str | os.PathLike[str]) -> None:
-            if Path(target).name == "app.py":
-                raise OSError("disk full")
-            replace(source, target)
+    @classmethod
+    def setUpClass(cls) -> None:
+        layout = make_layout(make_temporary_directory(cls))
+        make_copy(layout)
+        write_file(layout.tree, "scripts/dev.sh", "dev = \N{CYRILLIC SMALL LETTER A}\n")
+        cls.bring_back_run = run_bring_back(layout)
+        cls.dev_script = (layout.checkout / "scripts" / "dev.sh").read_bytes()
 
+    def test_should_refuse_since_it_may_look_like_another(self) -> None:
+        self.assertEqual(self.bring_back_run.returncode, 1)
+        self.assertIn(b"characters outside ASCII", self.bring_back_run.stderr)
+
+    def test_should_bring_back_nothing(self) -> None:
+        self.assertEqual(self.dev_script, b"dev\n")
+
+
+class TheBringBackCommandWhenAFormatterGrowsAFileToTwiceItsSizeAnd64Kib(unittest.TestCase):
+    bring_back_run: ClassVar[subprocess.CompletedProcess[bytes]]
+    app_module_size_bytes: ClassVar[int]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        layout = make_layout(make_temporary_directory(cls))
+        grow_the_copy_of_a_thousand_byte_file(layout, LARGEST_GROWN_SIZE_BYTES_OF_A_THOUSAND_BYTE_FILE)
+        cls.bring_back_run = run_bring_back(layout)
+        cls.app_module_size_bytes = (layout.checkout / "server" / "app.py").stat().st_size
+
+    def test_should_exit_with_zero(self) -> None:
+        self.assertEqual(self.bring_back_run.returncode, 0, self.bring_back_run.stderr)
+
+    def test_should_bring_it_back(self) -> None:
+        self.assertEqual(self.app_module_size_bytes, LARGEST_GROWN_SIZE_BYTES_OF_A_THOUSAND_BYTE_FILE)
+
+
+class TheBringBackCommandWhenAFormatterGrowsAFilePastTwiceItsSizeAnd64Kib(unittest.TestCase):
+    bring_back_run: ClassVar[subprocess.CompletedProcess[bytes]]
+    app_module_size_bytes: ClassVar[int]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        layout = make_layout(make_temporary_directory(cls))
+        grow_the_copy_of_a_thousand_byte_file(layout, LARGEST_GROWN_SIZE_BYTES_OF_A_THOUSAND_BYTE_FILE + 1)
+        cls.bring_back_run = run_bring_back(layout)
+        cls.app_module_size_bytes = (layout.checkout / "server" / "app.py").stat().st_size
+
+    def test_should_refuse_since_formatting_never_grows_a_file_that_much(self) -> None:
+        self.assertEqual(self.bring_back_run.returncode, 1)
+        self.assertIn(b"grew server/app.py past twice its size and 64 KiB", self.bring_back_run.stderr)
+
+    def test_should_bring_back_nothing(self) -> None:
+        self.assertEqual(self.app_module_size_bytes, 1000)
+
+
+class TheBringBackCommandWhenAFormatterWritesALineFarLongerThanTheFiles(unittest.TestCase):
+    bring_back_run: ClassVar[subprocess.CompletedProcess[bytes]]
+    dev_script: ClassVar[bytes]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        layout = make_layout(make_temporary_directory(cls))
+        make_copy(layout)
+        write_file(layout.tree, "scripts/dev.sh", "dev" + " " * 1000 + "; echo\n")
+        cls.bring_back_run = run_bring_back(layout)
+        cls.dev_script = (layout.checkout / "scripts" / "dev.sh").read_bytes()
+
+    def test_should_refuse_since_it_could_push_text_out_of_sight(self) -> None:
+        self.assertEqual(self.bring_back_run.returncode, 1)
+        self.assertIn(b"a formatter wrote in scripts/dev.sh a line of 1009 characters", self.bring_back_run.stderr)
+
+    def test_should_bring_back_nothing(self) -> None:
+        self.assertEqual(self.dev_script, b"dev\n")
+
+
+class TheBringBackCommandWhenAFormatterKeepsALongLineTheFileAlreadyHad(unittest.TestCase):
+    long_line: ClassVar[str] = "#" * 1500
+    bring_back_run: ClassVar[subprocess.CompletedProcess[bytes]]
+    dev_script: ClassVar[str]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        layout = make_layout(make_temporary_directory(cls))
+        write_file(layout.checkout, "scripts/dev.sh", f"{cls.long_line}\ndev\n")
+        make_copy(layout)
+        write_file(layout.tree, "scripts/dev.sh", f"{cls.long_line}\ndev = 1\n")
+        cls.bring_back_run = run_bring_back(layout)
+        cls.dev_script = (layout.checkout / "scripts" / "dev.sh").read_text()
+
+    def test_should_exit_with_zero(self) -> None:
+        self.assertEqual(self.bring_back_run.returncode, 0, self.bring_back_run.stderr)
+
+    def test_should_bring_the_change_back(self) -> None:
+        self.assertEqual(self.dev_script, f"{self.long_line}\ndev = 1\n")
+
+
+class TheBringBackCommandWhenAFileTheFormattersLeaveUnchangedHoldsACharacterATerminalDoesNotShow(unittest.TestCase):
+    bring_back_run: ClassVar[subprocess.CompletedProcess[bytes]]
+    app_module: ClassVar[str]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        layout = make_layout(make_temporary_directory(cls))
+        write_file(layout.checkout, "scripts/dev.sh", "dev\N{FORM FEED}\n")
+        make_copy(layout)
+        write_file(layout.tree, "server/app.py", "formatted\n")
+        cls.bring_back_run = run_bring_back(layout)
+        cls.app_module = (layout.checkout / "server" / "app.py").read_text()
+
+    def test_should_exit_with_zero(self) -> None:
+        self.assertEqual(self.bring_back_run.returncode, 0, self.bring_back_run.stderr)
+
+    def test_should_bring_the_changes_of_the_other_files_back(self) -> None:
+        self.assertEqual(self.app_module, "formatted\n")
+
+
+class TheBringBackCommandWhenAFormatterAddsALineIndentedWithATab(unittest.TestCase):
+    bring_back_run: ClassVar[subprocess.CompletedProcess[bytes]]
+    dev_script: ClassVar[str]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        layout = make_layout(make_temporary_directory(cls))
+        make_copy(layout)
+        write_file(layout.tree, "scripts/dev.sh", "dev\n\tmore\n")
+        cls.bring_back_run = run_bring_back(layout)
+        cls.dev_script = (layout.checkout / "scripts" / "dev.sh").read_text()
+
+    def test_should_exit_with_zero(self) -> None:
+        self.assertEqual(self.bring_back_run.returncode, 0, self.bring_back_run.stderr)
+
+    def test_should_bring_the_change_back(self) -> None:
+        self.assertEqual(self.dev_script, "dev\n\tmore\n")
+
+
+class TheBringBackCommandWhenAFormatterReformatsALineThatHoldsACharacterOutsideAscii(unittest.TestCase):
+    bring_back_run: ClassVar[subprocess.CompletedProcess[bytes]]
+    dev_script: ClassVar[str]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        layout = make_layout(make_temporary_directory(cls))
+        write_file(layout.checkout, "scripts/dev.sh", "caf\N{LATIN SMALL LETTER E WITH ACUTE}  =  1\n")
+        make_copy(layout)
+        write_file(layout.tree, "scripts/dev.sh", "caf\N{LATIN SMALL LETTER E WITH ACUTE} = 1\n")
+        cls.bring_back_run = run_bring_back(layout)
+        cls.dev_script = (layout.checkout / "scripts" / "dev.sh").read_text()
+
+    def test_should_exit_with_zero(self) -> None:
+        self.assertEqual(self.bring_back_run.returncode, 0, self.bring_back_run.stderr)
+
+    def test_should_bring_the_change_back(self) -> None:
+        self.assertEqual(self.dev_script, "caf\N{LATIN SMALL LETTER E WITH ACUTE} = 1\n")
+
+
+class TheBringBackCommandWhenAFormatterChangesAFileWhoseLinesEndInACarriageReturnAndALineFeed(unittest.TestCase):
+    bring_back_run: ClassVar[subprocess.CompletedProcess[bytes]]
+    dev_script: ClassVar[bytes]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        layout = make_layout(make_temporary_directory(cls))
+        (layout.checkout / "scripts" / "dev.sh").write_bytes(b"dev\r\n")
+        make_copy(layout)
+        (layout.tree / "scripts" / "dev.sh").write_bytes(b"dev\r\nmore\r\n")
+        cls.bring_back_run = run_bring_back(layout)
+        cls.dev_script = (layout.checkout / "scripts" / "dev.sh").read_bytes()
+
+    def test_should_exit_with_zero(self) -> None:
+        self.assertEqual(self.bring_back_run.returncode, 0, self.bring_back_run.stderr)
+
+    def test_should_bring_the_change_back(self) -> None:
+        self.assertEqual(self.dev_script, b"dev\r\nmore\r\n")
+
+
+class TheBringBackCommandWhenAFormatterDropsTheCarriageReturnsThatEndTheLinesOfAFile(unittest.TestCase):
+    bring_back_run: ClassVar[subprocess.CompletedProcess[bytes]]
+    dev_script: ClassVar[bytes]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        layout = make_layout(make_temporary_directory(cls))
+        (layout.checkout / "scripts" / "dev.sh").write_bytes(b"dev\r\nmore\r\n")
+        make_copy(layout)
+        (layout.tree / "scripts" / "dev.sh").write_bytes(b"dev\nmore\n")
+        cls.bring_back_run = run_bring_back(layout)
+        cls.dev_script = (layout.checkout / "scripts" / "dev.sh").read_bytes()
+
+    def test_should_exit_with_zero(self) -> None:
+        self.assertEqual(self.bring_back_run.returncode, 0, self.bring_back_run.stderr)
+
+    def test_should_bring_the_change_back(self) -> None:
+        self.assertEqual(self.dev_script, b"dev\nmore\n")
+
+
+class TheBringBackFunctionWhenAWriteFailsMidway(unittest.TestCase):
+    def setUp(self) -> None:
+        base = Path(self.enterContext(tempfile.TemporaryDirectory(prefix="scanmylib-formatting-"))).resolve()
+        layout = format_two_files(base)
+        self.enterContext(mock.patch("os.replace", make_replace_failing_on("app.py")))
+        self.bring_back = functools.partial(formatting.bring_back, layout.checkout, layout.tree, layout.digests_file)
+
+    def test_should_refuse_naming_the_files_it_brought_back_before_it(self) -> None:
+        self.assertRaisesRegex(
+            formatting.FormattingRefused,
+            r"^writing server/app\.py failed \(disk full\); brought back before it: scripts/dev\.sh$",
+            self.bring_back,
+        )
+
+
+class TheBringBackFunctionWhenAWriteHasFailedMidway(unittest.TestCase):
+    dev_script: ClassVar[str]
+    app_module: ClassVar[str]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        layout = format_two_files(make_temporary_directory(cls))
+        # The refusal ends the act: what it leaves in the checkout is read once the refusal is caught.
         with (
-            mock.patch("os.replace", fail_on_app_py),
-            self.assertRaisesRegex(
-                formatting.FormattingRefused,
-                r"^writing server/app\.py failed \(disk full\); brought back before it: scripts/dev\.sh$",
-            ),
+            mock.patch("os.replace", make_replace_failing_on("app.py")),
+            contextlib.suppress(formatting.FormattingRefused),
         ):
-            formatting.bring_back(self.checkout, self.tree, self.digests_file)
-        self.assertEqual(self.read("scripts/dev.sh"), "formatted\n")
-        self.assertEqual(self.read("server/app.py"), "app\n")
+            formatting.bring_back(layout.checkout, layout.tree, layout.digests_file)
+        cls.dev_script = (layout.checkout / "scripts" / "dev.sh").read_text()
+        cls.app_module = (layout.checkout / "server" / "app.py").read_text()
 
-    def test_a_formatter_may_add_a_line_indented_with_a_tab(self) -> None:
-        self.make_copy()
-        self.format_copy("scripts/dev.sh", "dev\n\tmore\n")
-        self.assertEqual(self.bring_back().returncode, 0)
-        self.assertEqual(self.read("scripts/dev.sh"), "dev\n\tmore\n")
+    def test_should_keep_the_files_it_brought_back_before_it(self) -> None:
+        self.assertEqual(self.dev_script, "formatted\n")
 
-    def test_a_formatter_may_reformat_a_line_that_holds_characters_outside_ascii(self) -> None:
-        self.write("scripts/dev.sh", "caf\N{LATIN SMALL LETTER E WITH ACUTE}  =  1\n")
-        self.make_copy()
-        self.format_copy("scripts/dev.sh", "caf\N{LATIN SMALL LETTER E WITH ACUTE} = 1\n")
-        self.assertEqual(self.bring_back().returncode, 0)
-        self.assertEqual(self.read("scripts/dev.sh"), "caf\N{LATIN SMALL LETTER E WITH ACUTE} = 1\n")
-
-    def test_a_file_whose_lines_end_in_a_carriage_return_and_a_line_feed_may_come_back(self) -> None:
-        (self.checkout / "scripts" / "dev.sh").write_bytes(b"dev\r\n")
-        self.make_copy()
-        (self.tree / "scripts" / "dev.sh").write_bytes(b"dev\r\nmore\r\n")
-        self.assertEqual(self.bring_back().returncode, 0)
-        self.assertEqual((self.checkout / "scripts" / "dev.sh").read_bytes(), b"dev\r\nmore\r\n")
-
-    def test_a_formatter_may_drop_the_carriage_returns_that_end_the_lines_of_a_file(self) -> None:
-        (self.checkout / "scripts" / "dev.sh").write_bytes(b"dev\r\nmore\r\n")
-        self.make_copy()
-        (self.tree / "scripts" / "dev.sh").write_bytes(b"dev\nmore\n")
-        self.assertEqual(self.bring_back().returncode, 0)
-        self.assertEqual((self.checkout / "scripts" / "dev.sh").read_bytes(), b"dev\nmore\n")
+    def test_should_leave_the_file_it_failed_to_write_as_it_was(self) -> None:
+        self.assertEqual(self.app_module, "app\n")
 
 
 if __name__ == "__main__":

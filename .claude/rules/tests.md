@@ -143,7 +143,8 @@ rule applies to it. The older files move to the structure area by area, each are
   of the code's history: they show the screens to whoever checks a change, and a pull request publishes those of a
   visible change (`.claude/skills/pull-request/SKILL.md` > Show a visible change).
 - **Unit tests of the scripts:** `scripts/tests/`, with `unittest` and the host's `python3`, on the modules of
-  `scripts/lib/` and on `scripts/release.py`, against throwaway repositories where git is needed.
+  `scripts/lib/`, on `scripts/release.py` and on the workflows of `.github/workflows/`, against throwaway repositories
+  where git is needed.
 - **Integration tests of the scripts:** `scripts/integration_tests/`, with `unittest` and the host's `python3`, which
   run the scripts themselves, such as `deploy.sh`, `dev.sh`, `build-apk.sh`, `prod.sh`, `check.sh` and the scripts of
   the skills (`.claude/skills/*/scripts/`), against throwaway repositories and a docker stand-in

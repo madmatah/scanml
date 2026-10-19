@@ -6,7 +6,7 @@
 #   lint        the formatters and linters, without network, on read-only sources: Ruff (format and lint) and
 #               mypy --strict for the Python, zizmor for the workflows, ShellCheck and shfmt for the shell scripts,
 #               Biome for the web UI (ktlint, for the app, runs in the android area)
-#   scripts     the unit tests of the scripts' modules (scripts/tests/), on the host's python3
+#   scripts     the unit tests of the scripts' modules and of the workflows (scripts/tests/), on the host's python3
 #   web         the unit tests of the web UI (node --test, in a container without network)
 #   server      the api's tests, in its test image, without network, read-only
 #   ocr         the sandbox's unit tests, in its image, without network or models

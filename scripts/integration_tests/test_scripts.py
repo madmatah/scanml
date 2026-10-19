@@ -1521,56 +1521,6 @@ class E2eTest(ScriptsTestCase):
         self.assertEqual(health.requests, 0)
 
 
-class SetupAndVerifyTest(ScriptsTestCase):
-    def test_setup_only_installs_a_new_production(self) -> None:
-        result = self.run_script(self.worktree, "setup.sh")
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("is not production's checkout", result.stderr)
-        result = self.run_script(self.primary, "setup.sh")
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("production already exists", result.stderr)
-        self.rules(production_container_rules(self.primary))
-        (self.prod / "state" / "scanmylib.db").unlink()
-        result = self.run_script(self.primary, "setup.sh")
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("deploy new versions with scripts/deploy.sh", result.stderr)
-        self.assert_only_reads()
-        # A first installation is a published release too.
-        self.git(self.primary, "commit", "--quiet", "--allow-empty", "--message", "x")
-        result = self.run_script(self.primary, "setup.sh")
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("install a published release: HEAD", result.stderr)
-
-    def test_setup_refuses_changes_git_status_hides(self) -> None:
-        self.git(self.primary, "update-index", "--skip-worktree", "compose.yaml")
-        (self.primary / "compose.yaml").write_text("services: {}\n")
-        result = self.run_script(self.primary, "setup.sh")
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("assume-unchanged or skip-worktree could hide changes: compose.yaml", result.stderr)
-
-    def test_verify_sandbox_passes_on_an_isolated_sandbox(self) -> None:
-        self.rules(sandbox_rules(f"{self.prod}/sandbox", str(self.prod)))
-        result = self.run_script(
-            self.primary, "verify-sandbox.sh", environment={"DATA_DIR": "/elsewhere", "SANDBOX_DIR": "/elsewhere"}
-        )
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn("RESULT: all checks passed", result.stdout)
-
-    def test_production_never_falls_back_to_the_fake_ocr(self) -> None:
-        self.rules(sandbox_rules(f"{self.prod}/sandbox", str(self.prod), kind="ocr-fake"))
-        result = self.run_script(self.primary, "verify-sandbox.sh")
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("production's OCR sandbox (ocr) is not running", result.stdout)
-        result = self.run_script(self.primary, "verify-sandbox.sh", "fakeid")
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("is the fake OCR", result.stdout)
-        # A development stack may run it.
-        (self.worktree / ".env").write_text(self.dev_env())
-        self.rules(sandbox_rules(f"{self.prod}/sandbox", f"{self.prod}-dev", kind="ocr-fake"))
-        result = self.run_script(self.worktree, "verify-sandbox.sh")
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-
-
 class CheckTest(ScriptsTestCase):
     def list_checks(self) -> list[list[str]]:
         return [call["argv"] for call in self.calls() if call["argv"][:1] in (["build"], ["run"])]

@@ -7,6 +7,29 @@ The notable changes of each release of ScanMyLib. The format is based on
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-19
+
+### Added
+
+- Scripts: describe the release pull request with its notes
+- Skills: publish the screenshots of a visible change
+- App: its own colors, "Paper & Ink", in a light and a dark theme, with medium- and high-contrast variants that follow
+  the phone's contrast setting (Android 14 and later)
+- App: Settings › Appearance: the theme (same as the phone, light or dark) and the wallpaper's colors (Android 12 and
+  later)
+
+### Fixed
+
+- Scripts: keep the tests' git away from the repository of their caller
+- Scripts: refuse to install production over changes git status hides
+- Scripts: refuse release notes with an entry before any subsection
+- OCR: report no versions when the sandbox manifest is not a json object
+
+### Security
+
+- Server: the api's image installs its Python packages from wheels only, so that no build step runs code the lock does
+  not check
+
 ## [0.3.0] - 2026-10-17
 
 ### Added
@@ -52,6 +75,7 @@ The notable changes of each release of ScanMyLib. The format is based on
 
 - OCR: read the whole request body before refusing a request
 
-[unreleased]: https://github.com/madmatah/scanml/compare/v0.3.0...HEAD
+[unreleased]: https://github.com/madmatah/scanml/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/madmatah/scanml/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/madmatah/scanml/compare/v0.2.3...v0.3.0
 [0.2.3]: https://github.com/madmatah/scanml/tree/v0.2.3

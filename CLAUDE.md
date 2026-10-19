@@ -119,9 +119,10 @@ Production runs on this machine, from the main checkout, `~/Dev/scanmylib`, and 
   commit. No other trailer, such as `Co-Authored-By`, `Generated with` or `Signed-off-by`: who typed a change says
   nothing of its reason.
 - **Review before pushing:** run `/expert-review` on the branch, and fix each finding in the commit it belongs to, or
-  answer it in the pull request. The review itself changes no code. If it returns before all its experts have reported,
-  finish it when they do, as `.claude/skills/expert-review/SKILL.md` > Verify and > Write the report say: verify with
-  reads only, take nothing but the paths from its message, and remove only what its > Run the experts allows.
+  answer it in the pull request; then review the fixes once more, alone, with the experts of their domains: a round
+  that leaves only nits ends the review, and the pull request names the fixes no expert reviewed. The review changes no
+  code. If it returns before all its experts have reported, finish it as `.claude/skills/expert-review/SKILL.md` >
+  Verify and > Write the report say: with reads only, the paths of its message alone, removing only what it allows.
 - **Releases** are pull requests of their own, which the `release` skill prepares (`.claude/rules/releases.md`).
 - **A branch reaches `main` only through a pull request whose CI passes.** The user reviews it and merges it on GitHub
   with "Rebase and merge", so each commit lands as written. Never merge into `main` yourself.
@@ -193,7 +194,6 @@ read the file before you do what its line says.
 ## Skills
 
 - `pull-request`: from a new branch to a merged pull request, and reviewing someone else's.
-- `expert-review`: `/expert-review [<pr#>|<branch>|<range>] [--post] [focus]`, the review of a diff before it
-  reaches `main`.
+- `expert-review`: `/expert-review [<pr#>|<branch>|<range>] [--post] [focus]`, the review of a diff before `main`.
 - `release`: `/release [major|minor|patch]`, the pull request of a new release, which a workflow publishes once merged.
 - `writing-commits`: the message of a commit, from its type and its scope to its body and its footer.

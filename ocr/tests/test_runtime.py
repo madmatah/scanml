@@ -1,20 +1,24 @@
-"""EngineRuntime tests with scripted fake workers (stdlib only, no GPU).
+"""The runtime of a loaded engine (ocr/scanmylib_ocr/runtime.py), with fake workers that are scripts of a few lines.
 
-They check what the GPU engine relies on: protocol messages survive arbitrary
-output on stdout/stderr, a dead or silent worker is detected, and stopping
-the engine kills the worker's whole process group (where VRAM is held).
-Run with ``docker run --init ...`` so that orphaned test processes get reaped.
+The gate runs them under `docker run --init`, which reaps the processes they leave orphaned.
+
+Standard library only, in the sandbox's image: `scripts/check.sh ocr`.
 """
 
 from __future__ import annotations
 
+import contextlib
+import functools
+import logging
+import re
 import sys
-import tempfile
 import textwrap
 import time
 import unittest
+from collections.abc import Callable, Iterator
+from contextlib import suppress
 from dataclasses import replace
-from typing import Any
+from typing import Any, ClassVar
 from unittest import mock
 
 from scanmylib_ocr import protocol
@@ -82,16 +86,26 @@ ENDLESS_OUTPUT_LINE = PRELUDE + textwrap.dedent(
     """
 )
 
-WITH_GRANDCHILD = PRELUDE + textwrap.dedent(
+WITH_CHILD_PROCESS = PRELUDE + textwrap.dedent(
     """
-    grandchild = subprocess.Popen(["sleep", "60"])
+    child = subprocess.Popen(["sleep", "60"])
     channel.send({"event": "ready"})
     message = channel.receive()
-    channel.send({"id": message["id"], "ok": True, "result": {"pid": grandchild.pid}})
+    channel.send({"id": message["id"], "ok": True, "result": {"child_process_id": child.pid}})
     channel.receive()
     time.sleep(60)  # ignores the shutdown request, like a hung worker
     """
 )
+
+SETTINGS = replace(Settings.from_env({}), backend="native", start_timeout_s=5.0)
+JOB_ID = "job-1"
+PAGE_PATH = "page.jpg"
+PAGE_THE_WORKER_DIES_ON = "exit"
+REPLY_TIMEOUT_SECONDS = 5.0
+OUTPUT_LINE_BYTES = 1 << 20
+OUTPUT_PIECE_LIMIT_BYTES = 4096
+RESULT_LINE_LIMIT_BYTES = 1 << 20
+WAIT_TIMEOUT_SECONDS = 5.0
 
 
 class ScriptSpec(EngineSpec):
@@ -112,95 +126,242 @@ class ScriptSpec(EngineSpec):
         raise NotImplementedError
 
 
-def process_gone(pid: int) -> bool:
-    """True when ``pid`` no longer runs (exited, possibly not yet reaped)."""
+class LogRecorder(logging.Handler):
+    def __init__(self) -> None:
+        super().__init__()
+        self.records: list[logging.LogRecord] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.records.append(record)
+
+
+@contextlib.contextmanager
+def record_logs(logger_name: str, level: int) -> Iterator[list[logging.LogRecord]]:
+    logger = logging.getLogger(logger_name)
+    recorder = LogRecorder()
+    previous_handlers, previous_level, previous_propagate = logger.handlers, logger.level, logger.propagate
+    logger.handlers = [recorder]
+    logger.setLevel(level)
+    logger.propagate = False
     try:
-        with open(f"/proc/{pid}/stat") as stat:
+        yield recorder.records
+    finally:
+        logger.handlers = previous_handlers
+        logger.setLevel(previous_level)
+        logger.propagate = previous_propagate
+
+
+def is_process_gone(process_id: int) -> bool:
+    # A zombie has exited already: only the init of `docker run --init` has yet to reap it.
+    try:
+        with open(f"/proc/{process_id}/stat") as stat:
             return stat.read().split(")")[-1].split()[0] == "Z"
     except FileNotFoundError:
         return True
 
 
-class RuntimeTest(unittest.TestCase):
+def wait_until_gone(process_id: int) -> bool:
+    deadline_seconds = time.monotonic() + WAIT_TIMEOUT_SECONDS
+    while not is_process_gone(process_id) and time.monotonic() < deadline_seconds:
+        time.sleep(0.05)
+    return is_process_gone(process_id)
+
+
+def wait_until_relayed(records: list[logging.LogRecord], size_bytes: int) -> None:
+    deadline_seconds = time.monotonic() + WAIT_TIMEOUT_SECONDS
+    while sum(len(record.getMessage()) for record in records) < size_bytes and time.monotonic() < deadline_seconds:
+        time.sleep(0.05)
+
+
+def measure_seconds(act: Callable[[], object], expected_failure: type[Exception]) -> float:
+    started_at_seconds = time.monotonic()
+    with suppress(expected_failure):
+        act()
+    return time.monotonic() - started_at_seconds
+
+
+class TheParseMethodWhenTheWorkerPrintsNoise(unittest.TestCase):
+    reply: ClassVar[dict[str, Any]]
+    is_alive_after_the_page: ClassVar[bool]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        runtime = EngineRuntime(SETTINGS, ScriptSpec(NOISY_ECHO))
+        cls.addClassCleanup(runtime.stop)
+        runtime.start()
+        cls.reply = runtime.parse(JOB_ID, PAGE_PATH, {"unwarp": True}, timeout_s=REPLY_TIMEOUT_SECONDS)
+        cls.is_alive_after_the_page = runtime.alive()
+
+    def test_should_return_the_reply_of_the_worker_untouched_so_that_no_output_can_forge_a_message(self) -> None:
+        self.assertEqual(self.reply, {"id": JOB_ID, "ok": True, "result": {"echo": {"unwarp": True}}})
+
+    def test_should_keep_the_worker_running(self) -> None:
+        self.assertTrue(self.is_alive_after_the_page)
+
+
+class TheParseMethodWhenTheWorkerDiesDuringAPage(unittest.TestCase):
     def setUp(self) -> None:
-        self.tmp = tempfile.TemporaryDirectory()
-        self.settings = replace(Settings.from_env({}), backend="native", work_dir=self.tmp.name, start_timeout_s=5.0)
-        self.runtime: EngineRuntime | None = None
+        runtime = EngineRuntime(SETTINGS, ScriptSpec(NOISY_ECHO))
+        self.addCleanup(runtime.stop)
+        runtime.start()
+        self.parse_the_page = functools.partial(
+            runtime.parse, JOB_ID, PAGE_THE_WORKER_DIES_ON, {}, timeout_s=REPLY_TIMEOUT_SECONDS
+        )
 
-    def tearDown(self) -> None:
-        if self.runtime is not None:
-            self.runtime.stop()
-        self.tmp.cleanup()
+    def test_should_fail_saying_that_the_worker_stopped(self) -> None:
+        self.assertRaisesRegex(EngineFailure, "worker stopped while processing the page", self.parse_the_page)
 
-    def start(self, script: str, settings: Settings | None = None) -> EngineRuntime:
-        self.runtime = EngineRuntime(self.settings if settings is None else settings, ScriptSpec(script))
-        self.runtime.start()
-        return self.runtime
 
-    def test_messages_survive_output_noise(self) -> None:
-        runtime = self.start(NOISY_ECHO)
-        reply = runtime.parse("job-1", "page.jpg", {"unwarp": True}, timeout_s=5)
-        self.assertEqual(reply, {"id": "job-1", "ok": True, "result": {"echo": {"unwarp": True}}})
-        self.assertTrue(runtime.alive())
+class TheAliveMethodWhenTheWorkerDiedDuringAPage(unittest.TestCase):
+    def setUp(self) -> None:
+        runtime = EngineRuntime(SETTINGS, ScriptSpec(NOISY_ECHO))
+        self.addCleanup(runtime.stop)
+        runtime.start()
+        with suppress(EngineFailure):
+            runtime.parse(JOB_ID, PAGE_THE_WORKER_DIES_ON, {}, timeout_s=REPLY_TIMEOUT_SECONDS)
+        self.is_alive = runtime.alive()
 
-    def test_worker_dying_during_a_page_is_reported(self) -> None:
-        runtime = self.start(NOISY_ECHO)
-        with self.assertRaises(EngineFailure) as failure:
-            runtime.parse("job-1", "exit", {}, timeout_s=5)
-        self.assertIn("worker", str(failure.exception))
-        time.sleep(0.2)
-        self.assertFalse(runtime.alive())
+    def test_should_report_the_engine_dead(self) -> None:
+        self.assertFalse(self.is_alive)
 
-    def test_fatal_load_error_fails_the_start(self) -> None:
-        with self.assertRaisesRegex(EngineStartError, "no GPU found"):
-            self.start(FATAL)
 
-    def test_start_error_reports_the_root_cause(self) -> None:
-        with self.assertRaises(EngineStartError) as failure:
-            self.start(CRASH_WITH_ROOT_CAUSE)
-        message = str(failure.exception)
-        self.assertIn("exited with code 1", message)
-        self.assertIn("ValueError: 0.28 GiB KV cache is needed", message)
+class TheStartMethodWhenTheWorkerCannotLoadTheEngine(unittest.TestCase):
+    def setUp(self) -> None:
+        runtime = EngineRuntime(SETTINGS, ScriptSpec(FATAL))
+        self.addCleanup(runtime.stop)
+        self.start_the_engine = runtime.start
 
-    def test_start_times_out(self) -> None:
-        started = time.monotonic()
-        with self.assertRaisesRegex(EngineStartError, "worker not ready"):
-            self.start(NEVER_READY, replace(self.settings, start_timeout_s=1.0))
-        self.assertLess(time.monotonic() - started, 15)
+    def test_should_fail_with_the_reason_of_the_worker(self) -> None:
+        self.assertRaisesRegex(
+            EngineStartError, "worker failed to load the engine: no GPU found", self.start_the_engine
+        )
 
-    def test_silent_worker_times_out(self) -> None:
-        runtime = self.start(SILENT)
-        with self.assertRaisesRegex(EngineFailure, "no result"):
-            runtime.parse("job-1", "page.jpg", {}, timeout_s=0.5)
 
-    def test_stop_kills_the_whole_process_group(self) -> None:
-        runtime = self.start(WITH_GRANDCHILD)
-        pid = runtime.parse("job-1", "page.jpg", {}, timeout_s=5)["result"]["pid"]
-        self.assertFalse(process_gone(pid))
-        runtime.stop()  # the worker ignores the shutdown request: SIGTERM, then SIGKILL
-        self.runtime = None
-        deadline = time.monotonic() + 5
-        while not process_gone(pid) and time.monotonic() < deadline:
-            time.sleep(0.05)
-        self.assertTrue(process_gone(pid))
+class TheStartMethodWhenTheWorkerExitsAfterPrintingTheRootCause(unittest.TestCase):
+    def setUp(self) -> None:
+        runtime = EngineRuntime(SETTINGS, ScriptSpec(CRASH_WITH_ROOT_CAUSE))
+        self.addCleanup(runtime.stop)
+        self.start_the_engine = runtime.start
 
-    def test_an_endless_result_line_fails_the_page_without_waiting_for_the_timeout(self) -> None:
-        with mock.patch.object(protocol, "MAX_MESSAGE_BYTES", 1 << 20):
-            runtime = self.start(ENDLESS_RESULT_LINE)
-            started = time.monotonic()
-            with self.assertRaisesRegex(EngineFailure, "larger than"):
-                runtime.parse("job-1", "page.jpg", {}, timeout_s=30)
-        self.assertLess(time.monotonic() - started, 10)
+    def test_should_fail_with_the_exit_code_of_the_worker(self) -> None:
+        self.assertRaisesRegex(EngineStartError, "worker exited with code 1", self.start_the_engine)
 
-    def test_an_endless_output_line_is_relayed_in_bounded_pieces(self) -> None:
-        with mock.patch.object(runtime_module, "MAX_OUTPUT_LINE_BYTES", 4096), self.assertLogs("worker") as logs:
-            self.start(ENDLESS_OUTPUT_LINE)  # the line never ends while the worker runs
-            deadline = time.monotonic() + 5
-            while sum(len(record.getMessage()) for record in logs.records) < 1 << 20 and time.monotonic() < deadline:
-                time.sleep(0.05)
-        pieces = [record.getMessage() for record in logs.records]
-        self.assertEqual(sum(map(len, pieces)), 1 << 20)
-        self.assertLessEqual(max(map(len, pieces)), 4096)
+    def test_should_quote_the_root_cause_printed_before_the_generic_error(self) -> None:
+        self.assertRaisesRegex(
+            EngineStartError, re.escape("ValueError: 0.28 GiB KV cache is needed"), self.start_the_engine
+        )
+
+
+class _TheStartMethodWhenTheWorkerIsNeverReady(unittest.TestCase):
+    def setUp(self) -> None:
+        start_timeout_seconds = 1.0
+        runtime = EngineRuntime(replace(SETTINGS, start_timeout_s=start_timeout_seconds), ScriptSpec(NEVER_READY))
+        self.addCleanup(runtime.stop)
+        self.start_the_engine = runtime.start
+
+
+class TheStartMethodWhenTheWorkerIsNeverReady(_TheStartMethodWhenTheWorkerIsNeverReady):
+    def test_should_fail_once_its_timeout_has_passed(self) -> None:
+        self.assertRaisesRegex(EngineStartError, "worker not ready after 1 s", self.start_the_engine)
+
+
+class TheStartMethodWhenTheWorkerIsNeverReadyWhenTheStartFails(_TheStartMethodWhenTheWorkerIsNeverReady):
+    def setUp(self) -> None:
+        super().setUp()
+        self.start_seconds = measure_seconds(self.start_the_engine, EngineStartError)
+
+    def test_should_give_up_without_waiting_for_the_worker_to_exit(self) -> None:
+        long_before_the_worker_exits_seconds = 15
+        self.assertLess(self.start_seconds, long_before_the_worker_exits_seconds)
+
+
+class TheParseMethodWhenTheWorkerNeverAnswers(unittest.TestCase):
+    def setUp(self) -> None:
+        runtime = EngineRuntime(SETTINGS, ScriptSpec(SILENT))
+        self.addCleanup(runtime.stop)
+        runtime.start()
+        reply_timeout_seconds = 0.5
+        self.parse_the_page = functools.partial(runtime.parse, JOB_ID, PAGE_PATH, {}, timeout_s=reply_timeout_seconds)
+
+    def test_should_fail_once_its_timeout_has_passed(self) -> None:
+        self.assertRaisesRegex(EngineFailure, "no result from the worker", self.parse_the_page)
+
+
+class _TheParseMethodWhenTheWorkerSendsAnEndlessResultLine(unittest.TestCase):
+    def setUp(self) -> None:
+        limit_patcher = mock.patch.object(protocol, "MAX_MESSAGE_BYTES", RESULT_LINE_LIMIT_BYTES)
+        limit_patcher.start()
+        self.addCleanup(limit_patcher.stop)
+        runtime = EngineRuntime(SETTINGS, ScriptSpec(ENDLESS_RESULT_LINE))
+        self.addCleanup(runtime.stop)
+        runtime.start()
+        reply_timeout_seconds = 30.0
+        self.parse_the_page = functools.partial(runtime.parse, JOB_ID, PAGE_PATH, {}, timeout_s=reply_timeout_seconds)
+
+
+class TheParseMethodWhenTheWorkerSendsAnEndlessResultLine(_TheParseMethodWhenTheWorkerSendsAnEndlessResultLine):
+    def test_should_fail_saying_that_the_result_is_larger_than_the_limit(self) -> None:
+        self.assertRaisesRegex(EngineFailure, f"larger than {RESULT_LINE_LIMIT_BYTES}", self.parse_the_page)
+
+
+class TheParseMethodWhenTheWorkerSendsAnEndlessResultLineWhenThePageFails(
+    _TheParseMethodWhenTheWorkerSendsAnEndlessResultLine
+):
+    def setUp(self) -> None:
+        super().setUp()
+        self.parse_seconds = measure_seconds(self.parse_the_page, EngineFailure)
+
+    def test_should_fail_the_page_without_waiting_for_its_timeout(self) -> None:
+        long_before_the_timeout_seconds = 10
+        self.assertLess(self.parse_seconds, long_before_the_timeout_seconds)
+
+
+class TheStopMethodWhenAHungWorkerHasStartedAProcess(unittest.TestCase):
+    is_child_running_before_the_stop: ClassVar[bool]
+    is_child_gone_after_the_stop: ClassVar[bool]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        runtime = EngineRuntime(SETTINGS, ScriptSpec(WITH_CHILD_PROCESS))
+        cls.addClassCleanup(runtime.stop)
+        runtime.start()
+        reply = runtime.parse(JOB_ID, PAGE_PATH, {}, timeout_s=REPLY_TIMEOUT_SECONDS)
+        child_process_id = reply["result"]["child_process_id"]
+        cls.is_child_running_before_the_stop = not is_process_gone(child_process_id)
+        runtime.stop()
+        cls.is_child_gone_after_the_stop = wait_until_gone(child_process_id)
+
+    def test_should_leave_the_process_of_the_worker_running_until_then(self) -> None:
+        self.assertTrue(self.is_child_running_before_the_stop)
+
+    def test_should_kill_it_too_since_the_whole_process_group_holds_the_gpu_memory(self) -> None:
+        self.assertTrue(self.is_child_gone_after_the_stop)
+
+
+class WhenTheWorkerPrintsAnEndlessLine(unittest.TestCase):
+    piece_sizes_bytes: ClassVar[list[int]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        with (
+            mock.patch.object(runtime_module, "MAX_OUTPUT_LINE_BYTES", OUTPUT_PIECE_LIMIT_BYTES),
+            record_logs("worker", logging.INFO) as records,
+        ):
+            runtime = EngineRuntime(SETTINGS, ScriptSpec(ENDLESS_OUTPUT_LINE))
+            cls.addClassCleanup(runtime.stop)
+            runtime.start()
+            wait_until_relayed(records, OUTPUT_LINE_BYTES)
+            cls.piece_sizes_bytes = [len(record.getMessage()) for record in records]
+
+    def test_should_relay_the_whole_line(self) -> None:
+        self.assertEqual(sum(self.piece_sizes_bytes), OUTPUT_LINE_BYTES)
+
+    def test_should_relay_it_in_pieces_no_longer_than_the_limit_so_that_the_supervisor_never_holds_it_whole(
+        self,
+    ) -> None:
+        oversized_pieces = [size for size in self.piece_sizes_bytes if size > OUTPUT_PIECE_LIMIT_BYTES]
+        self.assertNotEqual(self.piece_sizes_bytes, [])
+        self.assertEqual(oversized_pieces, [])
 
 
 if __name__ == "__main__":

@@ -5,15 +5,19 @@ Standard library only: python3 -m unittest discover -s scripts/tests
 
 from __future__ import annotations
 
+import functools
 import io
 import json
 import os
+import re
 import sys
 import tempfile
+import types
 import unittest
-from collections.abc import Sequence
-from contextlib import redirect_stderr
+from collections.abc import Mapping, Sequence
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
+from typing import ClassVar
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
@@ -36,149 +40,256 @@ APP_VARIANT=dev
 """
 
 
-class ReadEnvTest(unittest.TestCase):
-    def setUp(self) -> None:
-        self.directory = tempfile.TemporaryDirectory()
-        self.path = Path(self.directory.name) / ".env"
-
-    def tearDown(self) -> None:
-        self.directory.cleanup()
-
-    def read(self, text: str | bytes) -> dict[str, str]:
-        if isinstance(text, str):
-            text = text.encode()
-        self.path.write_bytes(text)
-        return stack.read_env(self.path)
-
-    def test_key_value_lines_comments_and_blank_lines(self) -> None:
-        values = self.read("# comment\n\nA=1\nPUBLIC_URL=http://192.168.1.10:8765\nEMPTY=\nLAST=a/b_c.d@e%f+g,h-i")
-        self.assertEqual(
-            values, {"A": "1", "PUBLIC_URL": "http://192.168.1.10:8765", "EMPTY": "", "LAST": "a/b_c.d@e%f+g,h-i"}
-        )
-
-    def test_lines_docker_compose_would_read_differently_are_refused(self) -> None:
-        # Each of these makes docker compose resolve COMPOSE_PROJECT_NAME=scanmylib while a naive
-        # parser (sed 's/^KEY=//') reads something else.
-        for text in [
-            "COMPOSE_PROJECT_NAME=scanmylib # dev\n",
-            "COMPOSE_PROJECT_NAME=scanmylib \n",
-            "COMPOSE_PROJECT_NAME=scanmylib-dev\nexport COMPOSE_PROJECT_NAME=scanmylib\n",
-            "COMPOSE_PROJECT_NAME=scanmylib-dev\n  COMPOSE_PROJECT_NAME=scanmylib\n",
-            "COMPOSE_PROJECT_NAME=scanmylib-dev\nCOMPOSE_PROJECT_NAME: scanmylib\n",
-            "COMPOSE_PROJECT_NAME=scanmylib-dev\nCOMPOSE_PROJECT_NAME = scanmylib\n",
-            "X=scanmylib\nCOMPOSE_PROJECT_NAME=${X}\n",
-            "X=scanmylib\nCOMPOSE_PROJECT_NAME=$X\n",
-            "COMPOSE_PROJECT_NAME=scanmylib\r\n",
-            'COMPOSE_PROJECT_NAME="scanmylib" # x\n',
-            "COMPOSE_PROJECT_NAME='scanmylib'\n",
-            "COMPOSE_PROJECT_NAME=scanmyli\\\nb\n",
-            "COMPOSE_PROJECT_NAME=scanmylib-dev\nCOMPOSE_PROJECT_NAME=scanmylib\n",
-            "\tCOMPOSE_PROJECT_NAME=scanmylib\n",
-            " # an indented comment\n",
-            "compose_project_name=scanmylib\n",
-            "COMPOSE_PROJECT_NAME\n",
-        ]:
-            with self.subTest(text=text), self.assertRaises(stack.EnvError):
-                self.read(text)
-
-    def test_keys_that_change_what_docker_compose_does_are_refused(self) -> None:
-        for key in (
-            "COMPOSE_FILE",
-            "COMPOSE_PROFILES",
-            "COMPOSE_ENV_FILES",
-            "COMPOSE_PATH_SEPARATOR",
-            "DOCKER_HOST",
-            "DOCKER_CONTEXT",
-            "BUILDKIT_PROGRESS",
-        ):
-            with self.subTest(key=key), self.assertRaisesRegex(stack.EnvError, key):
-                self.read(f"{key}=x\n")
-
-    def test_errors_name_the_line(self) -> None:
-        with self.assertRaisesRegex(stack.EnvError, "line 3"):
-            self.read("A=1\n# ok\nB=two words\n")
-
-    def test_not_utf8(self) -> None:
-        with self.assertRaisesRegex(stack.EnvError, "UTF-8"):
-            self.read(b"A=\xff\n")
-
-    def test_missing_file(self) -> None:
-        with self.assertRaises(stack.EnvError):
-            stack.read_env(Path(self.directory.name) / "missing")
+def make_directory(test: unittest.TestCase) -> Path:
+    return Path(os.path.realpath(test.enterContext(tempfile.TemporaryDirectory(prefix="scanmylib-stack-"))))
 
 
-class ImageTest(unittest.TestCase):
-    def test_normalize_image(self) -> None:
-        for reference, expected in [
-            ("scanmylib-api", "docker.io/library/scanmylib-api:latest"),
-            ("scanmylib-api:latest", "docker.io/library/scanmylib-api:latest"),
-            ("docker.io/scanmylib-api", "docker.io/library/scanmylib-api:latest"),
-            ("docker.io/library/scanmylib-api:deployed", "docker.io/library/scanmylib-api:deployed"),
-            ("index.docker.io/library/scanmylib-api", "docker.io/library/scanmylib-api:latest"),
-            ("someone/scanmylib-api", "docker.io/someone/scanmylib-api:latest"),
-            ("localhost/scanmylib-api", "localhost/scanmylib-api:latest"),
-            ("registry:5000/scanmylib-api", "registry:5000/scanmylib-api:latest"),
-            ("x/y:1@sha256:abc", "docker.io/x/y:1@sha256:abc"),
-            ("x@sha256:abc", "docker.io/library/x@sha256:abc"),
-        ]:
-            with self.subTest(reference=reference):
-                self.assertEqual(stack.normalize_image(reference), expected)
-
-    def test_repository(self) -> None:
-        self.assertEqual(stack.repository("scanmylib-api:latest"), "docker.io/library/scanmylib-api")
-        self.assertEqual(stack.repository("index.docker.io/library/scanmylib-api"), "docker.io/library/scanmylib-api")
-        self.assertEqual(stack.repository("registry:5000/scanmylib-api"), "registry:5000/scanmylib-api")
-        self.assertEqual(stack.repository("x/y:1@sha256:abc"), "docker.io/x/y")
+def write_env(path: Path, text: str | bytes) -> Path:
+    path.write_bytes(text.encode() if isinstance(text, str) else text)
+    return path
 
 
 def fake_home(test: unittest.TestCase, home: Path) -> None:
-    """Makes `home` the user's home directory, in the password database and in $HOME."""
-    for patcher in (
-        mock.patch.dict(os.environ, {"HOME": str(home)}),
-        mock.patch.object(stack, "user_home", return_value=str(home)),
-    ):
-        patcher.start()
-        test.addCleanup(patcher.stop)
+    test.enterContext(mock.patch.dict(os.environ, {"HOME": str(home)}))
+    test.enterContext(mock.patch.object(stack, "user_home", return_value=str(home)))
 
 
-class ProductionCheckoutTest(unittest.TestCase):
+def make_home(test: unittest.TestCase) -> Path:
+    home = make_directory(test)
+    fake_home(test, home)
+    return home
+
+
+def build_container(working_dir: str) -> stack.JsonObject:
+    return {"Name": "/scanmylib-api-1", "Config": {"Labels": {stack.WORKING_DIR_LABEL: working_dir}}}
+
+
+class TheReadEnvFunctionWhenTheFileKeepsToTheStrictFormat(unittest.TestCase):
     def setUp(self) -> None:
-        directory = tempfile.TemporaryDirectory()
-        self.addCleanup(directory.cleanup)
-        self.home = Path(os.path.realpath(directory.name))
-        fake_home(self, self.home)
+        path = write_env(
+            make_directory(self) / ".env",
+            "# comment\n\nA=1\nPUBLIC_URL=http://192.168.1.10:8765\nEMPTY=\nLAST=a/b_c.d@e%f+g,h-i",
+        )
+        self.values = stack.read_env(path)
 
-    @staticmethod
-    def container(working_dir: str) -> stack.JsonObject:
-        return {"Name": "/scanmylib-api-1", "Config": {"Labels": {stack.WORKING_DIR_LABEL: working_dir}}}
-
-    def test_the_project_directory_of_production_s_containers(self) -> None:
-        checkout = self.home / "elsewhere"
+    def test_should_read_its_key_value_lines_and_skip_its_comments_and_blank_lines(self) -> None:
         self.assertEqual(
-            stack.production_checkout([self.container(str(checkout)), self.container(str(checkout))]), checkout
+            self.values,
+            {"A": "1", "PUBLIC_URL": "http://192.168.1.10:8765", "EMPTY": "", "LAST": "a/b_c.d@e%f+g,h-i"},
         )
 
-    def test_without_containers_the_default(self) -> None:
-        self.assertEqual(stack.production_checkout([]), self.home / "Dev" / "scanmylib")
 
-    def test_the_home_directory_comes_from_the_password_database(self) -> None:
-        # $HOME pointing elsewhere moves neither production's checkout nor the home barrier.
-        with mock.patch.dict(os.environ, {"HOME": "/elsewhere"}):
-            self.assertEqual(stack.production_checkout([]), self.home / "Dev" / "scanmylib")
-            self.assertEqual(stack.homes(), {str(self.home), "/elsewhere"})
+class TheReadEnvFunctionWhenALineWouldReadDifferentlyInDockerCompose(unittest.TestCase):
+    #: Each line makes docker compose resolve COMPOSE_PROJECT_NAME=scanmylib, while a naive parser
+    #: (sed 's/^KEY=//') reads something else; and the reason of its refusal.
+    lines: ClassVar[Mapping[str, tuple[str, str]]] = types.MappingProxyType(
+        {
+            "a comment after the value": ("COMPOSE_PROJECT_NAME=scanmylib # dev\n", "may only contain"),
+            "a space after the value": ("COMPOSE_PROJECT_NAME=scanmylib \n", "may only contain"),
+            "an export": (
+                "COMPOSE_PROJECT_NAME=scanmylib-dev\nexport COMPOSE_PROJECT_NAME=scanmylib\n",
+                "expected KEY=VALUE",
+            ),
+            "an indented key": (
+                "COMPOSE_PROJECT_NAME=scanmylib-dev\n  COMPOSE_PROJECT_NAME=scanmylib\n",
+                "expected KEY=VALUE",
+            ),
+            "a colon": ("COMPOSE_PROJECT_NAME=scanmylib-dev\nCOMPOSE_PROJECT_NAME: scanmylib\n", "expected KEY=VALUE"),
+            "spaces around the equals sign": (
+                "COMPOSE_PROJECT_NAME=scanmylib-dev\nCOMPOSE_PROJECT_NAME = scanmylib\n",
+                "expected KEY=VALUE",
+            ),
+            "a braced variable": ("X=scanmylib\nCOMPOSE_PROJECT_NAME=${X}\n", "may only contain"),
+            "a variable": ("X=scanmylib\nCOMPOSE_PROJECT_NAME=$X\n", "may only contain"),
+            "a carriage return": ("COMPOSE_PROJECT_NAME=scanmylib\r\n", "carriage returns"),
+            "a quoted value and a comment": ('COMPOSE_PROJECT_NAME="scanmylib" # x\n', "may only contain"),
+            "a single-quoted value": ("COMPOSE_PROJECT_NAME='scanmylib'\n", "may only contain"),
+            "a line continued with a backslash": ("COMPOSE_PROJECT_NAME=scanmyli\\\nb\n", "may only contain"),
+            "a key set twice": ("COMPOSE_PROJECT_NAME=scanmylib-dev\nCOMPOSE_PROJECT_NAME=scanmylib\n", "is set twice"),
+            "a key indented with a tab": ("\tCOMPOSE_PROJECT_NAME=scanmylib\n", "expected KEY=VALUE"),
+            "an indented comment": (" # an indented comment\n", "expected KEY=VALUE"),
+            "a lowercase key": ("compose_project_name=scanmylib\n", "expected KEY=VALUE"),
+            "a key without a value": ("COMPOSE_PROJECT_NAME\n", "expected KEY=VALUE"),
+        }
+    )
 
-    def test_containers_from_several_checkouts_are_an_error(self) -> None:
-        with self.assertRaisesRegex(stack.EnvError, "several checkouts"):
-            stack.production_checkout([self.container("/a"), self.container("/b")])
+    def setUp(self) -> None:
+        directory = make_directory(self)
+        self.reading_acts = {
+            row: functools.partial(stack.read_env, write_env(directory / f"{index}.env", text))
+            for index, (row, (text, _)) in enumerate(self.lines.items())
+        }
 
-    def test_command_line(self) -> None:
+    def test_should_refuse_it_saying_why_so_that_the_scripts_never_read_another_value_than_docker_compose(
+        self,
+    ) -> None:
+        for row, (_, reason) in self.lines.items():
+            with self.subTest(row):
+                self.assertRaisesRegex(stack.EnvError, re.escape(reason), self.reading_acts[row])
+
+
+class TheReadEnvFunctionWhenAKeyChangesWhatDockerComposeDoes(unittest.TestCase):
+    keys: ClassVar[tuple[str, ...]] = (
+        "COMPOSE_FILE",
+        "COMPOSE_PROFILES",
+        "COMPOSE_ENV_FILES",
+        "COMPOSE_PATH_SEPARATOR",
+        "DOCKER_HOST",
+        "DOCKER_CONTEXT",
+        "BUILDKIT_PROGRESS",
+    )
+
+    def setUp(self) -> None:
+        directory = make_directory(self)
+        self.reading_acts = {
+            key: functools.partial(stack.read_env, write_env(directory / f"{key}.env", f"{key}=x\n"))
+            for key in self.keys
+        }
+
+    def test_should_refuse_it_naming_it(self) -> None:
+        for key in self.keys:
+            with self.subTest(key):
+                self.assertRaisesRegex(
+                    stack.EnvError, f"{key} would change what docker compose does", self.reading_acts[key]
+                )
+
+
+class TheReadEnvFunctionWhenALineBreaksTheFormat(unittest.TestCase):
+    def setUp(self) -> None:
+        path = write_env(make_directory(self) / ".env", "A=1\n# ok\nB=two words\n")
+        self.read = functools.partial(stack.read_env, path)
+
+    def test_should_refuse_it_naming_the_line(self) -> None:
+        self.assertRaisesRegex(stack.EnvError, "line 3", self.read)
+
+
+class TheReadEnvFunctionWhenTheFileIsNotUtf8(unittest.TestCase):
+    def setUp(self) -> None:
+        path = write_env(make_directory(self) / ".env", b"A=\xff\n")
+        self.read = functools.partial(stack.read_env, path)
+
+    def test_should_refuse_it(self) -> None:
+        self.assertRaisesRegex(stack.EnvError, "not UTF-8 text", self.read)
+
+
+class TheReadEnvFunctionWhenTheFileIsMissing(unittest.TestCase):
+    def setUp(self) -> None:
+        self.missing_path = make_directory(self) / "missing"
+        self.read = functools.partial(stack.read_env, self.missing_path)
+
+    def test_should_refuse_it_naming_it(self) -> None:
+        self.assertRaisesRegex(stack.EnvError, re.escape(f"{self.missing_path}: "), self.read)
+
+
+class TheNormalizeImageFunction(unittest.TestCase):
+    references: ClassVar[Mapping[str, str]] = types.MappingProxyType(
+        {
+            "scanmylib-api": "docker.io/library/scanmylib-api:latest",
+            "scanmylib-api:latest": "docker.io/library/scanmylib-api:latest",
+            "docker.io/scanmylib-api": "docker.io/library/scanmylib-api:latest",
+            "docker.io/library/scanmylib-api:deployed": "docker.io/library/scanmylib-api:deployed",
+            "index.docker.io/library/scanmylib-api": "docker.io/library/scanmylib-api:latest",
+            "someone/scanmylib-api": "docker.io/someone/scanmylib-api:latest",
+            "localhost/scanmylib-api": "localhost/scanmylib-api:latest",
+            "registry:5000/scanmylib-api": "registry:5000/scanmylib-api:latest",
+            "x/y:1@sha256:abc": "docker.io/x/y:1@sha256:abc",
+            "x@sha256:abc": "docker.io/library/x@sha256:abc",
+        }
+    )
+
+    def setUp(self) -> None:
+        self.images = {reference: stack.normalize_image(reference) for reference in self.references}
+
+    def test_should_read_each_reference_as_docker_does(self) -> None:
+        for reference, image in self.references.items():
+            with self.subTest(reference):
+                self.assertEqual(self.images[reference], image)
+
+
+class TheRepositoryFunction(unittest.TestCase):
+    images: ClassVar[Mapping[str, str]] = types.MappingProxyType(
+        {
+            "scanmylib-api:latest": "docker.io/library/scanmylib-api",
+            "index.docker.io/library/scanmylib-api": "docker.io/library/scanmylib-api",
+            "registry:5000/scanmylib-api": "registry:5000/scanmylib-api",
+            "x/y:1@sha256:abc": "docker.io/x/y",
+        }
+    )
+
+    def setUp(self) -> None:
+        self.repositories = {image: stack.repository(image) for image in self.images}
+
+    def test_should_be_the_name_docker_reads_without_its_tag_or_digest(self) -> None:
+        for image, repository in self.images.items():
+            with self.subTest(image):
+                self.assertEqual(self.repositories[image], repository)
+
+
+class TheProductionCheckoutFunctionWhenProductionHasContainers(unittest.TestCase):
+    def setUp(self) -> None:
+        self.project_directory = make_home(self) / "elsewhere"
+        containers = [build_container(str(self.project_directory)), build_container(str(self.project_directory))]
+        self.checkout = stack.production_checkout(containers)
+
+    def test_should_be_the_project_directory_of_its_containers(self) -> None:
+        self.assertEqual(self.checkout, self.project_directory)
+
+
+class TheProductionCheckoutFunctionWhenProductionHasNoContainer(unittest.TestCase):
+    def setUp(self) -> None:
+        self.home = make_home(self)
+        self.checkout = stack.production_checkout([])
+
+    def test_should_be_dev_scanmylib_in_the_home_directory(self) -> None:
+        self.assertEqual(self.checkout, self.home / "Dev" / "scanmylib")
+
+
+class TheProductionCheckoutFunctionWhenHomePointsElsewhere(unittest.TestCase):
+    def setUp(self) -> None:
+        self.home = make_home(self)
+        self.enterContext(mock.patch.dict(os.environ, {"HOME": "/elsewhere"}))
+        self.checkout = stack.production_checkout([])
+
+    def test_should_take_the_home_directory_from_the_password_database(self) -> None:
+        self.assertEqual(self.checkout, self.home / "Dev" / "scanmylib")
+
+
+class TheHomesFunctionWhenHomePointsElsewhere(unittest.TestCase):
+    def setUp(self) -> None:
+        self.home = make_home(self)
+        self.enterContext(mock.patch.dict(os.environ, {"HOME": "/elsewhere"}))
+        self.homes = stack.homes()
+
+    def test_should_hold_the_home_directory_of_the_password_database_and_home_so_that_no_stack_uses_either(
+        self,
+    ) -> None:
+        self.assertEqual(self.homes, {str(self.home), "/elsewhere"})
+
+
+class TheProductionCheckoutFunctionWhenProductionsContainersComeFromSeveralCheckouts(unittest.TestCase):
+    def setUp(self) -> None:
+        make_home(self)
+        containers = [build_container("/a"), build_container("/b")]
+        self.find_checkout = functools.partial(stack.production_checkout, containers)
+
+    def test_should_refuse_since_production_is_to_be_fixed_first(self) -> None:
+        self.assertRaisesRegex(stack.EnvError, "several checkouts", self.find_checkout)
+
+
+class TheMainFunctionWhenAskedForProductionsCheckout(unittest.TestCase):
+    def setUp(self) -> None:
+        self.home = make_home(self)
+        containers = json.dumps([build_container(f"{self.home}/prod")])
         output = io.StringIO()
-        with (
-            mock.patch("sys.stdin", io.StringIO(json.dumps([self.container(f"{self.home}/prod")]))),
-            mock.patch("sys.stdout", output),
-        ):
-            self.assertEqual(stack.main(["production-checkout"]), 0)
-        self.assertEqual(output.getvalue().strip(), f"{self.home}/prod")
+        with mock.patch("sys.stdin", io.StringIO(containers)), redirect_stdout(output):
+            self.exit_code = stack.main(["production-checkout"])
+        self.printed = output.getvalue()
+
+    def test_should_exit_with_zero(self) -> None:
+        self.assertEqual(self.exit_code, 0)
+
+    def test_should_print_the_project_directory_of_the_containers_it_reads(self) -> None:
+        self.assertEqual(self.printed.strip(), f"{self.home}/prod")
 
 
 class IsolationTest(unittest.TestCase):
@@ -629,124 +740,212 @@ class IsolationTest(unittest.TestCase):
         self.assertIn("RUNNER_TEMP: ", errors)
 
 
-class ComposeCommandTest(unittest.TestCase):
-    @staticmethod
-    def refused(*argv: str, production: bool = False) -> list[str]:
-        return stack.compose_command_problems(list(argv), production=production)
+class TheComposeCommandProblemsFunctionWhenTheCommandStaysInTheStack(unittest.TestCase):
+    commands: ClassVar[tuple[tuple[str, ...], ...]] = (
+        ("ps",),
+        ("up", "-d", "api"),
+        ("exec", "api", "sh"),
+        ("exec", "-T", "-u", "1000", "api", "id"),
+        ("run", "--rm", "-e", "X=1", "api", "pytest", "-v", "-p", "no:cacheprovider"),
+        ("run", "-dT", "--entrypoint=sh", "api"),
+        ("run", "-eX=1", "--rm", "api"),
+        ("build", "--no-cache", "api"),
+        ("build", "api", "--no-cache"),
+        ("logs", "-f", "api"),
+        ("down", "-v"),
+        ("config",),
+        ("config", "--format", "json", "--no-interpolate"),
+        ("config", "--hash", "api"),
+        ("up", "-d", "--wait", "--wait-timeout", "60", "api", "ocr-fake"),
+        ("up", "api", "-d", "--timeout", "5"),
+        ("restart", "-t", "5", "api"),
+        ("start", "ocr"),
+        ("create", "--no-build", "--", "api"),
+    )
 
-    def test_allowed(self) -> None:
-        for argv in (
-            ["ps"],
-            ["up", "-d", "api"],
-            ["exec", "api", "sh"],
-            ["exec", "-T", "-u", "1000", "api", "id"],
-            ["run", "--rm", "-e", "X=1", "api", "pytest", "-v", "-p", "no:cacheprovider"],
-            ["run", "-dT", "--entrypoint=sh", "api"],
-            ["run", "-eX=1", "--rm", "api"],
-            ["build", "--no-cache", "api"],
-            ["build", "api", "--no-cache"],
-            ["logs", "-f", "api"],
-            ["down", "-v"],
-            ["config"],
-            ["config", "--format", "json", "--no-interpolate"],
-            ["config", "--hash", "api"],
-            ["up", "-d", "--wait", "--wait-timeout", "60", "api", "ocr-fake"],
-            ["up", "api", "-d", "--timeout", "5"],
-            ["restart", "-t", "5", "api"],
-            ["start", "ocr"],
-            ["create", "--no-build", "--", "api"],
-        ):
-            with self.subTest(argv=argv):
-                self.assertEqual(self.refused(*argv), [])
+    def setUp(self) -> None:
+        self.problems = {command: stack.compose_command_problems(list(command)) for command in self.commands}
 
-    def test_global_options_and_commands_outside_the_stack(self) -> None:
-        for argv in (["-p", "scanmylib", "down"], ["--project-name=scanmylib", "down"], ["--file", "x.yaml", "ps"], []):
-            with self.subTest(argv=argv):
-                self.assertIn("no global option", self.refused(*argv)[0])
-        for command in ("cp", "export", "commit", "push", "pull", "publish", "watch", "bridge", "scale"):
-            with self.subTest(command=command):
-                self.assertIn(f"docker compose {command} is not allowed", self.refused(command, "api")[0])
+    def test_should_find_none(self) -> None:
+        for command in self.commands:
+            with self.subTest(" ".join(command)):
+                self.assertEqual(self.problems[command], [])
 
-    def test_options_that_give_a_container_more(self) -> None:
-        for argv, expected in [
-            (["run", "-v", "/:/host", "api"], "run -v"),
-            (["run", "--volume=/home:/h", "api"], "run --volume"),
-            (["run", "-dv", "/:/host", "api"], "run -v"),
-            (["run", "-p", "8765:8765", "api"], "run -p"),
-            (["run", "--publish", "8765:8765", "api"], "run --publish"),
-            (["run", "--cap-add", "SYS_ADMIN", "api"], "run --cap-add"),
-            (["run", "--env-from-file", "/home/x/.env", "api"], "run --env-from-file"),
-            (["run", "-l", "com.docker.compose.project=scanmylib", "api"], "run -l"),
-            (["run", "--name", "scanmylib-api-1", "api"], "run --name"),
-            (["run", "--rm", "-e", "X", "-v", "/:/h", "api"], "run -v"),
-            (["exec", "--privileged", "api", "sh"], "exec --privileged"),
-            (["build", "--ssh", "default", "api"], "build --ssh"),
-            (["build", "--push"], "build --push"),
-            # Options after the service names: docker compose reads them as options too.
-            (["build", "api", "--ssh", "default=/home/x/.ssh/id_ed25519"], "build --ssh"),
-            (["build", "api", "--push"], "build --push"),
-            (["build", "api", "ocr", "-q", "--push"], "build --push"),
-            (["config", "-o", "/home/x/Dev/scanmylib/.env"], "config -o"),
-            (["config", "--output=/home/x/.bashrc"], "config --output"),
-            (["config", "--format", "json", "--output", "x"], "config --output"),
-            (["up", "-d", "api", "--watch"], "up --watch"),
-            (["up", "-dw", "api"], "up -w"),
-            # --scale starts the services it names, listed or not.
-            (["up", "-d", "api", "ocr", "--scale", "ocr-fake=1"], "up --scale"),
-            (["create", "--scale=ocr-fake=1", "api"], "create --scale"),
-        ]:
-            with self.subTest(argv=argv):
-                problems = self.refused(*argv)
-                self.assertTrue(problems and expected in problems[0], problems)
 
-    def test_both_ocr_services_never_start_together(self) -> None:
-        for argv in (
-            ["up", "-d"],
-            ["up", "-d", "--wait"],
-            ["restart"],
-            ["start"],
-            [
-                "create",
-                "--",
-            ],
-        ):
-            with self.subTest(argv=argv):
-                problems = self.refused(*argv)
-                self.assertTrue(problems and "name them" in problems[0], problems)
-        for argv in (
-            ["up", "-d", "api", "ocr", "ocr-fake"],
-            ["start", "ocr-fake", "ocr"],
-            ["up", "ocr", "--", "ocr-fake"],
-        ):
-            with self.subTest(argv=argv):
-                problems = self.refused(*argv)
-                self.assertTrue(problems and "never start both" in problems[0], problems)
+class TheComposeCommandProblemsFunctionWhenTheCommandLineDoesNotStartWithACommand(unittest.TestCase):
+    commands: ClassVar[Mapping[str, tuple[str, ...]]] = types.MappingProxyType(
+        {
+            "-p": ("-p", "scanmylib", "down"),
+            "--project-name": ("--project-name=scanmylib", "down"),
+            "--file": ("--file", "x.yaml", "ps"),
+            "nothing": (),
+        }
+    )
 
-    def test_production(self) -> None:
-        for argv in (
-            ["ps"],
-            ["logs", "-f", "api", "ocr"],
-            ["restart", "api"],
-            ["up", "-d", "--no-build", "api", "ocr"],
-            ["up", "-d"],
-            ["restart"],
-            ["stop", "api", "ocr"],
-            ["down"],
-        ):
-            with self.subTest(argv=argv):
-                self.assertEqual(self.refused(*argv, production=True), [])
-        for argv, expected in [
-            (["build", "api"], "scripts/deploy.sh"),
-            (["run", "api", "sh"], "scripts/deploy.sh"),
-            (["up", "-d", "--build"], "--build"),
-            (["exec", "--privileged", "api", "sh"], "--privileged"),
-            (["cp", "api:/state/token", "."], "not allowed"),
-            (["up", "-d", "ocr-fake"], "fake OCR"),
-            (["config", "-o", ".env"], "config -o"),
-        ]:
-            with self.subTest(argv=argv):
-                problems = self.refused(*argv, production=True)
-                self.assertTrue(problems and expected in problems[0], problems)
+    def setUp(self) -> None:
+        self.problems = {row: stack.compose_command_problems(list(command)) for row, command in self.commands.items()}
+
+    def test_should_refuse_it_since_a_global_option_could_choose_another_stack(self) -> None:
+        for row in self.commands:
+            with self.subTest(row):
+                self.assertIn("no global option", "".join(self.problems[row][:1]), self.problems[row])
+
+
+class TheComposeCommandProblemsFunctionWhenTheCommandCouldReachOutsideTheStack(unittest.TestCase):
+    commands: ClassVar[tuple[str, ...]] = (
+        "cp",
+        "export",
+        "commit",
+        "push",
+        "pull",
+        "publish",
+        "watch",
+        "bridge",
+        "scale",
+    )
+
+    def setUp(self) -> None:
+        self.problems = {command: stack.compose_command_problems([command, "api"]) for command in self.commands}
+
+    def test_should_refuse_it(self) -> None:
+        for command in self.commands:
+            with self.subTest(command):
+                problems = self.problems[command]
+                self.assertIn(f"docker compose {command} is not allowed", "".join(problems[:1]), problems)
+
+
+class TheComposeCommandProblemsFunctionWhenAnOptionGivesAContainerMoreThanComposeYamlDoes(unittest.TestCase):
+    commands: ClassVar[Mapping[str, tuple[tuple[str, ...], str]]] = types.MappingProxyType(
+        {
+            "run -v": (("run", "-v", "/:/host", "api"), "run -v"),
+            "run --volume=": (("run", "--volume=/home:/h", "api"), "run --volume"),
+            "run -v among other flags": (("run", "-dv", "/:/host", "api"), "run -v"),
+            "run -p": (("run", "-p", "8765:8765", "api"), "run -p"),
+            "run --publish": (("run", "--publish", "8765:8765", "api"), "run --publish"),
+            "run --cap-add": (("run", "--cap-add", "SYS_ADMIN", "api"), "run --cap-add"),
+            "run --env-from-file": (("run", "--env-from-file", "/home/x/.env", "api"), "run --env-from-file"),
+            "run -l": (("run", "-l", "com.docker.compose.project=scanmylib", "api"), "run -l"),
+            "run --name": (("run", "--name", "scanmylib-api-1", "api"), "run --name"),
+            "run -v after allowed options": (("run", "--rm", "-e", "X", "-v", "/:/h", "api"), "run -v"),
+            "exec --privileged": (("exec", "--privileged", "api", "sh"), "exec --privileged"),
+            "build --ssh": (("build", "--ssh", "default", "api"), "build --ssh"),
+            "build --push": (("build", "--push"), "build --push"),
+            "build --ssh after the service, which docker compose reads as an option too": (
+                ("build", "api", "--ssh", "default=/home/x/.ssh/id_ed25519"),
+                "build --ssh",
+            ),
+            "build --push after the service": (("build", "api", "--push"), "build --push"),
+            "build --push after the services and another option": (
+                ("build", "api", "ocr", "-q", "--push"),
+                "build --push",
+            ),
+            "config -o": (("config", "-o", "/home/x/Dev/scanmylib/.env"), "config -o"),
+            "config --output=": (("config", "--output=/home/x/.bashrc"), "config --output"),
+            "config --output after an allowed option": (
+                ("config", "--format", "json", "--output", "x"),
+                "config --output",
+            ),
+            "up --watch": (("up", "-d", "api", "--watch"), "up --watch"),
+            "up -w among other flags": (("up", "-dw", "api"), "up -w"),
+            "up --scale, which starts the services it names, listed or not": (
+                ("up", "-d", "api", "ocr", "--scale", "ocr-fake=1"),
+                "up --scale",
+            ),
+            "create --scale=": (("create", "--scale=ocr-fake=1", "api"), "create --scale"),
+        }
+    )
+
+    def setUp(self) -> None:
+        self.problems = {
+            row: stack.compose_command_problems(list(command)) for row, (command, _) in self.commands.items()
+        }
+
+    def test_should_refuse_it_naming_the_option(self) -> None:
+        for row, (_, expected) in self.commands.items():
+            with self.subTest(row):
+                self.assertIn(expected, "".join(self.problems[row][:1]), self.problems[row])
+
+
+class TheComposeCommandProblemsFunctionWhenAStartingCommandNamesNoService(unittest.TestCase):
+    commands: ClassVar[tuple[tuple[str, ...], ...]] = (
+        ("up", "-d"),
+        ("up", "-d", "--wait"),
+        ("restart",),
+        ("start",),
+        ("create", "--"),
+    )
+
+    def setUp(self) -> None:
+        self.problems = {command: stack.compose_command_problems(list(command)) for command in self.commands}
+
+    def test_should_refuse_it_asking_to_name_them_since_both_ocr_services_would_start(self) -> None:
+        for command in self.commands:
+            with self.subTest(" ".join(command)):
+                self.assertIn("name them", "".join(self.problems[command][:1]), self.problems[command])
+
+
+class TheComposeCommandProblemsFunctionWhenAStartingCommandNamesBothOcrServices(unittest.TestCase):
+    commands: ClassVar[tuple[tuple[str, ...], ...]] = (
+        ("up", "-d", "api", "ocr", "ocr-fake"),
+        ("start", "ocr-fake", "ocr"),
+        ("up", "ocr", "--", "ocr-fake"),
+    )
+
+    def setUp(self) -> None:
+        self.problems = {command: stack.compose_command_problems(list(command)) for command in self.commands}
+
+    def test_should_refuse_it_since_both_serve_the_same_socket(self) -> None:
+        for command in self.commands:
+            with self.subTest(" ".join(command)):
+                self.assertIn("never start both", "".join(self.problems[command][:1]), self.problems[command])
+
+
+class TheComposeCommandProblemsFunctionWhenProductionOperatesItsContainers(unittest.TestCase):
+    commands: ClassVar[tuple[tuple[str, ...], ...]] = (
+        ("ps",),
+        ("logs", "-f", "api", "ocr"),
+        ("restart", "api"),
+        ("up", "-d", "--no-build", "api", "ocr"),
+        ("up", "-d"),
+        ("restart",),
+        ("stop", "api", "ocr"),
+        ("down",),
+    )
+
+    def setUp(self) -> None:
+        self.problems = {
+            command: stack.compose_command_problems(list(command), production=True) for command in self.commands
+        }
+
+    def test_should_find_none(self) -> None:
+        for command in self.commands:
+            with self.subTest(" ".join(command)):
+                self.assertEqual(self.problems[command], [])
+
+
+class TheComposeCommandProblemsFunctionWhenProductionWouldChangeOtherwiseThanThroughDeploySh(unittest.TestCase):
+    commands: ClassVar[Mapping[str, tuple[tuple[str, ...], str]]] = types.MappingProxyType(
+        {
+            "build": (("build", "api"), "scripts/deploy.sh"),
+            "run": (("run", "api", "sh"), "scripts/deploy.sh"),
+            "up --build": (("up", "-d", "--build"), "--build"),
+            "exec --privileged": (("exec", "--privileged", "api", "sh"), "--privileged"),
+            "cp": (("cp", "api:/state/token", "."), "not allowed"),
+            "the fake OCR": (("up", "-d", "ocr-fake"), "fake OCR"),
+            "config -o": (("config", "-o", ".env"), "config -o"),
+        }
+    )
+
+    def setUp(self) -> None:
+        self.problems = {
+            row: stack.compose_command_problems(list(command), production=True)
+            for row, (command, _) in self.commands.items()
+        }
+
+    def test_should_refuse_it(self) -> None:
+        for row, (_, expected) in self.commands.items():
+            with self.subTest(row):
+                self.assertIn(expected, "".join(self.problems[row][:1]), self.problems[row])
 
 
 if __name__ == "__main__":

@@ -11,8 +11,9 @@
 #   server      the api's tests, in its test image, without network, read-only
 #   ocr         the sandbox's unit tests, in its image, without network or models
 #   android     the app's unit tests, lint and ktlint (scripts/build-apk.sh, never signed)
-#   integration the integration tests of the scripts (scripts/integration_tests/): the scripts themselves, on the
-#               host's python3, against throwaway repositories and a docker stand-in that builds and starts nothing
+#   integration the integration tests of the scripts (scripts/integration_tests/): the scripts themselves, those of the
+#               skills (.claude/skills/*/scripts/) included, on the host's python3, against throwaway repositories and a
+#               docker stand-in that builds and starts nothing
 #
 # --fix formats the code and applies the linters' safe fixes instead of checking. ktlint formats android/ in place.
 # The other formatters work on a copy of the tracked files they format in server/, ocr/, scripts/ and .claude/skills/

@@ -134,10 +134,11 @@ rule applies to it. The older files move to the structure area by area, each are
 - **Unit tests of the scripts:** `scripts/tests/`, with `unittest` and the host's `python3`, on the modules of
   `scripts/lib/` and on `scripts/release.py`, against throwaway repositories where git is needed.
 - **Integration tests of the scripts:** `scripts/integration_tests/`, with `unittest` and the host's `python3`, which
-  run the scripts themselves, such as `deploy.sh`, `dev.sh`, `build-apk.sh`, `prod.sh` and `check.sh`, against
-  throwaway repositories and a docker stand-in (`scripts/integration_tests/docker_shim.py`) that never reaches the
-  Docker daemon. Each one runs a script whole, with the processes it starts, and they have an area of their own in the
-  gate, `integration`, which a commit runs only when it changes a script they run (`CLAUDE.md` > Workflow, "Commits").
+  run the scripts themselves, such as `deploy.sh`, `dev.sh`, `build-apk.sh`, `prod.sh`, `check.sh` and the scripts of
+  the skills (`.claude/skills/*/scripts/`), against throwaway repositories and a docker stand-in
+  (`scripts/integration_tests/docker_shim.py`) that never reaches the Docker daemon. Each one runs a script whole, with
+  the processes it starts, and they have an area of their own in the gate, `integration`, which a commit runs only when
+  it changes a script they run (`CLAUDE.md` > Workflow, "Commits").
 - **End to end:** `scripts/e2e_test.py`, which acts like the phone against a running stack, the development stack by
   default.
 - **Isolation of the sandbox:** `scripts/verify-sandbox.sh`, against the running `ocr` service.

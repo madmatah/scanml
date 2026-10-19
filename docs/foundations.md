@@ -168,6 +168,7 @@ The modules as they are, and the layer each one belongs to, whose directory the 
 | OCR sandbox | `engines/paddleocr_vl`, `engines/images` | PaddleOCR-VL-1.6, and its image handling | Adapters |
 | scripts | `lib/stack.py`, `lib/version.py`, `lib/formatting.py`, `lib/parallel_tests.py`, `lib/commit_areas.py`, `lib/common.sh` | The `.env` format, production's checkout and the isolation of a stack; the version of a build; what the gate hands to its formatters and linters, and what comes back; the gate's parallel run of the tests of the scripts; the areas a commit touches; shared shell functions | Tools |
 | scripts | `setup.sh`, `dev-env.sh`, `dev.sh`, `build-apk.sh`, `check.sh`, `deploy.sh`, `prod.sh`, `release.py`, `e2e_test.py`, `verify-sandbox.sh`, `vendor-katex.sh` | Install, develop, build the app, check, deploy, operate, release, test end to end, verify the sandbox, vendor KaTeX | Tools |
+| skills | `pull-request/scripts/publish_screenshots.py`, `clean-pr-screenshots/scripts/clean_screenshots.py` in `.claude/skills/` | Publish the screenshots of a pull request, and clean the branch that holds them | Tools |
 
 ## Repository layout
 
@@ -280,6 +281,11 @@ procedures. The reasons behind them:
 - **"Rebase and merge"** lands each commit as written, after the review ([Code review](#code-review)) and CI
   ([Technology stack](#technology-stack)).
 - **One writer for `.pm/`,** the coordinating session, keeps its commits from racing.
+- **The screenshots of pull requests live on a branch of their own, `pr-screenshots`,** that holds no code: in the
+  code's history, every clone would carry them, and CI artifacts would show every screen rather than the case a pull
+  request makes. Each picture is linked by the commit that adds it, so a description never changes once written, and
+  the branch is deleted whole from time to time rather than pruned, since rewriting the descriptions that link it
+  would cost more than publishing an open pull request's pictures again.
 
 ### Agent guidance
 

@@ -50,8 +50,10 @@ Read first: `.claude/rules/tests.md`.
 - **Refusals and properties** (`.claude/rules/tests.md` > Structure): a refusal asserted without its message, pattern,
   type or value, or a property whose act left its property run.
 - **Tables and collections** (`.claude/rules/tests.md` > Structure): a table whose rows lost the rule each one states, a
-  hand-written list where production data would cover new entries, or a check over a collection with no expectation on
-  its count.
+  hand-written list where production data would cover new entries, a single hook that runs every row of a table
+  without a costly arrangement to share, outside unittest, or whose tests do not name each mismatch for its row, a
+  table whose rows each rebuild the same costly arrangement, such as an api per row, or a check over a collection with
+  no expectation on its count.
 - **Names** (`.claude/rules/tests.md` > Writing a test): a test name that does not state one rule in domain vocabulary,
   that does not start with `should` after any prefix the framework requires, that does not read as one sentence with
   its groups, or that dropped the reason the rule had.

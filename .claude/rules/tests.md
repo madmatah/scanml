@@ -87,7 +87,9 @@ rule applies to it. The older files move to the structure area by area, each are
   - a parameterized test only for a simple table of data that no act produces, such as the entries of a constant,
     inside a `When …` group, each row named so that it states its own rule;
   - a table whose rows each need an act is a parameterized group, with the act in its hook, since a parameterized test
-    would call the unit in the test;
+    would call the unit in the test; when every row needs an act against one costly arrangement, such as a running api
+    or a server, a single hook runs every row against it and keeps each product under its named row, and each test
+    checks them as a collection, its mismatches named for their rows, next to an expectation on their count;
   - a table of subjects is a parameterized group at level 2;
   - a table built from production data covers a new entry by itself, where a hand-written list would not.
 - **Shared data that nothing changes** lives in the narrowest group that holds every test reading it, or at the file's
@@ -178,21 +180,26 @@ The api's tests, in `server/tests/`, run on pytest.
 
 - **Its words:** a group is a class whose name starts with `Test`, nested in its parent's (`TestTheOrdering` >
   `TestTheRomanToIntFunction` > `TestWhenTheNumeralIsNotCanonical`), since pytest collects only the classes with that
-  prefix; a test is a method named `test_should_…`; a hook is a fixture defined in its group. The fixtures of
-  `server/tests/conftest.py`, such as `client`, `settings` and `fake_ocr`, are shared arrangement: test support that a
-  group's fixtures request, and that acts on nothing under test.
+  prefix; a test is a method named `test_should_…`; a hook is a fixture defined in its group, and the hook that runs
+  once is a fixture of `scope="class"` written as a `@classmethod` under `@pytest.fixture`, since pytest 9.1 deprecates
+  the form of an instance method with a `PytestRemovedIn10Warning`, on which the gate fails. The fixtures of
+  `server/tests/conftest.py`, such as `settings`, `fake_ocr` and `socket_dir`, are shared arrangement: test support that
+  a group's fixtures request, and that acts on nothing under test.
 - **What the act produces is a fixture named for it,** which the tests, and the fixtures of the nested groups, request
-  as an argument. A fixture never sets an attribute on `self`: pytest gives each test a new instance of its class, and
-  runs a fixture of an outer class, or of class scope, on another one, which the tests never see. An act whose tests
-  read its effect through another fixture, such as a fake it writes to, is `autouse=True`. A fixture returns one value,
-  so the products of one act, such as the two sides of a comparison or the captures of a costly sequence, are the fields
-  of a frozen dataclass or a `NamedTuple` that it returns, each named for what it is.
+  as an argument. A fixture never sets an attribute on `self` or `cls`: pytest gives each test a new instance of its
+  class, and runs a fixture of an outer class, or of class scope, on another one, which the tests never see; and an
+  attribute set on `cls` reaches no test of a nested class, which is not a subclass, and outlives the teardown of the
+  fixture. An act whose tests read its effect through another fixture, such as a fake it writes to, is `autouse=True`. A
+  fixture returns one value, so the products of one act, such as the two sides of a comparison or the captures of a
+  costly sequence, are the fields of a frozen dataclass or a `NamedTuple` that it returns, each named for what it is.
 - **A sequence nests through the fixtures:** a nested group's fixture requests its parent's product, and returns the
   next state under a name of its own.
-- **A fixture of `scope="class"` runs once per class, each nested class included,** so a costly act whose captures
-  nested groups read is a fixture of `scope="module"`, at the file's top level, which runs once per file, one for each
-  such act: the only hooks there. A fixture of a wider scope runs before the narrower ones, whatever their group, and
-  pytest refuses one that requests a narrower one.
+- **A fixture of `scope="class"` lives until the end of the innermost class of the first test that requests it,** and
+  the classes nested in that class share its value; otherwise it runs again in each class whose test next requests it.
+  Which test comes first depends on the order and on the selection of the tests, such as `-k` or a test's node id, so a
+  costly act whose captures nested or sibling groups read is a fixture of `scope="module"`, at the file's top level,
+  which runs once per file, one for each such act: the only hooks there. A fixture of a wider scope runs before the
+  narrower ones, whatever their group, and pytest refuses one that requests a narrower one.
 - **A refusal:** the fixture returns the act as a function, and the test calls it as the only statement of
   `with pytest.raises(ReadingOrderRefused, match="…"):`, whose pattern is searched in the message. Ruff refuses a broad
   exception, such as `ValueError` or `OSError`, without `match` (PT011), a block of several statements (PT012) and an
@@ -201,7 +208,11 @@ The api's tests, in `server/tests/`, run on pytest.
 - **Teardown follows the `yield` of its fixture,** in a `with` around the `yield`, or in a function the fixture gives
   `request.addfinalizer` before it acts: pytest skips what follows the `yield` of a fixture that raised before it.
 - **Tables:** `@pytest.mark.parametrize`, with `ids` that name each row, for a table of data; a parameterized group is a
-  fixture with `params` and `ids`, whose act reads `request.param`.
+  fixture with `params` and `ids`, whose act reads `request.param`. A parameterized group whose act is costly takes
+  `scope="class"`, or `scope="module"` at the file's top level when nested or sibling groups read it, so that its act
+  runs once per row, not once per test: pytest runs the tests of a row together. The single hook that runs every row of
+  a table against one costly arrangement is a fixture of `scope="class"` or `scope="module"` that builds its own
+  arrangement, since pytest refuses one that requests the function-scoped fixtures of `conftest.py`.
 - **A test that asserts nothing passes:** pytest has no check for it, and a test that returns a value only warns, so
   review checks it. No lint sees an assertion in a fixture, nor a skip.
 - **No timeout:** pytest times out no test and no fixture.

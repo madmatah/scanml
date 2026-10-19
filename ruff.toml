@@ -1,6 +1,6 @@
 line-length = 120
 target-version = "py312"
-include = ["server/**/*.py", "ocr/**/*.py", "scripts/**/*.py"]
+include = ["server/**/*.py", "ocr/**/*.py", "scripts/**/*.py", ".claude/skills/*/scripts/*.py"]
 # Where the code imports its own modules from: their imports then come after the third-party ones
 # (.claude/rules/python.md).
 src = ["server", "server/tests", "ocr", "ocr/bench", "scripts", "scripts/lib", "scripts/tests",

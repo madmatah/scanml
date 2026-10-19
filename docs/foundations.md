@@ -78,9 +78,9 @@ Notes:
   from hashed locks; Biome from the web UI's lockfile; ShellCheck and shfmt from their authors' images, by digest.
   ktlint runs through Gradle in the app's build container, with its network and its writable `android/`, and Gradle's
   verification metadata checks it as it checks the app's dependencies. `scripts/check.sh --fix` runs the other
-  formatters on a copy of the tracked files they format in `server/`, `ocr/` and `scripts/` (never a vendored file or a
-  lock), and brings back only their changes to those files, so that nothing they create reaches the checkout, where the
-  host would run it, and no change reaches a file whose diff a reader could not judge. Biome's
+  formatters on a copy of the tracked files they format in `server/`, `ocr/`, `scripts/` and `.claude/skills/` (never a
+  vendored file or a lock), and brings back only their changes to those files, so that nothing they create reaches the
+  checkout, where the host would run it, and no change reaches a file whose diff a reader could not judge. Biome's
   `noDescendingSpecificity` is off: the stylesheet orders its rules by component, and reordering them to satisfy it
   would change which rule wins.
 - **`CLAUDE.md` and `.claude/` are the agent guidance** ([Agent guidance](#agent-guidance)).

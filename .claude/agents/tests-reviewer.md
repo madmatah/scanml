@@ -65,8 +65,8 @@ Read first: `.claude/rules/tests.md`.
   refusal message or a weaker assertion, without a reason in the change.
 - **Level** (`.claude/rules/tests.md` > Levels): a test at the wrong level or in the wrong place, such as a unit test
   that needs a real adapter.
-- **Test support** (`.claude/rules/tests.md` > Test support): a fake that accepts what the real adapter refuses, or test
-  support imported by shipped code.
+- **Test support** (`.claude/rules/tests.md` > Test support): a fake that accepts what the real adapter refuses, test
+  support imported by shipped code, or a test that runs git with the `GIT_` variables it inherits.
 - **Test frameworks** (`.claude/rules/tests.md` > pytest, > unittest, > node:test and > JUnit): a clear violation of
   one of the rules of the framework the test runs on.
 

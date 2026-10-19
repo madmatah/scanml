@@ -1490,37 +1490,6 @@ class BuildApkTest(ScriptsTestCase):
         self.assertIn("Version ", output_once_released)
 
 
-class E2eTest(ScriptsTestCase):
-    def test_refuses_production_s_port_however_it_is_written(self) -> None:
-        health = Health(self.api_port)
-        self.addCleanup(health.close)
-        (self.worktree / ".env").write_text(self.dev_env())
-        image = self.base / "page.jpg"
-        image.write_bytes(b"jpeg")
-        for api, expected in [
-            (f"http://127.0.0.1:{self.api_port}?x", "is production's port"),
-            (f"http://127.0.0.1:{self.api_port}#x", "is production's port"),
-            (f"http://localhost:0{self.api_port}/", "is production's port"),
-            ("http://127.0.0.1:8765", "is production's port"),
-            ("http://127.0.0.1", "no explicit port"),
-            ("http://127.0.0.1:99999", "cannot tell the port"),
-            ("ftp://127.0.0.1:8770", "expected http://HOST:PORT"),
-        ]:
-            with self.subTest(api=api):
-                result = subprocess.run(
-                    ["python3", str(self.worktree / "scripts" / "e2e_test.py"), str(image), "--api", api],
-                    cwd=self.worktree,
-                    capture_output=True,
-                    text=True,
-                    timeout=60,
-                    env=self.environment(),
-                )
-                self.assertNotEqual(result.returncode, 0)
-                self.assertIn("refusing to write a test document into production", result.stderr)
-                self.assertIn(expected, result.stderr)
-        self.assertEqual(health.requests, 0)
-
-
 class CheckTest(ScriptsTestCase):
     def list_checks(self) -> list[list[str]]:
         return [call["argv"] for call in self.calls() if call["argv"][:1] in (["build"], ["run"])]

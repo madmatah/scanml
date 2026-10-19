@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import fr.scanmylib.api.ScanMyLibApi
 import fr.scanmylib.model.ServerConfig
 import fr.scanmylib.settings.SettingsRepository
+import java.io.Closeable
 import java.io.File
 import java.security.MessageDigest
 import java.time.Clock
@@ -13,14 +14,12 @@ import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
 import java.time.ZoneOffset
-import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicInteger
-import kotlin.concurrent.thread
+import kotlin.properties.Delegates
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
@@ -36,145 +35,769 @@ import mockwebserver3.RecordedRequest
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okio.Buffer
-import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
-import org.junit.Rule
+import org.junit.BeforeClass
+import org.junit.ClassRule
 import org.junit.Test
+import org.junit.experimental.runners.Enclosed
 import org.junit.rules.TemporaryFolder
+import org.junit.runner.RunWith
+import org.junit.runners.Parameterized
 
-@OptIn(ExperimentalCoroutinesApi::class)
+@RunWith(Enclosed::class)
 class AppUpdaterTest {
+    @RunWith(Enclosed::class)
+    class TheInstallResultFunction {
+        class WhenAndroidAsksTheUserToConfirm {
+            private lateinit var prompt: Intent
+            private lateinit var waiting: UpdateState
 
-    @get:Rule
-    val folder = TemporaryFolder()
+            @Before
+            fun reportThePrompt() {
+                prompt = Intent()
+                waiting = installResult(INSTALLING, PackageInstaller.STATUS_PENDING_USER_ACTION, null, prompt)
+            }
 
-    private val update = AvailableUpdate(
-        "0.8.0",
-        800,
-        "ab".repeat(32),
-        1234,
-        "http://192.168.1.10:8770/download/scanmylib.apk".toHttpUrl(),
-    )
-    private val installing = UpdateState.Installing(update, sessionId = 7)
+            @Test
+            fun `should keep the install's session`() {
+                assertEquals(INSTALLING.sessionId, (waiting as? UpdateState.Installing)?.sessionId)
+            }
 
-    @Test
-    fun `Android's prompt is kept, to show again`() {
-        val prompt = Intent()
-        val waiting = installResult(installing, PackageInstaller.STATUS_PENDING_USER_ACTION, null, prompt)
-        assertEquals(installing.sessionId, (waiting as UpdateState.Installing).sessionId)
-        assertSame(prompt, waiting.confirmation)
-    }
-
-    @Test
-    fun `the installer's answer ends the install`() {
-        assertEquals(UpdateState.UpToDate, installResult(installing, PackageInstaller.STATUS_SUCCESS, null, null))
-        // The user said no: the update is still offered.
-        assertEquals(
-            UpdateState.Available(update),
-            installResult(installing, PackageInstaller.STATUS_FAILURE_ABORTED, "aborted", null),
-        )
-        assertEquals(
-            UpdateState.Failed(update, UpdateFailure.STORAGE_FULL, "not enough space"),
-            installResult(installing, PackageInstaller.STATUS_FAILURE_STORAGE, "not enough space", null),
-        )
-    }
-
-    @Test
-    fun `a refused install keeps Android's message for the details, a conflict included`() {
-        // A conflict is rarely another key: the app compares the certificates before.
-        val conflict = "INSTALL_FAILED_CONFLICTING_PROVIDER: another app declares the provider"
-        assertEquals(
-            UpdateState.Failed(update, UpdateFailure.INSTALL, conflict),
-            installResult(installing, PackageInstaller.STATUS_FAILURE_CONFLICT, conflict, null),
-        )
-        assertEquals(
-            UpdateState.Failed(update, UpdateFailure.INSTALL, "INSTALL_FAILED_OLDER_SDK"),
-            installResult(installing, PackageInstaller.STATUS_FAILURE_INCOMPATIBLE, "INSTALL_FAILED_OLDER_SDK", null),
-        )
-        assertEquals(
-            UpdateState.Failed(update, UpdateFailure.INSTALL, null),
-            installResult(installing, PackageInstaller.STATUS_FAILURE, null, null),
-        )
-    }
-
-    @Test
-    fun `an attempt that ended no longer acts`() {
-        val attempts = CurrentAttempt()
-        val first = attempts.next()
-        assertTrue(attempts.ifCurrent(first) {})
-        val second = attempts.next()
-        var ran = false
-        assertFalse(attempts.ifCurrent(first) { ran = true })
-        assertFalse(ran)
-        assertTrue(attempts.ifCurrent(second) { ran = true })
-        assertTrue(ran)
-    }
-
-    @Test
-    fun `an attempt never ends halfway through one of its steps`() {
-        val attempts = CurrentAttempt()
-        val id = attempts.next()
-        val events = Collections.synchronizedList(mutableListOf<String>())
-        val stepStarted = CountDownLatch(1)
-        val stepMayEnd = CountDownLatch(1)
-        val step = thread {
-            attempts.ifCurrent(id) {
-                stepStarted.countDown()
-                stepMayEnd.await()
-                events += "step"
+            @Test
+            fun `should keep Android's prompt, to show it again`() {
+                assertSame(prompt, (waiting as? UpdateState.Installing)?.confirmation)
             }
         }
-        stepStarted.await()
-        // A cancel, while the step runs: it waits for the step to end.
-        val cancel = thread { attempts.next { events += "canceled" } }
-        while (cancel.isAlive && cancel.state != Thread.State.BLOCKED) Thread.yield()
-        stepMayEnd.countDown()
-        step.join()
-        cancel.join()
-        assertEquals(listOf("step", "canceled"), events)
+
+        @RunWith(Parameterized::class)
+        class WhenAndroidEndsTheInstall(
+            private val answer: String,
+            private val status: Int,
+            private val message: String?,
+            private val expected: UpdateState,
+        ) {
+            private lateinit var stateOnceEnded: UpdateState
+
+            @Before
+            fun reportTheAnswer() {
+                stateOnceEnded = installResult(INSTALLING, status, message, null)
+            }
+
+            @Test
+            fun `should end the install as Android's answer says`() {
+                assertEquals(answer, expected, stateOnceEnded)
+            }
+
+            companion object {
+                @JvmStatic
+                @Parameterized.Parameters(name = "{0}")
+                fun answers(): List<Array<Any?>> = listOf(
+                    arrayOf("installed: up to date", PackageInstaller.STATUS_SUCCESS, null, UpdateState.UpToDate),
+                    arrayOf(
+                        "the user said no: the update is still offered",
+                        PackageInstaller.STATUS_FAILURE_ABORTED,
+                        "aborted",
+                        UpdateState.Available(UPDATE),
+                    ),
+                    arrayOf(
+                        "no room on the phone: the storage is full, with Android's message",
+                        PackageInstaller.STATUS_FAILURE_STORAGE,
+                        "not enough space",
+                        UpdateState.Failed(UPDATE, UpdateFailure.STORAGE_FULL, "not enough space"),
+                    ),
+                )
+            }
+        }
+
+        @RunWith(Parameterized::class)
+        class WhenAndroidRefusesTheInstall(
+            private val refusal: String,
+            private val status: Int,
+            private val message: String?,
+        ) {
+            private lateinit var stateOnceRefused: UpdateState
+
+            @Before
+            fun reportTheRefusal() {
+                stateOnceRefused = installResult(INSTALLING, status, message, null)
+            }
+
+            @Test
+            fun `should keep Android's message for the details`() {
+                assertEquals(refusal, UpdateState.Failed(UPDATE, UpdateFailure.INSTALL, message), stateOnceRefused)
+            }
+
+            companion object {
+                @JvmStatic
+                @Parameterized.Parameters(name = "{0}")
+                fun refusals(): List<Array<Any?>> = listOf(
+                    arrayOf(
+                        "a conflict, rarely another key since the app compares the certificates before",
+                        PackageInstaller.STATUS_FAILURE_CONFLICT,
+                        "INSTALL_FAILED_CONFLICTING_PROVIDER: another app declares the provider",
+                    ),
+                    arrayOf(
+                        "an APK incompatible with the phone",
+                        PackageInstaller.STATUS_FAILURE_INCOMPATIBLE,
+                        "INSTALL_FAILED_OLDER_SDK",
+                    ),
+                    arrayOf("a failure without a message", PackageInstaller.STATUS_FAILURE, null),
+                )
+            }
+        }
     }
 
-    // The updater itself, with a PC on this machine and a fake Android.
+    @RunWith(Enclosed::class)
+    class TheInstallMethod {
+        class WhenRetriedAfterAFileNotAsAnnounced {
+            @Test
+            fun `should fail first, the file not being the one announced`() {
+                assertEquals(UpdateState.Failed(firstOffer, UpdateFailure.NOT_AS_ANNOUNCED), stateAfterTheDownload)
+            }
 
-    private val pc = Pc()
-    private val server = MockWebServer()
-    private val installer = FakeInstaller()
-    private val clock = MovingClock(Instant.parse("2026-10-17T08:00:00Z"))
+            @Test
+            fun `should keep the banner while the PC is asked again`() {
+                assertEquals(UpdateState.Downloading(firstOffer, 0), stateWhileThePcIsAsked)
+            }
 
-    /** What the updater runs in the background: checks, downloads, installs. */
+            @Test
+            fun `should install at once what the PC offers now`() {
+                assertEquals(UpdateState.Installing(newOffer, sessionId = 1), stateOnceSettled)
+            }
+
+            @Test
+            fun `should commit that install`() {
+                assertEquals(listOf(1), committed)
+            }
+
+            @Test
+            fun `should ask the PC again before the download`() {
+                assertEquals(2, healthCheckCount)
+            }
+
+            companion object {
+                @ClassRule
+                @JvmField
+                val folder = TemporaryFolder()
+
+                private lateinit var firstOffer: AvailableUpdate
+                private lateinit var newOffer: AvailableUpdate
+                private lateinit var stateAfterTheDownload: UpdateState
+                private lateinit var stateWhileThePcIsAsked: UpdateState
+                private lateinit var stateOnceSettled: UpdateState
+                private lateinit var committed: List<Int>
+                private var healthCheckCount: Int by Delegates.notNull()
+
+                @BeforeClass
+                @JvmStatic
+                fun retryTheInstall() = runTest {
+                    UpdaterBench(folder.root).use { bench ->
+                        val updater = bench.updater(this)
+                        failOnAnotherBuildPublishedAfterTheCheck(bench, updater)
+                        firstOffer = bench.makeOfferFor(APK)
+                        stateAfterTheDownload = updater.state.value
+                        bench.pc.announcedApk = bench.pc.servedApk
+                        updater.install()
+                        stateWhileThePcIsAsked = updater.state.value
+                        bench.awaitBackgroundWork()
+                        stateOnceSettled = updater.state.value
+                        newOffer = bench.makeOfferFor(bench.pc.servedApk)
+                        committed = bench.installer.committed.toList()
+                        healthCheckCount = bench.pc.healthChecks.value
+                    }
+                }
+            }
+        }
+
+        class WhenARetryWasCanceledWhileThePcWasAsked {
+            @Test
+            fun `should fail first, the file not being the one announced`() {
+                assertEquals(UpdateState.Failed(firstOffer, UpdateFailure.NOT_AS_ANNOUNCED), stateAfterTheDownload)
+            }
+
+            @Test
+            fun `should offer the stale update again once the retry is canceled`() {
+                assertEquals(UpdateState.Available(firstOffer), stateOnceCanceled)
+            }
+
+            @Test
+            fun `should ask the PC first on the next install, rather than download the stale offer`() {
+                assertEquals(UpdateState.Installing(newOffer, sessionId = 1), stateOnceInstalled)
+            }
+
+            @Test
+            fun `should ask the PC once more on the next install`() {
+                assertEquals(3, healthCheckCount)
+            }
+
+            companion object {
+                @ClassRule
+                @JvmField
+                val folder = TemporaryFolder()
+
+                private lateinit var firstOffer: AvailableUpdate
+                private lateinit var newOffer: AvailableUpdate
+                private lateinit var stateAfterTheDownload: UpdateState
+                private lateinit var stateOnceCanceled: UpdateState
+                private lateinit var stateOnceInstalled: UpdateState
+                private var healthCheckCount: Int by Delegates.notNull()
+
+                @BeforeClass
+                @JvmStatic
+                fun cancelTheRetryThenInstall() = runTest {
+                    UpdaterBench(folder.root).use { bench ->
+                        val updater = bench.updater(this)
+                        failOnAnotherBuildPublishedAfterTheCheck(bench, updater)
+                        firstOffer = bench.makeOfferFor(APK)
+                        stateAfterTheDownload = updater.state.value
+                        retryThenCancelWhileThePcIsAsked(bench, updater)
+                        stateOnceCanceled = updater.state.value
+                        bench.pc.heldAnswer = null
+                        updater.install()
+                        bench.awaitBackgroundWork()
+                        stateOnceInstalled = updater.state.value
+                        newOffer = bench.makeOfferFor(bench.pc.servedApk)
+                        healthCheckCount = bench.pc.healthChecks.value
+                    }
+                }
+            }
+        }
+
+        class WhenARetryCannotReachThePc {
+            @Test
+            fun `should keep the banner, and say the download failed`() {
+                assertEquals(UpdateState.Failed(offer, UpdateFailure.DOWNLOAD), stateWhenUnreachable)
+            }
+
+            @Test
+            fun `should show nothing once the PC offers nothing any more`() {
+                assertEquals(UpdateState.UpToDate, stateWhenNothingIsOffered)
+            }
+
+            @Test
+            fun `should install nothing`() {
+                assertEquals(emptyList<Int>(), committed)
+            }
+
+            companion object {
+                @ClassRule
+                @JvmField
+                val folder = TemporaryFolder()
+
+                private lateinit var offer: AvailableUpdate
+                private lateinit var stateWhenUnreachable: UpdateState
+                private lateinit var stateWhenNothingIsOffered: UpdateState
+                private lateinit var committed: List<Int>
+
+                @BeforeClass
+                @JvmStatic
+                fun retryWithoutThePc() = runTest {
+                    UpdaterBench(folder.root).use { bench ->
+                        val updater = bench.updater(this)
+                        failOnAnotherBuildPublishedAfterTheCheck(bench, updater)
+                        offer = bench.makeOfferFor(APK)
+                        bench.pc.isDown = true
+                        updater.install()
+                        bench.awaitBackgroundWork()
+                        stateWhenUnreachable = updater.state.value
+                        bench.pc.isDown = false
+                        bench.pc.announcedApk = null
+                        updater.install()
+                        bench.awaitBackgroundWork()
+                        stateWhenNothingIsOffered = updater.state.value
+                        committed = bench.installer.committed.toList()
+                    }
+                }
+            }
+        }
+    }
+
+    @RunWith(Enclosed::class)
+    class TheCancelMethod {
+        class WhenTheApkIsCopiedIntoTheInstallersSession {
+            @Test
+            fun `should offer the update again`() {
+                assertEquals(UpdateState.Available(offer), state)
+            }
+
+            @Test
+            fun `should commit nothing`() {
+                assertEquals(emptyList<Int>(), committed)
+            }
+
+            @Test
+            fun `should abandon the session`() {
+                assertEquals(listOf(1), abandoned)
+            }
+
+            @Test
+            fun `should leave no file behind`() {
+                assertEquals(emptyList<String>(), downloadedFiles)
+            }
+
+            companion object {
+                @ClassRule
+                @JvmField
+                val folder = TemporaryFolder()
+
+                private lateinit var offer: AvailableUpdate
+                private lateinit var state: UpdateState
+                private lateinit var committed: List<Int>
+                private lateinit var abandoned: List<Int>
+                private lateinit var downloadedFiles: List<String>
+
+                @BeforeClass
+                @JvmStatic
+                fun cancelDuringTheCopy() = runTest {
+                    UpdaterBench(folder.root).use { bench ->
+                        val updater = bench.updater(this)
+                        updater.check()
+                        bench.awaitBackgroundWork()
+                        bench.installer.onCopy = { updater.cancel() }
+                        updater.install()
+                        bench.awaitBackgroundWork()
+                        offer = bench.makeOfferFor(APK)
+                        state = updater.state.value
+                        committed = bench.installer.committed.toList()
+                        abandoned = bench.installer.abandoned.toList()
+                        downloadedFiles = bench.downloads.list().orEmpty().toList()
+                    }
+                }
+            }
+        }
+
+        class WhenTheInstallHasBegunBeforeAndroidHasTheApk {
+            @Test
+            fun `should offer the update again, with no failure shown`() {
+                assertEquals(UpdateState.Available(offer), state)
+            }
+
+            @Test
+            fun `should commit nothing`() {
+                assertEquals(emptyList<Int>(), committed)
+            }
+
+            @Test
+            fun `should abandon its session, whose commit Android then refuses`() {
+                assertTrue("$abandoned", 1 in abandoned)
+            }
+
+            companion object {
+                @ClassRule
+                @JvmField
+                val folder = TemporaryFolder()
+
+                private lateinit var offer: AvailableUpdate
+                private lateinit var state: UpdateState
+                private lateinit var committed: List<Int>
+                private lateinit var abandoned: List<Int>
+
+                @BeforeClass
+                @JvmStatic
+                fun cancelBeforeTheCommit() = runTest {
+                    UpdaterBench(folder.root).use { bench ->
+                        val updater = bench.updater(this)
+                        updater.check()
+                        bench.awaitBackgroundWork()
+                        bench.installer.onCommit = {
+                            updater.cancel()
+                            bench.installer.abandonRecorded.await()
+                        }
+                        updater.install()
+                        bench.awaitBackgroundWork()
+                        offer = bench.makeOfferFor(APK)
+                        state = updater.state.value
+                        committed = bench.installer.committed.toList()
+                        abandoned = bench.installer.abandoned.toList()
+                    }
+                }
+            }
+        }
+    }
+
+    class WhenAnInstallIsUnderWayThenCanceled {
+        @Test
+        fun `should hand the APK to Android`() {
+            assertEquals(UpdateState.Installing(offer, sessionId = 1), stateOnceHandedOver)
+        }
+
+        @Test
+        fun `should ignore a report about another session`() {
+            assertFalse(isOtherSessionTaken)
+        }
+
+        @Test
+        fun `should keep the install as it was after a report about another session`() {
+            assertEquals(UpdateState.Installing(offer, sessionId = 1), stateAfterTheOtherSession)
+        }
+
+        @Test
+        fun `should take a report about the current install`() {
+            assertTrue(isCurrentSessionTaken)
+        }
+
+        @Test
+        fun `should keep Android's prompt for the current install, to show it again`() {
+            assertSame(prompt, shownPrompt.intent)
+        }
+
+        @Test
+        fun `should offer the update again once the install is canceled`() {
+            assertEquals(UpdateState.Available(offer), stateOnceCanceled)
+        }
+
+        @Test
+        fun `should abandon the session of the canceled install`() {
+            assertEquals(listOf(1), abandoned)
+        }
+
+        @Test
+        fun `should ignore a report about the canceled install`() {
+            assertFalse(isCanceledSessionTaken)
+        }
+
+        @Test
+        fun `should not show the prompt of the canceled install`() {
+            assertEquals(UpdateState.Available(offer), stateAfterTheCanceledSession)
+        }
+
+        companion object {
+            @ClassRule
+            @JvmField
+            val folder = TemporaryFolder()
+
+            private lateinit var offer: AvailableUpdate
+            private lateinit var prompt: Intent
+            private lateinit var stateOnceHandedOver: UpdateState
+            private var isOtherSessionTaken: Boolean by Delegates.notNull()
+            private lateinit var stateAfterTheOtherSession: UpdateState
+            private var isCurrentSessionTaken: Boolean by Delegates.notNull()
+            private lateinit var shownPrompt: Prompt
+            private lateinit var stateOnceCanceled: UpdateState
+            private lateinit var abandoned: List<Int>
+            private var isCanceledSessionTaken: Boolean by Delegates.notNull()
+            private lateinit var stateAfterTheCanceledSession: UpdateState
+
+            @BeforeClass
+            @JvmStatic
+            fun reportOnTheInstall() = runTest {
+                UpdaterBench(folder.root).use { bench ->
+                    val updater = bench.updater(this)
+                    updater.check()
+                    bench.awaitBackgroundWork()
+                    updater.install()
+                    bench.awaitBackgroundWork()
+                    offer = bench.makeOfferFor(APK)
+                    stateOnceHandedOver = updater.state.value
+                    val pending = PackageInstaller.STATUS_PENDING_USER_ACTION
+                    isOtherSessionTaken = updater.onInstallResult(2, pending, null, Intent())
+                    stateAfterTheOtherSession = updater.state.value
+                    prompt = Intent()
+                    isCurrentSessionTaken = updater.onInstallResult(1, pending, null, prompt)
+                    shownPrompt = Prompt((updater.state.value as? UpdateState.Installing)?.confirmation)
+                    updater.cancel()
+                    bench.awaitBackgroundWork()
+                    stateOnceCanceled = updater.state.value
+                    abandoned = bench.installer.abandoned.toList()
+                    isCanceledSessionTaken = updater.onInstallResult(1, pending, null, Intent())
+                    stateAfterTheCanceledSession = updater.state.value
+                }
+            }
+        }
+    }
+
+    class WhenTheAppIsPairedAgainDuringACheck {
+        @Test
+        fun `should offer the update the PC announces`() {
+            assertEquals(UpdateState.Available(offer), stateAfterTheCheck)
+        }
+
+        @Test
+        fun `should not ask the PC again a moment after it answered`() {
+            assertEquals(UpdateState.Available(offer), stateAMomentLater)
+        }
+
+        @Test
+        fun `should drop the check under way`() {
+            assertEquals(UpdateState.Unknown, stateOnceReset)
+        }
+
+        @Test
+        fun `should ask the PC at once when the library next shows`() {
+            assertEquals(UpdateState.Checking, stateWhenDue)
+        }
+
+        @Test
+        fun `should offer what the PC offers then`() {
+            assertEquals(UpdateState.Available(offer), stateOnceAsked)
+        }
+
+        @Test
+        fun `should ask the PC once more`() {
+            assertEquals(3, healthCheckCount)
+        }
+
+        companion object {
+            @ClassRule
+            @JvmField
+            val folder = TemporaryFolder()
+
+            private lateinit var offer: AvailableUpdate
+            private lateinit var stateAfterTheCheck: UpdateState
+            private lateinit var stateAMomentLater: UpdateState
+            private lateinit var stateOnceReset: UpdateState
+            private lateinit var stateWhenDue: UpdateState
+            private lateinit var stateOnceAsked: UpdateState
+            private var healthCheckCount: Int by Delegates.notNull()
+
+            @BeforeClass
+            @JvmStatic
+            fun pairAgainDuringACheck() = runTest {
+                UpdaterBench(folder.root).use { bench ->
+                    val updater = bench.updater(this)
+                    updater.check()
+                    bench.awaitBackgroundWork()
+                    offer = bench.makeOfferFor(APK)
+                    stateAfterTheCheck = updater.state.value
+                    updater.checkIfDue()
+                    stateAMomentLater = updater.state.value
+                    val answer = CountDownLatch(1)
+                    bench.pc.heldAnswer = answer
+                    updater.check()
+                    bench.pc.healthChecks.first { it == 2 }
+                    updater.reset()
+                    answer.countDown()
+                    bench.awaitBackgroundWork()
+                    stateOnceReset = updater.state.value
+                    bench.pc.heldAnswer = null
+                    updater.checkIfDue()
+                    stateWhenDue = updater.state.value
+                    bench.awaitBackgroundWork()
+                    stateOnceAsked = updater.state.value
+                    healthCheckCount = bench.pc.healthChecks.value
+                }
+            }
+        }
+    }
+
+    class WhenTheInstallWaitsForAndroidsPermission {
+        @Test
+        fun `should wait for Android's permission to install apps`() {
+            assertEquals(UpdateState.NeedsPermission(offer), stateWithoutPermission)
+        }
+
+        @Test
+        fun `should not replace the install, even when a check is due, since the user may be on Android's page`() {
+            assertEquals(UpdateState.NeedsPermission(offer), stateWhenDue)
+        }
+
+        @Test
+        fun `should keep waiting back in the app without the permission`() {
+            assertEquals(UpdateState.NeedsPermission(offer), stateBackWithoutPermission)
+        }
+
+        @Test
+        fun `should go on with the install back in the app with the permission`() {
+            assertEquals(UpdateState.Installing(offer, sessionId = 1), stateBackWithPermission)
+        }
+
+        @Test
+        fun `should not ask the PC again`() {
+            assertEquals(1, healthCheckCount)
+        }
+
+        companion object {
+            @ClassRule
+            @JvmField
+            val folder = TemporaryFolder()
+
+            private lateinit var offer: AvailableUpdate
+            private lateinit var stateWithoutPermission: UpdateState
+            private lateinit var stateWhenDue: UpdateState
+            private lateinit var stateBackWithoutPermission: UpdateState
+            private lateinit var stateBackWithPermission: UpdateState
+            private var healthCheckCount: Int by Delegates.notNull()
+
+            @BeforeClass
+            @JvmStatic
+            fun waitForThePermission() = runTest {
+                UpdaterBench(folder.root).use { bench ->
+                    val updater = bench.updater(this)
+                    bench.installer.isAllowed = false
+                    updater.check()
+                    bench.awaitBackgroundWork()
+                    updater.install()
+                    offer = bench.makeOfferFor(APK)
+                    stateWithoutPermission = updater.state.value
+                    bench.clock.now += Duration.ofHours(2)
+                    updater.checkIfDue()
+                    stateWhenDue = updater.state.value
+                    updater.onReturn()
+                    stateBackWithoutPermission = updater.state.value
+                    bench.installer.isAllowed = true
+                    updater.onReturn()
+                    bench.awaitBackgroundWork()
+                    stateBackWithPermission = updater.state.value
+                    healthCheckCount = bench.pc.healthChecks.value
+                }
+            }
+        }
+    }
+
+    @RunWith(Enclosed::class)
+    class TheOnReturnMethod {
+        class WhenAndroidsPromptIsLeftWithoutAnAnswer {
+            @Test
+            fun `should keep waiting for the answer`() {
+                assertEquals(UpdateState.Installing(offer, sessionId = 1), stateWithoutAnAnswer)
+            }
+
+            @Test
+            fun `should offer the update again once its session is gone, answered while the app was away`() {
+                assertEquals(UpdateState.Available(offer), stateOnceAnswered)
+            }
+
+            companion object {
+                @ClassRule
+                @JvmField
+                val folder = TemporaryFolder()
+
+                private lateinit var offer: AvailableUpdate
+                private lateinit var stateWithoutAnAnswer: UpdateState
+                private lateinit var stateOnceAnswered: UpdateState
+
+                @BeforeClass
+                @JvmStatic
+                fun comeBackToTheApp() = runTest {
+                    UpdaterBench(folder.root).use { bench ->
+                        val updater = bench.updater(this)
+                        updater.check()
+                        bench.awaitBackgroundWork()
+                        updater.install()
+                        bench.awaitBackgroundWork()
+                        offer = bench.makeOfferFor(APK)
+                        updater.onReturn()
+                        bench.awaitBackgroundWork()
+                        stateWithoutAnAnswer = updater.state.value
+                        bench.installer.sessions -= 1
+                        updater.onReturn()
+                        bench.awaitBackgroundWork()
+                        stateOnceAnswered = updater.state.value
+                    }
+                }
+            }
+        }
+    }
+
+    class WhenTheLastCheckCouldNotReachThePc {
+        @Test
+        fun `should show that the check failed`() {
+            assertEquals(UpdateState.CheckFailed, stateAfterTheCheck)
+        }
+
+        @Test
+        fun `should not check again before an hour has passed`() {
+            assertEquals(UpdateState.CheckFailed, stateWhenNotDue)
+        }
+
+        @Test
+        fun `should check again at once when the PC answers the library again`() {
+            assertEquals(UpdateState.Checking, stateWhenThePcIsBack)
+        }
+
+        @Test
+        fun `should offer the update the PC announces`() {
+            assertEquals(UpdateState.Available(offer), stateOnceAsked)
+        }
+
+        @Test
+        fun `should not check again after a check that succeeded`() {
+            assertEquals(UpdateState.Available(offer), stateWhenThePcIsBackAgain)
+            assertEquals(2, healthCheckCount)
+        }
+
+        companion object {
+            @ClassRule
+            @JvmField
+            val folder = TemporaryFolder()
+
+            private lateinit var offer: AvailableUpdate
+            private lateinit var stateAfterTheCheck: UpdateState
+            private lateinit var stateWhenNotDue: UpdateState
+            private lateinit var stateWhenThePcIsBack: UpdateState
+            private lateinit var stateOnceAsked: UpdateState
+            private lateinit var stateWhenThePcIsBackAgain: UpdateState
+            private var healthCheckCount: Int by Delegates.notNull()
+
+            @BeforeClass
+            @JvmStatic
+            fun bringThePcBack() = runTest {
+                UpdaterBench(folder.root).use { bench ->
+                    val updater = bench.updater(this)
+                    bench.pc.isDown = true
+                    updater.check()
+                    bench.awaitBackgroundWork()
+                    stateAfterTheCheck = updater.state.value
+                    bench.pc.isDown = false
+                    updater.checkIfDue()
+                    stateWhenNotDue = updater.state.value
+                    updater.onPcBack()
+                    stateWhenThePcIsBack = updater.state.value
+                    bench.awaitBackgroundWork()
+                    offer = bench.makeOfferFor(APK)
+                    stateOnceAsked = updater.state.value
+                    updater.onPcBack()
+                    stateWhenThePcIsBackAgain = updater.state.value
+                    healthCheckCount = bench.pc.healthChecks.value
+                }
+            }
+        }
+    }
+}
+
+private const val APP = "fr.scanmylib.dev"
+private const val TOKEN = "q9Xz-Lm_3vT0"
+private val APK = ByteArray(3000) { (it % 251).toByte() }
+private val SIGNERS = setOf("cd".repeat(32))
+private val UPDATE = AvailableUpdate(
+    "0.8.0",
+    800,
+    "ab".repeat(32),
+    1234,
+    "http://192.168.1.10:8770/download/scanmylib.apk".toHttpUrl(),
+)
+private val INSTALLING = UpdateState.Installing(UPDATE, sessionId = 7)
+
+/** Android's prompt, which may be missing, held in a non-null value so that a test fails when no hook ran. */
+private data class Prompt(val intent: Intent?)
+
+private class UpdaterBench(private val folder: File) : Closeable {
+    val pc = Pc()
+    val installer = FakeInstaller()
+    val clock = MovingClock(Instant.parse("2026-10-17T08:00:00Z"))
+    val downloads = File(folder, "updates")
+    private val server = MockWebServer().apply {
+        dispatcher = pc
+        start()
+    }
     private val background = SupervisorJob()
 
-    @Before
-    fun setUp() {
-        server.dispatcher = pc
-        server.start()
-    }
-
-    @After
-    fun tearDown() {
-        background.cancel()
-        server.close()
-    }
-
-    /** The updater of an app paired with [server], on the test's dispatcher. */
-    private suspend fun TestScope.updater(): AppUpdater {
-        val dataStore = PreferenceDataStoreFactory.create(scope = backgroundScope) {
-            File(folder.root, "settings.preferences_pb")
+    suspend fun updater(test: TestScope): AppUpdater {
+        val dataStore = PreferenceDataStoreFactory.create(scope = test.backgroundScope) {
+            File(folder, "settings.preferences_pb")
         }
         val settings = SettingsRepository(dataStore)
         settings.pair(ServerConfig(server.url("/"), TOKEN))
         val http = OkHttpClient()
-        val scope = CoroutineScope(StandardTestDispatcher(testScheduler) + background)
-        val downloads = File(folder.root, "updates")
+        val scope = CoroutineScope(StandardTestDispatcher(test.testScheduler) + background)
         return AppUpdater(installer, downloads, settings, { ScanMyLibApi(http, it) }, http, scope, clock)
     }
 
-    /** Waits for what the updater runs in the background. */
-    private suspend fun settle() {
+    suspend fun awaitBackgroundWork() {
         while (true) {
             val running = background.children.filter { !it.isCompleted }.toList()
             if (running.isEmpty()) return
@@ -182,340 +805,122 @@ class AppUpdaterTest {
         }
     }
 
-    /** The update the PC offers for [apk], published as its download. */
-    private fun offerOf(apk: ByteArray) =
-        AvailableUpdate("0.8.0", 800, sha256Of(apk), apk.size.toLong(), server.url("/download/scanmylib.apk"))
+    fun makeOfferFor(apk: ByteArray) =
+        AvailableUpdate("0.8.0", 800, computeSha256(apk), apk.size.toLong(), server.url("/download/scanmylib.apk"))
 
-    @Test
-    fun `after a file not as announced, Retry asks the PC again and installs what it offers, at once`() = runTest {
-        val updater = updater()
-        // The PC published another build after it answered.
-        pc.served = ByteArray(APK.size) { 7 }
-        updater.check()
-        settle()
-        updater.install()
-        settle()
-        val first = offerOf(APK)
-        assertEquals(UpdateState.Failed(first, UpdateFailure.NOT_AS_ANNOUNCED), updater.state.value)
-
-        pc.announced = pc.served
-        updater.install()
-        // The banner stays while the PC is asked.
-        assertEquals(UpdateState.Downloading(first, 0), updater.state.value)
-        settle()
-        assertEquals(UpdateState.Installing(offerOf(pc.served), sessionId = 1), updater.state.value)
-        assertEquals(listOf(1), installer.committed)
-        assertEquals(2, pc.healthChecks.value)
-    }
-
-    @Test
-    fun `a Retry canceled while the PC is asked still asks it first the next time`() = runTest {
-        val updater = updater()
-        pc.served = ByteArray(APK.size) { 7 }
-        updater.check()
-        settle()
-        updater.install()
-        settle()
-        val first = offerOf(APK)
-        assertEquals(UpdateState.Failed(first, UpdateFailure.NOT_AS_ANNOUNCED), updater.state.value)
-
-        // Retry, then Cancel while the PC is slow to answer: the stale offer is back on the banner.
-        pc.announced = pc.served
-        val answer = CountDownLatch(1)
-        pc.held = answer
-        updater.install()
-        pc.healthChecks.first { it == 2 }
-        updater.cancel()
-        answer.countDown()
-        settle()
-        assertEquals(UpdateState.Available(first), updater.state.value)
-
-        // Install asks the PC again rather than download the stale offer.
-        pc.held = null
-        updater.install()
-        settle()
-        assertEquals(UpdateState.Installing(offerOf(pc.served), sessionId = 1), updater.state.value)
-        assertEquals(3, pc.healthChecks.value)
-    }
-
-    @Test
-    fun `a Retry that cannot reach the PC keeps the banner and says so`() = runTest {
-        val updater = updater()
-        pc.served = ByteArray(APK.size) { 7 }
-        updater.check()
-        settle()
-        updater.install()
-        settle()
-        val offer = offerOf(APK)
-
-        pc.down = true
-        updater.install()
-        settle()
-        assertEquals(UpdateState.Failed(offer, UpdateFailure.DOWNLOAD), updater.state.value)
-
-        // The PC offers nothing any more: nothing left to show.
-        pc.down = false
-        pc.announced = null
-        updater.install()
-        settle()
-        assertEquals(UpdateState.UpToDate, updater.state.value)
-        assertEquals(emptyList<Int>(), installer.committed)
-    }
-
-    @Test
-    fun `a cancel before the APK is handed over commits nothing and leaves nothing behind`() = runTest {
-        val updater = updater()
-        updater.check()
-        settle()
-        // The user taps Cancel while the APK is copied into the installer's session.
-        installer.onCopy = { updater.cancel() }
-        updater.install()
-        settle()
-        assertEquals(UpdateState.Available(offerOf(APK)), updater.state.value)
-        assertEquals(emptyList<Int>(), installer.committed)
-        assertEquals(listOf(1), installer.abandoned)
-        assertEquals(emptyList<String>(), File(folder.root, "updates").list().orEmpty().toList())
-    }
-
-    @Test
-    fun `a cancel just before the APK is handed over abandons its session, and no failure shows`() = runTest {
-        val updater = updater()
-        updater.check()
-        settle()
-        // The user taps Cancel once the install has begun, before Android has the APK: the
-        // session is abandoned before the commit, which Android then refuses.
-        installer.onCommit = { sessionId ->
-            updater.cancel()
-            while (sessionId !in installer.abandoned) Thread.sleep(1)
-        }
-        updater.install()
-        settle()
-        assertEquals(UpdateState.Available(offerOf(APK)), updater.state.value)
-        assertEquals(emptyList<Int>(), installer.committed)
-        assertTrue(1 in installer.abandoned)
-    }
-
-    @Test
-    fun `Android's report on an install that is no longer current is ignored, its prompt not shown`() = runTest {
-        val updater = updater()
-        updater.check()
-        settle()
-        updater.install()
-        settle()
-        val offer = offerOf(APK)
-        assertEquals(UpdateState.Installing(offer, sessionId = 1), updater.state.value)
-
-        assertFalse(updater.onInstallResult(2, PackageInstaller.STATUS_PENDING_USER_ACTION, null, Intent()))
-        assertEquals(UpdateState.Installing(offer, sessionId = 1), updater.state.value)
-        val prompt = Intent()
-        assertTrue(updater.onInstallResult(1, PackageInstaller.STATUS_PENDING_USER_ACTION, null, prompt))
-        assertSame(prompt, (updater.state.value as UpdateState.Installing).confirmation)
-
-        updater.cancel()
-        settle()
-        assertEquals(UpdateState.Available(offer), updater.state.value)
-        assertEquals(listOf(1), installer.abandoned)
-        assertFalse(updater.onInstallResult(1, PackageInstaller.STATUS_PENDING_USER_ACTION, null, Intent()))
-        assertEquals(UpdateState.Available(offer), updater.state.value)
-    }
-
-    @Test
-    fun `pairing again drops the check under way and asks the PC at once`() = runTest {
-        val updater = updater()
-        updater.check()
-        settle()
-        val offer = offerOf(APK)
-        assertEquals(UpdateState.Available(offer), updater.state.value)
-        // Asked a moment ago: not again.
-        updater.checkIfDue()
-        assertEquals(UpdateState.Available(offer), updater.state.value)
-
-        val answer = CountDownLatch(1)
-        pc.held = answer
-        updater.check()
-        pc.healthChecks.first { it == 2 }
-        updater.reset()
-        answer.countDown()
-        settle()
-        assertEquals(UpdateState.Unknown, updater.state.value)
-
-        pc.held = null
-        updater.checkIfDue()
-        assertEquals(UpdateState.Checking, updater.state.value)
-        settle()
-        assertEquals(UpdateState.Available(offer), updater.state.value)
-        assertEquals(3, pc.healthChecks.value)
-    }
-
-    @Test
-    fun `a check never replaces the install waiting for Android's permission`() = runTest {
-        val updater = updater()
-        installer.allowed = false
-        updater.check()
-        settle()
-        updater.install()
-        val offer = offerOf(APK)
-        assertEquals(UpdateState.NeedsPermission(offer), updater.state.value)
-
-        // Due, but the user may be on Android's page: the install goes on once back.
-        clock.now += Duration.ofHours(2)
-        updater.checkIfDue()
-        assertEquals(UpdateState.NeedsPermission(offer), updater.state.value)
-        updater.onReturn()
-        assertEquals(UpdateState.NeedsPermission(offer), updater.state.value)
-
-        installer.allowed = true
-        updater.onReturn()
-        settle()
-        assertEquals(UpdateState.Installing(offer, sessionId = 1), updater.state.value)
-        assertEquals(1, pc.healthChecks.value)
-    }
-
-    @Test
-    fun `back in the app, an install whose session is gone is offered again`() = runTest {
-        val updater = updater()
-        updater.check()
-        settle()
-        updater.install()
-        settle()
-        val offer = offerOf(APK)
-        // Android's prompt, left without an answer: still waiting.
-        updater.onReturn()
-        settle()
-        assertEquals(UpdateState.Installing(offer, sessionId = 1), updater.state.value)
-
-        // Answered while the app was away.
-        installer.sessions -= 1
-        updater.onReturn()
-        settle()
-        assertEquals(UpdateState.Available(offer), updater.state.value)
-    }
-
-    @Test
-    fun `a check that could not reach the PC is made again once the PC answers`() = runTest {
-        val updater = updater()
-        pc.down = true
-        updater.check()
-        settle()
-        assertEquals(UpdateState.CheckFailed, updater.state.value)
-
-        pc.down = false
-        // Not due for an hour.
-        updater.checkIfDue()
-        assertEquals(UpdateState.CheckFailed, updater.state.value)
-        updater.onPcBack()
-        assertEquals(UpdateState.Checking, updater.state.value)
-        settle()
-        assertEquals(UpdateState.Available(offerOf(APK)), updater.state.value)
-
-        // Only after a check that failed.
-        updater.onPcBack()
-        assertEquals(UpdateState.Available(offerOf(APK)), updater.state.value)
-        assertEquals(2, pc.healthChecks.value)
-    }
-
-    /**
-     * The paired PC: announces [announced] in its health check (none if null), and serves
-     * [served] as its download; [down] fails its health check, [held] holds its answer.
-     */
-    private class Pc : Dispatcher() {
-        @Volatile var announced: ByteArray? = APK
-
-        @Volatile var served: ByteArray = APK
-
-        @Volatile var down = false
-
-        @Volatile var held: CountDownLatch? = null
-
-        val healthChecks = MutableStateFlow(0)
-
-        override fun dispatch(request: RecordedRequest): MockResponse = when (request.url.encodedPath) {
-            "/api/health" -> {
-                healthChecks.update { it + 1 }
-                held?.await()
-                if (down) MockResponse.Builder().code(503).build() else MockResponse.Builder().body(health()).build()
-            }
-
-            "/download/scanmylib.apk" -> MockResponse.Builder().body(Buffer().write(served)).build()
-
-            else -> MockResponse.Builder().code(404).build()
-        }
-
-        private fun health(): String {
-            val apk = announced ?: return """{"name": "ScanMyLib", "api": 1, "apk": null}"""
-            return """
-                {"name": "ScanMyLib", "api": 1, "apk": {"application_id": "$APP", "version": "0.8.0",
-                 "version_code": 800, "sha256": "${sha256Of(apk)}", "size": ${apk.size},
-                 "path": "/download/scanmylib.apk"}}
-            """
-        }
-    }
-
-    /**
-     * Android, as the updater sees it: the app at versionCode 700, allowed to install apps unless
-     * [allowed] says otherwise, and the installer's [sessions]. [onCopy] runs as the APK is copied
-     * into a session, [onCommit] as a session is committed; committing an abandoned session
-     * throws, as Android does.
-     */
-    private class FakeInstaller : AppInstaller {
-        override val packageName = APP
-
-        override val versionCode = 700L
-
-        @Volatile var allowed = true
-
-        @Volatile var onCopy: () -> Unit = {}
-
-        @Volatile var onCommit: (Int) -> Unit = {}
-
-        private val lastSession = AtomicInteger()
-        val sessions: MutableSet<Int> = ConcurrentHashMap.newKeySet()
-        val committed: MutableList<Int> = CopyOnWriteArrayList()
-        val abandoned: MutableList<Int> = CopyOnWriteArrayList()
-
-        override fun signers() = SIGNERS
-
-        override fun canInstall() = allowed
-
-        override fun archiveFacts(file: File) = ApkFacts(APP, 800, SIGNERS)
-
-        override fun createSession(file: File): Int {
-            val sessionId = lastSession.incrementAndGet()
-            sessions += sessionId
-            onCopy()
-            return sessionId
-        }
-
-        override fun commit(sessionId: Int) {
-            onCommit(sessionId)
-            if (sessionId !in sessions) throw SecurityException("session $sessionId was abandoned")
-            committed += sessionId
-        }
-
-        override fun abandon(sessionId: Int) {
-            abandoned += sessionId
-            sessions -= sessionId
-        }
-
-        override fun hasSession(sessionId: Int) = sessionId in sessions
-    }
-
-    /** A clock the test moves forward. */
-    private class MovingClock(@Volatile var now: Instant) : Clock() {
-        override fun instant(): Instant = now
-
-        override fun getZone(): ZoneId = ZoneOffset.UTC
-
-        override fun withZone(zone: ZoneId): Clock = this
-    }
-
-    private companion object {
-        const val APP = "fr.scanmylib.dev"
-        const val TOKEN = "q9Xz-Lm_3vT0"
-        val APK = ByteArray(3000) { (it % 251).toByte() }
-        val SIGNERS = setOf("cd".repeat(32))
+    override fun close() {
+        background.cancel()
+        server.close()
     }
 }
 
-private fun sha256Of(bytes: ByteArray) =
+private class Pc : Dispatcher() {
+    @Volatile var announcedApk: ByteArray? = APK
+
+    @Volatile var servedApk: ByteArray = APK
+
+    @Volatile var isDown = false
+
+    @Volatile var heldAnswer: CountDownLatch? = null
+
+    val healthChecks = MutableStateFlow(0)
+
+    override fun dispatch(request: RecordedRequest): MockResponse = when (request.url.encodedPath) {
+        "/api/health" -> {
+            healthChecks.update { it + 1 }
+            heldAnswer?.await()
+            if (isDown) MockResponse.Builder().code(503).build() else MockResponse.Builder().body(health()).build()
+        }
+
+        "/download/scanmylib.apk" -> MockResponse.Builder().body(Buffer().write(servedApk)).build()
+
+        else -> MockResponse.Builder().code(404).build()
+    }
+
+    private fun health(): String {
+        val apk = announcedApk ?: return """{"name": "ScanMyLib", "api": 1, "apk": null}"""
+        return """
+            {"name": "ScanMyLib", "api": 1, "apk": {"application_id": "$APP", "version": "0.8.0",
+             "version_code": 800, "sha256": "${computeSha256(apk)}", "size": ${apk.size},
+             "path": "/download/scanmylib.apk"}}
+        """
+    }
+}
+
+/** Committing an abandoned session throws, as Android does. */
+private class FakeInstaller : AppInstaller {
+    override val packageName = APP
+
+    override val versionCode = 700L
+
+    @Volatile var isAllowed = true
+
+    @Volatile var onCopy: () -> Unit = {}
+
+    @Volatile var onCommit: () -> Unit = {}
+
+    private val lastSession = AtomicInteger()
+    val sessions: MutableSet<Int> = ConcurrentHashMap.newKeySet()
+    val committed: MutableList<Int> = CopyOnWriteArrayList()
+    val abandoned: MutableList<Int> = CopyOnWriteArrayList()
+
+    /** Opened once the session is gone, so that a commit that awaits it finds the session abandoned. */
+    val abandonRecorded = CountDownLatch(1)
+
+    override fun signers() = SIGNERS
+
+    override fun canInstall() = isAllowed
+
+    override fun archiveFacts(file: File) = ApkFacts(APP, 800, SIGNERS)
+
+    override fun createSession(file: File): Int {
+        val sessionId = lastSession.incrementAndGet()
+        sessions += sessionId
+        onCopy()
+        return sessionId
+    }
+
+    override fun commit(sessionId: Int) {
+        onCommit()
+        if (sessionId !in sessions) throw SecurityException("session $sessionId was abandoned")
+        committed += sessionId
+    }
+
+    override fun abandon(sessionId: Int) {
+        sessions -= sessionId
+        abandoned += sessionId
+        abandonRecorded.countDown()
+    }
+
+    override fun hasSession(sessionId: Int) = sessionId in sessions
+}
+
+private class MovingClock(@Volatile var now: Instant) : Clock() {
+    override fun instant(): Instant = now
+
+    override fun getZone(): ZoneId = ZoneOffset.UTC
+
+    override fun withZone(zone: ZoneId): Clock = this
+}
+
+private suspend fun failOnAnotherBuildPublishedAfterTheCheck(bench: UpdaterBench, updater: AppUpdater) {
+    bench.pc.servedApk = ByteArray(APK.size) { 7 }
+    updater.check()
+    bench.awaitBackgroundWork()
+    updater.install()
+    bench.awaitBackgroundWork()
+}
+
+private suspend fun retryThenCancelWhileThePcIsAsked(bench: UpdaterBench, updater: AppUpdater) {
+    bench.pc.announcedApk = bench.pc.servedApk
+    val answer = CountDownLatch(1)
+    bench.pc.heldAnswer = answer
+    updater.install()
+    bench.pc.healthChecks.first { it == 2 }
+    updater.cancel()
+    answer.countDown()
+    bench.awaitBackgroundWork()
+}
+
+private fun computeSha256(bytes: ByteArray) =
     MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }

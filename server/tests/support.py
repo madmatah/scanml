@@ -202,20 +202,34 @@ def upload(
 
 
 def wait_for[Outcome](
-    condition: Callable[[], Outcome | None], timeout: float = 20.0, interval: float = 0.05
+    condition: Callable[[], Outcome | None], timeout_seconds: float = 20.0, interval_seconds: float = 0.05
 ) -> Outcome:
-    """Poll until `condition()` is truthy; return its value."""
-    deadline = time.monotonic() + timeout
+    deadline = time.monotonic() + timeout_seconds
     while True:
-        value = condition()
-        if value:
-            return value
+        outcome = condition()
+        if outcome:
+            return outcome
         if time.monotonic() > deadline:
-            raise AssertionError("condition not met in time")
-        time.sleep(interval)
+            raise TimeoutError(f"condition not met in {timeout_seconds} seconds")
+        time.sleep(interval_seconds)
 
 
-def wait_until_processed(client: TestClient, document_id: str, timeout: float = 20.0) -> dict[str, Any]:
+def read_until[Reading](
+    read: Callable[[], Reading],
+    is_reached: Callable[[Reading], bool],
+    timeout_seconds: float = 20.0,
+    interval_seconds: float = 0.05,
+) -> Reading:
+    # The last reading comes back on a timeout too, so that the test, which reads it, is the one that fails.
+    deadline = time.monotonic() + timeout_seconds
+    reading = read()
+    while not is_reached(reading) and time.monotonic() < deadline:
+        time.sleep(interval_seconds)
+        reading = read()
+    return reading
+
+
+def wait_until_processed(client: TestClient, document_id: str, timeout_seconds: float = 20.0) -> dict[str, Any]:
     """Wait until no page of the document is queued or processing; return the document."""
 
     def settled() -> dict[str, Any] | None:
@@ -223,4 +237,4 @@ def wait_until_processed(client: TestClient, document_id: str, timeout: float = 
         stats = document["stats"]
         return document if stats["queued"] == 0 and stats["processing"] == 0 else None
 
-    return wait_for(settled, timeout)
+    return wait_for(settled, timeout_seconds)

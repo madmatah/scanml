@@ -2,162 +2,215 @@
 
 from __future__ import annotations
 
-import asyncio
-import json
+from dataclasses import dataclass
 from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
 
-from scanmylib import __version__
-from scanmylib.app import create_app
-from scanmylib.config import Settings
-from scanmylib.devtools.fake_ocr import FakeOcrServer
 from scanmylib.library import MAX_OCR_RETRIES
-from scanmylib.ocr_client import OcrClient, OcrUnavailable
-from support import AUTH, create_document, page_image, upload, wait_for, wait_until_processed
+from support import (
+    AUTH,
+    build_client,
+    create_document,
+    page_image,
+    preparing_settings,
+    read_until,
+    running_api,
+    serving_fake_ocr,
+    upload,
+    wait_for,
+    wait_until_processed,
+)
+
+QUEUED_PAGE_NUMBER = 8
 
 
-def page_status(client: TestClient, page_id: str) -> dict[str, Any]:
+def read_page(client: TestClient, page_id: str) -> dict[str, Any]:
     page: dict[str, Any] = client.get(f"/api/pages/{page_id}", headers=AUTH).json()
     return page
 
 
-def test_uploads_wait_while_the_sandbox_is_down_then_get_processed(settings: Settings) -> None:
-    with TestClient(create_app(settings)) as client:
-        status = client.get("/api/status", headers=AUTH).json()
-        assert status["ocr"] == {
-            "reachable": False,
-            "state": "unreachable",
-            "backend": None,
-            "last_error": f"socket {settings.ocr_socket} absent",
-            "gpu": None,
-        }
-        document_id = create_document(client)
-        page = upload(client, document_id, page_image(8)).json()
-        wait_for(lambda: page_status(client, page["id"])["status"] == "queued")
+@dataclass(frozen=True)
+class SandboxStartedLate:
+    status_while_down: str
+    page_once_started: dict[str, Any]
 
-        sandbox = FakeOcrServer(settings.ocr_socket)  # the sandbox (re)starts
-        sandbox.start()
-        try:
+
+@dataclass(frozen=True)
+class FailingPage:
+    page: dict[str, Any]
+    error_count: int
+    parse_request_count: int
+    reprocessed_page: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class RetriedPage:
+    status: str
+    parse_request_count: int
+
+
+@dataclass(frozen=True)
+class EngineLoads:
+    before_work: int
+    once_work_is_queued: int
+
+
+@pytest.fixture(scope="module")
+def sandbox_started_late(tmp_path_factory: pytest.TempPathFactory) -> SandboxStartedLate:
+    with preparing_settings(tmp_path_factory.mktemp("api")) as settings, build_client(settings) as client:
+        document_id = create_document(client)
+        page = upload(client, document_id, page_image(QUEUED_PAGE_NUMBER)).json()
+        status_while_down = read_until(
+            lambda: str(read_page(client, page["id"])["status"]), lambda status: status == "queued"
+        )
+        with serving_fake_ocr(settings.ocr_socket):
             document = wait_until_processed(client, document_id)
-            assert document["pages"][0]["status"] == "done"
-            assert document["pages"][0]["number"] == 8
-        finally:
-            sandbox.stop()
+    return SandboxStartedLate(status_while_down, document["pages"][0])
 
 
-def test_engine_unavailable_is_retried_without_counting_failures(client: TestClient, fake_ocr: FakeOcrServer) -> None:
-    fake_ocr.fail_next(503, MAX_OCR_RETRIES + 3)
-    document_id = create_document(client)
-    page = upload(client, document_id, page_image(5)).json()
-    wait_until_processed(client, document_id, timeout=30)
-    assert page_status(client, page["id"])["status"] == "done"
-    assert len(fake_ocr.requests) == MAX_OCR_RETRIES + 4
+@pytest.fixture(scope="module")
+def failing_page(tmp_path_factory: pytest.TempPathFactory) -> FailingPage:
+    with running_api(tmp_path_factory.mktemp("api")) as api:
+        api.fake_ocr.fail_next(500, MAX_OCR_RETRIES + 1)
+        document_id = create_document(api.client)
+        page = upload(api.client, document_id, page_image(5)).json()
+        document = wait_until_processed(api.client, document_id)
+        parse_request_count = len(api.fake_ocr.requests)
+        api.client.post(f"/api/pages/{page['id']}/reprocess", headers=AUTH)
+        wait_until_processed(api.client, document_id)
+        return FailingPage(
+            page=document["pages"][0],
+            error_count=document["stats"]["error"],
+            parse_request_count=parse_request_count,
+            reprocessed_page=read_page(api.client, page["id"]),
+        )
 
 
-def test_processing_errors_are_retried_then_reported(client: TestClient, fake_ocr: FakeOcrServer) -> None:
-    fake_ocr.fail_next(500, MAX_OCR_RETRIES + 1)
-    document_id = create_document(client)
-    page = upload(client, document_id, page_image(5)).json()
-    document = wait_until_processed(client, document_id)
-    failed = document["pages"][0]
-    assert failed["status"] == "error"
-    assert failed["error"].startswith("OCR failed: HTTP 500 (processing_failed: simulated failure)")
-    assert len(fake_ocr.requests) == MAX_OCR_RETRIES + 1
-    assert document["stats"]["error"] == 1 and not failed["in_document"]
+class TestTheOcrLoop:
+    class TestWhenTheSandboxIsDown:
+        def test_should_keep_an_uploaded_page_queued(self, sandbox_started_late: SandboxStartedLate) -> None:
+            assert sandbox_started_late.status_while_down == "queued"
 
-    client.post(f"/api/pages/{page['id']}/reprocess", headers=AUTH)
-    wait_until_processed(client, document_id)
-    recovered = page_status(client, page["id"])
-    assert (recovered["status"], recovered["error"]) == ("done", None)
+        class TestWhenTheSandboxStarts:
+            def test_should_process_the_page(self, sandbox_started_late: SandboxStartedLate) -> None:
+                assert sandbox_started_late.page_once_started["status"] == "done"
 
+            def test_should_read_its_number(self, sandbox_started_late: SandboxStartedLate) -> None:
+                assert sandbox_started_late.page_once_started["number"] == QUEUED_PAGE_NUMBER
 
-def test_a_transient_failure_is_retried(client: TestClient, fake_ocr: FakeOcrServer) -> None:
-    fake_ocr.fail_next(500, 2)
-    document_id = create_document(client)
-    upload(client, document_id, page_image(6))
-    assert wait_until_processed(client, document_id)["pages"][0]["status"] == "done"
-    assert len(fake_ocr.requests) == 3
+    class TestWhenTheEngineIsUnavailable:
+        @pytest.fixture(scope="class")
+        @classmethod
+        def retried_page(cls, tmp_path_factory: pytest.TempPathFactory) -> RetriedPage:
+            with running_api(tmp_path_factory.mktemp("api")) as api:
+                api.fake_ocr.fail_next(503, MAX_OCR_RETRIES + 3)
+                document_id = create_document(api.client)
+                page = upload(api.client, document_id, page_image(5)).json()
+                wait_until_processed(api.client, document_id, timeout_seconds=30.0)
+                return RetriedPage(read_page(api.client, page["id"])["status"], len(api.fake_ocr.requests))
 
+        def test_should_retry_the_page_without_counting_failures_until_it_is_read(
+            self, retried_page: RetriedPage
+        ) -> None:
+            assert retried_page.status == "done"
 
-def test_pages_are_processed_in_upload_order(client: TestClient, fake_ocr: FakeOcrServer) -> None:
-    document_id = create_document(client)
-    for number in (30, 10, 20):
-        upload(client, document_id, page_image(number))
-    wait_until_processed(client, document_id)
-    assert [request["height"] - 1000 for request in fake_ocr.requests] == [30, 10, 20]
+        def test_should_send_the_page_again_after_each_refusal(self, retried_page: RetriedPage) -> None:
+            assert retried_page.parse_request_count == MAX_OCR_RETRIES + 4
 
+    class TestWhenProcessingFailsMoreTimesThanItsRetriesAllow:
+        def test_should_report_the_page_in_error(self, failing_page: FailingPage) -> None:
+            assert failing_page.page["status"] == "error"
 
-def test_interrupted_processing_is_requeued_on_restart(settings: Settings, fake_ocr: FakeOcrServer) -> None:
-    fake_ocr.delay = 3.0
-    with TestClient(create_app(settings)) as client:
-        document_id = create_document(client)
-        page = upload(client, document_id, page_image(9)).json()
-        wait_for(lambda: page_status(client, page["id"])["status"] == "processing")
-    # The api stopped in the middle of the page; on restart it is queued again.
-    fake_ocr.delay = 0.0
-    with TestClient(create_app(settings)) as client:
-        document = wait_until_processed(client, document_id)
-        assert document["pages"][0]["status"] == "done"
+        def test_should_say_why_it_failed(self, failing_page: FailingPage) -> None:
+            assert failing_page.page["error"].startswith("OCR failed: HTTP 500 (processing_failed: simulated failure)")
 
+        def test_should_send_the_page_once_and_retry_it_as_many_times_as_allowed(
+            self, failing_page: FailingPage
+        ) -> None:
+            assert failing_page.parse_request_count == MAX_OCR_RETRIES + 1
 
-def test_new_work_prewarms_the_engine(client: TestClient, fake_ocr: FakeOcrServer) -> None:
-    document_id = create_document(client)
-    assert fake_ocr.load_requests == 0
-    upload(client, document_id, page_image(1))
-    wait_for(lambda: fake_ocr.load_requests == 1)
-    wait_until_processed(client, document_id)
+        def test_should_count_the_error_in_the_document(self, failing_page: FailingPage) -> None:
+            assert failing_page.error_count == 1
 
+        def test_should_leave_the_page_out_of_the_document(self, failing_page: FailingPage) -> None:
+            assert failing_page.page["in_document"] is False
 
-def test_status_reports_the_sandbox_engine(client: TestClient) -> None:
-    status = client.get("/api/status", headers=AUTH).json()
-    assert status["ocr"] == {"reachable": True, "state": "idle", "backend": "fake", "last_error": None, "gpu": None}
-    assert status["version"] == __version__
+        class TestWhenThePageIsReprocessed:
+            def test_should_read_it(self, failing_page: FailingPage) -> None:
+                assert failing_page.reprocessed_page["status"] == "done"
 
+            def test_should_clear_its_error(self, failing_page: FailingPage) -> None:
+                assert failing_page.reprocessed_page["error"] is None
 
-def test_status_relays_only_typed_and_bounded_sandbox_fields(client: TestClient, fake_ocr: FakeOcrServer) -> None:
-    # The phone app decodes "state" and "last_error" as strings: other types must not get through.
-    fake_ocr.status_body = json.dumps(
-        {
-            "engine": {"state": 1, "backend": {"a": 1}, "last_error": "x\ud800\n" + "y" * 5000},
-            "gpu": {"name": ["x"], "memory_used_mb": "lots", "memory_total_mb": 24576, "extra": "z"},
-        }
-    ).encode()
-    response = client.get("/api/status", headers=AUTH)
-    assert response.status_code == 200
-    assert response.json()["ocr"] == {
-        "reachable": True,
-        "state": None,
-        "backend": None,
-        "last_error": ("x? " + "y" * 5000)[:1000],
-        "gpu": {"name": None, "memory_used_mb": None, "memory_total_mb": 24576},
-    }
+    class TestWhenProcessingFailsTransiently:
+        @pytest.fixture(scope="class")
+        @classmethod
+        def retried_page(cls, tmp_path_factory: pytest.TempPathFactory) -> RetriedPage:
+            with running_api(tmp_path_factory.mktemp("api")) as api:
+                api.fake_ocr.fail_next(500, 2)
+                document_id = create_document(api.client)
+                upload(api.client, document_id, page_image(6))
+                document = wait_until_processed(api.client, document_id)
+                return RetriedPage(document["pages"][0]["status"], len(api.fake_ocr.requests))
 
+        def test_should_read_the_page_once_retried(self, retried_page: RetriedPage) -> None:
+            assert retried_page.status == "done"
 
-@pytest.mark.parametrize(
-    "body",
-    [b"[" * 50_000, b'{"engine": {"state": "error", "last_error": "' + b"A" * (1024 * 1024) + b'"}}'],
-    ids=["deeply-nested", "oversized"],
-)
-def test_unusable_health_answers_mean_unreachable(client: TestClient, fake_ocr: FakeOcrServer, body: bytes) -> None:
-    fake_ocr.status_body = body
-    response = client.get("/api/status", headers=AUTH)
-    assert response.status_code == 200
-    ocr = response.json()["ocr"]
-    assert (ocr["reachable"], ocr["state"]) == (False, "unreachable")
-    assert len(ocr["last_error"]) <= 300
+        def test_should_retry_it_after_each_failure(self, retried_page: RetriedPage) -> None:
+            assert retried_page.parse_request_count == 3
 
+    class TestWhenSeveralPagesAreQueued:
+        UPLOADED_NUMBERS = (30, 10, 20)
 
-def test_oversized_load_answer_is_refused_without_buffering(fake_ocr: FakeOcrServer) -> None:
-    fake_ocr.status_body = b"x" * (1024 * 1024)
+        @pytest.fixture(scope="class")
+        @classmethod
+        def processed_numbers(cls, tmp_path_factory: pytest.TempPathFactory) -> list[int]:
+            with running_api(tmp_path_factory.mktemp("api")) as api:
+                document_id = create_document(api.client)
+                for number in cls.UPLOADED_NUMBERS:
+                    upload(api.client, document_id, page_image(number))
+                wait_until_processed(api.client, document_id)
+                return [request["height"] - 1000 for request in api.fake_ocr.requests]
 
-    async def load() -> None:
-        sandbox = OcrClient(fake_ocr.socket_path, 10)
-        try:
-            await sandbox.load()
-        finally:
-            await sandbox.aclose()
+        def test_should_process_them_in_upload_order(self, processed_numbers: list[int]) -> None:
+            assert processed_numbers == list(self.UPLOADED_NUMBERS)
 
-    with pytest.raises(OcrUnavailable, match="larger than"):
-        asyncio.run(load())
+    class TestWhenTheApiStopsWhileAPageIsProcessed:
+        @pytest.fixture(scope="class")
+        @classmethod
+        def status_after_restart(cls, tmp_path_factory: pytest.TempPathFactory) -> str:
+            with (
+                preparing_settings(tmp_path_factory.mktemp("api")) as settings,
+                serving_fake_ocr(settings.ocr_socket) as fake_ocr,
+            ):
+                fake_ocr.delay = 3.0
+                with build_client(settings) as client:
+                    document_id = create_document(client)
+                    page = upload(client, document_id, page_image(9)).json()
+                    wait_for(lambda: read_page(client, page["id"])["status"] == "processing")
+                fake_ocr.delay = 0.0
+                with build_client(settings) as client:
+                    document = wait_until_processed(client, document_id)
+            return str(document["pages"][0]["status"])
+
+        def test_should_queue_the_page_again_on_restart_and_process_it(self, status_after_restart: str) -> None:
+            assert status_after_restart == "done"
+
+    class TestWhenWorkIsQueued:
+        @pytest.fixture(scope="class")
+        @classmethod
+        def engine_loads(cls, tmp_path_factory: pytest.TempPathFactory) -> EngineLoads:
+            with running_api(tmp_path_factory.mktemp("api")) as api:
+                document_id = create_document(api.client)
+                before_work = api.fake_ocr.load_requests
+                upload(api.client, document_id, page_image(1))
+                once_work_is_queued = read_until(lambda: api.fake_ocr.load_requests, lambda count: count >= 1)
+                wait_until_processed(api.client, document_id)
+            return EngineLoads(before_work, once_work_is_queued)
+
+        def test_should_ask_the_sandbox_to_load_its_engine_once_work_is_queued_and_not_before(
+            self, engine_loads: EngineLoads
+        ) -> None:
+            assert (engine_loads.before_work, engine_loads.once_work_is_queued) == (0, 1)

@@ -153,6 +153,11 @@ rule applies to it. The older files move to the structure area by area, each are
 - **Only tests import test support.** The fake OCR sandbox (`server/scanmylib/devtools/fake_ocr.py`) is the exception:
   it ships in the api's image, since the development stack runs it as `ocr-fake`, and it refuses the production project
   and a socket that a real sandbox serves. Every other piece of test support lives in a test directory.
+- **A test that runs git in a repository of its own drops the `GIT_` variables it inherits:** `git rebase --exec`, which
+  checks each commit of a branch, exports `GIT_DIR` when it runs in a worktree, and the test's git would then work on
+  the repository under rebase instead of its own. The unit tests of the scripts build their git environment with
+  `scripts/tests/git_environment.py`, the integration tests a whole environment of their own, and `scripts/check.sh`
+  drops those variables before any area runs.
 
 ## pytest
 

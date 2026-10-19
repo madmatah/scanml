@@ -1,16 +1,7 @@
-/**
- * Unit tests of the translation of the UI (static/js/lib/i18n.js and the
- * French catalog static/js/locales/fr.js), with Node's built-in test runner
- * (see math.test.js for the command).
- *
- * The sources are scanned for the messages given to t(), tc(), tn() and
- * tNodes(), and for the static text of index.html: the French catalog must
- * translate each of them, and nothing else. French is written only in that
- * catalog, so these tests compare with its entries instead of quoting it.
- */
+// French is written only in the French catalog, so these tests compare with its entries instead of quoting it.
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
-import { describe, test } from 'node:test';
+import { before, beforeEach, describe, it } from 'node:test';
 
 import { currentLanguage, currentLocale, negotiate, setLocale, t, tc, tNodes, tn } from '../static/js/lib/i18n.js';
 import FRENCH from '../static/js/locales/fr.js';
@@ -19,6 +10,9 @@ const WEB = new URL('../', import.meta.url);
 const JS = new URL('static/js/', WEB);
 const CATALOG_FILE = new URL('locales/fr.js', JS);
 const HELPER_FILE = new URL('lib/i18n.js', JS);
+
+const ENGLISH_PREFERENCES = ['en-US'];
+const FRENCH_PREFERENCES = ['fr-FR'];
 
 /** The translation functions and the number of literal messages each one takes first. */
 const FUNCTIONS = { t: 1, tc: 2, tn: 2, tNodes: 1 };
@@ -257,10 +251,10 @@ function translationCalls(source) {
   return calls;
 }
 
-function sourceFiles(directory = JS) {
+function listSourceFiles(directory = JS) {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const url = new URL(entry.name + (entry.isDirectory() ? '/' : ''), directory);
-    if (entry.isDirectory()) return url.href === new URL('locales/', JS).href ? [] : sourceFiles(url);
+    if (entry.isDirectory()) return url.href === new URL('locales/', JS).href ? [] : listSourceFiles(url);
     return entry.name.endsWith('.js') && url.href !== HELPER_FILE.href ? [url] : [];
   });
 }
@@ -275,48 +269,110 @@ function htmlMessages() {
     const attribute = (name) => new RegExp(`\\s${name}(?:="([^"]*)")?(?=\\s|/?$)`).exec(attributes);
     const context = attribute('data-i18n-context')?.[1];
     const key = (message) => (context ? `${context}|${message}` : message);
-    if (attribute('data-i18n')) messages.push({ key: key(text.trim()), plural: false, where: 'index.html' });
+    if (attribute('data-i18n')) messages.push({ key: key(text.trim()), isPlural: false, where: 'index.html' });
     for (const name of attribute('data-i18n-attr')?.[1]?.split(/\s+/) ?? []) {
-      messages.push({ key: key(attribute(name)[1]), plural: false, where: `index.html [${name}]` });
+      messages.push({ key: key(attribute(name)[1]), isPlural: false, where: `index.html [${name}]` });
     }
   }
   return messages;
 }
 
-/** Every message of the UI: { key (catalog key), plural, english: [forms], values (keys given), where }. */
-function usedMessages() {
+function scanUsedMessages() {
   const messages = htmlMessages().map((message) => ({
     ...message,
     english: [message.key.split('|').at(-1)],
     values: [],
   }));
   const dynamic = [];
-  for (const file of sourceFiles()) {
+  let callCount = 0;
+  for (const file of listSourceFiles()) {
     for (const call of translationCalls(readFileSync(file, 'utf8'))) {
+      callCount += 1;
       const where = `${relative(file)}:${call.line}`;
       if (call.dynamic) dynamic.push(`${where}: ${call.name}() needs literal messages`);
       else if (call.name === 'tn') {
-        messages.push({ key: call.args[0], plural: true, english: call.args, values: call.values, where });
+        messages.push({ key: call.args[0], isPlural: true, english: call.args, values: call.values, where });
       } else if (call.name === 'tc') {
         const [context, message] = call.args;
-        messages.push({ key: `${context}|${message}`, plural: false, english: [message], values: call.values, where });
+        messages.push({
+          key: `${context}|${message}`,
+          isPlural: false,
+          english: [message],
+          values: call.values,
+          where,
+        });
       } else {
-        messages.push({ key: call.args[0], plural: false, english: [call.args[0]], values: call.values, where });
+        messages.push({ key: call.args[0], isPlural: false, english: [call.args[0]], values: call.values, where });
       }
     }
   }
-  return { messages, dynamic };
+  return { messages, dynamic, callCount };
 }
 
 const placeholders = (text) => [...new Set([...text.matchAll(/\{(\w+)\}/g)].map((match) => match[1]))].sort();
 
-describe('the French catalog', () => {
-  const { messages, dynamic } = usedMessages();
+function listWebFiles(directory = WEB) {
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const url = new URL(entry.name + (entry.isDirectory() ? '/' : ''), directory);
+    if (entry.isDirectory()) return entry.name === 'vendor' || entry.name === 'icons' ? [] : listWebFiles(url);
+    return /\.(js|html|css|webmanifest)$/.test(entry.name) && url.href !== CATALOG_FILE.href ? [url] : [];
+  });
+}
 
-  test('the scan finds the messages of every screen', () => {
-    // Guards the scan itself: a few messages from different files and functions.
-    const keys = new Set(messages.map((message) => message.key));
-    for (const key of [
+const PLURAL_CATEGORIES = ['zero', 'one', 'two', 'few', 'many', 'other'];
+
+function listForms(entry) {
+  return typeof entry === 'string' ? [entry] : Object.values(entry);
+}
+
+function isPluralEntry(entry) {
+  return (
+    typeof entry?.one === 'string' &&
+    typeof entry?.other === 'string' &&
+    Object.keys(entry).every((category) => PLURAL_CATEGORIES.includes(category))
+  );
+}
+
+function hasFormsOfItsCall(entry, isPlural) {
+  return isPlural ? isPluralEntry(entry) : typeof entry === 'string';
+}
+
+function listTranslatedForms(messages) {
+  return messages
+    .filter(({ key }) => Object.hasOwn(FRENCH, key))
+    .flatMap(({ key, english, where }) => listForms(FRENCH[key]).map((form) => ({ form, english, where })));
+}
+
+// tn() fills {count} itself.
+function dropTheCountOfTn(names, isPlural) {
+  return names.filter((name) => !(isPlural && name === 'count'));
+}
+
+function pairPlaceholdersWithValues({ english, isPlural, values, where }) {
+  return {
+    where,
+    placeholderNames: dropTheCountOfTn(placeholders(english.join(' ')), isPlural).join(),
+    valueNames: dropTheCountOfTn([...new Set(values)].sort(), isPlural).join(),
+  };
+}
+
+function fillTemplate(template, placeholderValues) {
+  return Object.entries(placeholderValues).reduce(
+    (text, [placeholderName, placeholderValue]) => text.replaceAll(`{${placeholderName}}`, () => placeholderValue),
+    template,
+  );
+}
+
+describe('The translation', () => {
+  let messages;
+  let dynamicCalls;
+  let callCount;
+  before(() => {
+    ({ messages, dynamic: dynamicCalls, callCount } = scanUsedMessages());
+  });
+
+  describe('When the UI gives messages to the translation functions', () => {
+    const sampleKeys = [
       'Skip to content',
       'header|Sign out',
       'Library',
@@ -326,209 +382,544 @@ describe('the French catalog', () => {
         'range, Ctrl+click: add or remove. Esc cancels a move.',
       'Markdown files and illustrations are stored in {folder}',
       'Unnumbered page',
-    ]) {
-      assert.ok(keys.has(key), key);
-    }
-    assert.ok(messages.length > 300, `${messages.length} messages`);
-  });
+    ];
+    const messageCountToExceed = 300;
 
-  test('messages are literals', () => {
-    assert.deepEqual(dynamic, []);
-  });
-
-  test('translates every message of the UI', () => {
-    const missing = messages.filter(({ key }) => !Object.hasOwn(FRENCH, key));
-    assert.deepEqual(
-      missing.map(({ key, where }) => `${where}: ${key}`),
-      [],
-    );
-  });
-
-  test('has no entry that the UI does not use', () => {
-    const used = new Set(messages.map(({ key }) => key));
-    assert.deepEqual(
-      Object.keys(FRENCH).filter((key) => !used.has(key)),
-      [],
-    );
-  });
-
-  test('has plural forms exactly for the messages given to tn()', () => {
-    const wrong = messages.filter(({ key, plural }) => {
-      const entry = FRENCH[key];
-      if (entry === undefined) return false;
-      if (!plural) return typeof entry !== 'string';
-      return (
-        typeof entry?.one !== 'string' ||
-        typeof entry?.other !== 'string' ||
-        Object.keys(entry).some((category) => !['zero', 'one', 'two', 'few', 'many', 'other'].includes(category))
+    it('should be found by the scan of the sources, in the HTML and the code, whatever the function', () => {
+      const foundKeys = new Set(messages.map(({ key }) => key));
+      assert.deepEqual(
+        sampleKeys.filter((key) => !foundKeys.has(key)),
+        [],
       );
     });
-    assert.deepEqual(
-      wrong.map(({ key, where }) => `${where}: ${key}`),
-      [],
-    );
-  });
 
-  test('keeps the placeholders of the English messages', () => {
-    const wrong = [];
-    for (const { key, english, where } of messages) {
-      const entry = FRENCH[key];
-      if (entry === undefined) continue;
-      const expected = placeholders(english.join(' '));
-      for (const form of typeof entry === 'string' ? [entry] : Object.values(entry)) {
-        if (placeholders(form).join() !== expected.join()) wrong.push(`${where}: ${form}`);
-      }
-    }
-    assert.deepEqual(wrong, []);
-  });
-
-  test('every placeholder gets a value where the message is used, and only those', () => {
-    const wrong = [];
-    for (const { english, plural, values, where } of messages) {
-      if (values === null) continue; // values passed as a variable
-      const own = (names) => names.filter((name) => !(plural && name === 'count')); // tn() fills {count}
-      const expected = own(placeholders(english.join(' ')));
-      const given = own([...new Set(values)].sort());
-      if (expected.join() !== given.join()) wrong.push(`${where}: {${expected}} needs values, given {${given}}`);
-    }
-    assert.deepEqual(wrong, []);
-  });
-
-  test('has each key once', () => {
-    const source = readFileSync(CATALOG_FILE, 'utf8');
-    const keys = [...source.matchAll(/^ {2}'((?:[^'\\]|\\.)*)':/gm)].map((match) => match[1]);
-    assert.equal(keys.length, Object.keys(FRENCH).length);
-  });
-
-  test('contexts never appear in plain messages', () => {
-    const plain = messages.filter(({ key, english }) => key === english[0] && key.includes('|'));
-    assert.deepEqual(
-      plain.map(({ where }) => where),
-      [],
-    );
-  });
-});
-
-describe('French stays in the French catalog', () => {
-  // Letters and signs of French that English text does not use (written as escapes, not to match this file).
-  const FRENCH_CHARACTERS = new RegExp(
-    '[\u00e0\u00e2\u00e6\u00e7\u00e8-\u00eb\u00ee\u00ef\u00f4\u00f9\u00fb' + '\u00fc\u00ff\u0153\u00ab\u00bb]',
-    'i',
-  );
-
-  function webFiles(directory = WEB) {
-    return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
-      const url = new URL(entry.name + (entry.isDirectory() ? '/' : ''), directory);
-      if (entry.isDirectory()) return entry.name === 'vendor' || entry.name === 'icons' ? [] : webFiles(url);
-      return /\.(js|html|css|webmanifest)$/.test(entry.name) && url.href !== CATALOG_FILE.href ? [url] : [];
+    it('should be found by the scan by the hundreds', () => {
+      assert.ok(messages.length > messageCountToExceed, `${messages.length} messages`);
     });
-  }
 
-  test('no French letters elsewhere', () => {
-    const found = [];
-    for (const file of webFiles()) {
-      readFileSync(file, 'utf8')
-        .split('\n')
-        .forEach((line, index) => {
-          if (FRENCH_CHARACTERS.test(line)) found.push(`${relative(file)}:${index + 1}: ${line.trim()}`);
-        });
-    }
-    assert.deepEqual(found, []);
+    it('should give literal messages, so that the French catalog can be checked against them', () => {
+      assert.notEqual(callCount, 0);
+      assert.deepEqual(dynamicCalls, []);
+    });
+
+    it('should give a value to every placeholder of a message, and to no other', () => {
+      // The values given as a variable are out of the scan's reach.
+      const valuesInPlace = messages.filter(({ values }) => values !== null).map(pairPlaceholdersWithValues);
+      assert.notEqual(valuesInPlace.length, 0);
+      assert.deepEqual(
+        valuesInPlace.filter(({ placeholderNames, valueNames }) => placeholderNames !== valueNames),
+        [],
+      );
+    });
+
+    it('should never put a context in a plain message, where it would read as the context of a key', () => {
+      const plainMessages = messages.filter(({ key, english }) => key === english[0]);
+      assert.notEqual(plainMessages.length, 0);
+      assert.deepEqual(
+        plainMessages.filter(({ key }) => key.includes('|')).map(({ where }) => where),
+        [],
+      );
+    });
   });
 
-  test('no French translation written as a string of the code', () => {
-    const translations = new Set(
-      Object.entries(FRENCH).flatMap(([key, entry]) =>
-        (typeof entry === 'string' ? [entry] : Object.values(entry)).filter((form) => form !== key.split('|').at(-1)),
-      ),
+  describe('The French catalog', () => {
+    // Letters and signs of French that English text does not use (written as escapes, not to match this file).
+    const frenchCharacters = new RegExp(
+      '[\u00e0\u00e2\u00e6\u00e7\u00e8-\u00eb\u00ee\u00ef\u00f4\u00f9\u00fb' + '\u00fc\u00ff\u0153\u00ab\u00bb]',
+      'i',
     );
-    const found = [];
-    for (const file of sourceFiles()) {
-      for (const token of lex(readFileSync(file, 'utf8'))) {
-        if (token.type === 'string' && translations.has(token.value)) {
-          found.push(`${relative(file)}:${token.line}: ${token.value}`);
-        }
-      }
+    let catalogSourceKeys;
+    let webLines;
+    let codeStrings;
+    before(() => {
+      catalogSourceKeys = [...readFileSync(CATALOG_FILE, 'utf8').matchAll(/^ {2}'((?:[^'\\]|\\.)*)':/gm)].map(
+        (match) => match[1],
+      );
+      webLines = listWebFiles().flatMap((file) =>
+        readFileSync(file, 'utf8')
+          .split('\n')
+          .map((line, index) => ({ where: `${relative(file)}:${index + 1}`, line })),
+      );
+      codeStrings = listSourceFiles().flatMap((file) =>
+        lex(readFileSync(file, 'utf8'))
+          .filter((token) => token.type === 'string')
+          .map((token) => ({ where: `${relative(file)}:${token.line}`, text: token.value })),
+      );
+    });
+
+    it('should translate every message of the UI', () => {
+      assert.notEqual(messages.length, 0);
+      assert.deepEqual(
+        messages.filter(({ key }) => !Object.hasOwn(FRENCH, key)).map(({ key, where }) => `${where}: ${key}`),
+        [],
+      );
+    });
+
+    it('should have no entry that the UI does not use', () => {
+      const usedKeys = new Set(messages.map(({ key }) => key));
+      const entryKeys = Object.keys(FRENCH);
+      assert.notEqual(entryKeys.length, 0);
+      assert.deepEqual(
+        entryKeys.filter((key) => !usedKeys.has(key)),
+        [],
+      );
+    });
+
+    it('should have plural forms exactly for the messages given to tn()', () => {
+      const translatedMessages = messages.filter(({ key }) => Object.hasOwn(FRENCH, key));
+      assert.notEqual(translatedMessages.length, 0);
+      assert.deepEqual(
+        translatedMessages
+          .filter(({ key, isPlural }) => !hasFormsOfItsCall(FRENCH[key], isPlural))
+          .map(({ key, where }) => `${where}: ${key}`),
+        [],
+      );
+    });
+
+    it('should keep the placeholders of the English messages', () => {
+      const forms = listTranslatedForms(messages);
+      assert.notEqual(forms.length, 0);
+      assert.deepEqual(
+        forms
+          .filter(({ form, english }) => placeholders(form).join() !== placeholders(english.join(' ')).join())
+          .map(({ form, where }) => `${where}: ${form}`),
+        [],
+      );
+    });
+
+    it('should hold each key once', () => {
+      assert.deepEqual(
+        catalogSourceKeys.filter((key, index) => catalogSourceKeys.indexOf(key) !== index),
+        [],
+      );
+      assert.equal(catalogSourceKeys.length, Object.keys(FRENCH).length);
+    });
+
+    it('should hold the only French letters of the web UI', () => {
+      assert.notEqual(webLines.length, 0);
+      assert.deepEqual(
+        webLines.filter(({ line }) => frenchCharacters.test(line)).map(({ where, line }) => `${where}: ${line.trim()}`),
+        [],
+      );
+    });
+
+    it('should hold the only French translations of the web UI, which no code writes as a string', () => {
+      const translations = new Set(
+        Object.entries(FRENCH).flatMap(([key, entry]) =>
+          listForms(entry).filter((form) => form !== key.split('|').at(-1)),
+        ),
+      );
+      assert.notEqual(codeStrings.length, 0);
+      assert.deepEqual(
+        codeStrings.filter(({ text }) => translations.has(text)).map(({ where, text }) => `${where}: ${text}`),
+        [],
+      );
+    });
+  });
+
+  describe('The negotiate() function', () => {
+    const negotiations = [
+      {
+        situation: 'When the browser prefers French in France first',
+        preferences: ['fr-FR', 'fr', 'en-US'],
+        rule: 'should choose French, in that locale',
+        expectedChoice: { language: 'fr', locale: 'fr-FR' },
+      },
+      {
+        situation: 'When the browser prefers French without a region',
+        preferences: ['fr'],
+        rule: 'should choose French, in the locale of France',
+        expectedChoice: { language: 'fr', locale: 'fr-FR' },
+      },
+      {
+        situation: 'When the browser prefers French in another region',
+        preferences: ['fr-CA'],
+        rule: 'should choose French, in the region of the browser',
+        expectedChoice: { language: 'fr', locale: 'fr-CA' },
+      },
+      {
+        situation: 'When the browser writes its language tag in another letter case',
+        preferences: ['FR-be'],
+        rule: 'should choose French, writing the locale in its canonical case',
+        expectedChoice: { language: 'fr', locale: 'fr-BE' },
+      },
+      {
+        situation: 'When the browser prefers a language that the UI does not speak, then French',
+        preferences: ['de-DE', 'fr-CH'],
+        rule: 'should choose French, the first language that the UI speaks',
+        expectedChoice: { language: 'fr', locale: 'fr-CH' },
+      },
+      {
+        situation: 'When the browser prefers English, then French',
+        preferences: ['en-GB', 'fr-FR'],
+        rule: 'should choose English, the first language that the UI speaks, in the region of the browser',
+        expectedChoice: { language: 'en', locale: 'en-GB' },
+      },
+      {
+        situation: 'When the browser prefers English without a region',
+        preferences: ['en'],
+        rule: 'should choose English, in the locale of the United States',
+        expectedChoice: { language: 'en', locale: 'en-US' },
+      },
+      {
+        situation: 'When the browser prefers only languages that the UI does not speak',
+        preferences: ['de-DE', 'es'],
+        rule: 'should choose English, in the locale of the United States',
+        expectedChoice: { language: 'en', locale: 'en-US' },
+      },
+      {
+        situation: 'When the browser prefers no language',
+        preferences: [],
+        rule: 'should choose English, in the locale of the United States',
+        expectedChoice: { language: 'en', locale: 'en-US' },
+      },
+      {
+        situation: 'When the browser gives no preferences',
+        preferences: undefined,
+        rule: 'should choose English, in the locale of the United States',
+        expectedChoice: { language: 'en', locale: 'en-US' },
+      },
+      {
+        situation: 'When the browser prefers French with a malformed tag',
+        preferences: ['fr-!!'],
+        rule: 'should choose French, in the locale of France',
+        expectedChoice: { language: 'fr', locale: 'fr-FR' },
+      },
+    ];
+
+    for (const { situation, preferences, rule, expectedChoice } of negotiations) {
+      describe(situation, () => {
+        let choice;
+        beforeEach(() => {
+          choice = negotiate(preferences);
+        });
+
+        it(rule, () => {
+          assert.deepEqual(choice, expectedChoice);
+        });
+      });
     }
-    assert.deepEqual(found, []);
-  });
-});
-
-describe('the language', () => {
-  test('is the first French or English one the browser prefers', () => {
-    assert.deepEqual(negotiate(['fr-FR', 'fr', 'en-US']), { language: 'fr', locale: 'fr-FR' });
-    assert.deepEqual(negotiate(['fr']), { language: 'fr', locale: 'fr-FR' });
-    assert.deepEqual(negotiate(['fr-CA']), { language: 'fr', locale: 'fr-CA' });
-    assert.deepEqual(negotiate(['FR-be']), { language: 'fr', locale: 'fr-BE' });
-    assert.deepEqual(negotiate(['de-DE', 'fr-CH']), { language: 'fr', locale: 'fr-CH' });
-    assert.deepEqual(negotiate(['en-GB', 'fr-FR']), { language: 'en', locale: 'en-GB' });
-    assert.deepEqual(negotiate(['en']), { language: 'en', locale: 'en-US' });
   });
 
-  test('is English otherwise', () => {
-    assert.deepEqual(negotiate(['de-DE', 'es']), { language: 'en', locale: 'en-US' });
-    assert.deepEqual(negotiate([]), { language: 'en', locale: 'en-US' });
-    assert.deepEqual(negotiate(undefined), { language: 'en', locale: 'en-US' });
-    assert.deepEqual(negotiate(['fr-!!']), { language: 'fr', locale: 'fr-FR' }); // malformed tag
+  describe('The setLocale() function', () => {
+    describe('When it switches to French in a region of the browser', () => {
+      const canadianFrenchPreferences = ['fr-CA'];
+      let language;
+      let locale;
+      let libraryText;
+      beforeEach(() => {
+        setLocale(canadianFrenchPreferences);
+        language = currentLanguage();
+        locale = currentLocale();
+        libraryText = t('Library');
+      });
+
+      it('should make French the language of the UI', () => {
+        assert.equal(language, 'fr');
+      });
+
+      it('should take the locale of the browser', () => {
+        assert.equal(locale, 'fr-CA');
+      });
+
+      it('should translate the messages from the French catalog', () => {
+        assert.equal(libraryText, FRENCH.Library);
+      });
+
+      describe('When it switches back to English', () => {
+        let languageBack;
+        let libraryTextBack;
+        beforeEach(() => {
+          setLocale(ENGLISH_PREFERENCES);
+          languageBack = currentLanguage();
+          libraryTextBack = t('Library');
+        });
+
+        it('should make English the language of the UI again', () => {
+          assert.equal(languageBack, 'en');
+        });
+
+        it('should give the messages in English again', () => {
+          assert.equal(libraryTextBack, 'Library');
+        });
+      });
+    });
   });
 
-  test('can be switched', () => {
-    setLocale(['fr-FR']);
-    assert.equal(currentLanguage(), 'fr');
-    assert.equal(currentLocale(), 'fr-FR');
-    assert.equal(t('Library'), FRENCH.Library);
-    setLocale(['en-US']);
-    assert.equal(currentLanguage(), 'en');
-    assert.equal(t('Library'), 'Library');
+  describe('The t() function', () => {
+    describe('When the UI is in English', () => {
+      beforeEach(() => {
+        setLocale(ENGLISH_PREFERENCES);
+      });
+
+      describe('When the message has no placeholder', () => {
+        let text;
+        beforeEach(() => {
+          text = t('Library');
+        });
+
+        it('should give the message itself', () => {
+          assert.equal(text, 'Library');
+        });
+      });
+
+      describe('When the message has a placeholder', () => {
+        const values = { title: '“Example Book”' };
+        let text;
+        beforeEach(() => {
+          text = t('Delete {title}?', values);
+        });
+
+        it('should fill the placeholder with its value', () => {
+          assert.equal(text, 'Delete “Example Book”?');
+        });
+      });
+
+      describe('When the values are numbers, zero among them', () => {
+        const values = { first: 1, second: 0 };
+        let text;
+        beforeEach(() => {
+          text = t('{first} and {second}', values);
+        });
+
+        it('should write every number, zero included', () => {
+          assert.equal(text, '1 and 0');
+        });
+      });
+
+      describe('When a placeholder has no value', () => {
+        const values = { first: 'x' };
+        let text;
+        beforeEach(() => {
+          text = t('{first} and {second}', values);
+        });
+
+        it('should leave the placeholder as written', () => {
+          assert.equal(text, 'x and {second}');
+        });
+      });
+
+      describe('When a value holds a placeholder', () => {
+        const values = { first: '{second}', second: 'no' };
+        let text;
+        beforeEach(() => {
+          text = t('{first}', values);
+        });
+
+        it('should leave it as written, since the values are never filled in again', () => {
+          assert.equal(text, '{second}');
+        });
+      });
+    });
+
+    describe('When the UI is in French', () => {
+      beforeEach(() => {
+        setLocale(FRENCH_PREFERENCES);
+      });
+
+      describe('When the message has a placeholder', () => {
+        const values = { title: 'X' };
+        let text;
+        beforeEach(() => {
+          text = t('Delete {title}?', values);
+        });
+
+        it('should fill the placeholder of the translation from the catalog', () => {
+          assert.equal(text, fillTemplate(FRENCH['Delete {title}?'], values));
+        });
+      });
+
+      describe('When the catalog also translates the message in a context', () => {
+        let text;
+        beforeEach(() => {
+          text = t('Done');
+        });
+
+        it('should take the translation without context', () => {
+          assert.equal(text, FRENCH.Done);
+        });
+      });
+
+      describe('When the catalog does not translate the message', () => {
+        let text;
+        beforeEach(() => {
+          text = t('A message without translation');
+        });
+
+        it('should give the English message', () => {
+          assert.equal(text, 'A message without translation');
+        });
+      });
+    });
   });
-});
 
-describe('messages', () => {
-  test('English is the message itself, with its placeholders filled', () => {
-    setLocale(['en-US']);
-    assert.equal(t('Library'), 'Library');
-    assert.equal(t('Delete {title}?', { title: '“Example Book”' }), 'Delete “Example Book”?');
-    assert.equal(t('{a} and {b}', { a: 1, b: 0 }), '1 and 0');
-    assert.equal(t('{a} and {b}', { a: 'x' }), 'x and {b}'); // a missing value leaves the placeholder
-    assert.equal(t('{a}', { a: '{b}', b: 'no' }), '{b}'); // values are not interpolated again
-    assert.equal(tc('page status', 'Done'), 'Done');
+  describe('The tc() function', () => {
+    describe('When the UI is in English', () => {
+      let text;
+      beforeEach(() => {
+        setLocale(ENGLISH_PREFERENCES);
+        text = tc('page status', 'Done');
+      });
+
+      it('should give the message itself, without its context', () => {
+        assert.equal(text, 'Done');
+      });
+    });
+
+    describe('When the UI is in French', () => {
+      let textInContext;
+      let textWithoutContext;
+      beforeEach(() => {
+        setLocale(FRENCH_PREFERENCES);
+        textInContext = tc('page status', 'Done');
+        textWithoutContext = t('Done');
+      });
+
+      it('should take the translation of the message in its context', () => {
+        assert.equal(textInContext, FRENCH['page status|Done']);
+      });
+
+      it('should translate the message otherwise than without context, where the English is ambiguous', () => {
+        assert.notEqual(textInContext, textWithoutContext);
+      });
+    });
   });
 
-  test('French comes from the catalog, with a context when the English is ambiguous', () => {
-    setLocale(['fr-FR']);
-    assert.equal(t('Delete {title}?', { title: 'X' }), FRENCH['Delete {title}?'].replace('{title}', 'X'));
-    assert.equal(tc('page status', 'Done'), FRENCH['page status|Done']);
-    assert.equal(t('Done'), FRENCH.Done);
-    assert.notEqual(FRENCH['page status|Done'], FRENCH.Done);
-    assert.equal(t('A message without translation'), 'A message without translation');
-    setLocale(['en-US']);
+  describe('The tn() function', () => {
+    const singular = '{count} page';
+    const plural = '{count} pages';
+
+    describe('When the UI is in English', () => {
+      beforeEach(() => {
+        setLocale(ENGLISH_PREFERENCES);
+      });
+
+      const counts = [
+        { situation: 'When the count is 0', count: 0, rule: 'should take the plural', expectedText: '0 pages' },
+        { situation: 'When the count is 1', count: 1, rule: 'should take the singular', expectedText: '1 page' },
+        { situation: 'When the count is 2', count: 2, rule: 'should take the plural', expectedText: '2 pages' },
+        {
+          situation: 'When the count is in the thousands',
+          count: 1234,
+          rule: 'should write the count for the locale',
+          expectedText: '1,234 pages',
+        },
+      ];
+
+      for (const { situation, count, rule, expectedText } of counts) {
+        describe(situation, () => {
+          let text;
+          beforeEach(() => {
+            text = tn(singular, plural, count);
+          });
+
+          it(rule, () => {
+            assert.equal(text, expectedText);
+          });
+        });
+      }
+
+      describe('When the values give the count', () => {
+        const count = 2;
+        const values = { count: 'two' };
+        let text;
+        beforeEach(() => {
+          text = tn(singular, plural, count, values);
+        });
+
+        it('should write the count as given', () => {
+          assert.equal(text, 'two pages');
+        });
+      });
+    });
+
+    describe('When the UI is in French', () => {
+      const { one, other } = FRENCH[singular];
+      const frenchNumbers = new Intl.NumberFormat('fr-FR');
+      beforeEach(() => {
+        setLocale(FRENCH_PREFERENCES);
+      });
+
+      const counts = [
+        {
+          situation: 'When the count is 0',
+          count: 0,
+          rule: 'should take the singular, as French does below 2',
+          form: one,
+        },
+        { situation: 'When the count is 1', count: 1, rule: 'should take the singular', form: one },
+        { situation: 'When the count is 2', count: 2, rule: 'should take the plural', form: other },
+        {
+          situation: 'When the count is in the thousands',
+          count: 1234,
+          rule: 'should take the plural, with the count written for the locale',
+          form: other,
+        },
+        {
+          situation: 'When the count is a million, of the category many that the catalog does not give',
+          count: 1_000_000,
+          rule: 'should take the plural',
+          form: other,
+        },
+      ];
+
+      for (const { situation, count, rule, form } of counts) {
+        describe(situation, () => {
+          let text;
+          beforeEach(() => {
+            text = tn(singular, plural, count);
+          });
+
+          it(rule, () => {
+            assert.equal(text, fillTemplate(form, { count: frenchNumbers.format(count) }));
+          });
+        });
+      }
+    });
   });
 
-  test('plurals follow the rules of the language', () => {
-    setLocale(['en-US']);
-    const pages = (count) => tn('{count} page', '{count} pages', count);
-    assert.deepEqual([0, 1, 2, 1234].map(pages), ['0 pages', '1 page', '2 pages', '1,234 pages']);
-    assert.equal(tn('{count} page', '{count} pages', 2, { count: 'two' }), 'two pages');
-
-    setLocale(['fr-FR']);
-    const { one, other } = FRENCH['{count} page'];
-    const french = (template, count) => template.replace('{count}', count);
-    assert.equal(pages(0), french(one, '0')); // French uses the singular below 2
-    assert.equal(pages(1), french(one, '1'));
-    assert.equal(pages(2), french(other, '2'));
-    assert.equal(pages(1234), french(other, new Intl.NumberFormat('fr-FR').format(1234)));
-    assert.equal(pages(1_000_000), french(other, new Intl.NumberFormat('fr-FR').format(1_000_000))); // "many"
-    setLocale(['en-US']);
-  });
-
-  test('nodes are kept as they are, text around them is merged', () => {
-    setLocale(['en-US']);
+  describe('The tNodes() function', () => {
     const node = { nodeType: 1 };
-    assert.deepEqual(tNodes('{fraction} pages between {min} and {max}', { fraction: node, min: 1, max: 9 }), [
-      node,
-      ' pages between 1 and 9',
-    ]);
-    assert.deepEqual(tNodes('In {folder}', { folder: node }), ['In ', node]);
-    assert.deepEqual(tNodes('Plain text'), ['Plain text']);
+
+    describe('When the UI is in English', () => {
+      beforeEach(() => {
+        setLocale(ENGLISH_PREFERENCES);
+      });
+
+      describe('When a node comes before text values', () => {
+        const values = { fraction: node, min: 1, max: 9 };
+        let parts;
+        beforeEach(() => {
+          parts = tNodes('{fraction} pages between {min} and {max}', values);
+        });
+
+        it('should keep the node, then merge the text and the values after it into one string', () => {
+          assert.deepEqual(parts, [node, ' pages between 1 and 9']);
+        });
+      });
+
+      describe('When a node comes after text', () => {
+        const values = { folder: node };
+        let parts;
+        beforeEach(() => {
+          parts = tNodes('In {folder}', values);
+        });
+
+        it('should keep the text, then the node', () => {
+          assert.deepEqual(parts, ['In ', node]);
+        });
+      });
+
+      describe('When the message has no placeholder', () => {
+        let parts;
+        beforeEach(() => {
+          parts = tNodes('Plain text');
+        });
+
+        it('should give the message as one string', () => {
+          assert.deepEqual(parts, ['Plain text']);
+        });
+      });
+    });
   });
 });

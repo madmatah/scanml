@@ -44,7 +44,7 @@ AREAS_OF_EACH_PATH = {
     "scripts/lib/version.py": ["lint", "scripts", "android", "integration"],
     "scripts/lint/requirements.lock": ["lint"],
     "scripts/tests/test_release.py": ["lint", "scripts"],
-    "scripts/integration_tests/test_scripts.py": ["lint", "integration"],
+    "scripts/integration_tests/test_deploy.py": ["lint", "integration"],
     "scripts/release.py": ["lint", "scripts"],
     "scripts/vendor-katex.sh": ["lint"],
     "scripts/dev.sh": ["lint", "scripts", "integration"],

@@ -25,3 +25,4 @@ test = ["pytest==9.1.1", "httpx2==2.13.1"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra -p no:cacheprovider"
+filterwarnings = ["error::pytest.PytestRemovedIn10Warning"]

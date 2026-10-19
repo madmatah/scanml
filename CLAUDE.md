@@ -92,10 +92,9 @@ Production runs on this machine, from the main checkout, `~/Dev/scanmylib`, and 
   that each hold one reason to change, with its tests and documents, and pass `scripts/check.sh --last-commit`, the
   areas it touches; the last one passes `scripts/check.sh`. The header of a message follows Conventional Commits,
   `<type>(<scope>): <subject>`, with a type among `feat`, `fix`, `refactor`, `perf`, `style`, `test`, `docs`, `build`,
-  `ci` and `chore` (`style` for a change of layout only, such as a formatter's):
-  `fix(android): resume uploads once back online`. A scope that would only repeat the type is left out, as in
-  `ci: pin the checkout action`, and a breaking change adds `!` before the colon:
-  `feat(scripts)!: deploy only published releases`.
+  `ci` and `chore` (`style` for layout only, such as a formatter's): `fix(android): resume uploads once back online`.
+  A scope that would only repeat the type is left out, as in `ci: pin the checkout action`, and a breaking change adds
+  `!` before the colon: `feat(scripts)!: deploy only published releases`.
 - **A commit scope names where the change belongs:** the unit, as `docs/foundations.md` > Layers and modules names it,
   `server` for the api, `web` for the web UI, `android` for the app, `ocr` for the OCR sandbox, and `scripts`; or else
   the area: `build` for the build, the packaging and the tools' configuration, `ci` for the workflows, `docs` for
@@ -127,7 +126,7 @@ Production runs on this machine, from the main checkout, `~/Dev/scanmylib`, and 
 - **A branch reaches `main` only through a pull request whose CI passes.** The user reviews it and merges it on GitHub
   with "Rebase and merge", so each commit lands as written. Never merge into `main` yourself.
 - **The `pull-request` skill holds the procedure:** starting a branch, stacking it on another, shaping its history,
-  reviewing it, opening and updating its pull request, and reviewing someone else's.
+  reviewing it, opening and updating its pull request, showing a visible change in it, and reviewing someone else's.
 
 ## Commands
 
@@ -193,10 +192,8 @@ read the file before you do what its line says.
 
 ## Skills
 
-- `pull-request`: from a new branch to a merged pull request, the screenshots of a visible change included, and
-  reviewing someone else's.
+- `pull-request`: from a new branch to a merged pull request, and reviewing someone else's.
 - `expert-review`: `/expert-review [<pr#>|<branch>|<range>] [--post] [focus]`, the review of a diff before `main`.
 - `release`: `/release [major|minor|patch]`, the pull request of a new release, which a workflow publishes once merged.
 - `writing-commits`: the message of a commit, from its type and its scope to its body and its footer.
-- `clean-pr-screenshots`: `/clean-pr-screenshots`, for the maintainer only, the deletion of the branch where pull
-  requests publish their screenshots.
+- `clean-pr-screenshots`: `/clean-pr-screenshots`, the maintainer's deletion of the published screenshots.

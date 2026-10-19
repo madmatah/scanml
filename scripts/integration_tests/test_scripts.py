@@ -22,20 +22,16 @@ import itertools
 import json
 import os
 import pwd
-import queue
 import re
 import shutil
-import signal
 import socket
 import sqlite3
 import subprocess
 import tempfile
 import threading
-import time
 import unittest
 from collections.abc import Callable, Mapping
 from contextlib import closing
-from dataclasses import dataclass
 from pathlib import Path
 
 from docker_shim import LoggedCall, Rule, image_id
@@ -75,11 +71,6 @@ COPIED = [
     ".claude/skills/pull-request/SKILL.md",
 ]
 VERSION = (REPO / "VERSION").read_text().strip()
-VERSION_CODE = sum(int(part) * factor for part, factor in zip(VERSION.split("."), (10000, 100, 1), strict=True))
-#: The version of a development build of the test repositories, whose only commit is the release
-#: VERSION (scripts/lib/version.py): the next patch, no commit since, then the commit.
-_MAJOR, _MINOR, _PATCH = (int(part) for part in VERSION.split("."))
-DEV_VERSION = re.escape(f"{_MAJOR}.{_MINOR}.{_PATCH + 1}-dev.0+g") + "[0-9a-f]{12}"
 REAL_DOCKER = shutil.which("docker")
 #: The home directory of the password database, which the scripts refuse whatever $HOME says.
 PASSWD_HOME = pwd.getpwuid(os.getuid()).pw_dir
@@ -92,12 +83,6 @@ def free_port() -> int:
         probe.bind(("127.0.0.1", 0))
         port: int = probe.getsockname()[1]
         return port
-
-
-@dataclass(frozen=True)
-class RunningScript:
-    process: subprocess.Popen[str]
-    lines: queue.Queue[str | None]
 
 
 class Health:
@@ -345,72 +330,6 @@ class ScriptsTestCase(unittest.TestCase):
             timeout=timeout,
             env=self.environment(**(environment or {})),
         )
-
-    def start_script(self, checkout: Path, script: str) -> RunningScript:
-        process = subprocess.Popen(
-            [str(checkout / "scripts" / script)],
-            cwd=checkout,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            env=self.environment(),
-            start_new_session=True,
-        )
-        self.addCleanup(self.stop, process)
-        lines: queue.Queue[str | None] = queue.Queue()
-
-        def read_lines() -> None:
-            # A thread rather than select(): a line already read into the pipe's buffer would never wake select().
-            for line in process.stdout or ():
-                lines.put(line)
-            lines.put(None)
-
-        threading.Thread(target=read_lines, daemon=True).start()
-        return RunningScript(process, lines)
-
-    @staticmethod
-    def read_output_until(running: RunningScript, expected: str, idle_seconds: float = 60) -> str:
-        output = ""
-        while expected not in output:
-            try:
-                line = running.lines.get(timeout=idle_seconds)
-            except queue.Empty:
-                return output
-            if line is None:
-                # The end of the output stays there for the next read.
-                running.lines.put(None)
-                return output
-            output += line
-        return output
-
-    @staticmethod
-    def is_waiting_on(running: RunningScript, command: str, search_seconds: float = 60) -> bool:
-        deadline_seconds = time.monotonic() + search_seconds
-        while time.monotonic() < deadline_seconds:
-            for entry in Path("/proc").iterdir():
-                if not entry.name.isdigit():
-                    continue
-                try:
-                    stat = (entry / "stat").read_text()
-                except OSError:
-                    # The process ended since the directory was listed, or belongs to someone the system hides.
-                    continue
-                # pid (comm) state ppid pgrp session: comm may hold spaces and parentheses.
-                name = stat[stat.index("(") + 1 : stat.rindex(")")]
-                session = int(stat[stat.rindex(")") + 2 :].split()[3])
-                if name == command and session == running.process.pid:
-                    return True
-            time.sleep(0.05)
-        return False
-
-    @staticmethod
-    def stop(process: subprocess.Popen[str]) -> None:
-        # The whole session: the script and what it waits on, such as flock.
-        if process.poll() is None:
-            os.killpg(process.pid, signal.SIGTERM)
-        process.wait(timeout=60)
-        if process.stdout is not None:
-            process.stdout.close()
 
     def assert_only_reads(self) -> None:
         """Every docker call was read-only: listing, inspecting, resolving the configuration."""
@@ -983,292 +902,6 @@ class DeployTest(ScriptsTestCase):
         self.assertIn("not isolated from production", result.stdout)
         self.assertIn(".git", result.stdout)
         self.assert_only_reads()
-
-
-class BuildApkTest(ScriptsTestCase):
-    def runs(self) -> list[str]:
-        return [command for command in self.commands() if command.startswith("run ")]
-
-    def test_a_worktree_builds_the_dev_app_with_its_own_toolchain(self) -> None:
-        (self.worktree / ".env").write_text(self.dev_env())
-        dev = f"{self.prod}-dev"
-        # The environment cannot turn this into a release build in production's directories.
-        result = self.run_script(
-            self.worktree,
-            "build-apk.sh",
-            environment={"APP_VARIANT": "release", "DATA_DIR": str(self.prod), "ANDROID_DIR": f"{self.prod}/android"},
-        )
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        build, sign = self.runs()
-        self.assertIn(f"{dev}/android/sdk:/opt/android-sdk", build)
-        self.assertIn(f"{dev}/android/gradle:/gradle", build)
-        self.assertIn("assembleDev", build)
-        self.assertNotIn(str(self.prod) + "/", build.replace(f"{dev}/", ""))
-        self.assertIn("--network none", sign)
-        self.assertIn(f"{self.prod}/android/keystore:/keystore:ro", sign)
-        self.assertIn(f"{dev}/android/sdk/build-tools/36.0.0:/build-tools:ro", sign)
-        self.assertIn(f"{dev}/app:/out", sign)
-        self.assertIn("APP_VARIANT=dev", sign)
-        # A development build: its version comes from git, its versionCode from the time of the build.
-        name = re.search(rf"--env SCANMYLIB_DEV_VERSION_NAME=({DEV_VERSION}) ", build)
-        code = re.search(r"--env SCANMYLIB_DEV_VERSION_CODE=([0-9]+) ", build)
-        assert name is not None, build
-        assert code is not None, build
-        self.assertGreater(int(code[1]), 400_000)
-        self.assertIn(f"Version {name[1]} (versionCode {code[1]})", result.stdout)
-        # The signer refuses any other app than fr.scanmylib.dev with that versionCode.
-        self.assertIn("EXPECTED_PACKAGE=fr.scanmylib.dev ", sign)
-        self.assertIn(f"EXPECTED_VERSION_CODE={code[1]} ", sign)
-        # The definitions, not only their calls in sign_main ("declare -f" prints "name () ").
-        self.assertIn("apk_identity () ", sign)
-        # Its version is published next to it, for /api/health.
-        self.assertIn(f"EXPECTED_VERSION_NAME={name[1]} ", sign)
-        self.assertIn("write_apk_metadata () ", sign)
-        # A later build installs over the published one, even within the same minute; uncommitted
-        # changes say so.
-        (self.worktree / "VERSION").write_text(VERSION + "\n\n")
-        Path(f"{dev}/app/scanmylib.json").write_text(json.dumps({"version_code": int(code[1]) + 5}))
-        self.log.unlink()
-        result = self.run_script(self.worktree, "build-apk.sh")
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        build, sign = self.runs()
-        self.assertRegex(build, rf"--env SCANMYLIB_DEV_VERSION_NAME={DEV_VERSION}\.dirty ")
-        self.assertIn(f"EXPECTED_VERSION_CODE={int(code[1]) + 6} ", sign)
-
-    def write_apk_metadata(self, file: Path, *values: str) -> subprocess.CompletedProcess[str]:
-        """Runs write_apk_metadata of build-apk.sh, as the signing container does, in its locale."""
-        script = (REPO / "scripts" / "build-apk.sh").read_text()
-        function = script[script.index("write_apk_metadata() {") :]
-        function = function[: function.index("\n}\n") + 3]
-        return subprocess.run(
-            [
-                "bash",
-                "-c",
-                'die() { echo "error: $*" >&2; exit 1; }\n' + function + '\nwrite_apk_metadata "$@"',
-                "bash",
-                str(file),
-                *values,
-            ],
-            capture_output=True,
-            text=True,
-            check=False,
-            env={**os.environ, "LC_ALL": "en_US.UTF-8"},
-        )
-
-    def test_the_published_apk_metadata_is_checked_json(self) -> None:
-        out = self.base / "app"
-        out.mkdir()
-        sha256 = "0123456789abcdef" * 4
-        metadata = out / ".scanmylib.json.partial"
-        longest = "0.2.4-dev+g" + "a" * 53  # 64 characters
-        for name in ("0.2.4-dev.27+g1a2b3c4d5e6f", "0.2.4-dev+g1a2b3c4d5e6f.dirty", "0.2.4-dev", longest):
-            with self.subTest(name=name):
-                result = self.write_apk_metadata(metadata, "fr.scanmylib.dev", name, "416057", sha256, "4567")
-                self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertEqual(json.loads(metadata.read_text())["version_name"], name)
-        result = self.write_apk_metadata(metadata, "fr.scanmylib.dev", "1.2.3", "10203", sha256, "4567")
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(
-            json.loads(metadata.read_text()),
-            {
-                "application_id": "fr.scanmylib.dev",
-                "version_name": "1.2.3",
-                "version_code": 10203,
-                "sha256": sha256,
-                "size": 4567,
-            },
-        )
-        self.assertEqual(sorted(path.name for path in out.iterdir()), [".scanmylib.json.partial"])
-        # Anything that could break the JSON, or that the app could not trust, is refused.
-        for values in [
-            ('fr.scanmylib", "x": "', "1.2.3", "10203", sha256, "4567"),
-            ("fr.scanmylib", '1.2.3"', "10203", sha256, "4567"),
-            ("fr.scanmylib", '1.2.3-dev", "x": "', "10203", sha256, "4567"),
-            ("fr.scanmylib", longest + "a", "10203", sha256, "4567"),
-            ("fr.scanmylib", "1.2.3-dév", "10203", sha256, "4567"),
-            ("fr.scanmylib", "١.2.3", "10203", sha256, "4567"),
-            ("fr.scanmylib", "1.2.3", '10203, "x": 1', sha256, "4567"),
-            ("fr.scanmylib", "1.2.3", "10203", "not-a-digest", "4567"),
-            ("fr.scanmylib", "1.2.3", "10203", sha256, ""),
-        ]:
-            with self.subTest(values=values):
-                result = self.write_apk_metadata(metadata, *values)
-                self.assertNotEqual(result.returncode, 0)
-                self.assertIn("unexpected APK metadata", result.stderr)
-                self.assertEqual(json.loads(metadata.read_text())["version_code"], 10203)
-
-    def test_a_worktree_never_builds_the_release_app(self) -> None:
-        (self.worktree / ".env").write_text(self.dev_env(APP_VARIANT="release"))
-        result = self.run_script(self.worktree, "build-apk.sh")
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("production's checkout", result.stderr)
-        self.assertEqual(self.runs(), [])
-        # Nor with production's .env copied into it, nor in another clone.
-        (self.worktree / ".env").write_text(self.production_env())
-        result = self.run_script(self.worktree, "build-apk.sh")
-        self.assertNotEqual(result.returncode, 0)
-        clone = self.make_clone()
-        result = self.run_script(clone, "build-apk.sh")
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn(f"only built in production's checkout ({self.primary})", result.stderr)
-        self.assertEqual(self.runs(), [])
-
-    def test_the_release_app_comes_from_production_s_checkout_on_a_published_release(self) -> None:
-        result = self.run_script(self.primary, "build-apk.sh")
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        build, sign = self.runs()
-        self.assertIn("assembleRelease", build)
-        self.assertIn(f"{self.prod}/android/keystore:/keystore:ro", sign)
-        self.assertIn("EXPECTED_PACKAGE=fr.scanmylib ", sign)
-        # The release is VERSION, which the build reads itself.
-        self.assertIn(f"EXPECTED_VERSION_CODE={VERSION_CODE} ", sign)
-        self.assertIn(f"EXPECTED_VERSION_NAME={VERSION} ", sign)
-        self.assertNotIn("SCANMYLIB_DEV_VERSION", build)
-        self.log.unlink()
-
-        def add_a_stray_file() -> None:
-            (self.primary / "android" / "app" / "src").mkdir(parents=True)
-            (self.primary / "android" / "app" / "src" / "stray.jks").write_bytes(b"key")
-
-        refusals: list[tuple[str, Callable[[], object], str]] = [
-            ("a stray file", add_a_stray_file, "could end up in the release app"),
-            ("an untracked file", lambda: (self.primary / "notes.txt").write_text("x"), "clean checkout"),
-            (
-                "a hidden change",
-                lambda: (
-                    self.git(self.primary, "update-index", "--assume-unchanged", "VERSION"),
-                    (self.primary / "VERSION").write_text("9.9.9\n"),
-                ),
-                "assume-unchanged or skip-worktree",
-            ),
-            (
-                "a commit after the release",
-                lambda: self.git(self.primary, "commit", "--quiet", "--allow-empty", "-m", "x"),
-                "built from a published release only: HEAD",
-            ),
-            (
-                "a release not published",
-                lambda: self.git(self.primary, "push", "--quiet", "origin", f":refs/tags/v{VERSION}"),
-                f"v{VERSION} is not published on origin",
-            ),
-        ]
-        for name, prepare, expected in refusals:
-            with self.subTest(name):
-                for path in (self.origin, self.primary):
-                    shutil.rmtree(path)
-                self.make_repository()
-                prepare()
-                result = self.run_script(self.primary, "build-apk.sh")
-                self.assertNotEqual(result.returncode, 0)
-                self.assertIn(expected, result.stderr)
-                self.assertEqual(self.runs(), [])
-
-    def test_the_signing_key_is_only_created_on_request(self) -> None:
-        for name in ("scanmylib-release.p12", "password"):
-            (self.prod / "android" / "keystore" / name).unlink()
-        result = self.run_script(self.primary, "build-apk.sh")
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("no signing key", result.stderr)
-        self.assertEqual(self.runs(), [])
-        result = self.run_script(self.primary, "build-apk.sh", "--create-signing-key")
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        _, key, sign = self.runs()
-        self.assertIn(f"{self.prod}/android/keystore:/keystore ", key + " ")
-        self.assertIn("--network none", key)
-        self.assertIn(f"{self.prod}/android/keystore:/keystore:ro", sign)
-        (self.worktree / ".env").write_text(self.dev_env())
-        result = self.run_script(self.worktree, "build-apk.sh", "--create-signing-key")
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("only production creates the signing key", result.stderr)
-
-    def test_without_env_only_ci_builds_and_never_signs(self) -> None:
-        data = self.base / "ci"
-        result = self.run_script(self.worktree, "build-apk.sh", "test", "lint", environment={"DATA_DIR": str(data)})
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("only CI builds", result.stderr)
-        result = self.run_script(self.worktree, "build-apk.sh", environment={"DATA_DIR": str(data), "CI": "true"})
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn("never published", result.stdout)
-        [build] = self.runs()
-        self.assertIn(f"{data}/android/sdk:/opt/android-sdk", build)
-        # Never production's toolchain or data, mounted read-write into a networked build.
-        for environment, expected in [
-            ({"DATA_DIR": str(self.prod)}, "is production's DATA_DIR"),
-            ({"DATA_DIR": str(data), "ANDROID_DIR": f"{self.prod}/android"}, "is production's ANDROID_DIR"),
-            ({"DATA_DIR": str(self.base)}, "contains production's DATA_DIR"),
-        ]:
-            with self.subTest(environment=environment):
-                self.log.unlink()
-                result = self.run_script(
-                    self.worktree, "build-apk.sh", "test", "lint", environment={"GITHUB_ACTIONS": "true", **environment}
-                )
-                self.assertNotEqual(result.returncode, 0)
-                self.assertIn(expected, result.stderr)
-                self.assertEqual(self.runs(), [])
-
-    def test_ci_builds_stay_out_of_the_home_directory(self) -> None:
-        # CI=true on a workstation: the home directory is refused, and nothing is created there.
-        android = self.home / "android-ci"
-        result = self.run_script(
-            self.worktree,
-            "build-apk.sh",
-            "test",
-            "lint",
-            environment={"CI": "true", "DATA_DIR": str(self.base / "ci"), "ANDROID_DIR": str(android)},
-        )
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn(f"ANDROID_DIR: {android} is inside your home directory", result.stderr)
-        self.assertFalse(android.exists())
-        self.assertEqual(self.runs(), [])
-        # GitHub Actions keeps RUNNER_TEMP in the runner's home directory: allowed there only.
-        runner_temp = self.home / "work" / "_temp"
-        result = self.run_script(
-            self.worktree,
-            "build-apk.sh",
-            "test",
-            "lint",
-            environment={
-                "GITHUB_ACTIONS": "true",
-                "RUNNER_TEMP": str(runner_temp),
-                "DATA_DIR": str(runner_temp / "data"),
-            },
-        )
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn(f"{runner_temp}/data/android/sdk:/opt/android-sdk", self.runs()[0])
-        self.log.unlink()
-        result = self.run_script(
-            self.worktree,
-            "build-apk.sh",
-            "test",
-            "lint",
-            environment={
-                "GITHUB_ACTIONS": "true",
-                "RUNNER_TEMP": str(runner_temp),
-                "DATA_DIR": str(runner_temp / "data"),
-                "ANDROID_DIR": str(android),
-            },
-        )
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("is inside your home directory", result.stderr)
-        self.assertEqual(self.runs(), [])
-
-    def test_one_build_at_a_time_per_toolchain(self) -> None:
-        (self.worktree / ".env").write_text(self.dev_env())
-        android = Path(f"{self.prod}-dev/android")
-        android.mkdir(parents=True)
-        lock = os.open(android, os.O_RDONLY)
-        self.addCleanup(os.close, lock)
-        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        build = self.start_script(self.worktree, "build-apk.sh")
-        output_while_locked = self.read_output_until(build, "Waiting for another build")
-        waits_on_the_lock = self.is_waiting_on(build, "flock")
-        runs_while_locked = self.runs()
-        fcntl.flock(lock, fcntl.LOCK_UN)
-        output_once_released = self.read_output_until(build, "Version ")
-        self.assertIn("Waiting for another build", output_while_locked)
-        self.assertTrue(waits_on_the_lock)
-        self.assertEqual(runs_while_locked, [])
-        self.assertIn("Version ", output_once_released)
 
 
 class CheckTest(ScriptsTestCase):

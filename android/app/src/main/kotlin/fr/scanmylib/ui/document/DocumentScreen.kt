@@ -63,7 +63,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -75,6 +74,8 @@ import fr.scanmylib.db.DocumentEntity
 import fr.scanmylib.db.PendingPageEntity
 import fr.scanmylib.model.ScanSource
 import fr.scanmylib.ui.components.BackButton
+import fr.scanmylib.ui.components.ScreenTitle
+import fr.scanmylib.ui.components.SectionHeader
 import fr.scanmylib.ui.components.iconRes
 import fr.scanmylib.ui.components.labelRes
 import fr.scanmylib.ui.components.pageStatsText
@@ -271,9 +272,7 @@ internal fun DocumentContent(
         modifier = modifier,
         topBar = {
             TopAppBar(
-                title = {
-                    Text(sanitizeTextFromPc(document?.title.orEmpty()), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                },
+                title = { ScreenTitle(sanitizeTextFromPc(document?.title.orEmpty())) },
                 navigationIcon = { BackButton(onBack) },
             )
         },
@@ -333,7 +332,7 @@ internal fun DocumentContent(
                     val pages = state.pages
                     if (pages.local.isNotEmpty()) {
                         fullWidthItem("local") {
-                            SectionTitle(
+                            SectionHeader(
                                 pluralStringResource(
                                     R.plurals.document_local_pages,
                                     pages.local.size,
@@ -351,7 +350,7 @@ internal fun DocumentContent(
                         }
                     }
                     fullWidthItem("server") {
-                        SectionTitle(
+                        SectionHeader(
                             pluralStringResource(R.plurals.document_server_pages, pages.server.size, pages.server.size),
                         )
                     }
@@ -493,11 +492,6 @@ private fun DocumentSummary(document: DocumentEntity, onRetryUpload: () -> Unit)
             }
         }
     }
-}
-
-@Composable
-private fun SectionTitle(text: String) {
-    Text(text, style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 8.dp))
 }
 
 @Composable

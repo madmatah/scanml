@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -35,7 +36,6 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -66,9 +66,11 @@ import fr.scanmylib.library.PageNumbering
 import fr.scanmylib.library.StagedPage
 import fr.scanmylib.model.ScanSource
 import fr.scanmylib.ui.components.LocalImage
+import fr.scanmylib.ui.components.SettingSwitchRow
 import fr.scanmylib.ui.components.descriptionRes
 import fr.scanmylib.ui.components.iconRes
 import fr.scanmylib.ui.components.labelRes
+import fr.scanmylib.ui.theme.DISABLED_ALPHA
 import kotlinx.coroutines.launch
 
 /**
@@ -386,21 +388,15 @@ private fun NumberingFields(
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
         modifier = Modifier.fillMaxWidth(),
     )
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
-            Text(stringResource(R.string.scan_consecutive))
-            Text(
-                stringResource(R.string.scan_consecutive_help),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        Switch(
-            checked = scan.consecutive,
-            onCheckedChange = onConsecutiveChange,
-            enabled = scan.firstPage.isNotEmpty(),
-        )
-    }
+    SettingSwitchRow(
+        label = stringResource(R.string.scan_consecutive),
+        description = stringResource(R.string.scan_consecutive_help),
+        checked = scan.consecutive,
+        onCheckedChange = onConsecutiveChange,
+        enabled = scan.firstPage.isNotEmpty(),
+        // The dialog has margins of its own.
+        contentPadding = PaddingValues(),
+    )
 }
 
 /** What the server will receive as page-number hints, in words. */
@@ -415,5 +411,3 @@ private fun numberingSummary(numbering: PageNumbering?, count: Int): String {
         else -> stringResource(R.string.scan_summary_range, first, last)
     }
 }
-
-private const val DISABLED_ALPHA = 0.38f

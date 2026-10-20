@@ -49,6 +49,7 @@ import fr.scanmylib.db.DocumentEntity
 import fr.scanmylib.db.LibraryRow
 import fr.scanmylib.model.ServerConfig
 import fr.scanmylib.ui.components.MessageCard
+import fr.scanmylib.ui.components.ScreenTitle
 import fr.scanmylib.ui.components.ServerImage
 import fr.scanmylib.ui.components.StatusLine
 import fr.scanmylib.ui.components.UpdateBanner
@@ -107,7 +108,7 @@ internal fun LibraryContent(
         modifier = modifier,
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.app_name), style = MaterialTheme.typography.wordmark) },
+                title = { ScreenTitle(stringResource(R.string.app_name), style = MaterialTheme.typography.wordmark) },
                 actions = {
                     IconButton(onClick = onOpenSettings) {
                         Icon(painterResource(R.drawable.ic_settings), stringResource(R.string.settings_title))

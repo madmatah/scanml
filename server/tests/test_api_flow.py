@@ -28,6 +28,7 @@ from support import (
     AUTH,
     BROKEN_EXIF,
     CORRUPT_PNGS,
+    NO_NUMBER,
     Answer,
     capture_answer,
     create_document,
@@ -44,7 +45,6 @@ from support import (
 )
 
 SLUG = "sample-cafe-guide"
-NO_NUMBER = 0  # page_image(0): the fake OCR finds no page number
 NO_STATS = {"pages": 0, "done": 0, "queued": 0, "processing": 0, "error": 0, "excluded": 0, "duplicates": 0}
 
 
@@ -456,7 +456,7 @@ def rotated_page(tmp_path_factory: pytest.TempPathFactory) -> RotatedPage:
     with running_api(tmp_path_factory.mktemp("api")) as api:
         client = api.client
         document_id = create_document(client)
-        # 1204×1500: the fake engine finds no number (variant 4); rotated: 1500×1204, page 204.
+        # 1204×1500: the fake engine finds no number (PageNumberVariant.UNNUMBERED); rotated: 1500×1204, page 204.
         page = upload(client, document_id, jpeg(1204, 1500)).json()
         wait_until_processed(client, document_id)
         number_before = client.get(f"/api/pages/{page['id']}", headers=AUTH).json()["number"]

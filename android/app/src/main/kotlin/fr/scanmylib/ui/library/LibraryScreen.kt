@@ -276,7 +276,10 @@ private fun DocumentCard(
     val author = sanitizeTextFromPc(document.author)
     Card(
         onClick = onClick,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.cardColor),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.cardColor,
+            contentColor = MaterialTheme.colorScheme.onSurface,
+        ),
         modifier = Modifier.fillMaxWidth(),
     ) {
         Row(
@@ -289,6 +292,7 @@ private fun DocumentCard(
                 Text(
                     title,
                     style = MaterialTheme.typography.cardTitle,
+                    color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )

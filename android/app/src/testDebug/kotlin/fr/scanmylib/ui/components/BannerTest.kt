@@ -31,7 +31,7 @@ class BannerTest {
                 actions = mutableListOf()
                 compose.setContent {
                     ScanMyLibTheme {
-                        AttentionBanner(MESSAGE, R.drawable.ic_cloud_off, ACTION, onAction = { actions += Unit })
+                        AttentionBanner(MESSAGE, R.drawable.ic_pause_circle, ACTION, onAction = { actions += Unit })
                     }
                 }
                 compose.onNodeWithText(ACTION).performClick()

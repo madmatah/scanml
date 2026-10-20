@@ -239,6 +239,35 @@ data or library; an `--api` URL without an explicit port is refused) without
   check covers the rest: it refuses an update signed with another key in any
   case, so a swapped APK on the network cannot replace the app. Pairing with
   another PC, or unpairing, forgets what the previous one offered.
+- **Text from the PC**: the titles, authors, messages, version, page labels,
+  page ranges and folder names the PC sends are shown as plain text, which
+  Compose never reads as markup, without line breaks: line breaks, control
+  characters and runs of spaces become one space. The characters a reader cannot
+  see are removed: the format characters (every bidirectional control,
+  zero-width spaces and tags among them), private-use, unassigned and lone
+  surrogate code points, the variation selectors of glyphs (U+FE00 to U+FE0D and
+  the supplementary ones), the combining grapheme joiner, the Khmer inherent
+  vowels, the Mongolian free variation selectors, the Hangul fillers and the
+  Braille blank. Unassigned means unknown to the phone's own Unicode tables, so
+  a phone older than a character removes it. A mark with no character before it,
+  at the start of the text or after a space, is removed. What spelling needs is
+  kept: the zero-width joiner and non-joiner after a kept character other than a
+  space, a joiner or a non-joiner, and the text and emoji presentation selectors
+  after any kept character other than a space, including a joiner or a
+  non-joiner, so that a text made of them alone shows as empty. A letter keeps
+  at most four marks in a row, so that stacked marks cannot draw over the rest
+  of the screen. A grapheme, as the phone's own Unicode tables segment it,
+  longer than 24 code units or holding more than three zero-width joiners or
+  non-joiners is replaced with a space, so that the graphemes around it cannot
+  join into a new one. That space is left out where it would start or end the
+  text or follow another space, and a space of the text that would then start
+  it or follow another space is left out with what it carries, such as a skin
+  tone or a sound mark. Only the start of a long text is read, ending before the
+  grapheme it may cut; a text read only in part, or longer than 300 graphemes
+  (16 for a page label), is cut to at most that many, the ellipsis that ends it
+  included, so that a long or garbled text can neither fill a screen nor hide or
+  reorder what it shows. A label, a range or a folder name left empty shows as
+  missing.
 - **Token**: it is only sent to the paired PC, never to another address (not
   even for thumbnails). It is excluded from Android backups and from transfers
   to another phone.

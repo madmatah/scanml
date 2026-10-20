@@ -22,10 +22,12 @@ import fr.scanmylib.db.UploadState
 import fr.scanmylib.library.serverThumbUrl
 import fr.scanmylib.model.ServerConfig
 import fr.scanmylib.ui.components.LocalImage
+import fr.scanmylib.ui.components.MAX_PAGE_LABEL_GRAPHEMES
 import fr.scanmylib.ui.components.ServerImage
 import fr.scanmylib.ui.components.StatusLine
 import fr.scanmylib.ui.components.iconRes
 import fr.scanmylib.ui.components.labelRes
+import fr.scanmylib.ui.components.sanitizeTextFromPc
 import java.io.File
 
 /**
@@ -60,9 +62,13 @@ fun LocalPageTile(page: PendingPageEntity, image: File?, server: ServerConfig?, 
 /** A page known by the server, with its OCR state. */
 @Composable
 fun ServerPageTile(page: ServerPageEntity, server: ServerConfig?, onClick: () -> Unit) {
+    val label = sanitizeTextFromPc(page.pageLabel.orEmpty(), MAX_PAGE_LABEL_GRAPHEMES)
     PageTile(
-        title = page.pageLabel?.let { stringResource(R.string.page_label, it) }
-            ?: stringResource(R.string.page_without_number),
+        title = if (label.isEmpty()) {
+            stringResource(R.string.page_without_number)
+        } else {
+            stringResource(R.string.page_label, label)
+        },
         onClick = onClick,
         image = { modifier -> ServerImage(server, page.thumbUrl, contentDescription = null, modifier = modifier) },
         status = {

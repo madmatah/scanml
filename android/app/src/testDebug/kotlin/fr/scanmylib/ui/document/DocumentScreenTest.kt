@@ -1,9 +1,11 @@
 package fr.scanmylib.ui.document
 
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasScrollToKeyAction
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performScrollToKey
@@ -27,6 +29,7 @@ import org.junit.Test
 import org.junit.experimental.runners.Enclosed
 import org.junit.runner.RunWith
 import org.robolectric.ParameterizedRobolectricTestRunner
+import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
@@ -168,6 +171,69 @@ class DocumentScreenTest {
                 fun themes(): List<Array<Any>> = THEMES
             }
         }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenItsTitleAndAuthorHoldCharactersAReaderCannotSee {
+            @get:Rule
+            val compose = createComposeRule()
+
+            @Before
+            fun drawTheDocument() {
+                val document = BOOK.copy(
+                    title = makeCharacter(0x202E) + BOOK.title + makeCharacter(0x0A),
+                    author = makeCharacter(0x200B) + BOOK.author,
+                )
+                compose.setContent { ScanMyLibTheme { DocumentContentOf(BOOK_BEING_READ.copy(document = document)) } }
+            }
+
+            @Test
+            fun `should show the title without them in the top bar`() {
+                compose.onNodeWithText(BOOK.title).assertIsDisplayed()
+            }
+
+            @Test
+            fun `should show the author without them in the summary`() {
+                compose.onNodeWithText("Book · ${BOOK.author}").assertIsDisplayed()
+            }
+        }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenItsRangesAndFolderHoldOnlyCharactersAReaderCannotSee {
+            @get:Rule
+            val compose = createComposeRule()
+
+            @Before
+            fun drawTheDocument() {
+                val invisibleText = makeCharacter(0x200B).repeat(3)
+                val server =
+                    BOOK.server?.copy(coverage = invisibleText, missing = invisibleText, folder = invisibleText)
+                val document = BOOK.copy(server = server)
+                compose.setContent { ScanMyLibTheme { DocumentContentOf(BOOK_BEING_READ.copy(document = document)) } }
+            }
+
+            @Test
+            fun `should not mention the missing pages, rather than show an empty range`() {
+                compose.onAllNodesWithText(MISSING_PAGES, substring = true).assertCountEquals(0)
+            }
+
+            @Test
+            fun `should not mention the folder, rather than show an empty name`() {
+                compose.onAllNodesWithText(FOLDER, substring = true).assertCountEquals(0)
+            }
+
+            @Test
+            fun `should say that no page is numbered, rather than show an empty range`() {
+                compose.onNodeWithText(NO_NUMBERED_PAGES).assertIsDisplayed()
+            }
+
+            companion object {
+                private const val MISSING_PAGES = "Not scanned yet"
+                private const val FOLDER = "Folder on the PC"
+                private const val NO_NUMBERED_PAGES = "Scanned pages: no numbered pages"
+            }
+        }
     }
 }
 
@@ -271,6 +337,8 @@ private val PAMPHLET_REJECTED = DocumentUiState(
     ),
     pages = DocumentPages(local = listOf(pageOnThePhone(1, UploadState.QUEUED)), server = emptyList()),
 )
+
+private fun makeCharacter(codePoint: Int): String = String(Character.toChars(codePoint))
 
 @Composable
 private fun DocumentContentOf(state: DocumentUiState) {

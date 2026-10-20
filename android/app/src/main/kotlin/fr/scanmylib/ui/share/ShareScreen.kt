@@ -32,6 +32,7 @@ import fr.scanmylib.R
 import fr.scanmylib.db.DocumentEntity
 import fr.scanmylib.ui.components.iconRes
 import fr.scanmylib.ui.components.labelRes
+import fr.scanmylib.ui.components.sanitizeTextFromPc
 
 /**
  * "Add to…": photos shared from another app, [photoCount] of them, wait for the user to choose
@@ -47,8 +48,21 @@ fun ShareScreen(
     viewModel: ShareViewModel = viewModel(factory = ShareViewModel.Factory),
 ) {
     val documents by viewModel.documents.collectAsStateWithLifecycle()
+    ShareContent(documents, photoCount, onChoose = onChoose, onNewDocument = onNewDocument, onClose = onClose)
+}
 
+/** Apart from the view model, so that a test draws the choice from invented documents. */
+@Composable
+internal fun ShareContent(
+    documents: List<DocumentEntity>?,
+    photoCount: Int,
+    onChoose: (documentId: String) -> Unit,
+    onNewDocument: () -> Unit,
+    onClose: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     Scaffold(
+        modifier = modifier,
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.share_title)) },
@@ -98,9 +112,12 @@ fun ShareScreen(
 @Composable
 private fun DocumentRow(document: DocumentEntity, onClick: () -> Unit) {
     val kind = stringResource(document.kind.labelRes())
+    val author = sanitizeTextFromPc(document.author)
     ListItem(
-        headlineContent = { Text(document.title, maxLines = 2, overflow = TextOverflow.Ellipsis) },
-        supportingContent = { Text(document.author.ifEmpty { kind }, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+        headlineContent = {
+            Text(sanitizeTextFromPc(document.title), maxLines = 2, overflow = TextOverflow.Ellipsis)
+        },
+        supportingContent = { Text(author.ifEmpty { kind }, maxLines = 1, overflow = TextOverflow.Ellipsis) },
         leadingContent = { Icon(painterResource(document.kind.iconRes()), contentDescription = null) },
         modifier = Modifier.clickable(
             role = Role.Button,

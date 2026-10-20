@@ -3,6 +3,7 @@ package fr.scanmylib.ui.library
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import com.github.takahirom.roborazzi.RobolectricDeviceQualifiers
@@ -23,6 +24,7 @@ import org.junit.Test
 import org.junit.experimental.runners.Enclosed
 import org.junit.runner.RunWith
 import org.robolectric.ParameterizedRobolectricTestRunner
+import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
@@ -50,63 +52,6 @@ class LibraryScreenTest {
             }
 
             companion object {
-                private const val BOOK_TITLE = "Example Book"
-                private const val PAMPHLET_TITLE = "Example Pamphlet"
-
-                private val BOOK = LibraryRow(
-                    document = DocumentEntity(
-                        id = "book",
-                        title = BOOK_TITLE,
-                        author = "Jane Doe",
-                        kind = DocumentKind.BOOK,
-                        unwarp = true,
-                        updatedAt = 0,
-                        needsUpload = false,
-                        uploadError = null,
-                        confirmedAt = 0,
-                        server = ServerDocumentState(
-                            pages = 25,
-                            done = 23,
-                            queued = 2,
-                            processing = 0,
-                            errors = 0,
-                            excluded = 0,
-                            duplicates = 0,
-                            coverage = "12–31, 88–92",
-                            missing = "32–87",
-                            unnumbered = 0,
-                            coverThumbUrl = null,
-                            folder = "Example Book",
-                        ),
-                    ),
-                    pagesToUpload = 3,
-                    failedPages = 0,
-                )
-
-                private val PAMPHLET = LibraryRow(
-                    document = DocumentEntity(
-                        id = "pamphlet",
-                        title = PAMPHLET_TITLE,
-                        author = "",
-                        kind = DocumentKind.DOCUMENT,
-                        unwarp = false,
-                        updatedAt = 0,
-                        needsUpload = true,
-                        uploadError = null,
-                        confirmedAt = 0,
-                        server = null,
-                    ),
-                    pagesToUpload = 0,
-                    failedPages = 1,
-                )
-
-                private val LIBRARY = LibraryUiState(
-                    documents = listOf(BOOK, PAMPHLET),
-                    pc = PcState.Online(
-                        ServerStatus(ocr = OcrStatus(state = "ready"), queue = QueueCounts(queued = 2)),
-                    ),
-                )
-
                 @JvmStatic
                 @ParameterizedRobolectricTestRunner.Parameters(name = "in the {0} theme")
                 fun themes(): List<Array<Any>> = listOf(
@@ -117,8 +62,150 @@ class LibraryScreenTest {
                 )
             }
         }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenATitleAndAnAuthorHoldBidirectionalControls {
+            @get:Rule
+            val compose = createComposeRule()
+
+            @Before
+            fun drawTheLibrary() {
+                val document = BOOK.document.copy(
+                    title = makeCharacter(0x202E) + BOOK_TITLE,
+                    author = makeCharacter(0x2066) + AUTHOR + makeCharacter(0x2069),
+                )
+                val book = BOOK.copy(document = document)
+                compose.setContent { ScanMyLibTheme { LibraryContentOf(LIBRARY.copy(documents = listOf(book))) } }
+            }
+
+            @Test
+            fun `should show the title without them, so that it reads in the order it was written`() {
+                compose.onNodeWithText(BOOK_TITLE).assertIsDisplayed()
+            }
+
+            @Test
+            fun `should show the author without them`() {
+                compose.onNodeWithText(AUTHOR).assertIsDisplayed()
+            }
+
+            @Test
+            fun `should name the scan button after the title without them`() {
+                compose.onNodeWithContentDescription(SCAN_THE_BOOK).assertExists()
+            }
+
+            companion object {
+                private const val AUTHOR = "Jane Doe"
+                private const val SCAN_THE_BOOK = "Scan pages into $BOOK_TITLE"
+            }
+        }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenACoverageHoldsOnlyCharactersAReaderCannotSee {
+            @get:Rule
+            val compose = createComposeRule()
+
+            @Before
+            fun drawTheLibrary() {
+                val server = BOOK.document.server?.copy(coverage = makeCharacter(0x200B).repeat(3))
+                val book = BOOK.copy(document = BOOK.document.copy(server = server))
+                compose.setContent { ScanMyLibTheme { LibraryContentOf(LIBRARY.copy(documents = listOf(book))) } }
+            }
+
+            @Test
+            fun `should count the pages without an empty range`() {
+                compose.onNodeWithText(PAGES_WITHOUT_RANGE).assertIsDisplayed()
+            }
+
+            companion object {
+                private const val PAGES_WITHOUT_RANGE = "25 pages"
+            }
+        }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenTheEngineFailsWithAnErrorOfCharactersAReaderCannotSee {
+            @get:Rule
+            val compose = createComposeRule()
+
+            @Before
+            fun drawTheLibrary() {
+                val status = ServerStatus(ocr = OcrStatus(state = "error", lastError = makeCharacter(0x200B).repeat(3)))
+                compose.setContent { ScanMyLibTheme { LibraryContentOf(LIBRARY.copy(pc = PcState.Online(status))) } }
+            }
+
+            @Test
+            fun `should show the generic message, never an empty error`() {
+                compose.onNodeWithText(READING_UNAVAILABLE).assertIsDisplayed()
+            }
+
+            companion object {
+                private const val READING_UNAVAILABLE =
+                    "PC connected, but text recognition isn’t available: the pages wait on the PC."
+            }
+        }
     }
 }
+
+private const val BOOK_TITLE = "Example Book"
+private const val PAMPHLET_TITLE = "Example Pamphlet"
+
+private val BOOK = LibraryRow(
+    document = DocumentEntity(
+        id = "book",
+        title = BOOK_TITLE,
+        author = "Jane Doe",
+        kind = DocumentKind.BOOK,
+        unwarp = true,
+        updatedAt = 0,
+        needsUpload = false,
+        uploadError = null,
+        confirmedAt = 0,
+        server = ServerDocumentState(
+            pages = 25,
+            done = 23,
+            queued = 2,
+            processing = 0,
+            errors = 0,
+            excluded = 0,
+            duplicates = 0,
+            coverage = "12–31, 88–92",
+            missing = "32–87",
+            unnumbered = 0,
+            coverThumbUrl = null,
+            folder = "Example Book",
+        ),
+    ),
+    pagesToUpload = 3,
+    failedPages = 0,
+)
+
+private val PAMPHLET = LibraryRow(
+    document = DocumentEntity(
+        id = "pamphlet",
+        title = PAMPHLET_TITLE,
+        author = "",
+        kind = DocumentKind.DOCUMENT,
+        unwarp = false,
+        updatedAt = 0,
+        needsUpload = true,
+        uploadError = null,
+        confirmedAt = 0,
+        server = null,
+    ),
+    pagesToUpload = 0,
+    failedPages = 1,
+)
+
+private val LIBRARY = LibraryUiState(
+    documents = listOf(BOOK, PAMPHLET),
+    pc = PcState.Online(
+        ServerStatus(ocr = OcrStatus(state = "ready"), queue = QueueCounts(queued = 2)),
+    ),
+)
+
+private fun makeCharacter(codePoint: Int): String = String(Character.toChars(codePoint))
 
 @Composable
 private fun LibraryContentOf(state: LibraryUiState) {

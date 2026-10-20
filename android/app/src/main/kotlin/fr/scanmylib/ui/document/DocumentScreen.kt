@@ -72,11 +72,13 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import fr.scanmylib.R
 import fr.scanmylib.db.DocumentEntity
+import fr.scanmylib.db.PendingPageEntity
 import fr.scanmylib.model.ScanSource
 import fr.scanmylib.ui.components.BackButton
 import fr.scanmylib.ui.components.iconRes
 import fr.scanmylib.ui.components.labelRes
 import fr.scanmylib.ui.components.pageStatsText
+import java.io.File
 
 @Composable
 fun DocumentScreen(
@@ -182,101 +184,20 @@ fun DocumentScreen(
     // Messages show in the review dialog: behind it, they would be dimmed.
     val messagesInDialog = reviewVisible
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(document?.title.orEmpty(), maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                navigationIcon = { BackButton(onBack) },
-            )
-        },
-        floatingActionButton = {
-            if (document != null) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    // On a narrow screen, or with large text, "Import" keeps its icon only.
-                    val density = LocalDensity.current
-                    val width = with(density) { LocalWindowInfo.current.containerSize.width.toDp() }
-                    val roomy = width.value / density.fontScale >= ROOMY_WIDTH_DP
-                    val importLabel = stringResource(R.string.scan_source_picker)
-                    ExtendedFloatingActionButton(
-                        onClick = importPhotos,
-                        expanded = roomy,
-                        icon = { Icon(painterResource(R.drawable.ic_photo_library), contentDescription = null) },
-                        text = { Text(importLabel) },
-                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                        modifier = Modifier.semantics { contentDescription = importLabel },
-                    )
-                    ScanButton(
-                        camera = scan.camera,
-                        enabled = scan.loaded,
-                        onScan = { openCamera(scan.camera, false) },
-                        onChooseCamera = { choosingCamera = true },
-                    )
-                }
-            }
-        },
+    DocumentContent(
+        state = state,
+        scan = scan,
+        localImage = viewModel::localImage,
+        onBack = onBack,
+        onRefresh = viewModel::refresh,
+        onRetryDocumentUpload = viewModel::retryDocumentUpload,
+        onImport = importPhotos,
+        onScan = { openCamera(scan.camera, false) },
+        onChooseCamera = { choosingCamera = true },
+        onOpenLocalPage = { selectedLocalPage = it },
+        onOpenServerPage = { selectedServerPage = it },
         snackbarHost = { if (!messagesInDialog) SnackbarHost(snackbarHostState) },
-    ) { padding ->
-        PullToRefreshBox(
-            isRefreshing = state.refreshing,
-            onRefresh = viewModel::refresh,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
-        ) {
-            when {
-                state.loading -> Unit
-
-                document == null -> DocumentGone()
-
-                else -> LazyVerticalGrid(
-                    columns = GridCells.Adaptive(minSize = 104.dp),
-                    contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 88.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.fillMaxSize(),
-                ) {
-                    fullWidthItem("summary") {
-                        DocumentSummary(document, onRetryUpload = viewModel::retryDocumentUpload)
-                    }
-                    val pages = state.pages
-                    if (pages.local.isNotEmpty()) {
-                        fullWidthItem("local") {
-                            SectionTitle(
-                                pluralStringResource(
-                                    R.plurals.document_local_pages,
-                                    pages.local.size,
-                                    pages.local.size,
-                                ),
-                            )
-                        }
-                        items(pages.local, key = { it.id }) { page ->
-                            LocalPageTile(
-                                page,
-                                viewModel.localImage(page),
-                                state.server,
-                                onClick = { selectedLocalPage = page.id },
-                            )
-                        }
-                    }
-                    fullWidthItem("server") {
-                        SectionTitle(
-                            pluralStringResource(R.plurals.document_server_pages, pages.server.size, pages.server.size),
-                        )
-                    }
-                    if (pages.isEmpty) {
-                        fullWidthItem("empty") { NoPagesYet() }
-                    }
-                    items(pages.server, key = { it.id }) { page ->
-                        ServerPageTile(page, state.server, onClick = { selectedServerPage = page.id })
-                    }
-                }
-            }
-        }
-    }
+    )
 
     if (choosingCamera && document != null) {
         CameraSheet(
@@ -322,6 +243,122 @@ fun DocumentScreen(
     }
     state.pages.server.firstOrNull { it.id == selectedServerPage }?.let { page ->
         ServerPageDialog(page, onDismiss = { selectedServerPage = null })
+    }
+}
+
+/** Apart from the view model, so that a test draws the document from invented state. */
+@Composable
+internal fun DocumentContent(
+    state: DocumentUiState,
+    scan: ScanUiState,
+    localImage: (PendingPageEntity) -> File?,
+    onBack: () -> Unit,
+    onRefresh: () -> Unit,
+    onRetryDocumentUpload: () -> Unit,
+    onImport: () -> Unit,
+    onScan: () -> Unit,
+    onChooseCamera: () -> Unit,
+    onOpenLocalPage: (pageId: String) -> Unit,
+    onOpenServerPage: (pageId: String) -> Unit,
+    snackbarHost: @Composable () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val document = state.document
+    Scaffold(
+        modifier = modifier,
+        topBar = {
+            TopAppBar(
+                title = { Text(document?.title.orEmpty(), maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                navigationIcon = { BackButton(onBack) },
+            )
+        },
+        floatingActionButton = {
+            if (document != null) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    // On a narrow screen, or with large text, "Import" keeps its icon only.
+                    val density = LocalDensity.current
+                    val width = with(density) { LocalWindowInfo.current.containerSize.width.toDp() }
+                    val roomy = width.value / density.fontScale >= ROOMY_WIDTH_DP
+                    val importLabel = stringResource(R.string.scan_source_picker)
+                    ExtendedFloatingActionButton(
+                        onClick = onImport,
+                        expanded = roomy,
+                        icon = { Icon(painterResource(R.drawable.ic_photo_library), contentDescription = null) },
+                        text = { Text(importLabel) },
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                        modifier = Modifier.semantics { contentDescription = importLabel },
+                    )
+                    ScanButton(
+                        camera = scan.camera,
+                        enabled = scan.loaded,
+                        onScan = onScan,
+                        onChooseCamera = onChooseCamera,
+                    )
+                }
+            }
+        },
+        snackbarHost = snackbarHost,
+    ) { padding ->
+        PullToRefreshBox(
+            isRefreshing = state.refreshing,
+            onRefresh = onRefresh,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding),
+        ) {
+            when {
+                state.loading -> Unit
+
+                document == null -> DocumentGone()
+
+                else -> LazyVerticalGrid(
+                    columns = GridCells.Adaptive(minSize = 104.dp),
+                    contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 88.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    fullWidthItem("summary") {
+                        DocumentSummary(document, onRetryUpload = onRetryDocumentUpload)
+                    }
+                    val pages = state.pages
+                    if (pages.local.isNotEmpty()) {
+                        fullWidthItem("local") {
+                            SectionTitle(
+                                pluralStringResource(
+                                    R.plurals.document_local_pages,
+                                    pages.local.size,
+                                    pages.local.size,
+                                ),
+                            )
+                        }
+                        items(pages.local, key = { it.id }) { page ->
+                            LocalPageTile(
+                                page,
+                                remember(page.fileName) { localImage(page) },
+                                state.server,
+                                onClick = { onOpenLocalPage(page.id) },
+                            )
+                        }
+                    }
+                    fullWidthItem("server") {
+                        SectionTitle(
+                            pluralStringResource(R.plurals.document_server_pages, pages.server.size, pages.server.size),
+                        )
+                    }
+                    if (pages.isEmpty) {
+                        fullWidthItem("empty") { NoPagesYet() }
+                    }
+                    items(pages.server, key = { it.id }) { page ->
+                        ServerPageTile(page, state.server, onClick = { onOpenServerPage(page.id) })
+                    }
+                }
+            }
+        }
     }
 }
 

@@ -186,7 +186,8 @@ fun DocumentScreen(
 
     DocumentContent(
         state = state,
-        scan = scan,
+        camera = scan.camera,
+        canScan = scan.loaded,
         localImage = viewModel::localImage,
         onBack = onBack,
         onRefresh = viewModel::refresh,
@@ -250,7 +251,8 @@ fun DocumentScreen(
 @Composable
 internal fun DocumentContent(
     state: DocumentUiState,
-    scan: ScanUiState,
+    camera: ScanSource,
+    canScan: Boolean,
     localImage: (PendingPageEntity) -> File?,
     onBack: () -> Unit,
     onRefresh: () -> Unit,
@@ -293,8 +295,8 @@ internal fun DocumentContent(
                         modifier = Modifier.semantics { contentDescription = importLabel },
                     )
                     ScanButton(
-                        camera = scan.camera,
-                        enabled = scan.loaded,
+                        camera = camera,
+                        enabled = canScan,
                         onScan = onScan,
                         onChooseCamera = onChooseCamera,
                     )

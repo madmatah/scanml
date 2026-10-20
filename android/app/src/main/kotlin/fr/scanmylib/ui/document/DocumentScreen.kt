@@ -78,6 +78,7 @@ import fr.scanmylib.ui.components.BackButton
 import fr.scanmylib.ui.components.iconRes
 import fr.scanmylib.ui.components.labelRes
 import fr.scanmylib.ui.components.pageStatsText
+import fr.scanmylib.ui.components.sanitizeTextFromPc
 import java.io.File
 
 @Composable
@@ -270,7 +271,9 @@ internal fun DocumentContent(
         modifier = modifier,
         topBar = {
             TopAppBar(
-                title = { Text(document?.title.orEmpty(), maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                title = {
+                    Text(sanitizeTextFromPc(document?.title.orEmpty()), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                },
                 navigationIcon = { BackButton(onBack) },
             )
         },
@@ -430,8 +433,9 @@ private fun DocumentSummary(document: DocumentEntity, onRetryUpload: () -> Unit)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(painterResource(document.kind.iconRes()), contentDescription = null)
                 val kind = stringResource(document.kind.labelRes())
+                val author = sanitizeTextFromPc(document.author)
                 Text(
-                    if (document.author.isEmpty()) kind else "$kind · ${document.author}",
+                    if (author.isEmpty()) kind else "$kind · $author",
                     style = MaterialTheme.typography.titleSmall,
                 )
             }
@@ -440,9 +444,11 @@ private fun DocumentSummary(document: DocumentEntity, onRetryUpload: () -> Unit)
                 Text(stringResource(R.string.document_not_on_pc_yet_long), style = MaterialTheme.typography.bodyMedium)
             } else {
                 val noCoverage = stringResource(R.string.document_coverage_none)
-                Text(stringResource(R.string.document_coverage, server.coverage.ifEmpty { noCoverage }))
-                if (server.missing.isNotEmpty()) {
-                    Text(stringResource(R.string.document_missing, server.missing))
+                val coverage = sanitizeTextFromPc(server.coverage).ifEmpty { noCoverage }
+                Text(stringResource(R.string.document_coverage, coverage))
+                val missing = sanitizeTextFromPc(server.missing)
+                if (missing.isNotEmpty()) {
+                    Text(stringResource(R.string.document_missing, missing))
                 }
                 if (server.unnumbered > 0) {
                     Text(pluralStringResource(R.plurals.document_unnumbered, server.unnumbered, server.unnumbered))
@@ -466,9 +472,10 @@ private fun DocumentSummary(document: DocumentEntity, onRetryUpload: () -> Unit)
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                if (server.folder.isNotEmpty()) {
+                val folder = sanitizeTextFromPc(server.folder)
+                if (folder.isNotEmpty()) {
                     Text(
-                        stringResource(R.string.document_folder, server.folder),
+                        stringResource(R.string.document_folder, folder),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -478,7 +485,10 @@ private fun DocumentSummary(document: DocumentEntity, onRetryUpload: () -> Unit)
                 Text(stringResource(R.string.document_unwarp_on), style = MaterialTheme.typography.bodySmall)
             }
             document.uploadError?.let { error ->
-                Text(stringResource(R.string.document_upload_refused, error), color = MaterialTheme.colorScheme.error)
+                Text(
+                    stringResource(R.string.document_upload_refused, sanitizeTextFromPc(error)),
+                    color = MaterialTheme.colorScheme.error,
+                )
                 TextButton(onClick = onRetryUpload) { Text(stringResource(R.string.retry)) }
             }
         }
@@ -520,7 +530,7 @@ private fun DocumentMessage.text(resources: Resources): String = when (this) {
 
     DocumentMessage.TokenRefused -> resources.getString(R.string.message_token_refused)
 
-    is DocumentMessage.ServerError -> resources.getString(R.string.message_server_error, detail)
+    is DocumentMessage.ServerError -> resources.getString(R.string.message_server_error, sanitizeTextFromPc(detail))
 
     is DocumentMessage.PagesQueued -> resources.getQuantityString(R.plurals.message_pages_queued, count, count)
 

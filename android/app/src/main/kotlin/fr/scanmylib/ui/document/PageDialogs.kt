@@ -15,7 +15,9 @@ import fr.scanmylib.db.PendingPageEntity
 import fr.scanmylib.db.ServerPageEntity
 import fr.scanmylib.db.UploadFailure
 import fr.scanmylib.db.UploadState
+import fr.scanmylib.ui.components.MAX_PAGE_LABEL_GRAPHEMES
 import fr.scanmylib.ui.components.labelRes
+import fr.scanmylib.ui.components.sanitizeTextFromPc
 
 /** Details of a local scan, with retry (if refused) and delete (unless uploading). */
 @Composable
@@ -47,7 +49,7 @@ fun LocalPageDialog(page: PendingPageEntity, onRetry: () -> Unit, onDelete: () -
                 }
                 page.lastError?.let {
                     Text(
-                        stringResource(R.string.error_detail, it),
+                        stringResource(R.string.error_detail, sanitizeTextFromPc(it)),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -84,9 +86,13 @@ fun ServerPageDialog(page: ServerPageEntity, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
+            val label = sanitizeTextFromPc(page.pageLabel.orEmpty(), MAX_PAGE_LABEL_GRAPHEMES)
             Text(
-                page.pageLabel?.let { stringResource(R.string.page_label, it) }
-                    ?: stringResource(R.string.page_without_number),
+                if (label.isEmpty()) {
+                    stringResource(R.string.page_without_number)
+                } else {
+                    stringResource(R.string.page_label, label)
+                },
             )
         },
         text = {
@@ -96,7 +102,10 @@ fun ServerPageDialog(page: ServerPageEntity, onDismiss: () -> Unit) {
                 if (page.duplicate) Text(stringResource(R.string.server_page_duplicate))
                 if (page.excluded) Text(stringResource(R.string.server_page_excluded))
                 page.error?.let {
-                    Text(stringResource(R.string.error_detail, it), color = MaterialTheme.colorScheme.error)
+                    Text(
+                        stringResource(R.string.error_detail, sanitizeTextFromPc(it)),
+                        color = MaterialTheme.colorScheme.error,
+                    )
                 }
             }
         },

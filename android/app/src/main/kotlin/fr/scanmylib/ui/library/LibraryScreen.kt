@@ -54,6 +54,7 @@ import fr.scanmylib.ui.components.StatusLine
 import fr.scanmylib.ui.components.UpdateBanner
 import fr.scanmylib.ui.components.iconRes
 import fr.scanmylib.ui.components.readingUnavailable
+import fr.scanmylib.ui.components.sanitizeTextFromPc
 import fr.scanmylib.ui.theme.cardColor
 import fr.scanmylib.ui.theme.cardTitle
 import fr.scanmylib.ui.theme.wordmark
@@ -183,7 +184,7 @@ private fun PcStatusCard(pc: PcState) {
         )
 
         is PcState.Error -> MessageCard(
-            stringResource(R.string.library_pc_error, pc.detail),
+            stringResource(R.string.library_pc_error, sanitizeTextFromPc(pc.detail)),
             R.drawable.ic_error,
             isError = true,
         )
@@ -192,7 +193,7 @@ private fun PcStatusCard(pc: PcState) {
 
 @Composable
 private fun pcOnlineText(status: ServerStatus): String {
-    val ocrError = status.ocr.lastError
+    val ocrError = status.ocr.lastError?.let(::sanitizeTextFromPc)?.takeIf { it.isNotEmpty() }
     val waiting = status.queue.queued + status.queue.processing
     return when {
         status.ocr.state == "error" && ocrError != null -> stringResource(
@@ -234,6 +235,8 @@ private fun DocumentCard(
     onScan: () -> Unit,
 ) {
     val document = row.document
+    val title = sanitizeTextFromPc(document.title)
+    val author = sanitizeTextFromPc(document.author)
     Card(
         onClick = onClick,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.cardColor),
@@ -247,14 +250,14 @@ private fun DocumentCard(
             Cover(document, server)
             Column(verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.weight(1f)) {
                 Text(
-                    document.title,
+                    title,
                     style = MaterialTheme.typography.cardTitle,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
-                if (document.author.isNotEmpty()) {
+                if (author.isNotEmpty()) {
                     Text(
-                        document.author,
+                        author,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
@@ -273,7 +276,7 @@ private fun DocumentCard(
             FilledTonalIconButton(onClick = onScan) {
                 Icon(
                     painterResource(R.drawable.ic_document_scanner),
-                    contentDescription = stringResource(R.string.library_scan_in, document.title),
+                    contentDescription = stringResource(R.string.library_scan_in, title),
                 )
             }
         }
@@ -284,7 +287,12 @@ private fun DocumentCard(
 @Composable
 private fun pagesSummary(pages: Int, coverage: String): String {
     val count = pluralStringResource(R.plurals.stats_pages, pages, pages)
-    return if (coverage.isEmpty()) count else stringResource(R.string.library_pages_summary, count, coverage)
+    val shownCoverage = sanitizeTextFromPc(coverage)
+    return if (shownCoverage.isEmpty()) {
+        count
+    } else {
+        stringResource(R.string.library_pages_summary, count, shownCoverage)
+    }
 }
 
 @Composable

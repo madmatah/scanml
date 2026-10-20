@@ -89,9 +89,9 @@ val ServerStatus.readingUnavailable: Boolean
 @Composable
 fun connectionCheckMessage(check: ConnectionCheck): String = when (check) {
     is ConnectionCheck.Ok -> if (check.status.readingUnavailable) {
-        stringResource(R.string.connection_ok_reading_unavailable, check.status.version)
+        stringResource(R.string.connection_ok_reading_unavailable, sanitizeTextFromPc(check.status.version))
     } else {
-        stringResource(R.string.connection_ok, check.status.version)
+        stringResource(R.string.connection_ok, sanitizeTextFromPc(check.status.version))
     }
 
     ConnectionCheck.Unreachable -> stringResource(R.string.connection_unreachable)
@@ -102,5 +102,5 @@ fun connectionCheckMessage(check: ConnectionCheck): String = when (check) {
 
     ConnectionCheck.TokenRefused -> stringResource(R.string.connection_token_refused)
 
-    is ConnectionCheck.Failed -> stringResource(R.string.connection_failed, check.detail)
+    is ConnectionCheck.Failed -> stringResource(R.string.connection_failed, sanitizeTextFromPc(check.detail))
 }

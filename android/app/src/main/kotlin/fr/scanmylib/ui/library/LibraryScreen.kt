@@ -48,6 +48,9 @@ import fr.scanmylib.api.ServerStatus
 import fr.scanmylib.db.DocumentEntity
 import fr.scanmylib.db.LibraryRow
 import fr.scanmylib.model.ServerConfig
+import fr.scanmylib.ui.components.AttentionBanner
+import fr.scanmylib.ui.components.BannerSlot
+import fr.scanmylib.ui.components.ErrorBanner
 import fr.scanmylib.ui.components.MessageCard
 import fr.scanmylib.ui.components.ScreenTitle
 import fr.scanmylib.ui.components.ServerImage
@@ -143,7 +146,7 @@ internal fun LibraryContent(
                 // First, even while empty (the PC's state unknown): the list keeps its first visible
                 // item in place, so an item that appears later, like the update, shows below it
                 // rather than above the screen.
-                item(key = "pc") { PcStatusCard(state.pc) }
+                item(key = "pc") { PcStatusCard(state.pc, onRetry = onRefresh, onOpenSettings = onOpenSettings) }
                 // After the PC's card: a PC that refuses the token comes first.
                 if (update is UpdateState.WithUpdate) {
                     item(key = "update") {
@@ -168,27 +171,59 @@ internal fun LibraryContent(
 }
 
 @Composable
-private fun PcStatusCard(pc: PcState) {
+private fun PcStatusCard(pc: PcState, onRetry: () -> Unit, onOpenSettings: () -> Unit, modifier: Modifier = Modifier) {
+    val needsUser = pc.needsUser
+    Column(modifier) {
+        if (pc is PcState.Online && !needsUser) {
+            MessageCard(pcOnlineText(pc.status), R.drawable.ic_cloud_done)
+        }
+        BannerSlot { PcProblemBanner(pc, onRetry, onOpenSettings) }
+    }
+}
+
+private val PcState.needsUser: Boolean
+    get() = when (this) {
+        PcState.Unknown -> false
+        is PcState.Online -> status.readingUnavailable
+        PcState.Unreachable, PcState.TokenRefused, is PcState.Error -> true
+    }
+
+@Composable
+private fun PcProblemBanner(
+    pc: PcState,
+    onRetry: () -> Unit,
+    onOpenSettings: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     when (pc) {
         PcState.Unknown -> Unit
 
-        is PcState.Online -> MessageCard(
-            pcOnlineText(pc.status),
-            if (pc.status.readingUnavailable) R.drawable.ic_error else R.drawable.ic_cloud_done,
+        is PcState.Online -> if (pc.needsUser) {
+            ErrorBanner(pcOnlineText(pc.status), R.drawable.ic_error, stringResource(R.string.retry), onRetry, modifier)
+        }
+
+        PcState.Unreachable -> AttentionBanner(
+            stringResource(R.string.library_pc_unreachable),
+            R.drawable.ic_cloud_off,
+            stringResource(R.string.retry),
+            onRetry,
+            modifier,
         )
 
-        PcState.Unreachable -> MessageCard(stringResource(R.string.library_pc_unreachable), R.drawable.ic_cloud_off)
-
-        PcState.TokenRefused -> MessageCard(
+        PcState.TokenRefused -> ErrorBanner(
             stringResource(R.string.library_pc_token_refused),
-            R.drawable.ic_error,
-            isError = true,
+            R.drawable.ic_link_off,
+            stringResource(R.string.settings_title),
+            onOpenSettings,
+            modifier,
         )
 
-        is PcState.Error -> MessageCard(
+        is PcState.Error -> ErrorBanner(
             stringResource(R.string.library_pc_error, sanitizeTextFromPc(pc.detail)),
             R.drawable.ic_error,
-            isError = true,
+            stringResource(R.string.retry),
+            onRetry,
+            modifier,
         )
     }
 }

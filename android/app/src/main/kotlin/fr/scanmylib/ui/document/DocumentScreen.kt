@@ -39,7 +39,6 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
@@ -75,6 +74,8 @@ import fr.scanmylib.db.DocumentEntity
 import fr.scanmylib.db.PendingPageEntity
 import fr.scanmylib.model.ScanSource
 import fr.scanmylib.ui.components.BackButton
+import fr.scanmylib.ui.components.BannerSlot
+import fr.scanmylib.ui.components.ErrorBanner
 import fr.scanmylib.ui.components.ScreenTitle
 import fr.scanmylib.ui.components.SectionHeader
 import fr.scanmylib.ui.components.iconRes
@@ -330,7 +331,20 @@ internal fun DocumentContent(
                     modifier = Modifier.fillMaxSize(),
                 ) {
                     fullWidthItem("summary") {
-                        DocumentSummary(document, onRetryUpload = onRetryDocumentUpload)
+                        Column {
+                            DocumentSummary(document)
+                            BannerSlot {
+                                document.uploadError?.let { error ->
+                                    ErrorBanner(
+                                        stringResource(R.string.document_upload_refused, sanitizeTextFromPc(error)),
+                                        R.drawable.ic_error,
+                                        stringResource(R.string.retry),
+                                        onRetryDocumentUpload,
+                                        modifier = Modifier.padding(top = 8.dp),
+                                    )
+                                }
+                            }
+                        }
                     }
                     val pages = state.pages
                     if (pages.local.isNotEmpty()) {
@@ -433,8 +447,8 @@ private fun LazyGridScope.fullWidthItem(key: String, content: @Composable () -> 
 }
 
 @Composable
-private fun DocumentSummary(document: DocumentEntity, onRetryUpload: () -> Unit) {
-    Card(Modifier.fillMaxWidth()) {
+private fun DocumentSummary(document: DocumentEntity, modifier: Modifier = Modifier) {
+    Card(modifier.fillMaxWidth()) {
         Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(16.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(painterResource(document.kind.iconRes()), contentDescription = null)
@@ -489,13 +503,6 @@ private fun DocumentSummary(document: DocumentEntity, onRetryUpload: () -> Unit)
             }
             if (document.unwarp) {
                 Text(stringResource(R.string.document_unwarp_on), style = MaterialTheme.typography.bodySmall)
-            }
-            document.uploadError?.let { error ->
-                Text(
-                    stringResource(R.string.document_upload_refused, sanitizeTextFromPc(error)),
-                    color = MaterialTheme.colorScheme.error,
-                )
-                TextButton(onClick = onRetryUpload) { Text(stringResource(R.string.retry)) }
             }
         }
     }

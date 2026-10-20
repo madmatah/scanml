@@ -13,8 +13,10 @@ from fastapi.testclient import TestClient
 from scanmylib.ordering import int_to_roman
 from support import (
     AUTH,
+    NO_NUMBER,
     TOKEN,
     Answer,
+    PageNumberVariant,
     capture_answer,
     create_document,
     list_labels,
@@ -26,14 +28,17 @@ from support import (
     wait_until_processed,
 )
 
-NO_NUMBER = 0  # page_image(0): the fake OCR finds no page number
-ARABIC = 0  # page_image(n, ARABIC): the fake OCR finds n in arabic numerals
-ROMAN = 2  # page_image(n, ROMAN): the fake OCR finds n in roman numerals (front matter)
 UNNUMBERED_HEADING = "## Unnumbered pages"
 
 
 def scan(
-    client: TestClient, document_id: str, number: int, session: str, seq: int, minute: int = 0, variant: int = ARABIC
+    client: TestClient,
+    document_id: str,
+    number: int,
+    session: str,
+    seq: int,
+    minute: int = 0,
+    variant: PageNumberVariant = PageNumberVariant.ARABIC,
 ) -> dict[str, Any]:
     response = upload(
         client,
@@ -85,7 +90,7 @@ def build_markers(pages: list[dict[str, Any]]) -> list[str]:
 @dataclass(frozen=True)
 class PrintedNumber:
     number: int
-    variant: int
+    variant: PageNumberVariant
 
 
 @dataclass(frozen=True)
@@ -193,8 +198,12 @@ class OrderChangedFromTheWebUi:
 
 @pytest.fixture(scope="module")
 def roman_book(tmp_path_factory: pytest.TempPathFactory) -> RomanBook:
-    printed_numbers_by_seq = {15: PrintedNumber(15, ROMAN), 22: PrintedNumber(25, ROMAN), 25: PrintedNumber(3, ARABIC)}
-    no_printed_number = PrintedNumber(NO_NUMBER, ARABIC)
+    printed_numbers_by_seq = {
+        15: PrintedNumber(15, PageNumberVariant.ROMAN),
+        22: PrintedNumber(25, PageNumberVariant.ROMAN),
+        25: PrintedNumber(3, PageNumberVariant.ARABIC),
+    }
+    no_printed_number = PrintedNumber(NO_NUMBER, PageNumberVariant.ARABIC)
     with running_api(tmp_path_factory.mktemp("api")) as api:
         document_id = create_document(api.client, kind="book")
         session = new_id()

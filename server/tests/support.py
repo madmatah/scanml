@@ -12,6 +12,7 @@ import zlib
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 from typing import Any
 
@@ -95,9 +96,21 @@ def mpo(width: int, height: int) -> bytes:
     )
 
 
-def page_image(number: int, variant: int = 0) -> bytes:
+NO_NUMBER = 0  # page_image(NO_NUMBER): the fake OCR finds no page number, whatever the variant
+
+
+# The fake OCR reads the variant from the last digit of the image's width (fake_ocr.py).
+class PageNumberVariant(Enum):
+    ARABIC = 0
+    TWO_PAGE_SPREAD = 1
+    ROMAN = 2
+    IN_THE_RUNNING_HEADER = 3
+    UNNUMBERED = 4
+
+
+def page_image(number: int, variant: PageNumberVariant = PageNumberVariant.ARABIC) -> bytes:
     """Scan that the fake OCR reads as page `number` (variant: see fake_ocr)."""
-    return jpeg(1200 + variant, 1000 + number)
+    return jpeg(1200 + variant.value, 1000 + number)
 
 
 @dataclass(frozen=True)

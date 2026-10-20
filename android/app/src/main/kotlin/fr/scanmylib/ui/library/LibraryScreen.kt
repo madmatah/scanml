@@ -175,7 +175,7 @@ private fun PcStatusCard(pc: PcState, onRetry: () -> Unit, onOpenSettings: () ->
     val needsUser = pc.needsUser
     Column(modifier) {
         if (pc is PcState.Online && !needsUser) {
-            MessageCard(pcOnlineText(pc.status), R.drawable.ic_cloud_done)
+            MessageCard(pcOnlineText(pc.status), R.drawable.ic_computer)
         }
         BannerSlot { PcProblemBanner(pc, onRetry, onOpenSettings) }
     }
@@ -204,7 +204,7 @@ private fun PcProblemBanner(
 
         PcState.Unreachable -> AttentionBanner(
             stringResource(R.string.library_pc_unreachable),
-            R.drawable.ic_cloud_off,
+            R.drawable.ic_pause_circle,
             stringResource(R.string.retry),
             onRetry,
             modifier,
@@ -341,7 +341,7 @@ private fun CardLineText(line: CardLine) {
     when (line) {
         is CardLine.ToSend -> StatusBadge(
             pluralStringResource(R.plurals.library_pages_to_confirm, line.count, line.count),
-            R.drawable.ic_schedule,
+            R.drawable.ic_outbox,
             StatusTone.ATTENTION,
         )
 
@@ -365,7 +365,7 @@ private fun CardLineText(line: CardLine) {
 
         is CardLine.InTransit -> StatusBadge(
             pluralStringResource(R.plurals.library_pages_in_transit, line.count, line.count),
-            R.drawable.ic_cloud_upload,
+            R.drawable.ic_upload,
             StatusTone.NEUTRAL,
         )
 
@@ -377,7 +377,7 @@ private fun CardLineText(line: CardLine) {
 
         CardLine.NotOnPcYet -> StatusBadge(
             stringResource(R.string.document_not_on_pc_yet),
-            R.drawable.ic_cloud_off,
+            R.drawable.ic_smartphone,
             StatusTone.NEUTRAL,
         )
     }

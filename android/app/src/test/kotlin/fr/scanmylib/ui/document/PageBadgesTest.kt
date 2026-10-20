@@ -134,12 +134,12 @@ private val PAGE_ON_THE_PHONE_ROWS = listOf(
     PageOnThePhoneRow(
         "a page waiting to upload says so, in a neutral tone",
         makePageOnThePhone(UploadState.QUEUED),
-        PageBadge(R.string.upload_badge_queued, R.drawable.ic_schedule, StatusTone.NEUTRAL),
+        PageBadge(R.string.upload_badge_queued, R.drawable.ic_upload, StatusTone.NEUTRAL),
     ),
     PageOnThePhoneRow(
         "a page uploading says so, in a neutral tone",
         makePageOnThePhone(UploadState.UPLOADING),
-        PageBadge(R.string.upload_badge_uploading, R.drawable.ic_cloud_upload, StatusTone.NEUTRAL),
+        PageBadge(R.string.upload_badge_uploading, R.drawable.ic_upload, StatusTone.NEUTRAL),
     ),
     PageOnThePhoneRow(
         "a page the PC rejected says so, in the tone of a failure",

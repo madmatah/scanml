@@ -39,6 +39,11 @@ top of `conventions.md`.
   events as parameters (state hoisting), and takes `modifier: Modifier = Modifier` as its first optional parameter.
   Every text of the UI comes from the string resources (`stringResource`), since its French translation lives in
   `values-fr/`.
+- **Text from the PC:** a title, an author, a page label or range, a folder name or a message reaches the screen only
+  through `sanitizeTextFromPc` (`ui/components/TextFromPc.kt`). The PC's responses are outside input, and nothing else
+  bounds them: a long one would fill the screen, and a character a reader cannot see, such as a bidirectional control,
+  would hide or reorder what it shows. A page label, a range or a folder name that the rule leaves empty shows as
+  missing, never as an empty value in a sentence.
 - **Idioms that override the naming rules:** `it` in a short lambda; `e` for a caught exception; test names in
   backticks, as sentences, and test groups named as their phrase (`TheHintForMethod`, `WhenThePagesAreConsecutive`), in
   tests only; composables named as nouns; and the names Android imposes (`onCreate`, `doWork`).

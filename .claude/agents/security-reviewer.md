@@ -16,21 +16,23 @@ Changes to code that reads input from outside the program or passes data to a pa
 (`server/scanmylib/api/**`, `server/scanmylib/auth.py`, `server/scanmylib/middleware.py`, `server/scanmylib/images.py`,
 `server/scanmylib/sanitize.py`, `server/scanmylib/preview.py`, `server/scanmylib/ocr_client.py`,
 `server/scanmylib/ocr_result.py`, `server/scanmylib/config.py`, `server/scanmylib/web/static/js/**`, the app's `api/`,
-`pairing/`, `update/`, `library/` and `ui/share/`, `android/app/src/main/AndroidManifest.xml`, `ocr/scanmylib_ocr/**`
-and `scripts/**`), and changes to files matching the `paths` of `.claude/rules/configuration.md`. If none of these
+`pairing/`, `update/`, `library/`, `ui/components/TextFromPc.kt` and the screens that show text from the PC
+(`ui/components/`, `ui/document/`, `ui/library/`, `ui/pairing/`, `ui/settings/` and `ui/share/`),
+`android/app/src/main/AndroidManifest.xml`, `ocr/scanmylib_ocr/**` and `scripts/**`), and changes to files matching the
+`paths` of `.claude/rules/configuration.md`. If none of these
 changed, reply: "No security surface in this diff; review not applicable."
 
 Read first: `.claude/rules/repository.md`, `.claude/rules/conventions.md` > Input from outside the program,
-`.claude/rules/configuration.md`, `.claude/rules/sandbox.md` > The OCR sandbox, `.claude/rules/documents.md` > Expert
-reviewers, and `CLAUDE.md` > Production.
+`.claude/rules/kotlin.md`, "Text from the PC", `.claude/rules/configuration.md`, `.claude/rules/sandbox.md` > The OCR
+sandbox, `.claude/rules/documents.md` > Expert reviewers, and `CLAUDE.md` > Production.
 
 ## Checks
 
 - **Untrusted input** (`.claude/rules/conventions.md` > Input from outside the program): uploads and requests from the
   phone and the web UI, the pairing QR code, photos shared by another app, the results of the OCR sandbox
-  (`.claude/rules/sandbox.md` > The OCR sandbox), `.env` files, command-line arguments and URL parameters. Parsing
-  checks shape and bounds before use, and malformed input fails cleanly, without crashing the program or corrupting its
-  state.
+  (`.claude/rules/sandbox.md` > The OCR sandbox), the PC's responses that the app shows (`.claude/rules/kotlin.md`,
+  "Text from the PC"), `.env` files, command-line arguments and URL parameters. Parsing checks shape and bounds before
+  use, and malformed input fails cleanly, without crashing the program or corrupting its state.
 - **Injection** (`.claude/rules/conventions.md` > Input from outside the program):
   - markup, queries, URLs, paths or commands built from outside text, such as a file name the sandbox or the client
     sent;

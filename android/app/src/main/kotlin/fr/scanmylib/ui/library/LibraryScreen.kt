@@ -51,7 +51,8 @@ import fr.scanmylib.model.ServerConfig
 import fr.scanmylib.ui.components.MessageCard
 import fr.scanmylib.ui.components.ScreenTitle
 import fr.scanmylib.ui.components.ServerImage
-import fr.scanmylib.ui.components.StatusLine
+import fr.scanmylib.ui.components.StatusBadge
+import fr.scanmylib.ui.components.StatusTone
 import fr.scanmylib.ui.components.UpdateBanner
 import fr.scanmylib.ui.components.iconRes
 import fr.scanmylib.ui.components.readingUnavailable
@@ -299,42 +300,47 @@ private fun pagesSummary(pages: Int, coverage: String): String {
 @Composable
 private fun CardLineText(line: CardLine) {
     when (line) {
-        is CardLine.ToSend -> StatusLine(
+        is CardLine.ToSend -> StatusBadge(
             pluralStringResource(R.plurals.library_pages_to_confirm, line.count, line.count),
             R.drawable.ic_schedule,
-            color = MaterialTheme.colorScheme.tertiary,
+            StatusTone.ATTENTION,
         )
 
-        is CardLine.Refused -> StatusLine(
+        is CardLine.Refused -> StatusBadge(
             pluralStringResource(R.plurals.library_pages_failed, line.count, line.count),
             R.drawable.ic_error,
-            color = MaterialTheme.colorScheme.error,
+            StatusTone.FAILURE,
         )
 
-        CardLine.DocumentRefused -> StatusLine(
+        CardLine.DocumentRefused -> StatusBadge(
             stringResource(R.string.library_document_refused),
             R.drawable.ic_error,
-            color = MaterialTheme.colorScheme.error,
+            StatusTone.FAILURE,
         )
 
-        is CardLine.ReadFailed -> StatusLine(
+        is CardLine.ReadFailed -> StatusBadge(
             pluralStringResource(R.plurals.library_pages_read_failed, line.count, line.count),
             R.drawable.ic_error,
-            color = MaterialTheme.colorScheme.error,
+            StatusTone.FAILURE,
         )
 
-        is CardLine.InTransit -> StatusLine(
+        is CardLine.InTransit -> StatusBadge(
             pluralStringResource(R.plurals.library_pages_in_transit, line.count, line.count),
             R.drawable.ic_cloud_upload,
+            StatusTone.NEUTRAL,
         )
 
-        is CardLine.BeingRead -> StatusLine(
+        is CardLine.BeingRead -> StatusBadge(
             pluralStringResource(R.plurals.library_pages_being_read, line.count, line.count),
             R.drawable.ic_autorenew,
-            color = MaterialTheme.colorScheme.primary,
+            StatusTone.IN_PROGRESS,
         )
 
-        CardLine.NotOnPcYet -> StatusLine(stringResource(R.string.document_not_on_pc_yet), R.drawable.ic_cloud_off)
+        CardLine.NotOnPcYet -> StatusBadge(
+            stringResource(R.string.document_not_on_pc_yet),
+            R.drawable.ic_cloud_off,
+            StatusTone.NEUTRAL,
+        )
     }
 }
 

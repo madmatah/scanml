@@ -2,7 +2,9 @@ package fr.scanmylib.ui.theme
 
 import androidx.compose.material3.ColorScheme
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.luminance
+import kotlin.properties.Delegates
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -46,7 +48,7 @@ class ColorTest {
             fun `should give body text at least 7 to 1 on every surface, for long reading`() {
                 val measured = BODY_TEXT_COMBINATIONS.map { it.measure(colors) }
                 assertTrue("nothing measured", measured.isNotEmpty())
-                assertEquals(variant, emptyList<Measure>(), measured.filter { it.ratio < BODY_TEXT_RATIO })
+                assertEquals(variant, emptyList<Measure>(), measured.filter { it.ratio < ENHANCED_TEXT_RATIO })
             }
 
             @Test
@@ -71,9 +73,27 @@ class ColorTest {
             }
         }
     }
+
+    @RunWith(Enclosed::class)
+    class ThePageChipColors {
+        class WhenTheChipIsOverAWhitePage {
+            private var ratio by Delegates.notNull<Float>()
+
+            @Before
+            fun measureTheChipText() {
+                ratio = measureContrastRatio(PageChipContent, PageChipContainer.compositeOver(Color.White))
+            }
+
+            @Test
+            fun `should keep its text at 7 to 1, as high contrast asks, since the chip is the same in every theme`() {
+                assertTrue("$ratio", ratio >= ENHANCED_TEXT_RATIO)
+            }
+        }
+    }
 }
 
-private const val BODY_TEXT_RATIO = 7f
+// WCAG 2.2's enhanced contrast of text (1.4.6), which body text and high contrast ask.
+private const val ENHANCED_TEXT_RATIO = 7f
 
 private class Role(val name: String, val color: (ColorScheme) -> Color)
 

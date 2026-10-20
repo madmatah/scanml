@@ -64,6 +64,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.min
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -320,7 +321,9 @@ internal fun DocumentContent(
                 document == null -> DocumentGone()
 
                 else -> LazyVerticalGrid(
-                    columns = GridCells.Adaptive(minSize = 104.dp),
+                    columns = GridCells.Adaptive(
+                        minSize = min(TILE_MIN_WIDTH * LocalDensity.current.fontScale, TILE_MIN_WIDTH_CAP),
+                    ),
                     contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 88.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -417,6 +420,10 @@ private fun ScanButton(camera: ScanSource, enabled: Boolean, onScan: () -> Unit,
         }
     }
 }
+
+// A page's tile widens with the text, so that its badge is never cut, up to two columns on a phone.
+private val TILE_MIN_WIDTH = 104.dp
+private val TILE_MIN_WIDTH_CAP = 160.dp
 
 /** Screen width, in dp of text at its normal size, from which "Import" shows its label. */
 private const val ROOMY_WIDTH_DP = 380

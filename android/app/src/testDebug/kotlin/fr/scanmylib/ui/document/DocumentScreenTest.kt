@@ -1,11 +1,13 @@
 package fr.scanmylib.ui.document
 
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.test.SemanticsNodeInteractionsProvider
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasScrollToKeyAction
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performScrollToKey
@@ -24,6 +26,7 @@ import fr.scanmylib.model.DocumentKind
 import fr.scanmylib.model.ScanSource
 import fr.scanmylib.ui.readHeadingsFromTheTop
 import fr.scanmylib.ui.theme.ScanMyLibTheme
+import kotlin.math.roundToInt
 import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Rule
@@ -54,12 +57,12 @@ class DocumentScreenTest {
 
             @Test
             fun `should show the pages on the PC by their numbers`() {
-                compose.onNodeWithText(FIRST_READ_PAGE).assertIsDisplayed()
+                compose.onNodeWithContentDescription(FIRST_READ_PAGE).assertIsDisplayed()
             }
 
             @Test
             fun `should show the pages that wait on the phone`() {
-                compose.onNodeWithText(FIRST_PAGE_ON_THE_PHONE).assertIsDisplayed()
+                compose.onNodeWithContentDescription(FIRST_PAGE_ON_THE_PHONE).assertIsDisplayed()
             }
 
             @Test
@@ -90,7 +93,7 @@ class DocumentScreenTest {
 
             @Test
             fun `should show the pages on the PC by their numbers`() {
-                compose.onNodeWithText(FIRST_READ_PAGE).assertIsDisplayed()
+                compose.onNodeWithContentDescription(FIRST_READ_PAGE).assertIsDisplayed()
             }
 
             companion object {
@@ -115,7 +118,7 @@ class DocumentScreenTest {
 
             @Test
             fun `should show the pages that wait on the phone`() {
-                compose.onNodeWithText(FIRST_PAGE_ON_THE_PHONE).assertIsDisplayed()
+                compose.onNodeWithContentDescription(FIRST_PAGE_ON_THE_PHONE).assertIsDisplayed()
             }
 
             companion object {
@@ -144,7 +147,72 @@ class DocumentScreenTest {
 
             @Test
             fun `should show the pages on the PC by their numbers`() {
-                compose.onNodeWithText(FIRST_READ_PAGE).assertIsDisplayed()
+                compose.onNodeWithContentDescription(FIRST_READ_PAGE).assertIsDisplayed()
+            }
+
+            @Test
+            fun `should lay the pages out in two columns, so that no badge is cut`() {
+                assertEquals(2, countColumnsOfTheFirstThreePagesOnThePc(compose))
+            }
+
+            companion object {
+                @JvmStatic
+                @ParameterizedRobolectricTestRunner.Parameters(name = "in the {0} theme")
+                fun themes(): List<Array<Any>> = THEMES
+            }
+        }
+
+        @RunWith(ParameterizedRobolectricTestRunner::class)
+        @GraphicsMode(GraphicsMode.Mode.NATIVE)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.SmallPhone, fontScale = 2f)
+        class WhenItsPagesAreBeingReadAndTheTextIsTwiceItsSizeOnASmallPhone(
+            private val theme: String,
+            private val dark: Boolean,
+        ) {
+            @get:Rule
+            val compose = createComposeRule()
+
+            @Before
+            fun drawThePagesOnThePhone() {
+                compose.setContent { ScanMyLibTheme(dark = dark) { DocumentContentOf(BOOK_BEING_READ) } }
+                compose.onNode(hasScrollToKeyAction()).performScrollToKey(PAGES_ON_THE_PHONE_KEY)
+                compose.onRoot()
+                    .captureRoboImage("build/outputs/roborazzi/document-reading-large-text-small-phone-$theme.png")
+            }
+
+            @Test
+            fun `should show the pages that wait on the phone`() {
+                compose.onNodeWithContentDescription(FIRST_PAGE_ON_THE_PHONE).assertIsDisplayed()
+            }
+
+            companion object {
+                @JvmStatic
+                @ParameterizedRobolectricTestRunner.Parameters(name = "in the {0} theme")
+                fun themes(): List<Array<Any>> = THEMES
+            }
+        }
+
+        @RunWith(ParameterizedRobolectricTestRunner::class)
+        @GraphicsMode(GraphicsMode.Mode.NATIVE)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.SmallPhone, fontScale = 2f)
+        class WhenTheTextIsTwiceItsSizeOnASmallPhoneAndScrolledToThePc(
+            private val theme: String,
+            private val dark: Boolean,
+        ) {
+            @get:Rule
+            val compose = createComposeRule()
+
+            @Before
+            fun drawThePagesOnThePc() {
+                compose.setContent { ScanMyLibTheme(dark = dark) { DocumentContentOf(BOOK_BEING_READ) } }
+                compose.onNode(hasScrollToKeyAction()).performScrollToKey(PAGES_ON_THE_PC_KEY)
+                compose.onRoot()
+                    .captureRoboImage("build/outputs/roborazzi/document-reading-large-text-small-phone-pc-$theme.png")
+            }
+
+            @Test
+            fun `should lay the pages out in two columns, so that no badge is cut`() {
+                assertEquals(2, countColumnsOfTheFirstThreePagesOnThePc(compose))
             }
 
             companion object {
@@ -244,9 +312,11 @@ class DocumentScreenTest {
     }
 }
 
-private const val FIRST_READ_PAGE = "p. 12"
+private const val FIRST_READ_PAGE = "Page 12, Text ready"
+private val FIRST_THREE_PAGES_ON_THE_PC = listOf(FIRST_READ_PAGE, "Page 13, Reading…", "Page 14, Waiting to be read")
 private const val PAGES_ON_THE_PC_KEY = "server"
-private const val FIRST_PAGE_ON_THE_PHONE = "p. 31"
+private const val PAGES_ON_THE_PHONE_KEY = "local"
+private const val FIRST_PAGE_ON_THE_PHONE = "Page 31, Uploading…"
 private const val REJECTION = "invalid title"
 private val HEADINGS = listOf("Example Book", "On the phone (3)", "On the PC (8)")
 
@@ -347,6 +417,11 @@ private val PAMPHLET_REJECTED = DocumentUiState(
 )
 
 private fun makeCharacter(codePoint: Int): String = String(Character.toChars(codePoint))
+
+private fun countColumnsOfTheFirstThreePagesOnThePc(screen: SemanticsNodeInteractionsProvider): Int =
+    FIRST_THREE_PAGES_ON_THE_PC.map { page ->
+        screen.onNodeWithContentDescription(page).fetchSemanticsNode().positionInRoot.x.roundToInt()
+    }.toSet().size
 
 @Composable
 private fun DocumentContentOf(state: DocumentUiState) {

@@ -186,7 +186,7 @@ read the file before you do what its line says.
 - `python.md`, for any Python file: layout, casing, typing, plain data, errors, internal names, async code, idioms and
   directives.
 - `kotlin.md`, for the app's Kotlin, Gradle scripts and resources: layout, casing, null safety, immutability, closed
-  sets, coroutines, Compose, text from the PC, idioms and directives.
+  sets, coroutines, Compose, states, text from the PC, idioms and directives.
 - `web.md`, for the web UI: TypeScript and React, which it moves to, and JavaScript until then.
 - `bash.md`, for any shell script: strict mode, logic in Python, quoting, `.env` files, errors and temporary files.
 - `architecture.md`, for any source code, test or build file, and before adding a dependency: layers, ports and wiring,

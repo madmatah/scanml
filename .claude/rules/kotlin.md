@@ -44,6 +44,11 @@ top of `conventions.md`.
   bounds them: a long one would fill the screen, and a character a reader cannot see, such as a bidirectional control,
   would hide or reorder what it shows. A page label, a range or a folder name that the rule leaves empty shows as
   missing, never as an empty value in a sentence.
+- **States:** a state of a page, a document or the PC that differs from the normal one shows in an icon and a few words
+  as well as a color, never in color alone, through `StatusBadge` (`ui/components/StatusBadge.kt`) or, when it needs
+  the user, an `AttentionBanner` or `ErrorBanner` (`ui/components/Banner.kt`) with its one action, and the normal state
+  shows none. Someone who does not tell colors apart, or who listens with TalkBack, then gets the same meaning, and a
+  screen stays quiet while all goes well. Its words wrap rather than being cut, at twice the text size too.
 - **Idioms that override the naming rules:** `it` in a short lambda; `e` for a caught exception; test names in
   backticks, as sentences, and test groups named as their phrase (`TheHintForMethod`, `WhenThePagesAreConsecutive`), in
   tests only; composables named as nouns; and the names Android imposes (`onCreate`, `doWork`).

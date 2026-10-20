@@ -149,7 +149,7 @@ private val PAGE_ON_THE_PHONE_ROWS = listOf(
     PageOnThePhoneRow(
         "an uploaded page still shows one, since its text is not ready yet",
         makePageOnThePhone(UploadState.UPLOADED),
-        PageBadge(R.string.upload_badge_uploaded, R.drawable.ic_cloud_done, StatusTone.NEUTRAL),
+        PageBadge(R.string.upload_badge_uploaded, R.drawable.ic_schedule, StatusTone.NEUTRAL),
     ),
 )
 

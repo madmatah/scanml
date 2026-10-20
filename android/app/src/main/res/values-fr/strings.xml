@@ -84,7 +84,12 @@
     <string name="document_no_pages">Aucune page pour l’instant : touchez « Scanner » ou « Importer ».</string>
     <string name="document_gone">Ce document n’existe plus : il a été supprimé sur le PC.</string>
     <string name="page_label">p. %1$s</string>
+    <string name="page_label_spread">p. %1$s–%2$s</string>
     <string name="page_without_number">Sans numéro</string>
+    <string name="page_description">Page %1$s, %2$s</string>
+    <string name="page_description_spread">Pages %1$s et %2$s, %3$s</string>
+    <string name="page_description_unnumbered">Page sans numéro, %1$s</string>
+    <string name="page_open">Ouvrir la page</string>
     <string name="page_duplicate">Doublon</string>
     <string name="page_excluded">Exclue</string>
     <string name="page_status_queued">En attente de lecture</string>
@@ -104,6 +109,10 @@
     <string name="upload_state_uploading">Envoi…</string>
     <string name="upload_state_failed">Envoi refusé</string>
     <string name="upload_state_uploaded">Envoyée</string>
+    <string name="upload_badge_queued">En attente</string>
+    <string name="upload_badge_uploading">Envoi…</string>
+    <string name="upload_badge_failed">Refusée</string>
+    <string name="upload_badge_uploaded">Envoyée</string>
     <string name="upload_failure_network">PC injoignable</string>
     <string name="upload_failure_server_error">erreur du PC</string>
     <string name="upload_failure_unauthorized">téléphone non reconnu par le PC</string>

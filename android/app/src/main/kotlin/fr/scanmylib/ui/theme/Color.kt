@@ -321,3 +321,7 @@ private val DarkHighContrastColors = darkColorScheme(
     onTertiaryFixed = Color(0xFF000000),
     onTertiaryFixedVariant = Color(0xFF382800),
 )
+
+// The page chip over a page's image: pages are light paper in both themes, so it stays dark in both.
+internal val PageChipContainer = Color(0xFF1E1B16).copy(alpha = 0.88f)
+internal val PageChipContent = Color(0xFFF7F0E3)

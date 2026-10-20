@@ -1,31 +1,18 @@
 package fr.scanmylib.ui.document
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Card
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import fr.scanmylib.R
-import fr.scanmylib.api.PageStatus
 import fr.scanmylib.db.PendingPageEntity
 import fr.scanmylib.db.ServerPageEntity
-import fr.scanmylib.db.UploadState
+import fr.scanmylib.library.PageLabel
+import fr.scanmylib.library.parsePageLabel
 import fr.scanmylib.library.serverThumbUrl
 import fr.scanmylib.model.ServerConfig
 import fr.scanmylib.ui.components.LocalImage
 import fr.scanmylib.ui.components.MAX_PAGE_LABEL_GRAPHEMES
+import fr.scanmylib.ui.components.PageThumbnail
 import fr.scanmylib.ui.components.ServerImage
-import fr.scanmylib.ui.components.StatusLine
-import fr.scanmylib.ui.components.iconRes
 import fr.scanmylib.ui.components.labelRes
 import fr.scanmylib.ui.components.sanitizeTextFromPc
 import java.io.File
@@ -36,10 +23,10 @@ import java.io.File
  */
 @Composable
 fun LocalPageTile(page: PendingPageEntity, image: File?, server: ServerConfig?, onClick: () -> Unit) {
-    val failed = page.state == UploadState.FAILED
-    PageTile(
-        title = page.pageNumberHint?.let { stringResource(R.string.page_label, it.toString()) }
-            ?: stringResource(R.string.page_without_number),
+    PageThumbnail(
+        label = page.pageNumberHint?.let { PageLabel.OnePage(it.toString()) } ?: PageLabel.Unnumbered,
+        status = stringResource(page.state.labelRes()),
+        badge = page.pickBadge(),
         onClick = onClick,
         image = { modifier ->
             val serverThumbUrl = page.serverThumbUrl()
@@ -49,77 +36,25 @@ fun LocalPageTile(page: PendingPageEntity, image: File?, server: ServerConfig?, 
                 LocalImage(image, contentDescription = null, modifier = modifier)
             }
         },
-        status = {
-            StatusLine(
-                stringResource(page.state.labelRes()),
-                page.state.iconRes(),
-                color = if (failed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        },
     )
 }
 
 /** A page known by the server, with its OCR state. */
 @Composable
 fun ServerPageTile(page: ServerPageEntity, server: ServerConfig?, onClick: () -> Unit) {
-    val label = sanitizeTextFromPc(page.pageLabel.orEmpty(), MAX_PAGE_LABEL_GRAPHEMES)
-    PageTile(
-        title = if (label.isEmpty()) {
-            stringResource(R.string.page_without_number)
-        } else {
-            stringResource(R.string.page_label, label)
-        },
+    PageThumbnail(
+        label = parsePageLabel(sanitizeTextFromPc(page.pageLabel.orEmpty(), MAX_PAGE_LABEL_GRAPHEMES)),
+        status = page.statusText(),
+        badge = page.pickBadge(),
+        isSetAside = page.duplicate || page.excluded,
         onClick = onClick,
         image = { modifier -> ServerImage(server, page.thumbUrl, contentDescription = null, modifier = modifier) },
-        status = {
-            when {
-                page.duplicate -> StatusLine(stringResource(R.string.page_duplicate), R.drawable.ic_content_copy)
-
-                page.excluded -> StatusLine(stringResource(R.string.page_excluded), R.drawable.ic_block)
-
-                else -> StatusLine(
-                    stringResource(page.status.badgeRes()),
-                    page.status.iconRes(),
-                    color = if (page.status == PageStatus.ERROR) {
-                        MaterialTheme.colorScheme.error
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                )
-            }
-        },
     )
 }
 
 @Composable
-private fun PageTile(
-    title: String,
-    onClick: () -> Unit,
-    image: @Composable (Modifier) -> Unit,
-    status: @Composable () -> Unit,
-) {
-    Card(onClick = onClick) {
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .aspectRatio(PAGE_ASPECT_RATIO)
-                .background(MaterialTheme.colorScheme.surfaceVariant),
-        ) {
-            image(Modifier.matchParentSize())
-        }
-        Column(Modifier.padding(horizontal = 8.dp, vertical = 6.dp)) {
-            Text(title, style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            status()
-        }
-    }
+private fun ServerPageEntity.statusText(): String = when {
+    duplicate -> stringResource(R.string.server_page_duplicate)
+    excluded -> stringResource(R.string.server_page_excluded)
+    else -> stringResource(status.labelRes())
 }
-
-/** The status in the few words a tile has room for; the page's dialog says it in full. */
-private fun PageStatus.badgeRes(): Int = when (this) {
-    PageStatus.QUEUED -> R.string.page_badge_queued
-    PageStatus.ERROR -> R.string.page_badge_failed
-    else -> labelRes()
-}
-
-/** Portrait page (A4 is about 1:1.41). */
-private const val PAGE_ASPECT_RATIO = 1f / 1.41f

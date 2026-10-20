@@ -84,7 +84,12 @@
     <string name="document_no_pages">No pages yet. Tap “Scan” or “Import” to add some.</string>
     <string name="document_gone">This document no longer exists: it was deleted on the PC.</string>
     <string name="page_label">p. %1$s</string>
+    <string name="page_label_spread">p. %1$s–%2$s</string>
     <string name="page_without_number">Unnumbered</string>
+    <string name="page_description">Page %1$s, %2$s</string>
+    <string name="page_description_spread">Pages %1$s and %2$s, %3$s</string>
+    <string name="page_description_unnumbered">Unnumbered page, %1$s</string>
+    <string name="page_open">Open the page</string>
     <string name="page_duplicate">Duplicate</string>
     <string name="page_excluded">Excluded</string>
     <string name="page_status_queued">Waiting to be read</string>
@@ -104,6 +109,10 @@
     <string name="upload_state_uploading">Uploading…</string>
     <string name="upload_state_failed">Upload rejected</string>
     <string name="upload_state_uploaded">Uploaded</string>
+    <string name="upload_badge_queued">Waiting</string>
+    <string name="upload_badge_uploading">Sending</string>
+    <string name="upload_badge_failed">Rejected</string>
+    <string name="upload_badge_uploaded">Sent</string>
     <string name="upload_failure_network">PC unreachable</string>
     <string name="upload_failure_server_error">PC error</string>
     <string name="upload_failure_unauthorized">phone not recognized by the PC</string>

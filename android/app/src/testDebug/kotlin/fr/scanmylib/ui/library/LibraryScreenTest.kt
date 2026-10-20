@@ -61,12 +61,40 @@ class LibraryScreenTest {
             companion object {
                 @JvmStatic
                 @ParameterizedRobolectricTestRunner.Parameters(name = "in the {0} theme")
-                fun themes(): List<Array<Any>> = listOf(
-                    arrayOf("light", false, Contrast.STANDARD),
-                    arrayOf("dark", true, Contrast.STANDARD),
-                    arrayOf("light-high-contrast", false, Contrast.HIGH),
-                    arrayOf("dark-high-contrast", true, Contrast.HIGH),
-                )
+                fun themes(): List<Array<Any>> = THEMES_AND_CONTRASTS
+            }
+        }
+
+        @RunWith(ParameterizedRobolectricTestRunner::class)
+        @GraphicsMode(GraphicsMode.Mode.NATIVE)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone, fontScale = 2f)
+        class WhenThePcIsReadingAndTheTextIsTwiceItsSize(
+            private val theme: String,
+            private val dark: Boolean,
+            private val contrast: Contrast,
+        ) {
+            @get:Rule
+            val compose = createComposeRule()
+
+            @Before
+            fun drawTheLibrary() {
+                compose.setContent { ScanMyLibTheme(dark = dark, contrast = contrast) { LibraryContentOf(LIBRARY) } }
+                compose.onRoot().captureRoboImage("build/outputs/roborazzi/library-reading-large-text-$theme.png")
+            }
+
+            @Test
+            fun `should show what each document waits for`() {
+                compose.onNodeWithContentDescription(BOOK_PAGES_ON_THEIR_WAY).assertIsDisplayed()
+                compose.onNodeWithContentDescription(PAMPHLET_PAGE_REJECTED).assertIsDisplayed()
+            }
+
+            companion object {
+                private const val BOOK_PAGES_ON_THEIR_WAY = "3 on their way to the PC"
+                private const val PAMPHLET_PAGE_REJECTED = "1 rejected"
+
+                @JvmStatic
+                @ParameterizedRobolectricTestRunner.Parameters(name = "in the {0} theme")
+                fun themes(): List<Array<Any>> = THEMES_AND_CONTRASTS
             }
         }
 
@@ -158,6 +186,13 @@ class LibraryScreenTest {
 private const val APP_NAME = "ScanMyLib"
 private const val BOOK_TITLE = "Example Book"
 private const val PAMPHLET_TITLE = "Example Pamphlet"
+
+private val THEMES_AND_CONTRASTS = listOf(
+    arrayOf<Any>("light", false, Contrast.STANDARD),
+    arrayOf<Any>("dark", true, Contrast.STANDARD),
+    arrayOf<Any>("light-high-contrast", false, Contrast.HIGH),
+    arrayOf<Any>("dark-high-contrast", true, Contrast.HIGH),
+)
 
 private val BOOK = LibraryRow(
     document = DocumentEntity(

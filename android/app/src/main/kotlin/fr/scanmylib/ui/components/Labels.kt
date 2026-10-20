@@ -12,8 +12,6 @@ import fr.scanmylib.db.UploadState
 import fr.scanmylib.model.DocumentKind
 import fr.scanmylib.model.ScanSource
 
-// Labels and icons of the states shown in the UI.
-
 @StringRes
 fun ScanSource.labelRes(): Int = when (this) {
     ScanSource.GOOGLE_SCANNER -> R.string.scan_source_google
@@ -65,6 +63,13 @@ fun PageStatus.iconRes(): Int = when (this) {
     PageStatus.ERROR -> R.drawable.ic_error
 }
 
+val PageStatus.tone: StatusTone
+    get() = when (this) {
+        PageStatus.QUEUED, PageStatus.DONE, PageStatus.UNKNOWN -> StatusTone.NEUTRAL
+        PageStatus.PROCESSING -> StatusTone.IN_PROGRESS
+        PageStatus.ERROR -> StatusTone.FAILURE
+    }
+
 @StringRes
 fun NumberSource.labelRes(): Int = when (this) {
     NumberSource.MANUAL -> R.string.number_source_manual
@@ -88,6 +93,12 @@ fun UploadState.iconRes(): Int = when (this) {
     UploadState.FAILED -> R.drawable.ic_error
     UploadState.UPLOADED -> R.drawable.ic_cloud_done
 }
+
+val UploadState.tone: StatusTone
+    get() = when (this) {
+        UploadState.QUEUED, UploadState.UPLOADING, UploadState.UPLOADED -> StatusTone.NEUTRAL
+        UploadState.FAILED -> StatusTone.FAILURE
+    }
 
 @StringRes
 fun UploadFailure.labelRes(): Int = when (this) {

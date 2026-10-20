@@ -318,7 +318,7 @@ private const val PAGES_ON_THE_PC_KEY = "server"
 private const val PAGES_ON_THE_PHONE_KEY = "local"
 private const val FIRST_PAGE_ON_THE_PHONE = "Page 31, Uploading…"
 private const val REJECTION = "invalid title"
-private val HEADINGS = listOf("Example Book", "On the phone (3)", "On the PC (8)")
+private val HEADINGS = listOf("Example Book", "On the phone (4)", "On the PC (8)")
 
 private val THEMES = listOf(arrayOf<Any>("light", false), arrayOf<Any>("dark", true))
 
@@ -385,6 +385,7 @@ private val BOOK_BEING_READ = DocumentUiState(
             pageOnThePhone(31, UploadState.UPLOADING),
             pageOnThePhone(32, UploadState.QUEUED),
             pageOnThePhone(33, UploadState.FAILED, UploadFailure.TOO_LARGE),
+            pageOnThePhone(34, UploadState.UPLOADED),
         ),
         server = listOf(
             pageOnThePc("12", PageStatus.DONE),

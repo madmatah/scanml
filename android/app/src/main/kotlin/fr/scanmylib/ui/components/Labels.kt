@@ -91,7 +91,7 @@ fun UploadState.iconRes(): Int = when (this) {
     UploadState.QUEUED -> R.drawable.ic_schedule
     UploadState.UPLOADING -> R.drawable.ic_cloud_upload
     UploadState.FAILED -> R.drawable.ic_error
-    UploadState.UPLOADED -> R.drawable.ic_cloud_done
+    UploadState.UPLOADED -> R.drawable.ic_schedule
 }
 
 val UploadState.tone: StatusTone

@@ -28,6 +28,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
@@ -82,6 +83,7 @@ import fr.scanmylib.ui.components.iconRes
 import fr.scanmylib.ui.components.labelRes
 import fr.scanmylib.ui.components.pageStatsText
 import fr.scanmylib.ui.components.sanitizeTextFromPc
+import fr.scanmylib.ui.theme.cardColor
 import java.io.File
 
 @Composable
@@ -448,30 +450,51 @@ private fun LazyGridScope.fullWidthItem(key: String, content: @Composable () -> 
 
 @Composable
 private fun DocumentSummary(document: DocumentEntity, modifier: Modifier = Modifier) {
-    Card(modifier.fillMaxWidth()) {
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.cardColor,
+            contentColor = MaterialTheme.colorScheme.onSurface,
+        ),
+        modifier = modifier.fillMaxWidth(),
+    ) {
         Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(16.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(painterResource(document.kind.iconRes()), contentDescription = null)
+                Icon(
+                    painterResource(document.kind.iconRes()),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 val kind = stringResource(document.kind.labelRes())
                 val author = sanitizeTextFromPc(document.author)
                 Text(
                     if (author.isEmpty()) kind else "$kind · $author",
                     style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
                 )
             }
             val server = document.server
             if (server == null) {
-                Text(stringResource(R.string.document_not_on_pc_yet_long), style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    stringResource(R.string.document_not_on_pc_yet_long),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             } else {
                 val noCoverage = stringResource(R.string.document_coverage_none)
                 val coverage = sanitizeTextFromPc(server.coverage).ifEmpty { noCoverage }
-                Text(stringResource(R.string.document_coverage, coverage))
+                Text(stringResource(R.string.document_coverage, coverage), color = MaterialTheme.colorScheme.onSurface)
                 val missing = sanitizeTextFromPc(server.missing)
                 if (missing.isNotEmpty()) {
-                    Text(stringResource(R.string.document_missing, missing))
+                    Text(
+                        stringResource(R.string.document_missing, missing),
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
                 }
                 if (server.unnumbered > 0) {
-                    Text(pluralStringResource(R.plurals.document_unnumbered, server.unnumbered, server.unnumbered))
+                    Text(
+                        pluralStringResource(R.plurals.document_unnumbered, server.unnumbered, server.unnumbered),
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
                 }
                 Text(
                     pageStatsText(server),
@@ -502,7 +525,11 @@ private fun DocumentSummary(document: DocumentEntity, modifier: Modifier = Modif
                 }
             }
             if (document.unwarp) {
-                Text(stringResource(R.string.document_unwarp_on), style = MaterialTheme.typography.bodySmall)
+                Text(
+                    stringResource(R.string.document_unwarp_on),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
     }

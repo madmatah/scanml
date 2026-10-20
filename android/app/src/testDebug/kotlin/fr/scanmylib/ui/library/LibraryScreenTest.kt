@@ -1,11 +1,20 @@
 package fr.scanmylib.ui.library
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertWidthIsAtLeast
+import androidx.compose.ui.test.hasAnyDescendant
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.unit.dp
 import com.github.takahirom.roborazzi.RobolectricDeviceQualifiers
 import com.github.takahirom.roborazzi.captureRoboImage
 import fr.scanmylib.api.OcrStatus
@@ -15,10 +24,13 @@ import fr.scanmylib.db.DocumentEntity
 import fr.scanmylib.db.LibraryRow
 import fr.scanmylib.db.ServerDocumentState
 import fr.scanmylib.model.DocumentKind
+import fr.scanmylib.ui.components.MAX_TEXT_FROM_PC_GRAPHEMES
+import fr.scanmylib.ui.isPoliteLiveRegion
 import fr.scanmylib.ui.readHeadingsFromTheTop
 import fr.scanmylib.ui.theme.Contrast
 import fr.scanmylib.ui.theme.ScanMyLibTheme
 import fr.scanmylib.update.UpdateState
+import kotlin.properties.Delegates
 import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Rule
@@ -58,7 +70,28 @@ class LibraryScreenTest {
                 assertEquals(listOf(APP_NAME), readHeadingsFromTheTop(compose))
             }
 
+            @Test
+            fun `should offer no retry while all goes well`() {
+                compose.onAllNodesWithText(RETRY).assertCountEquals(0)
+            }
+
+            @Test
+            fun `should keep a region with a size for the PC's problems, so that one is read out when it appears`() {
+                compose.onNode(isPoliteLiveRegion())
+                    .assertWidthIsAtLeast(1.dp)
+                    .assertHeightIsAtLeast(1.dp)
+            }
+
+            @Test
+            fun `should never read out the normal card, so that each count of pages being read stays quiet`() {
+                compose.onAllNodes(isPoliteLiveRegion() and hasAnyDescendant(hasText(PC_CONNECTED, substring = true)))
+                    .assertCountEquals(0)
+            }
+
             companion object {
+                private const val APP_NAME = "ScanMyLib"
+                private const val PC_CONNECTED = "PC connected"
+
                 @JvmStatic
                 @ParameterizedRobolectricTestRunner.Parameters(name = "in the {0} theme")
                 fun themes(): List<Array<Any>> = THEMES_AND_CONTRASTS
@@ -95,6 +128,250 @@ class LibraryScreenTest {
                 @JvmStatic
                 @ParameterizedRobolectricTestRunner.Parameters(name = "in the {0} theme")
                 fun themes(): List<Array<Any>> = THEMES_AND_CONTRASTS
+            }
+        }
+
+        @RunWith(ParameterizedRobolectricTestRunner::class)
+        @GraphicsMode(GraphicsMode.Mode.NATIVE)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenThePcIsUnreachable(
+            private val theme: String,
+            private val dark: Boolean,
+            private val contrast: Contrast,
+        ) {
+            @get:Rule
+            val compose = createComposeRule()
+
+            @Before
+            fun drawTheLibrary() {
+                compose.setContent {
+                    ScanMyLibTheme(dark = dark, contrast = contrast) {
+                        LibraryContentOf(LIBRARY.copy(pc = PcState.Unreachable))
+                    }
+                }
+                compose.onRoot().captureRoboImage("build/outputs/roborazzi/library-unreachable-$theme.png")
+            }
+
+            @Test
+            fun `should offer to try again`() {
+                compose.onNodeWithText(RETRY).assertIsDisplayed()
+            }
+
+            @Test
+            fun `should announce the problem from a region that stays, so that its appearance is read out`() {
+                compose.onNode(isPoliteLiveRegion() and hasAnyDescendant(hasText(UNREACHABLE, substring = true)))
+                    .assertExists()
+            }
+
+            companion object {
+                private const val UNREACHABLE = "PC unreachable"
+
+                @JvmStatic
+                @ParameterizedRobolectricTestRunner.Parameters(name = "in the {0} theme")
+                fun themes(): List<Array<Any>> = THEMES_AND_CONTRASTS
+            }
+        }
+
+        @RunWith(ParameterizedRobolectricTestRunner::class)
+        @GraphicsMode(GraphicsMode.Mode.NATIVE)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenThePcNoLongerRecognizesThePhone(
+            private val theme: String,
+            private val dark: Boolean,
+            private val contrast: Contrast,
+        ) {
+            @get:Rule
+            val compose = createComposeRule()
+
+            @Before
+            fun drawTheLibrary() {
+                compose.setContent {
+                    ScanMyLibTheme(dark = dark, contrast = contrast) {
+                        LibraryContentOf(LIBRARY.copy(pc = PcState.TokenRefused))
+                    }
+                }
+                compose.onRoot().captureRoboImage("build/outputs/roborazzi/library-token-refused-$theme.png")
+            }
+
+            @Test
+            fun `should lead to the settings, where the phone is paired again`() {
+                compose.onNodeWithText(SETTINGS).assertIsDisplayed()
+            }
+
+            companion object {
+                @JvmStatic
+                @ParameterizedRobolectricTestRunner.Parameters(name = "in the {0} theme")
+                fun themes(): List<Array<Any>> = THEMES_AND_CONTRASTS
+            }
+        }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenThePcBecomesUnreachableWhileItReads {
+            @get:Rule
+            val compose = createComposeRule()
+
+            private var regionIdBefore by Delegates.notNull<Int>()
+            private var regionIdAfter by Delegates.notNull<Int>()
+
+            @Before
+            fun loseThePc() {
+                val pc = mutableStateOf(LIBRARY.pc)
+                compose.setContent { ScanMyLibTheme { LibraryContentOf(LIBRARY.copy(pc = pc.value)) } }
+                regionIdBefore = compose.onNode(isPoliteLiveRegion()).fetchSemanticsNode().id
+                pc.value = PcState.Unreachable
+                compose.waitForIdle()
+                regionIdAfter = compose
+                    .onNode(isPoliteLiveRegion() and hasAnyDescendant(hasText(UNREACHABLE, substring = true)))
+                    .fetchSemanticsNode()
+                    .id
+            }
+
+            @Test
+            fun `should show the problem in the region that was already there, so that it is read out`() {
+                assertEquals(regionIdBefore, regionIdAfter)
+            }
+
+            companion object {
+                private const val UNREACHABLE = "PC unreachable"
+            }
+        }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenThePcIsUnreachableAndRetryIsTapped {
+            @get:Rule
+            val compose = createComposeRule()
+
+            private lateinit var refreshes: MutableList<Unit>
+
+            @Before
+            fun tapRetry() {
+                refreshes = mutableListOf()
+                compose.setContent {
+                    ScanMyLibTheme {
+                        LibraryContentOf(LIBRARY.copy(pc = PcState.Unreachable), onRefresh = { refreshes += Unit })
+                    }
+                }
+                compose.onNodeWithText(RETRY).performClick()
+            }
+
+            @Test
+            fun `should ask the PC again`() {
+                assertEquals(1, refreshes.size)
+            }
+        }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenThePcCannotReadAndRetryIsTapped {
+            @get:Rule
+            val compose = createComposeRule()
+
+            private lateinit var refreshes: MutableList<Unit>
+
+            @Before
+            fun tapRetry() {
+                refreshes = mutableListOf()
+                compose.setContent {
+                    ScanMyLibTheme {
+                        LibraryContentOf(LIBRARY.copy(pc = PC_THAT_CANNOT_READ), onRefresh = { refreshes += Unit })
+                    }
+                }
+                compose.onNodeWithText(RETRY).performClick()
+            }
+
+            @Test
+            fun `should ask the PC again`() {
+                assertEquals(1, refreshes.size)
+            }
+
+            companion object {
+                private val PC_THAT_CANNOT_READ = PcState.Online(ServerStatus(ocr = OcrStatus(state = "unreachable")))
+            }
+        }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenThePcAnswersWithAnErrorAndRetryIsTapped {
+            @get:Rule
+            val compose = createComposeRule()
+
+            private lateinit var refreshes: MutableList<Unit>
+
+            @Before
+            fun tapRetry() {
+                refreshes = mutableListOf()
+                compose.setContent {
+                    ScanMyLibTheme {
+                        LibraryContentOf(
+                            LIBRARY.copy(pc = PcState.Error(SERVER_ERROR)),
+                            onRefresh = { refreshes += Unit },
+                        )
+                    }
+                }
+                compose.onNodeWithText(RETRY).performClick()
+            }
+
+            @Test
+            fun `should ask the PC again`() {
+                assertEquals(1, refreshes.size)
+            }
+
+            companion object {
+                private const val SERVER_ERROR = "HTTP 500"
+            }
+        }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenThePcNoLongerRecognizesThePhoneAndSettingsIsTapped {
+            @get:Rule
+            val compose = createComposeRule()
+
+            private lateinit var openings: MutableList<Unit>
+
+            @Before
+            fun tapSettings() {
+                openings = mutableListOf()
+                compose.setContent {
+                    ScanMyLibTheme {
+                        LibraryContentOf(LIBRARY.copy(pc = PcState.TokenRefused), onOpenSettings = { openings += Unit })
+                    }
+                }
+                compose.onNodeWithText(SETTINGS).performClick()
+            }
+
+            @Test
+            fun `should open the settings`() {
+                assertEquals(1, openings.size)
+            }
+        }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenThePcAnswersWithAGarbledError {
+            @get:Rule
+            val compose = createComposeRule()
+
+            @Before
+            fun drawTheLibrary() {
+                compose.setContent {
+                    ScanMyLibTheme { LibraryContentOf(LIBRARY.copy(pc = PcState.Error(GARBLED_ERROR))) }
+                }
+            }
+
+            @Test
+            fun `should show it on one line, without the characters a reader cannot see, and cut`() {
+                compose.onNodeWithText(SHOWN_ERROR).assertIsDisplayed()
+            }
+
+            companion object {
+                private val LONG_DETAIL = "x".repeat(MAX_TEXT_FROM_PC_GRAPHEMES)
+                private val GARBLED_ERROR =
+                    "HTTP 500:" + makeCharacter(0x0A) + makeCharacter(0x202E) + "engine " + LONG_DETAIL
+                private val SHOWN_ERROR =
+                    "PC error: " + "HTTP 500: engine $LONG_DETAIL".take(MAX_TEXT_FROM_PC_GRAPHEMES - 1) + "…"
             }
         }
 
@@ -183,9 +460,10 @@ class LibraryScreenTest {
     }
 }
 
-private const val APP_NAME = "ScanMyLib"
 private const val BOOK_TITLE = "Example Book"
 private const val PAMPHLET_TITLE = "Example Pamphlet"
+private const val RETRY = "Retry"
+private const val SETTINGS = "Settings"
 
 private val THEMES_AND_CONTRASTS = listOf(
     arrayOf<Any>("light", false, Contrast.STANDARD),
@@ -251,15 +529,15 @@ private val LIBRARY = LibraryUiState(
 private fun makeCharacter(codePoint: Int): String = String(Character.toChars(codePoint))
 
 @Composable
-private fun LibraryContentOf(state: LibraryUiState) {
+private fun LibraryContentOf(state: LibraryUiState, onRefresh: () -> Unit = {}, onOpenSettings: () -> Unit = {}) {
     LibraryContent(
         state = state,
         update = UpdateState.UpToDate,
         onOpenDocument = {},
         onScanDocument = {},
         onNewDocument = {},
-        onOpenSettings = {},
-        onRefresh = {},
+        onOpenSettings = onOpenSettings,
+        onRefresh = onRefresh,
         onInstallUpdate = {},
         onCancelUpdate = {},
     )

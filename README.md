@@ -91,8 +91,9 @@ instead. On Android 12 and later, **Settings › Wallpaper colors** replaces Sca
 Android 14 and later, the app follows the contrast chosen in the phone's accessibility settings.
 
 The phone and the PC must be on the same network. Away from it, the app keeps the pages and sends them once the PC is
-reachable again. To send pages from elsewhere, use a VPN (WireGuard, Tailscale…) rather than exposing the port to the
-Internet.
+reachable again; the library says when the PC does not answer, with **Retry**, and when it no longer recognizes the
+phone, with **Settings**, where **Change PC** pairs it again. To send pages from elsewhere, use a VPN (WireGuard,
+Tailscale…) rather than exposing the port to the Internet.
 
 ## Scanning
 

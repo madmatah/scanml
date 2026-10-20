@@ -1,5 +1,6 @@
 package fr.scanmylib.ui
 
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -15,3 +16,6 @@ internal fun readFirstText(node: SemanticsNode): String? =
 
 internal fun readHeadingsFromTheTop(screen: SemanticsNodeInteractionsProvider): List<String?> =
     screen.onAllNodes(isHeading()).fetchSemanticsNodes().sortedBy { it.positionInRoot.y }.map(::readFirstText)
+
+internal fun isPoliteLiveRegion(): SemanticsMatcher =
+    SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite)

@@ -1,16 +1,23 @@
 package fr.scanmylib.ui.document
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.SemanticsNodeInteractionsProvider
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertWidthIsAtLeast
+import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasScrollToKeyAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToKey
+import androidx.compose.ui.unit.dp
 import com.github.takahirom.roborazzi.RobolectricDeviceQualifiers
 import com.github.takahirom.roborazzi.captureRoboImage
 import fr.scanmylib.api.NumberSource
@@ -24,9 +31,12 @@ import fr.scanmylib.db.UploadState
 import fr.scanmylib.library.DocumentPages
 import fr.scanmylib.model.DocumentKind
 import fr.scanmylib.model.ScanSource
+import fr.scanmylib.ui.components.MAX_TEXT_FROM_PC_GRAPHEMES
+import fr.scanmylib.ui.isPoliteLiveRegion
 import fr.scanmylib.ui.readHeadingsFromTheTop
 import fr.scanmylib.ui.theme.ScanMyLibTheme
 import kotlin.math.roundToInt
+import kotlin.properties.Delegates
 import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Rule
@@ -66,11 +76,20 @@ class DocumentScreenTest {
             }
 
             @Test
+            fun `should keep a region with a size for a refusal, so that one is read out when it appears`() {
+                compose.onNode(isPoliteLiveRegion())
+                    .assertWidthIsAtLeast(1.dp)
+                    .assertHeightIsAtLeast(1.dp)
+            }
+
+            @Test
             fun `should mark its title and the titles of its sections as headings, in reading order`() {
                 assertEquals(HEADINGS, readHeadingsFromTheTop(compose))
             }
 
             companion object {
+                private val HEADINGS = listOf("Example Book", "On the phone (4)", "On the PC (8)")
+
                 @JvmStatic
                 @ParameterizedRobolectricTestRunner.Parameters(name = "in the {0} theme")
                 fun themes(): List<Array<Any>> = THEMES
@@ -186,6 +205,8 @@ class DocumentScreenTest {
             }
 
             companion object {
+                private const val PAGES_ON_THE_PHONE_KEY = "local"
+
                 @JvmStatic
                 @ParameterizedRobolectricTestRunner.Parameters(name = "in the {0} theme")
                 fun themes(): List<Array<Any>> = THEMES
@@ -238,6 +259,17 @@ class DocumentScreenTest {
             @Test
             fun `should say why the PC rejected it`() {
                 compose.onNodeWithText(REJECTION, substring = true).assertIsDisplayed()
+            }
+
+            @Test
+            fun `should offer to send it again`() {
+                compose.onNodeWithText(RETRY).assertIsDisplayed()
+            }
+
+            @Test
+            fun `should announce the refusal from a region that stays, so that its appearance is read out`() {
+                compose.onNode(isPoliteLiveRegion() and hasAnyDescendant(hasText(REJECTION, substring = true)))
+                    .assertExists()
             }
 
             companion object {
@@ -309,16 +341,92 @@ class DocumentScreenTest {
                 private const val NO_NUMBERED_PAGES = "Scanned pages: no numbered pages"
             }
         }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenThePcRejectsItWhileItIsOpen {
+            @get:Rule
+            val compose = createComposeRule()
+
+            private var regionIdBefore by Delegates.notNull<Int>()
+            private var regionIdAfter by Delegates.notNull<Int>()
+
+            @Before
+            fun rejectTheDocument() {
+                val state = mutableStateOf(BOOK_BEING_READ)
+                compose.setContent { ScanMyLibTheme { DocumentContentOf(state.value) } }
+                regionIdBefore = compose.onNode(isPoliteLiveRegion()).fetchSemanticsNode().id
+                state.value = BOOK_BEING_READ.copy(document = BOOK.copy(uploadError = "HTTP 422: $REJECTION"))
+                compose.waitForIdle()
+                regionIdAfter = compose
+                    .onNode(isPoliteLiveRegion() and hasAnyDescendant(hasText(REJECTION, substring = true)))
+                    .fetchSemanticsNode()
+                    .id
+            }
+
+            @Test
+            fun `should show the refusal in the region that was already there, so that it is read out`() {
+                assertEquals(regionIdBefore, regionIdAfter)
+            }
+        }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenThePcRejectedItAndRetryIsTapped {
+            @get:Rule
+            val compose = createComposeRule()
+
+            private lateinit var retries: MutableList<Unit>
+
+            @Before
+            fun tapRetry() {
+                retries = mutableListOf()
+                compose.setContent {
+                    ScanMyLibTheme { DocumentContentOf(PAMPHLET_REJECTED, onRetryDocumentUpload = { retries += Unit }) }
+                }
+                compose.onNodeWithText(RETRY).performClick()
+            }
+
+            @Test
+            fun `should send the document again`() {
+                assertEquals(1, retries.size)
+            }
+        }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenThePcRejectedItWithAGarbledReason {
+            @get:Rule
+            val compose = createComposeRule()
+
+            @Before
+            fun drawTheDocument() {
+                val document = PAMPHLET_REJECTED.document?.copy(uploadError = GARBLED_REASON)
+                compose.setContent { ScanMyLibTheme { DocumentContentOf(PAMPHLET_REJECTED.copy(document = document)) } }
+            }
+
+            @Test
+            fun `should show the reason on one line, without the characters a reader cannot see, and cut`() {
+                compose.onNodeWithText(SHOWN_REFUSAL).assertIsDisplayed()
+            }
+
+            companion object {
+                private val LONG_DETAIL = "x".repeat(MAX_TEXT_FROM_PC_GRAPHEMES)
+                private val GARBLED_REASON =
+                    "HTTP 422:" + makeCharacter(0x0A) + makeCharacter(0x202E) + "title " + LONG_DETAIL
+                private val SHOWN_REFUSAL = "The PC rejected this document: " +
+                    "HTTP 422: title $LONG_DETAIL".take(MAX_TEXT_FROM_PC_GRAPHEMES - 1) + "…"
+            }
+        }
     }
 }
 
 private const val FIRST_READ_PAGE = "Page 12, Text ready"
 private val FIRST_THREE_PAGES_ON_THE_PC = listOf(FIRST_READ_PAGE, "Page 13, Reading…", "Page 14, Waiting to be read")
 private const val PAGES_ON_THE_PC_KEY = "server"
-private const val PAGES_ON_THE_PHONE_KEY = "local"
 private const val FIRST_PAGE_ON_THE_PHONE = "Page 31, Uploading…"
 private const val REJECTION = "invalid title"
-private val HEADINGS = listOf("Example Book", "On the phone (4)", "On the PC (8)")
+private const val RETRY = "Retry"
 
 private val THEMES = listOf(arrayOf<Any>("light", false), arrayOf<Any>("dark", true))
 
@@ -348,7 +456,7 @@ private val BOOK = DocumentEntity(
     ),
 )
 
-private fun pageOnThePhone(number: Int, state: UploadState, failure: UploadFailure? = null) = PendingPageEntity(
+private fun makePageOnThePhone(number: Int, state: UploadState, failure: UploadFailure? = null) = PendingPageEntity(
     id = "phone-$number",
     documentId = BOOK.id,
     sessionId = "session",
@@ -363,7 +471,7 @@ private fun pageOnThePhone(number: Int, state: UploadState, failure: UploadFailu
     queuedAt = number.toLong(),
 )
 
-private fun pageOnThePc(label: String?, status: PageStatus, duplicate: Boolean = false, excluded: Boolean = false) =
+private fun makePageOnThePc(label: String?, status: PageStatus, duplicate: Boolean = false, excluded: Boolean = false) =
     ServerPageEntity(
         id = "pc-$label-$status-$duplicate-$excluded",
         documentId = BOOK.id,
@@ -382,20 +490,20 @@ private val BOOK_BEING_READ = DocumentUiState(
     document = BOOK,
     pages = DocumentPages(
         local = listOf(
-            pageOnThePhone(31, UploadState.UPLOADING),
-            pageOnThePhone(32, UploadState.QUEUED),
-            pageOnThePhone(33, UploadState.FAILED, UploadFailure.TOO_LARGE),
-            pageOnThePhone(34, UploadState.UPLOADED),
+            makePageOnThePhone(31, UploadState.UPLOADING),
+            makePageOnThePhone(32, UploadState.QUEUED),
+            makePageOnThePhone(33, UploadState.FAILED, UploadFailure.TOO_LARGE),
+            makePageOnThePhone(34, UploadState.UPLOADED),
         ),
         server = listOf(
-            pageOnThePc("12", PageStatus.DONE),
-            pageOnThePc("13", PageStatus.PROCESSING),
-            pageOnThePc("14", PageStatus.QUEUED),
-            pageOnThePc("15", PageStatus.ERROR),
-            pageOnThePc("16–17", PageStatus.DONE),
-            pageOnThePc(null, PageStatus.DONE),
-            pageOnThePc("14", PageStatus.DONE, duplicate = true),
-            pageOnThePc("18", PageStatus.DONE, excluded = true),
+            makePageOnThePc("12", PageStatus.DONE),
+            makePageOnThePc("13", PageStatus.PROCESSING),
+            makePageOnThePc("14", PageStatus.QUEUED),
+            makePageOnThePc("15", PageStatus.ERROR),
+            makePageOnThePc("16–17", PageStatus.DONE),
+            makePageOnThePc(null, PageStatus.DONE),
+            makePageOnThePc("14", PageStatus.DONE, duplicate = true),
+            makePageOnThePc("18", PageStatus.DONE, excluded = true),
         ),
     ),
 )
@@ -414,7 +522,7 @@ private val PAMPHLET_REJECTED = DocumentUiState(
         confirmedAt = 0,
         server = null,
     ),
-    pages = DocumentPages(local = listOf(pageOnThePhone(1, UploadState.QUEUED)), server = emptyList()),
+    pages = DocumentPages(local = listOf(makePageOnThePhone(1, UploadState.QUEUED)), server = emptyList()),
 )
 
 private fun makeCharacter(codePoint: Int): String = String(Character.toChars(codePoint))
@@ -425,7 +533,7 @@ private fun countColumnsOfTheFirstThreePagesOnThePc(screen: SemanticsNodeInterac
     }.toSet().size
 
 @Composable
-private fun DocumentContentOf(state: DocumentUiState) {
+private fun DocumentContentOf(state: DocumentUiState, onRetryDocumentUpload: () -> Unit = {}) {
     DocumentContent(
         state = state,
         camera = ScanSource.GOOGLE_SCANNER,
@@ -433,7 +541,7 @@ private fun DocumentContentOf(state: DocumentUiState) {
         localImage = { null },
         onBack = {},
         onRefresh = {},
-        onRetryDocumentUpload = {},
+        onRetryDocumentUpload = onRetryDocumentUpload,
         onImport = {},
         onScan = {},
         onChooseCamera = {},

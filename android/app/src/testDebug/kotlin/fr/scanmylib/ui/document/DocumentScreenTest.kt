@@ -22,7 +22,9 @@ import fr.scanmylib.db.UploadState
 import fr.scanmylib.library.DocumentPages
 import fr.scanmylib.model.DocumentKind
 import fr.scanmylib.model.ScanSource
+import fr.scanmylib.ui.readHeadingsFromTheTop
 import fr.scanmylib.ui.theme.ScanMyLibTheme
+import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -58,6 +60,11 @@ class DocumentScreenTest {
             @Test
             fun `should show the pages that wait on the phone`() {
                 compose.onNodeWithText(FIRST_PAGE_ON_THE_PHONE).assertIsDisplayed()
+            }
+
+            @Test
+            fun `should mark its title and the titles of its sections as headings, in reading order`() {
+                assertEquals(HEADINGS, readHeadingsFromTheTop(compose))
             }
 
             companion object {
@@ -189,7 +196,7 @@ class DocumentScreenTest {
 
             @Test
             fun `should show the title without them in the top bar`() {
-                compose.onNodeWithText(BOOK.title).assertIsDisplayed()
+                assertEquals(BOOK.title, readHeadingsFromTheTop(compose).first())
             }
 
             @Test
@@ -241,6 +248,7 @@ private const val FIRST_READ_PAGE = "p. 12"
 private const val PAGES_ON_THE_PC_KEY = "server"
 private const val FIRST_PAGE_ON_THE_PHONE = "p. 31"
 private const val REJECTION = "invalid title"
+private val HEADINGS = listOf("Example Book", "On the phone (3)", "On the PC (8)")
 
 private val THEMES = listOf(arrayOf<Any>("light", false), arrayOf<Any>("dark", true))
 

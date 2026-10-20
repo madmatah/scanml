@@ -2,6 +2,7 @@ package fr.scanmylib.ui.settings
 
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isSelected
@@ -20,6 +21,9 @@ import fr.scanmylib.model.ScannerMode
 import fr.scanmylib.model.ServerConfig
 import fr.scanmylib.model.ThemeMode
 import fr.scanmylib.settings.AppSettings
+import fr.scanmylib.ui.hasRole
+import fr.scanmylib.ui.readFirstText
+import fr.scanmylib.ui.readHeadingsFromTheTop
 import fr.scanmylib.ui.theme.ScanMyLibTheme
 import fr.scanmylib.update.UpdateState
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -38,6 +42,49 @@ import org.robolectric.annotation.GraphicsMode
 class SettingsScreenTest {
     @RunWith(Enclosed::class)
     class TheSettingsContentFunction {
+        @RunWith(ParameterizedRobolectricTestRunner::class)
+        @GraphicsMode(GraphicsMode.Mode.NATIVE)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenOpened(private val theme: String, private val dark: Boolean) {
+            @get:Rule
+            val compose = createComposeRule()
+
+            @Before
+            fun drawTheSettings() {
+                compose.setContent { ScanMyLibTheme(dark = dark) { SettingsContentOf(SETTINGS) } }
+                compose.onRoot().captureRoboImage("build/outputs/roborazzi/settings-top-$theme.png")
+            }
+
+            @Test
+            fun `should name each switch by its label`() {
+                val switches = compose.onAllNodes(hasRole(Role.Switch)).fetchSemanticsNodes()
+                assertEquals(listOf(WIFI_ONLY, KEEP_COPIES, WALLPAPER_COLORS), switches.map(::readFirstText))
+            }
+
+            @Test
+            fun `should mark its title and the title of each section as headings, in reading order`() {
+                assertEquals(HEADINGS, readHeadingsFromTheTop(compose))
+            }
+
+            companion object {
+                private const val WIFI_ONLY = "Wi-Fi only"
+                private const val KEEP_COPIES = "Keep a copy on the phone"
+                private val HEADINGS = listOf(
+                    "Settings",
+                    "PC",
+                    "Uploads",
+                    "“Scan” opens",
+                    "Google scanner retouching",
+                    "Appearance",
+                    ABOUT,
+                )
+
+                @JvmStatic
+                @ParameterizedRobolectricTestRunner.Parameters(name = "in the {0} theme")
+                fun themes(): List<Array<Any>> = THEMES
+            }
+        }
+
         @RunWith(ParameterizedRobolectricTestRunner::class)
         @GraphicsMode(GraphicsMode.Mode.NATIVE)
         @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)

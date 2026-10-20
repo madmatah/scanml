@@ -15,9 +15,11 @@ import fr.scanmylib.db.DocumentEntity
 import fr.scanmylib.db.LibraryRow
 import fr.scanmylib.db.ServerDocumentState
 import fr.scanmylib.model.DocumentKind
+import fr.scanmylib.ui.readHeadingsFromTheTop
 import fr.scanmylib.ui.theme.Contrast
 import fr.scanmylib.ui.theme.ScanMyLibTheme
 import fr.scanmylib.update.UpdateState
+import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -49,6 +51,11 @@ class LibraryScreenTest {
             fun `should show each document by its title`() {
                 compose.onNodeWithText(BOOK_TITLE).assertIsDisplayed()
                 compose.onNodeWithText(PAMPHLET_TITLE).assertIsDisplayed()
+            }
+
+            @Test
+            fun `should mark its title as a heading`() {
+                assertEquals(listOf(APP_NAME), readHeadingsFromTheTop(compose))
             }
 
             companion object {
@@ -148,6 +155,7 @@ class LibraryScreenTest {
     }
 }
 
+private const val APP_NAME = "ScanMyLib"
 private const val BOOK_TITLE = "Example Book"
 private const val PAMPHLET_TITLE = "Example Pamphlet"
 

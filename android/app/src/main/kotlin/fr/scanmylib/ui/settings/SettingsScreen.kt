@@ -8,31 +8,26 @@ import androidx.annotation.StringRes
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -44,9 +39,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.painterResource
@@ -64,6 +57,10 @@ import fr.scanmylib.model.ScanSource
 import fr.scanmylib.model.ScannerMode
 import fr.scanmylib.model.ThemeMode
 import fr.scanmylib.ui.components.BackButton
+import fr.scanmylib.ui.components.ChoiceRow
+import fr.scanmylib.ui.components.ScreenTitle
+import fr.scanmylib.ui.components.SectionHeader
+import fr.scanmylib.ui.components.SettingSwitchRow
 import fr.scanmylib.ui.components.UpdateBanner
 import fr.scanmylib.ui.components.connectionCheckMessage
 import fr.scanmylib.ui.components.descriptionRes
@@ -143,7 +140,7 @@ internal fun SettingsContent(
         modifier = modifier,
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.settings_title)) },
+                title = { ScreenTitle(stringResource(R.string.settings_title)) },
                 navigationIcon = { BackButton(onBack) },
             )
         },
@@ -155,7 +152,7 @@ internal fun SettingsContent(
                 .padding(padding)
                 .verticalScroll(rememberScrollState()),
         ) {
-            SectionHeader(R.string.settings_section_pc)
+            SettingsSectionHeader(R.string.settings_section_pc)
             ListItem(
                 headlineContent = { Text(server?.displayUrl ?: stringResource(R.string.settings_not_paired)) },
                 supportingContent = state.lastCheck?.let { check -> { Text(connectionCheckMessage(check)) } },
@@ -183,17 +180,16 @@ internal fun SettingsContent(
                 }
             }
 
-            HorizontalDivider(Modifier.padding(vertical = 8.dp))
-            SectionHeader(R.string.settings_section_upload)
-            SwitchItem(
-                title = R.string.settings_wifi_only,
-                description = R.string.settings_wifi_only_help,
+            SettingsSectionHeader(R.string.settings_section_upload)
+            SettingSwitchRow(
+                label = stringResource(R.string.settings_wifi_only),
+                description = stringResource(R.string.settings_wifi_only_help),
                 checked = settings?.wifiOnly ?: false,
                 onCheckedChange = onWifiOnly,
             )
-            SwitchItem(
-                title = R.string.settings_keep_copies,
-                description = R.string.settings_keep_copies_help,
+            SettingSwitchRow(
+                label = stringResource(R.string.settings_keep_copies),
+                description = stringResource(R.string.settings_keep_copies_help),
                 checked = settings?.keepLocalCopies ?: false,
                 onCheckedChange = onKeepLocalCopies,
             )
@@ -210,17 +206,18 @@ internal fun SettingsContent(
                 )
             }
 
-            HorizontalDivider(Modifier.padding(vertical = 8.dp))
-            SectionHeader(R.string.settings_default_camera)
+            SettingsSectionHeader(R.string.settings_default_camera)
             val context = LocalContext.current
             val hasCamera =
                 remember(context) { context.packageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_ANY) }
             Column(Modifier.selectableGroup()) {
                 ScanSource.CAMERAS.forEach { camera ->
                     val enabled = camera != ScanSource.CAMERA || hasCamera
-                    RadioItem(
-                        title = camera.labelRes(),
-                        description = if (enabled) camera.descriptionRes() else R.string.camera_none_on_phone,
+                    ChoiceRow(
+                        label = stringResource(camera.labelRes()),
+                        description = stringResource(
+                            if (enabled) camera.descriptionRes() else R.string.camera_none_on_phone,
+                        ),
                         selected = settings?.defaultCamera == camera,
                         enabled = enabled,
                         onSelect = { onDefaultCamera(camera) },
@@ -228,8 +225,7 @@ internal fun SettingsContent(
                 }
             }
 
-            HorizontalDivider(Modifier.padding(vertical = 8.dp))
-            SectionHeader(R.string.settings_scanner_mode)
+            SettingsSectionHeader(R.string.settings_scanner_mode)
             Text(
                 stringResource(R.string.settings_scanner_help),
                 style = MaterialTheme.typography.bodyMedium,
@@ -238,33 +234,31 @@ internal fun SettingsContent(
             )
             Column(Modifier.selectableGroup()) {
                 ScannerMode.entries.forEach { mode ->
-                    RadioItem(
-                        title = mode.labelRes(),
-                        description = mode.descriptionRes(),
+                    ChoiceRow(
+                        label = stringResource(mode.labelRes()),
+                        description = stringResource(mode.descriptionRes()),
                         selected = settings?.scannerMode == mode,
                         onSelect = { onScannerMode(mode) },
                     )
                 }
             }
 
-            HorizontalDivider(Modifier.padding(vertical = 8.dp))
-            SectionHeader(R.string.settings_section_appearance)
+            SettingsSectionHeader(R.string.settings_section_appearance)
             ListItem(
                 headlineContent = { Text(stringResource(R.string.settings_theme)) },
                 supportingContent = { Text(stringResource((settings?.themeMode ?: ThemeMode.DEFAULT).labelRes())) },
                 modifier = Modifier.clickable(role = Role.Button) { isChoosingTheme = true },
             )
             if (canUseWallpaperColors) {
-                SwitchItem(
-                    title = R.string.settings_wallpaper_colors,
-                    description = R.string.settings_wallpaper_colors_help,
+                SettingSwitchRow(
+                    label = stringResource(R.string.settings_wallpaper_colors),
+                    description = stringResource(R.string.settings_wallpaper_colors_help),
                     checked = settings?.usesWallpaperColors ?: false,
                     onCheckedChange = onUsesWallpaperColors,
                 )
             }
 
-            HorizontalDivider(Modifier.padding(vertical = 8.dp))
-            SectionHeader(R.string.settings_section_about)
+            SettingsSectionHeader(R.string.settings_section_about)
             ListItem(
                 headlineContent = { Text(stringResource(R.string.settings_version, BuildConfig.VERSION_NAME)) },
                 supportingContent = { Text(stringResource(R.string.settings_about)) },
@@ -355,35 +349,13 @@ internal fun SettingsContent(
 }
 
 @Composable
-private fun SectionHeader(@StringRes title: Int) {
-    Text(
+private fun SettingsSectionHeader(@StringRes title: Int, modifier: Modifier = Modifier) {
+    SectionHeader(
         stringResource(title),
-        style = MaterialTheme.typography.titleSmall,
         color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 4.dp),
+        modifier = modifier.padding(horizontal = 16.dp),
     )
 }
-
-/** One choice of a setting, selected by tapping anywhere on its row. */
-@Composable
-private fun RadioItem(
-    @StringRes title: Int,
-    @StringRes description: Int,
-    selected: Boolean,
-    onSelect: () -> Unit,
-    enabled: Boolean = true,
-) {
-    ListItem(
-        headlineContent = { Text(stringResource(title)) },
-        supportingContent = { Text(stringResource(description)) },
-        leadingContent = { RadioButton(selected = selected, onClick = null, enabled = enabled) },
-        modifier = Modifier
-            .alpha(if (enabled) 1f else DISABLED_ALPHA)
-            .selectable(selected = selected, enabled = enabled, role = Role.RadioButton, onClick = onSelect),
-    )
-}
-
-private const val DISABLED_ALPHA = 0.38f
 
 @Composable
 private fun ThemeDialog(
@@ -399,17 +371,13 @@ private fun ThemeDialog(
         text = {
             Column(Modifier.selectableGroup()) {
                 ThemeMode.entries.forEach { mode ->
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = 56.dp)
-                            .selectable(selected = mode == selected, role = Role.RadioButton) { onSelect(mode) },
-                    ) {
-                        RadioButton(selected = mode == selected, onClick = null)
-                        Text(stringResource(mode.labelRes()), style = MaterialTheme.typography.bodyLarge)
-                    }
+                    ChoiceRow(
+                        label = stringResource(mode.labelRes()),
+                        selected = mode == selected,
+                        onSelect = { onSelect(mode) },
+                        // The dialog has margins of its own.
+                        contentPadding = PaddingValues(),
+                    )
                 }
             }
         },
@@ -436,20 +404,4 @@ private fun ScannerMode.descriptionRes(): Int = when (this) {
     ScannerMode.CROP_ONLY -> R.string.settings_scanner_mode_crop_help
     ScannerMode.FILTERS -> R.string.settings_scanner_mode_filters_help
     ScannerMode.FULL -> R.string.settings_scanner_mode_full_help
-}
-
-/** A setting toggled by tapping anywhere on its row. */
-@Composable
-private fun SwitchItem(
-    @StringRes title: Int,
-    @StringRes description: Int,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-) {
-    ListItem(
-        headlineContent = { Text(stringResource(title)) },
-        supportingContent = { Text(stringResource(description)) },
-        trailingContent = { Switch(checked = checked, onCheckedChange = null) },
-        modifier = Modifier.toggleable(value = checked, role = Role.Switch, onValueChange = onCheckedChange),
-    )
 }

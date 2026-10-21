@@ -384,7 +384,8 @@ Every branch goes through `/expert-review` before its pull request. It is a proj
 - **A triage on Sonnet weighs the experts that the paths pick,** by what the diff holds, before any of them runs: an
   expert pays a full reading of its rules, the diff and the code even when it has nothing to say, and the triage costs a
   fraction of that. It keeps an expert when unsure, and never drops correctness, nor security and isolation on their
-  paths, nor narrows what they read, since a missed expert costs more than a needless one, and a triage that reads the
+  paths, nor documentation on an added file, whose content only it searches for a real document's name, nor narrows
+  what they read, since a missed expert costs more than a needless one, and a triage that reads the
   diff can be steered by it.
 - **A round of fixes is reviewed against the findings it answers,** by their experts, by correctness, and by the
   experts whose concerns the fixes newly touch, such as tests for a new test, rather than by every expert whose paths

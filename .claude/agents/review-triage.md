@@ -37,12 +37,12 @@ concerns a secret, a real document name or personal information never quotes its
    - when unsure, **run**: a missed expert costs more than a needless one.
 
    `correctness-reviewer` always runs, and so do `security-reviewer` and `sandbox-reviewer` when a changed path falls in
-   their scope, in a round of fixes too.
+   their scope, in a round of fixes too, and `documentation-reviewer` when the diff adds a file.
 4. Add an expert that is not a candidate when the diff falls in its scope by what it holds, or when the focus names its
    domain.
 5. For each expert to run, give the line ranges of `scope.diff` that hold the hunks of its concern.
-   `correctness-reviewer` gets every hunk, and `security-reviewer` and `sandbox-reviewer` every hunk of the files in
-   their scope.
+   `correctness-reviewer` gets every hunk, `security-reviewer` and `sandbox-reviewer` every hunk of the files in their
+   scope, and `documentation-reviewer` every added file.
 6. In a round of fixes, give the hunks that answer each finding, and name each concern that the fixes newly touch.
 
 ## Answer

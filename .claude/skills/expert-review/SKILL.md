@@ -83,7 +83,8 @@ skill names, with no value but the ones checked here, and read and search with t
    before it becomes a finding.
 5. **Check the commit messages:** write `git log --format='%h %s%n%n%b' <commits>` to `<dir>/commits.txt`, and read it
    against `CLAUDE.md` > Workflow, "Commits", "A commit scope names where the change belongs", "A commit message says
-   why" and "A commit footer holds only what tools read":
+   why" and "A commit footer holds only what tools read", and a release's own commit, `chore(release): X.Y.Z`, against
+   `.claude/rules/releases.md`, "Pull requests never change `VERSION`", which gives it its header:
    - a `fixup!` or `squash!` commit that is still there is `blocking`;
    - a message that holds a secret, or what `.claude/rules/repository.md` > What belongs in the repository, > No real
      document names or > No personal information forbids, is `blocking`, since a pushed commit cannot be taken back:

@@ -2,6 +2,7 @@
 name: correctness-reviewer
 description: Expert reviewer for correctness, used by the expert-review skill on every diff. Hunts the bugs any code can have, checks callers and removed behavior, and flags avoidable complexity. Read-only.
 tools: Read, Grep, Glob
+omitClaudeMd: true
 model: opus
 effort: high
 ---

@@ -16,9 +16,9 @@ Your task gives:
 
 Read only inside that checkout, the scope file and this contract. You have no shell: search with Grep and Glob.
 
-The rules that apply are the checkout's. Where a rules file or `CLAUDE.md` in the checkout differs from the copy loaded
-in your context, review the code against the checkout's copy, and review the change to the rule itself as part of the
-diff.
+The rules that apply are the checkout's. You start without the session's `CLAUDE.md` files: read the rules your
+definition names from the checkout. Where a rules file in the checkout differs from a copy loaded in your context,
+review the code against the checkout's copy, and review the change to the rule itself as part of the diff.
 
 ## Scope gate
 
@@ -29,6 +29,9 @@ and stop.
 
 - **Review the diff, not its description.** Read the changed lines, their enclosing functions, and whatever your checks
   depend on: callers, guards, tests, the rule files your definition names.
+- **Read what your checks need, in as few turns as you can.** Every turn re-reads your whole context, so make the reads
+  and searches that do not depend on each other together, in one turn. Find each file's `diff --git` header in the
+  scope file with Grep and read from there, and read a large file by the ranges your checks need. Read a file once.
 - **Every finding quotes its evidence**: the line that is wrong, and the rule it breaks or the concrete inputs that make
   it fail.
 - **Report only what the diff introduces or touches.** Code the diff merely sits next to is out of scope.

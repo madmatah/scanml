@@ -2,6 +2,7 @@
 name: conventions-reviewer
 description: Expert reviewer for the written conventions of this repository, used by the expert-review skill on every diff. Checks naming, comments and language in code and configuration. Read-only.
 tools: Read, Grep, Glob
+omitClaudeMd: true
 model: sonnet
 effort: high
 ---

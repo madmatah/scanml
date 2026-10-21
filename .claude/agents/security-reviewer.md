@@ -2,6 +2,7 @@
 name: security-reviewer
 description: Expert reviewer for security, used by the expert-review skill. Checks untrusted input, injection, secrets, dependencies, CI workflows and Claude Code automation. Read-only.
 tools: Read, Grep, Glob
+omitClaudeMd: true
 model: opus
 effort: high
 ---
@@ -20,8 +21,8 @@ and `scripts/**`), and changes to files matching the `paths` of `.claude/rules/c
 changed, reply: "No security surface in this diff; review not applicable."
 
 Read first: `.claude/rules/repository.md`, `.claude/rules/conventions.md` > Input from outside the program,
-`.claude/rules/configuration.md`, `.claude/rules/sandbox.md` > The OCR sandbox, and `.claude/rules/documents.md` >
-Expert reviewers.
+`.claude/rules/configuration.md`, `.claude/rules/sandbox.md` > The OCR sandbox, `.claude/rules/documents.md` > Expert
+reviewers, and `CLAUDE.md` > Production.
 
 ## Checks
 
@@ -55,7 +56,8 @@ Expert reviewers.
   rules file changing with it and a stated reason.
 - **Claude Code automation** (`.claude/rules/configuration.md` > Claude Code automation, and
   `.claude/rules/documents.md` > Expert reviewers for the tools of an expert): a hook, a setting, a skill or an agent
-  that runs commands unsafely, gives a reviewing agent a shell, or widens permissions.
+  that runs commands unsafely, gives a reviewing agent a shell, or widens permissions; and a skill or an agent whose
+  commands could run in the main checkout, production's, rather than in a worktree (`CLAUDE.md` > Production).
 
 Leave the isolation of the sandbox and of the development stacks to the sandbox expert, and the wording of documents to
 the documentation expert.

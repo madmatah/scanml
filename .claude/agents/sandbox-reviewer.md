@@ -2,6 +2,7 @@
 name: sandbox-reviewer
 description: Expert reviewer for isolation, used by the expert-review skill. Checks the OCR sandbox's isolation, the handling of its untrusted output, what containers and scripts may reach, and the guards that keep development stacks from production. Read-only.
 tools: Read, Grep, Glob
+omitClaudeMd: true
 model: opus
 effort: high
 ---

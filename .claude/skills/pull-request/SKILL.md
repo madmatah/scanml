@@ -109,7 +109,8 @@ stopped carries a context that only grows.
 4. If an answer of its triage or of an expert reaches you rather than the review, the review handed back its report
    too soon: set that report aside, send the answer to the review with SendMessage, addressed to the agent ID that its
    invocation returned, or else to the name it runs under, such as `expert-review`, and act only on the report it hands
-   back next.
+   back next. When no agent of the review is left to receive it, which `ListAgents` shows, run the review again, once
+   at most: if the second run hands back too soon as well, tell the user what remains unreviewed.
 
 ## Push and open the pull request
 

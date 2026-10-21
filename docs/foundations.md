@@ -374,7 +374,8 @@ Every branch goes through `/expert-review` before its pull request. It is a proj
 
 - **It runs in its own subagent**, which never saw the code being written, so the review stays independent of the
   session that wrote the code, and that session keeps its context: the experts report to the review, which waits for
-  all of them.
+  all of them with short pauses, since a forked skill hands back as soon as its turn ends, whatever agents it still
+  runs.
 - **One expert per domain, in parallel.** Correctness reviews every diff, and conventions every diff that holds code or
   configuration. Architecture, tests, performance, security and documentation join when the diff touches their domain,
   and so do the project's own experts: isolation (the sandbox, the guards of the scripts, the Dockerfiles and

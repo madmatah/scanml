@@ -49,9 +49,8 @@ may be back in the main checkout between two calls, where a rebase or a commit w
 
 1. Check a visible change, as `CLAUDE.md` > Workflow, "Check a visible change" says: of the web UI in a browser, on the
    development stack; of the app in its screenshot tests, with `cd <worktree> && scripts/build-apk.sh
-   testDebugUnitTest`, then a look at the pictures under `android/app/build/outputs/roborazzi/`. Try a change to the
-   `ocr` service on the development stack with `cd <worktree> && scripts/verify-sandbox.sh`. For a change under `ocr/`,
-   also run the sandbox's tests with the engine's environment, as `CLAUDE.md` > Commands shows.
+   testDebugUnitTest`, then a look at the pictures under `android/app/build/outputs/roborazzi/`. Run the tests that the
+   gate skips and the change calls for, as the `running-tests` skill says.
 2. Run `/expert-review` on the branch, or `/expert-review <base>...HEAD` when it is stacked. While it reads the
    worktree, run nothing that moves the worktree between commits, such as `git rebase --exec`: the experts would read
    another revision than the one under review.

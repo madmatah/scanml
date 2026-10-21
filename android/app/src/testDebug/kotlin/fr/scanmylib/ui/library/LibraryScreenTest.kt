@@ -1,11 +1,17 @@
 package fr.scanmylib.ui.library
 
+import androidx.compose.material3.ColorScheme
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertWidthIsAtLeast
+import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createComposeRule
@@ -25,6 +31,7 @@ import fr.scanmylib.db.LibraryRow
 import fr.scanmylib.db.ServerDocumentState
 import fr.scanmylib.model.DocumentKind
 import fr.scanmylib.ui.components.MAX_TEXT_FROM_PC_GRAPHEMES
+import fr.scanmylib.ui.findMostFrequentColor
 import fr.scanmylib.ui.isPoliteLiveRegion
 import fr.scanmylib.ui.readHeadingsFromTheTop
 import fr.scanmylib.ui.theme.Contrast
@@ -124,6 +131,59 @@ class LibraryScreenTest {
             companion object {
                 private const val BOOK_PAGES_ON_THEIR_WAY = "3 on their way to the PC"
                 private const val PAMPHLET_PAGE_REJECTED = "1 rejected"
+
+                @JvmStatic
+                @ParameterizedRobolectricTestRunner.Parameters(name = "in the {0} theme")
+                fun themes(): List<Array<Any>> = THEMES_AND_CONTRASTS
+            }
+        }
+
+        @RunWith(ParameterizedRobolectricTestRunner::class)
+        @GraphicsMode(GraphicsMode.Mode.NATIVE)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenTheLibraryIsEmpty(
+            private val theme: String,
+            private val dark: Boolean,
+            private val contrast: Contrast,
+        ) {
+            @get:Rule
+            val compose = createComposeRule()
+
+            private lateinit var colors: ColorScheme
+            private var markColor by Delegates.notNull<Color>()
+
+            @Before
+            fun drawTheEmptyLibrary() {
+                compose.setContent {
+                    ScanMyLibTheme(dark = dark, contrast = contrast) {
+                        colors = MaterialTheme.colorScheme
+                        LibraryContentOf(LIBRARY.copy(documents = emptyList()))
+                    }
+                }
+                val screen = compose.onRoot().captureToImage()
+                screen.asAndroidBitmap().captureRoboImage("build/outputs/roborazzi/library-empty-$theme.png")
+                val sentenceBounds = compose.onNodeWithText(NO_DOCUMENTS_YET, substring = true)
+                    .fetchSemanticsNode()
+                    .boundsInRoot
+                val markSizePixels = with(compose.density) { MARK_SIZE.toPx() }
+                val rowsAboveTheSentence =
+                    (sentenceBounds.top - markSizePixels).toInt() until sentenceBounds.top.toInt()
+                markColor = findMostFrequentColor(screen.toPixelMap(), colors.background, rowsAboveTheSentence)
+            }
+
+            @Test
+            fun `should say that there are no documents yet`() {
+                compose.onNodeWithText(NO_DOCUMENTS_YET, substring = true).assertIsDisplayed()
+            }
+
+            @Test
+            fun `should show the brand mark above the no-documents sentence, in the theme's primary color`() {
+                assertEquals(colors.primary, markColor)
+            }
+
+            companion object {
+                private const val NO_DOCUMENTS_YET = "No documents yet."
+                private val MARK_SIZE = 72.dp
 
                 @JvmStatic
                 @ParameterizedRobolectricTestRunner.Parameters(name = "in the {0} theme")

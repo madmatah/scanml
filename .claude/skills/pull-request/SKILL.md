@@ -90,8 +90,10 @@ stopped carries a context that only grows.
 2. Run `/expert-review` on the branch, or `/expert-review <base>...HEAD` when it is stacked. While it reads the
    worktree, run nothing that moves the worktree between commits, such as `git rebase --exec`: the experts would read
    another revision than the one under review.
-3. Settle each finding as `CLAUDE.md` > Workflow, "Review before pushing" says, committing each fix as a `fixup!`
-   commit, as [Fold review fixes](#fold-review-fixes) shows. Before you fold them, review the fixes alone, against the
+3. Settle each finding as `CLAUDE.md` > Workflow, "Review before pushing" says. Give the findings to fix to a new
+   `fixer` agent, with its brief: the worktree and its base, the purpose of the branch, each verified finding, and the
+   commit each fix belongs to. It commits each fix as a `fixup!` commit, or as an `amend!` commit for a commit message,
+   as [Fold review fixes](#fold-review-fixes) shows. Before you fold them, review the fixes alone, against the
    findings they answer: write those findings, as the review reported them, with the Write tool, to a file in a
    directory that `mktemp -d` creates outside the worktree, and run
    `/expert-review <the commit before the first fix of the round>...HEAD --fixes <file>`. Remove the directory once the

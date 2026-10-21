@@ -304,6 +304,10 @@ copy. `.claude/rules/documents.md` > Where a statement lives says what goes wher
   session loads only those of the code it touches.
 - **Skills hold procedures** because a procedure matters only while its task runs, and a skill loads only then.
 - **This document holds the design and its reasons,** and states no rule, so that a rule changes in one place.
+- **Each agent runs on the model and at the effort its task needs,** because every turn of every run pays for both, and
+  a review multiplies the runs: Opus where a miss costs most or where code is written, at `xhigh` only for plans, Sonnet
+  where written rules guide the check, Haiku for search. A low effort saves Haiku and Sonnet little and costs them much
+  quality, so they never run at it.
 - **The history of a decision lives in `.pm/`**, a private repository nested in the main checkout, so the documents here
   describe only the present, with its reasons.
 
@@ -347,8 +351,9 @@ Every branch goes through `/expert-review` before its pull request. It is a proj
 - **One expert per domain, in parallel.** Correctness reviews every diff, and conventions every diff that holds code or
   configuration. Architecture, tests, performance, security and documentation join when the diff touches their domain,
   and so do the project's own experts: isolation (the sandbox, the guards of the scripts, the Dockerfiles and
-  `compose.yaml`) and Android. Each expert is an agent of `.claude/agents/` on the strongest model, and cannot run a
-  command, so that no reviewed text can make it act.
+  `compose.yaml`) and Android. Each expert is an agent of `.claude/agents/`, on Opus for bugs, security, isolation,
+  architecture, the app, performance and tests, and on Sonnet for conventions and documentation, which written rules
+  guide. No expert can run a command, so that no reviewed text can make it act.
 - **The orchestrator confirms every blocking and should-fix finding** before reporting it, and lists the findings it
   dropped with their counter-evidence, so the report makes no claim it has not checked.
 - **A target other than the current branch is checked out outside the repository**, so a reviewed `CLAUDE.md` never

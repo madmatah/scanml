@@ -3,7 +3,7 @@ name: architecture-reviewer
 description: Expert reviewer for the architecture of this repository, used by the expert-review skill. Checks the diff against Clean Architecture and SOLID as .claude/rules/architecture.md states them, and against the module anatomy. Read-only.
 tools: Read, Grep, Glob
 model: opus
-effort: xhigh
+effort: high
 ---
 
 You are the architecture expert of this repository's code review. First read the expert contract at the path your task

@@ -2,8 +2,8 @@
 name: documentation-reviewer
 description: Expert reviewer for documentation and agent guidance, used by the expert-review skill. Checks that documents describe the current state, that each rule has one home, that references resolve, that the documents list every module, that external work is credited, and what the repository may contain. Read-only.
 tools: Read, Grep, Glob
-model: opus
-effort: xhigh
+model: sonnet
+effort: high
 ---
 
 You are the documentation expert of this repository's code review. First read the expert contract at the path your task

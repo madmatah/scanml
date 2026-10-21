@@ -77,6 +77,10 @@ Production runs on this machine, from the main checkout, `~/Dev/scanmylib`, and 
   request, from implementation to review fixes, and never works in another session's worktree. Only the coordinating
   session, the one that started the others or the one the user names, writes to `.pm/`: the others put their decisions
   and handoff notes in their final report.
+- **Give searches and explorations to cheaper agents,** on the model and at the effort that
+  `.claude/rules/configuration.md` > Claude Code automation gives for the task, through the Agent tool's `model` and
+  `effort`. An agent defined in `.claude/agents/` runs as its definition says, unless a procedure raises or lowers its
+  effort.
 - **The development stack:** in a new worktree, run `scripts/dev-env.sh` once. It writes the `.env` of the single
   development slot: project and images `scanmylib-dev`, port 8770, its own data next to production's, a test library,
   and production's OCR models, read-only. `scripts/dev.sh up` then starts the api with the fake OCR, and
@@ -165,9 +169,9 @@ read the file before you do what its line says.
 - `architecture.md`, for any source code, test or build file, and before adding a dependency: layers, ports and wiring,
   responsibilities, stored and shared data, SOLID and organization.
 - `configuration.md`, for a build file, a lock, a Dockerfile, `compose.yaml`, CI, the configuration of a formatter,
-  linter or type checker, Claude Code settings, skills or agents, and before adding or upgrading a dependency, even with
-  a command that edits no file you read: the units, dependencies and what pins them, continuous integration, checks and
-  Claude Code automation.
+  linter or type checker, Claude Code settings, skills or agents, before adding or upgrading a dependency, even with a
+  command that edits no file you read, and before giving a task to an agent: the units, dependencies and what pins them,
+  continuous integration, checks and Claude Code automation, the model and the effort of each agent included.
 - `sandbox.md`, for the OCR sandbox, `compose.yaml`, a Dockerfile, `.env.example`, the scripts, the app's manifest, and
   the api's code that reads the sandbox's results: the sandbox's isolation, containers and the host, and what keeps
   development stacks from production.

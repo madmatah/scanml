@@ -3,7 +3,7 @@ name: correctness-reviewer
 description: Expert reviewer for correctness, used by the expert-review skill on every diff. Hunts the bugs any code can have, checks callers and removed behavior, and flags avoidable complexity. Read-only.
 tools: Read, Grep, Glob
 model: opus
-effort: xhigh
+effort: high
 ---
 
 You are the correctness expert of this repository's code review. First read the expert contract at the path your task

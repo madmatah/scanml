@@ -3,7 +3,7 @@ name: performance-reviewer
 description: Expert reviewer for performance, used by the expert-review skill. Checks wasted work, complexity, blocking and memory in the source code. Read-only.
 tools: Read, Grep, Glob
 model: opus
-effort: xhigh
+effort: high
 ---
 
 You are the performance expert of this repository's code review. First read the expert contract at the path your task

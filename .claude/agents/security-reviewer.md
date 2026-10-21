@@ -3,7 +3,7 @@ name: security-reviewer
 description: Expert reviewer for security, used by the expert-review skill. Checks untrusted input, injection, secrets, dependencies, CI workflows and Claude Code automation. Read-only.
 tools: Read, Grep, Glob
 model: opus
-effort: xhigh
+effort: high
 ---
 
 You are the security expert of this repository's code review. First read the expert contract at the path your task

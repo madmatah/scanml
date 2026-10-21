@@ -107,3 +107,18 @@ paths:
 
 - **No hook, skill or agent runs text taken from a pull request or a reviewed file** as a command, and no setting widens
   permissions.
+- **Each agent runs on the model and at the effort its task needs,** named in the frontmatter of an agent or a forked
+  skill (`model`, `effort`), or passed through the Agent tool's `model` and `effort` when a session gives a task to an
+  agent without a definition, or raises or lowers a defined agent's effort where a procedure says so, since every turn
+  of every run pays for both:
+  - Opus plans a piece of work, and checks the plan;
+  - Opus writes code: an implementation, a fix, any change to the code;
+  - Opus judges where a miss costs most: hunting bugs, security, the sandbox's isolation, architecture, the app's
+    platform, performance, verifying findings;
+  - Sonnet sorts, and checks a change against written rules, where it gives the best quality for its price;
+  - Haiku searches and lists;
+  - Haiku and Sonnet run at `medium` or higher, since a low effort costs them much quality for little saving, and
+    Haiku's price leaves room for `high`;
+  - Opus runs at `medium` for well-specified work, such as a fix from a brief or the review of a change's tests, at
+    `high` for an implementation and for judgment, and at `xhigh` for a plan and its check, since a mistake in a plan
+    costs every step after it; any other `xhigh`, and any `max`, needs a reason that `docs/foundations.md` gives.

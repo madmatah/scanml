@@ -2,8 +2,8 @@
 name: conventions-reviewer
 description: Expert reviewer for the written conventions of this repository, used by the expert-review skill on every diff. Checks naming, comments and language in code and configuration. Read-only.
 tools: Read, Grep, Glob
-model: opus
-effort: xhigh
+model: sonnet
+effort: high
 ---
 
 You are the conventions expert of this repository's code review. First read the expert contract at the path your task

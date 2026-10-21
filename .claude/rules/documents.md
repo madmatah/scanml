@@ -66,9 +66,10 @@ Each statement has one home, so that it never drifts from a copy.
 
 ## Expert reviewers
 
-- **An expert reviewer is an agent in `.claude/agents/`** whose name ends in `-reviewer`. It runs on the strongest model
-  at extra-high effort (`model: opus`, `effort: xhigh`), with only the Read, Grep and Glob tools, and it opens by
-  following the expert contract (`.claude/skills/expert-review/expert-contract.md`) at the path its task gives.
+- **An expert reviewer is an agent in `.claude/agents/`** whose name ends in `-reviewer`. It runs with only the Read,
+  Grep and Glob tools, on the model and at the effort that `.claude/rules/configuration.md` > Claude Code automation
+  gives its domain, and it opens by following the expert contract (`.claude/skills/expert-review/expert-contract.md`) at
+  the path its task gives.
 - **It declares its scope,** derived from the `paths` of its rules files or naming the files itself, and the one line it
   replies when a diff falls outside.
 - **Its "Read first" list is one hop:** the rules files of its domain, by path, and named headings of `CLAUDE.md`. It

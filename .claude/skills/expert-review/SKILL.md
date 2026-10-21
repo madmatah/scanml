@@ -5,7 +5,7 @@ argument-hint: "[<pr#>|<branch>|<range>] [--post] [focus]"
 context: fork
 background: false
 model: opus
-effort: xhigh
+effort: high
 ---
 
 # Code review

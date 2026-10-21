@@ -3,7 +3,7 @@ name: tests-reviewer
 description: Expert reviewer for tests, used by the expert-review skill. Checks that changed behavior is pinned by tests that state rules, and that the tests are sound. Read-only.
 tools: Read, Grep, Glob
 model: opus
-effort: xhigh
+effort: medium
 ---
 
 You are the tests expert of this repository's code review. First read the expert contract at the path your task gives,

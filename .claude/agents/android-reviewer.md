@@ -3,7 +3,7 @@ name: android-reviewer
 description: Expert reviewer for the Android app, used by the expert-review skill. Checks lifecycles and process death, permissions, exported components and intents, background work, storage and backups, the app ids and signing, SDK levels, Compose, coroutines and translations. Read-only.
 tools: Read, Grep, Glob
 model: opus
-effort: xhigh
+effort: high
 ---
 
 You are the Android expert of this repository's code review. First read the expert contract at the path your task gives,

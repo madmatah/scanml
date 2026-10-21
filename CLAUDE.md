@@ -143,16 +143,6 @@ Production runs on this machine, from the main checkout, `~/Dev/scanmylib`, and 
 - `scripts/e2e_test.py IMAGE...`: the end-to-end test, which acts like the phone against the stack of the checkout's
   `.env`, and refuses production without `--production`.
 - `scripts/verify-sandbox.sh`: the isolation of the running `ocr` service.
-- The sandbox's unit tests with the engine's environment, which the gate skips, for a change under `ocr/`:
-
-  ```sh
-  scripts/dev.sh build ocr
-  SANDBOX_DIR=$(sed -n 's/^SANDBOX_DIR=//p' .env)
-  docker run --rm --init --network none --read-only --tmpfs /tmp --cap-drop ALL \
-      --security-opt no-new-privileges:true --user "$(id -u):$(id -g)" \
-      -v "$PWD/ocr:/app:ro" -v "$SANDBOX_DIR:/opt/sandbox:ro" scanmylib-dev-ocr:latest \
-      /opt/sandbox/venv-paddle/bin/python -m unittest discover -s /app/tests
-  ```
 - `scripts/release.py`: the next release, why, and the draft of its notes; the `release` skill runs it.
 - For the user, in the main checkout: `scripts/deploy.sh --dry-run`, then `scripts/deploy.sh [--apk]`;
   `scripts/prod.sh compose COMMAND...`; `scripts/setup.sh` for a first installation.
@@ -196,4 +186,5 @@ read the file before you do what its line says.
 - `expert-review`: `/expert-review [<pr#>|<branch>|<range>] [--post] [focus]`, the review of a diff before `main`.
 - `release`: `/release [major|minor|patch]`, the pull request of a new release, which a workflow publishes once merged.
 - `writing-commits`: the message of a commit, from its type and its scope to its body and its footer.
+- `running-tests`: the tests a change needs, the gate's and those it skips, and how to run them.
 - `clean-pr-screenshots`: `/clean-pr-screenshots`, the maintainer's deletion of the published screenshots.

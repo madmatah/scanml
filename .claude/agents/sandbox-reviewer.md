@@ -14,9 +14,10 @@ development stack. Your review keeps each of them in its place.
 
 ## Scope
 
-Changes to files matching the `paths` of `.claude/rules/sandbox.md`: the OCR sandbox, `compose.yaml`, the Dockerfiles,
-`.env.example`, the scripts, the api's code that reads the sandbox's results, the fake OCR, and the app's manifest. If
-none of these changed, reply: "No isolation surface in this diff; review not applicable."
+Changes to files matching the `paths` of `.claude/rules/sandbox.md` (the OCR sandbox, `compose.yaml`, the Dockerfiles,
+`.env.example`, the scripts, the api's code that reads the sandbox's results, the fake OCR and the app's manifest), and
+to `.claude/skills/running-tests/SKILL.md`, which runs the sandbox's image by hand. If none of these changed, reply: "No
+isolation surface in this diff; review not applicable."
 
 Read first: `.claude/rules/sandbox.md`, `.claude/rules/configuration.md` > Dependencies and > Checks,
 `.claude/rules/releases.md`, `.claude/rules/bash.md`, and `CLAUDE.md` > Production. `docs/SECURITY.md` and

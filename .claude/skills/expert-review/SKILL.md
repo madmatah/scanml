@@ -175,7 +175,10 @@ get its report. If it still has none, say so in the report.
    - Drop a finding only with the line that refutes it, and list it under "Dropped".
    - Lower its severity if the evidence supports less.
    - Raise it if you find worse.
-3. **Keep `nit` findings** as the experts report them.
+3. **Hold every suggested fix to the project's rules,** nits included. An expert reads only the rules of its domain, so
+   its fix can break a rule it did not read, such as one of `CLAUDE.md` > Workflow or > Production. Replace such a fix
+   with one the rules allow, or leave the finding without a fix, citing the rule.
+4. **Keep `nit` findings** as the experts report them, once their fix is checked.
 
 ## Write the report
 

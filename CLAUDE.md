@@ -123,8 +123,7 @@ Production runs on this machine, from the main checkout, `~/Dev/scanmylib`, and 
 - **Review before pushing:** run `/expert-review` on the branch, and fix each finding in the commit it belongs to, or
   answer it in the pull request; then review the fixes once more, alone, with the experts of their domains: a round
   that leaves only nits ends the review, and the pull request names the fixes no expert reviewed. The review changes no
-  code. If it returns before all its experts have reported, finish it as `.claude/skills/expert-review/SKILL.md` >
-  Verify and > Write the report say: with reads only, the paths of its message alone, removing only what it allows.
+  code.
 - **Releases** are pull requests of their own, which the `release` skill prepares (`.claude/rules/releases.md`).
 - **A branch reaches `main` only through a pull request whose CI passes.** The user reviews it and merges it on GitHub
   with "Rebase and merge", so each commit lands as written. Never merge into `main` yourself.

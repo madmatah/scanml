@@ -57,7 +57,7 @@ skill names, with no value but the ones checked here, and read and search with t
    Remove this worktree when the review ends, whether it succeeds or not.
 2. **Write the scope file.** Several reviews can run from one checkout at the same time, so each one has its own
    directory: create `<dir>` with `mktemp -d "$(git rev-parse --absolute-git-dir)/expert-review.XXXXXX"`, and use the
-   path it prints. Remove it when the review ends, whether it succeeds or not. A review that returns early leaves its
+   path it prints. Remove it when the review ends, whether it succeeds or not. A review that is interrupted leaves its
    directory behind, so first remove the ones more than a day old:
    `find "$(git rev-parse --absolute-git-dir)" -mindepth 1 -maxdepth 1 -name 'expert-review.*' -mmin +1440 -exec rm -rf {} +`.
    Write `<dir>/scope.diff` from:
@@ -130,18 +130,10 @@ name. Each prompt holds:
 - what is under review: the branch, the commit range, or the pull request's number;
 - the user's focus, word for word, if there is one.
 
-**Wait for every expert's report before going on.** Each report arrives as a message; no tool call waits for it. While
-the experts run, prepare the verification: read the changed files and what they depend on. Write the report only once
-every picked expert has reported or replied "not applicable". If nothing is left to prepare, end your message with the
-list of experts you are waiting for, the paths of `<dir>` and of the temporary checkout, if there is one, and this
-instruction for the session that receives their reports: verify and report them as
-`.claude/skills/expert-review/SKILL.md` > Verify and > Write the report say, then remove `<dir>` and the checkout as the
-end of > Run the experts allows. The experts' reports reach that session as messages, and the review goes on when they
-do. A session that finishes the review in your place removes `<dir>` only if it is exactly
-`$(git rev-parse --absolute-git-dir)/expert-review.` followed by six letters or digits, nothing else, and the checkout
-only if it appears as it is in `git worktree list --porcelain`, lies outside the repository, and is exactly
-`${TMPDIR:-/tmp}/tmp.` followed by ten letters or digits, the shape `mktemp -d` gives it, with `git worktree remove` and
-no `--force`, which refuses anything that is not a clean worktree of this repository. It refuses any other path.
+**Wait for every expert's report before going on.** Each report arrives as a message; no tool call waits for it.
+Ending a turn while they run does not end the review: Claude Code keeps it running, and the review ends only when you
+hand back its report. Do not read the code while they run: [Verify](#verify) reads only what each finding cites. Write
+the report only once every picked expert has reported or replied "not applicable".
 
 An expert that replies "not applicable" is done. If an expert's output comes back marked as partial, resume it once to
 get its report. If it still has none, say so in the report.
@@ -182,7 +174,7 @@ file, or for an uncommitted file its status (staged, unstaged or untracked), and
 2. Scan it with the patterns of [Gather and scope](#gather-and-scope). If anything matches, do not post, and say why.
 3. Otherwise, post it with `gh pr review <number> --comment --body-file <dir>/review.md`.
 
-Then delete `<dir>`, and remove the temporary worktree.
+Then, before you hand back the report, delete `<dir>` and remove the temporary worktree: handing it back ends your run.
 
 The report ends the review. Do not offer to fix the findings, and do not ask whether to go on: the user decides what
 happens next, and the review changes no code.

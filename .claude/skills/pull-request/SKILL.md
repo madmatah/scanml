@@ -58,9 +58,10 @@ may be back in the main checkout between two calls, where a rebase or a commit w
    commit, as [Fold review fixes](#fold-review-fixes) shows. Before you fold them, review the fixes alone:
    `/expert-review <the commit before the first fix>...HEAD`, which picks the experts of the domains they touch. Then
    fold them.
-4. If an expert's answer reaches you rather than the review, the review handed back its report too soon: set that
-   report aside, send the answer to the review with SendMessage, addressed to the name it runs under, such as
-   `expert-review`, and act only on the report it hands back next.
+4. If an answer of its triage or of an expert reaches you rather than the review, the review handed back its report
+   too soon: set that report aside, send the answer to the review with SendMessage, addressed to the agent ID that its
+   invocation returned, or else to the name it runs under, such as `expert-review`, and act only on the report it hands
+   back next.
 
 ## Push and open the pull request
 

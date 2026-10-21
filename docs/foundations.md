@@ -358,6 +358,11 @@ Every branch goes through `/expert-review` before its pull request. It is a proj
   `compose.yaml`) and Android. Each expert is an agent of `.claude/agents/`, on Opus for bugs, security, isolation,
   architecture, the app, performance and tests, and on Sonnet for conventions and documentation, which written rules
   guide. No expert can run a command, so that no reviewed text can make it act.
+- **A triage on Sonnet weighs the experts that the paths pick,** by what the diff holds, before any of them runs: an
+  expert pays a full reading of its rules, the diff and the code even when it has nothing to say, and the triage costs a
+  fraction of that. It keeps an expert when unsure, and never drops correctness, nor security and isolation on their
+  paths, nor narrows what they read, since a missed expert costs more than a needless one, and a triage that reads the
+  diff can be steered by it.
 - **The orchestrator confirms every blocking and should-fix finding** before reporting it, and lists the findings it
   dropped with their counter-evidence, so the report makes no claim it has not checked.
 - **A target other than the current branch is checked out outside the repository**, so a reviewed `CLAUDE.md` never

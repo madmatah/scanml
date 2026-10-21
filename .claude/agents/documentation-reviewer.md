@@ -46,7 +46,8 @@ review: read what a check needs of them.
   - a skill or an agent whose instructions no longer match the repository;
   - a skill whose `description` lists its steps, is not in the third person, or does not say what the skill is for and
     when to use it;
-  - `CLAUDE.md` over 200 lines.
+  - a change that takes `CLAUDE.md` over the size that `.claude/rules/documents.md` > Where a statement lives, "Session
+    conduct" gives.
 - **References** (`.claude/rules/documents.md` > References), in every changed file, the messages of the tools included:
   - a section, rule or step number used as a reference;
   - a cited file or heading that does not exist;

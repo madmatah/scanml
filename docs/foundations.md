@@ -363,6 +363,11 @@ Every branch goes through `/expert-review` before its pull request. It is a proj
   fraction of that. It keeps an expert when unsure, and never drops correctness, nor security and isolation on their
   paths, nor narrows what they read, since a missed expert costs more than a needless one, and a triage that reads the
   diff can be steered by it.
+- **A round of fixes is reviewed against the findings it answers,** by their experts, by correctness, and by the
+  experts whose concerns the fixes newly touch, such as tests for a new test, rather than by every expert whose paths
+  they touch: a fix of three files can touch the paths of every domain, and only the experts it concerns have something
+  to check. Security and isolation still review every fix of their paths, since a fix can weaken a guard as well as add
+  one.
 - **The orchestrator confirms every blocking and should-fix finding** before reporting it, and lists the findings it
   dropped with their counter-evidence, so the report makes no claim it has not checked.
 - **A target other than the current branch is checked out outside the repository**, so a reviewed `CLAUDE.md` never

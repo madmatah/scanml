@@ -185,7 +185,8 @@ read the file before you do what its line says.
 ## Skills
 
 - `pull-request`: from a new branch to a merged pull request, and reviewing someone else's.
-- `expert-review`: `/expert-review [<pr#>|<branch>|<range>] [--post] [focus]`, the review of a diff before `main`.
+- `expert-review`: `/expert-review [<pr#>|<branch>|<range>] [--fixes <file>] [--post] [focus]`, the review of a diff
+  before `main`.
 - `release`: `/release [major|minor|patch]`, the pull request of a new release, which a workflow publishes once merged.
 - `writing-commits`: the message of a commit, from its type and its scope to its body and its footer.
 - `running-tests`: the tests a change needs, the gate's and those it skips, and how to run them.

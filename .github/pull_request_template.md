@@ -33,7 +33,7 @@
 
 - [ ] Each commit passes `scripts/check.sh --last-commit`, and the last one `scripts/check.sh`, every area.
 - [ ] A visible change of the web UI was checked in a browser, one of the app in its screenshot tests, and a change to the `ocr` service passes `scripts/verify-sandbox.sh` on the development stack.
-- [ ] `/expert-review` ran on the completed branch, every finding is fixed or answered here, and the review section says what was not reviewed.
+- [ ] `/expert-review` ran on the completed branch and on each round of its fixes, or this pull request names the fixes no expert reviewed; every finding is fixed or answered here, and the review section says what was not reviewed.
 
 ### History
 

@@ -394,6 +394,10 @@ Every branch goes through `/expert-review` before its pull request. It is a proj
 - **The orchestrator confirms every blocking and should-fix finding** before reporting it, and lists the findings it
   dropped with their counter-evidence, so the report makes no claim it has not checked. It also holds every suggested
   fix to the project's rules, since an expert reads only those of its domain.
+- **Rounds of fixes converge, or the user decides.** A fix can bring the bug that the next round finds, so each round
+  of fixes is reviewed. A defect that a fix brought into the code it fixed says the method is wrong: a test of the whole
+  input space, or a simpler design, ends the chase sooner than more rounds. Past a few rounds, the user weighs what
+  remains against what the rounds cost.
 - **A new agent fixes each round,** from a brief: an agent resumed round after round re-reads its whole, growing
   context on every turn, which costs more than the review it answers.
 - **The report says what the review cost,** agent by agent, so that the cost of the rounds shows while it builds up,

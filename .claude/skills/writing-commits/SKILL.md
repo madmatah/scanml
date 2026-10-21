@@ -61,6 +61,9 @@ Take the scope as `CLAUDE.md` > Workflow, "A commit scope names where the change
 - **A new unit** takes its own name, and a new module of a unit the unit's.
 - **A rule changed together with the skills, agents and documents that follow it** takes `rules`: the rule owns the
   decision.
+- **A release's own commit,** `chore(release): X.Y.Z`, takes `release`, the name of the skill that prepares it, though
+  it changes `VERSION` and `CHANGELOG.md`: `scripts/release.py --commit` writes it whole, as
+  `.claude/rules/releases.md`, "Pull requests never change `VERSION`" says.
 
 ## Write the subject
 

@@ -99,12 +99,11 @@ Production runs on this machine, from the main checkout, `~/Dev/scanmylib`, and 
   `server` for the api, `web` for the web UI, `android` for the app, `ocr` for the OCR sandbox, and `scripts`; or else
   the area: `build` for the build, the packaging and the tools' configuration, `ci` for the workflows, `docs` for
   `README.md`, `CREDITS.md` and a document of `docs/` that belongs to no single unit, `rules` for `CLAUDE.md` and
-  `.claude/rules/`, a skill's name for that skill and the agents it runs (`release` also scopes a release's own commit,
-  `chore(release): X.Y.Z`, which `scripts/release.py --commit` writes whole), and `project` for the repository's own
-  files, such as the license, `.gitignore`, `.claude/settings.json` or the pull request template. A scope is in
-  lowercase, and never a file name, a path or two scopes. The documents that a change must update go in its commit,
-  under its scope. A change that spans two units is usually two commits, and one that cannot be split takes the scope of
-  the unit or the area that owns the decision.
+  `.claude/rules/`, a skill's name for that skill and the agents it runs, and `project` for the repository's own files,
+  such as the license, `.gitignore`, `.claude/settings.json` or the pull request template. A scope is in lowercase, and
+  never a file name, a path or two scopes. The documents that a change must update go in its commit, under its scope. A
+  change that spans two units is usually two commits, and one that cannot be split takes the scope of the unit or the
+  area that owns the decision.
 - **A commit message says why.** The subject says what the change achieves, in the reader's terms, and not the files it
   touches, which the diff lists: in the imperative, in lowercase, acronyms and product names included, with a symbol
   keeping its own casing, without a final period, in a header of around 70 characters, so that it reads whole in a log.

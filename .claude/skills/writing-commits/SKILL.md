@@ -14,9 +14,8 @@ below its first line follows it all, since it replaces the message of its commit
 leaves a choice, the sections below say how to make it. Write from the rules, not from `git log`, whose older messages
 may predate them.
 
-The examples below come from an imagined shop, whose modules are `billing`, `importer`, `calendar`, `catalog` and
-`checkout`, so that none of them reads as a fact about this repository; its own scopes are those of "A commit scope
-names where the change belongs".
+The examples below use this repository's own scopes, those of "A commit scope names where the change belongs", so that
+none shows a scope the rule refuses. The changes they tell are invented: none of them is a fact about this repository.
 
 ## Draw the commits
 
@@ -77,19 +76,19 @@ the mechanism and the files. What does not fit goes in the body. A revert gets a
 💩 The mechanism, or nothing at all:
 
 ```
-fix(billing): fix payment bug
-fix(billing): add a retry around chargeCard
-feat(billing): update invoice.ts and charge.ts
-fix(billing): Fixed the timeout error.
+fix(android): fix upload bug
+fix(android): add a retry around uploadPage
+feat(server): update library.py and pages.py
+fix(android): Fixed the timeout error.
 ```
 
 ❤ The intent:
 
 ```
-fix(billing): never charge a card twice when the provider times out
-fix(importer): say which row broke instead of rejecting the whole file
-feat(calendar): read recurring events that end on a date
-refactor(catalog): compute a price in one place instead of three
+fix(android): never upload a page twice when the PC times out
+fix(server): say which page broke instead of refusing the whole upload
+feat(web): show the pages of a document in their reading order
+refactor(ocr): read the engine's results in one place instead of three
 ```
 
 ## Write the body
@@ -111,25 +110,25 @@ Then reread the body: a sentence that the diff could have told is one to cut. An
 repository: an observation about a document or a machine is told with placeholders, as
 [Check the message](#check-the-message) checks.
 
-Under `fix(billing): never charge a card twice when the provider times out`:
+Under `fix(android): never upload a page twice when the PC times out`:
 
 💩 The diff, told again:
 
 ```
-Add an idempotency key to chargeCard and retry on timeout. Update the
-billing tests accordingly.
+Add an idempotency key to uploadPage and retry on timeout. Update the
+upload tests accordingly.
 ```
 
 ❤ The context that led there:
 
 ```
-Under load, the payment provider accepts a charge and times out before
-it replies. The client took the timeout for a refusal and charged again
-on its next attempt, so a customer could pay twice for one order.
+Under load, the PC accepts a page and times out before it replies. The
+app took the timeout for a refusal and sent the page again on its next
+attempt, so a document could hold the same page twice.
 
-An idempotency key sent with each charge lets the provider recognize
-the retry and return the first result. A longer timeout would only have
-made the double charge rarer, never impossible.
+An idempotency key sent with each page lets the api recognize the retry
+and return the first result. A longer timeout would only have made the
+duplicate rarer, never impossible.
 ```
 
 ## Add the footer
@@ -138,14 +137,16 @@ Write it as `CLAUDE.md` > Workflow, "A commit footer holds only what tools read"
 change only when its users will meet it, an issue only when this commit closes it.
 
 ```
-feat(checkout)!: return amounts as integer cents
+feat(server)!: give the size of a page in bytes, as an integer
 
-Clients rounded the decimal strings each in their own way, so two
-screens could show different totals for the same order. An integer
-number of cents leaves no rounding to the client.
+Clients rounded the decimal string of `size`, in megabytes, each in
+their own way, so the app and the web UI could show different sizes
+for the same page. An integer number of bytes leaves no rounding to
+the client.
 
-BREAKING CHANGE: `amount` is an integer number of cents, no longer a
-decimal string. Divide it by 100 to show it.
+BREAKING CHANGE: `size`, a decimal string of megabytes, is replaced by
+`size_bytes`, an integer number of bytes. Divide it by 1,000,000 to
+show megabytes.
 Closes #42
 ```
 

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <color name="ic_launcher_background">#006A60</color>
+    <color name="ic_launcher_background">#FBF8F1</color>
     <!-- Orange, so that the development app stands apart from the production one. Only the dev
          icon uses it, which lint, checking the debug variant, sees as unused. -->
     <color name="ic_launcher_dev_background" tools:ignore="UnusedResources">#A84300</color>

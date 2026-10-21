@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Themed icons drop the background, the one color that tells the development app from the
+     production one: a "dev" tag takes the place of the lower-right corner, which would merge with it
+     in the alpha mask. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:pathData="M33 43V33h10 M65 33h10v10 M43 75H33V65"
+        android:strokeWidth="4.5"
+        android:strokeColor="#FFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M52.5 47.5C48 45 43 44.5 39.5 45.5v19C43 63.5 48 64 52.5 66.5Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M55.5 47.5C60 45 65 44.5 68.5 45.5v19C65 63.5 60 64 55.5 66.5Z" />
+    <group android:name="tag">
+        <path
+            android:pathData="M56.75 69.25h12.5a5.75 5.75 0 0 1 0 11.5h-12.5a5.75 5.75 0 0 1 0 -11.5Z"
+            android:strokeWidth="1.5"
+            android:strokeColor="#FFFFFF" />
+        <path
+            android:pathData="M58.2 76.15a2.1 2.1 0 1 1 -4.2 0a2.1 2.1 0 1 1 4.2 0 M58.2 71.75V78.25 M60.9 76.15h4.2a2.1 2.1 0 1 0 -0.62 1.48 M67.8 74.05l2.1 4.2l2.1 -4.2"
+            android:strokeWidth="1.5"
+            android:strokeColor="#FFFFFF"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+    </group>
+</vector>

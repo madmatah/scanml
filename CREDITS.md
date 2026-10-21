@@ -82,12 +82,12 @@ own dependencies against `android/gradle/verification-metadata.xml`.
 | OkHttp | The client of the PC | Apache-2.0 | https://github.com/square/okhttp |
 | Google Play services: ML Kit document scanner, code scanner | Google's document scanner, and the QR code reader of pairing | Google's terms: https://developers.google.com/ml-kit/terms | https://developers.google.com/ml-kit |
 
-The app's icons, the vector drawables of `android/app/src/main/res/drawable/`, are Google's Material Symbols (Outlined,
-24 px) and, for a few older ones, Material Icons, from https://github.com/google/material-design-icons (the symbols from
+The app's icons, the vector drawables of `android/app/src/main/res/drawable/` apart from the launcher's layers
+(`ic_launcher_*.xml`), are Google's Material Symbols (Outlined, 24 px) and, for a few older ones, Material Icons, from
+https://github.com/google/material-design-icons (the symbols from
 `symbols/web/<name>/materialsymbolsoutlined/<name>_24px.svg`), under the Apache License 2.0
 (https://www.apache.org/licenses/LICENSE-2.0). Each drawable is the icon converted from SVG to an Android vector
-drawable, and names its icon and its license in a comment; the launcher's foreground (`ic_launcher_foreground.xml`) is
-the "document_scanner" symbol, scaled and centered in the adaptive icon.
+drawable, and names its icon and its license in a comment. The launcher's layers are the project's own drawing.
 
 ## The OCR engine
 

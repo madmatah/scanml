@@ -192,6 +192,7 @@ Write one report, in one voice: calm, plain, no preamble, no flattery. Its parts
 5. **Dropped**: the findings you refuted, each with its counter-evidence in one line.
 6. **Not reviewed**: what the scope left out, such as an expert with no report, and each expert the triage left out,
    with its reason.
+7. **Cost**: each agent that ran, the triage included, with the tokens its completion notice gives, and their total.
 
 In the terminal, paths are absolute. In a posted report, they are relative to the repository root.
 

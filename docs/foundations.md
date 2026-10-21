@@ -369,7 +369,8 @@ Every branch goes through `/expert-review` before its pull request. It is a proj
   to check. Security and isolation still review every fix of their paths, since a fix can weaken a guard as well as add
   one.
 - **The orchestrator confirms every blocking and should-fix finding** before reporting it, and lists the findings it
-  dropped with their counter-evidence, so the report makes no claim it has not checked.
+  dropped with their counter-evidence, so the report makes no claim it has not checked. It also holds every suggested
+  fix to the project's rules, since an expert reads only those of its domain.
 - **The report says what the review cost,** agent by agent, so that the cost of the rounds shows while it builds up,
   and the decision to go on weighs it.
 - **A target other than the current branch is checked out outside the repository**, so a reviewed `CLAUDE.md` never

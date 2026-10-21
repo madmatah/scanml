@@ -8,9 +8,11 @@ description: Writes the commit messages of ScanMyLib, so that each one says what
 `CLAUDE.md` > Workflow states the rules of a commit: "Commits", "A commit scope names where the change belongs", "A
 commit message says why" and "A commit footer holds only what tools read". This skill applies them to each commit that
 will be pushed, whether you write it at once or while you rewrite the branch before pushing. A work-in-progress commit
-or a `fixup!` commit needs none of it, since the rewrite replaces it, and neither does a release's own commit,
-`chore(release): X.Y.Z`, which `scripts/release.py --commit` writes whole. Where a rule leaves a choice, the sections
-below say how to make it. Write from the rules, not from `git log`, whose older messages may predate them.
+or a `fixup!` commit needs none of it, since the rewrite replaces it, but the message that an `amend!` commit carries
+below its first line follows it all, since it replaces the message of its commit. A release's own commit,
+`chore(release): X.Y.Z`, needs none of it either, since `scripts/release.py --commit` writes it whole. Where a rule
+leaves a choice, the sections below say how to make it. Write from the rules, not from `git log`, whose older messages
+may predate them.
 
 The examples below come from an imagined shop, whose modules are `billing`, `importer`, `calendar`, `catalog` and
 `checkout`, so that none of them reads as a fact about this repository; its own scopes are those of "A commit scope

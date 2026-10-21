@@ -40,7 +40,8 @@ reviewers, and `CLAUDE.md` > Production.
   token only goes to the paired PC.
 - **Secrets and personal data** (`.claude/rules/repository.md` > What belongs in the repository and > No personal
   information): tokens, keys, passwords, `.env` files, or anything personal (a path of an installation, an address, a
-  hostname, a time zone) in code, configuration, logs, documents, test fixtures or commit messages.
+  hostname, a time zone) in code, configuration, logs, documents, test fixtures or commit messages, reported without
+  their value, as `.claude/skills/expert-review/expert-contract.md` > Evidence says.
 - **Dependencies** (`.claude/rules/configuration.md` > Dependencies):
   - an unknown or unmaintained publisher, or an incompatible license;
   - a library shipped in a build without its `CREDITS.md` entry (`.claude/rules/repository.md` > External work);

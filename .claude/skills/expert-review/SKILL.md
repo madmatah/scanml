@@ -199,10 +199,8 @@ Write one report, in one voice: calm, plain, no preamble, no flattery. Its parts
 
 In the terminal, paths are absolute. In a posted report, they are relative to the repository root.
 
-A finding about a secret, a real document name or personal information names where it is and its kind, never the value:
-its file and line, or, when the value is in a commit message, the commit's short hash. When the value is in a file's
-name or path, the report never names that file, in any finding: it gives the short hash of the commit that adds the
-file, or for an uncommitted file its status (staged, unstaged or untracked), and the kind of file.
+A finding about a secret, a real document name or personal information is reported as
+`.claude/skills/expert-review/expert-contract.md` > Evidence says, without its value.
 
 **With `--post`**, and only for a pull request target:
 

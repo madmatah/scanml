@@ -89,7 +89,9 @@ stopped carries a context that only grows.
    gate skips and the change calls for, as the `running-tests` skill says.
 2. Run `/expert-review` on the branch, or `/expert-review <base>...HEAD` when it is stacked. While it reads the
    worktree, run nothing that moves the worktree between commits, such as `git rebase --exec`: the experts would read
-   another revision than the one under review.
+   another revision than the one under review. Claude Code loads the skills and agents of the session's directory, not
+   the branch's: when the branch changes the skills or agents that review or fix it, review it from a session started
+   in its worktree, or say in the pull request which definitions reviewed it.
 3. Settle each finding as `CLAUDE.md` > Workflow, "Review before pushing" says. Give the findings to fix to a new
    `fixer` agent, with its brief: the worktree and its base, the purpose of the branch, each verified finding, and the
    commit each fix belongs to. It commits each fix as a `fixup!` commit, or as an `amend!` commit for a commit message,

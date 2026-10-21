@@ -34,6 +34,7 @@ android {
         targetSdk = 36
         versionCode = projectVersionCode
         versionName = projectVersion
+        manifestPlaceholders["launcherIcon"] = "@mipmap/ic_launcher"
     }
 
     buildTypes {
@@ -46,12 +47,14 @@ android {
             isShrinkResources = false
         }
         // The development app (APP_VARIANT=dev, scripts/dev-env.sh): the release build under its own
-        // application id and name ("ScanMyLib (dev)", src/dev/res), so that it installs next to the
-        // production app and talks to the development stack. Same signing key. Its version is set
-        // below (androidComponents).
+        // application id, name ("ScanMyLib (dev)", src/dev/res) and launcher icon, so that it installs
+        // next to the production app and talks to the development stack. Its icon lives in src/main, so
+        // that the tests of the debug variant can draw it. Same signing key. Its version is set below
+        // (androidComponents).
         create("dev") {
             initWith(getByName("release"))
             applicationIdSuffix = ".dev"
+            manifestPlaceholders["launcherIcon"] = "@mipmap/ic_launcher_dev"
         }
     }
 

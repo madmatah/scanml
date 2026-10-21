@@ -55,9 +55,11 @@ may be back in the main checkout between two calls, where a rebase or a commit w
    worktree, run nothing that moves the worktree between commits, such as `git rebase --exec`: the experts would read
    another revision than the one under review.
 3. Settle each finding as `CLAUDE.md` > Workflow, "Review before pushing" says, committing each fix as a `fixup!`
-   commit, as [Fold review fixes](#fold-review-fixes) shows. Before you fold them, review the fixes alone:
-   `/expert-review <the commit before the first fix>...HEAD`, which picks the experts of the domains they touch. Then
-   fold them.
+   commit, as [Fold review fixes](#fold-review-fixes) shows. Before you fold them, review the fixes alone, against the
+   findings they answer: write those findings, as the review reported them, with the Write tool, to a file in a
+   directory that `mktemp -d` creates outside the worktree, and run
+   `/expert-review <the commit before the first fix of the round>...HEAD --fixes <file>`. Remove the directory once the
+   round's report arrives. Then fold them.
 4. If an answer of its triage or of an expert reaches you rather than the review, the review handed back its report
    too soon: set that report aside, send the answer to the review with SendMessage, addressed to the agent ID that its
    invocation returned, or else to the name it runs under, such as `expert-review`, and act only on the report it hands

@@ -10,6 +10,7 @@ pull request, is published.
   - status or tracking files;
   - decision records;
   - roadmaps;
+  - plans;
   - handoffs;
   - meeting or research notes;
   - the task markers `TODO`, `FIXME`, `XXX` and `HACK`, in a comment or a document.

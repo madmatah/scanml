@@ -1,6 +1,6 @@
 ---
 name: pull-request
-description: Takes a change to ScanMyLib from a new branch to a merged pull request, in a worktree with its own development stack, and reviews someone else's pull request. Use when starting a piece of work, before pushing a branch, when opening or updating a pull request, when showing screenshots of a change in its pull request, after its base branch changes or is merged, or when the user asks to review a pull request. A release is prepared by the release skill instead.
+description: Takes a change to ScanMyLib from a new branch to a merged pull request, in a worktree with its own development stack, and reviews someone else's pull request. Use when starting a piece of work, planning it, writing its code, before pushing a branch, when opening or updating a pull request, when showing screenshots of a change in its pull request, after its base branch changes or is merged, or when the user asks to review a pull request. A release is prepared by the release skill instead.
 ---
 
 # Pull request
@@ -9,8 +9,9 @@ description: Takes a change to ScanMyLib from a new branch to a merged pull requ
 the work is stacked on, and `<worktree>` the branch's worktree, `~/Dev/scanmylib/.claude/worktrees/<topic>`. The shell
 may be back in the main checkout between two calls, where a rebase or a commit would move production's release
 (`CLAUDE.md` > Production): every command of the branch below starts with `cd <worktree> &&`. Write each file that this
-procedure names, such as the findings of a round or a commit message, with the Write tool, never through a shell: in a
-heredoc, or in `git commit -m "…"`, the backquoted text that findings and messages quote runs as commands. Give git a
+procedure names, such as a plan, the findings of a round or a commit message, with the Write tool, never through a
+shell: in a heredoc, or in `git commit -m "…"`, the backquoted text that findings, plans and messages quote runs as
+commands. Give git a
 message from a file in a directory that `mktemp -d` creates outside the worktree, with `git commit -F <file>`.
 
 ## Start a branch
@@ -25,6 +26,38 @@ message from a file in a directory that `mktemp -d` creates outside the worktree
    `cd <worktree> && git reset --hard origin/main`, while the branch has no commit of its own.
 3. Run `cd <worktree> && scripts/dev-env.sh` once, before `scripts/dev.sh` or `scripts/build-apk.sh`, as `CLAUDE.md` >
    Workflow, "The development stack" says.
+
+## Plan the work
+
+Plan the work as `CLAUDE.md` > Workflow, "Plan before writing code" says, and revise the plan the same way when the code
+or a review shows it wrong:
+
+1. Spawn the `planner` agent with its brief: the worktree and its base, the goal and where it comes from, the
+   constraints and the decisions you know, and the path of `.pm/`, as `CLAUDE.md` > Project management gives it. For a
+   revision, add the path of the plan, what showed it wrong, such as the findings of a review, and the commits of the
+   branch with their files, from `cd <worktree> && git log --format='%h %s' --name-only <base>..HEAD`. Write each plan
+   it returns, without its `Answers` section, to the path of the plan that `CLAUDE.md` > Project management gives, and
+   commit it as it says.
+2. Spawn the `plan-critic` agent with the worktree, its base, the goal, the constraints, the decisions and the user's
+   answers you know, and the path of the plan, and, for a revision, what showed the plan wrong and the commits of the
+   branch, as the planner got them. Resume the planner with the critic's blocking and should-fix points, rather than
+   spawning a new one that would read the code again, then resume the critic with the planner's answers. Go on until
+   the critic says `ready`. After three rounds, ask the user about what remains, or, when the user does not follow the
+   work, stop and give the plan and its open points in your final report.
+3. When the user follows the work, show them the plan and its open questions, and wait for their approval: a change
+   they ask for goes to the planner, then to the critic. Otherwise, take the answer that the plan recommends to each
+   open question, and name it in the pull request.
+
+## Write the code
+
+Write the code from the plan, or give it to an agent on Opus at `high`, as `.claude/rules/configuration.md` > Claude
+Code automation says, with the worktree, its base and the path of the plan, and this constraint: it works only in that
+worktree, apart from reading the plan and writing its commit messages where this skill says, and every command it runs
+starts with `cd <worktree> &&`, since its shell may be back in the main checkout,
+production's, between two calls (`CLAUDE.md` > Production). When the plan proves wrong, stop, and revise it as [Plan
+the work](#plan-the-work) says. If an agent was writing the code, commit or drop its work in progress, as
+the revised plan says, then give the rest to a new agent, with the revised plan and the commits so far: the one that
+stopped carries a context that only grows.
 
 ## Stack on an unmerged branch
 
@@ -62,7 +95,10 @@ message from a file in a directory that `mktemp -d` creates outside the worktree
    findings they answer: write those findings, as the review reported them, with the Write tool, to a file in a
    directory that `mktemp -d` creates outside the worktree, and run
    `/expert-review <the commit before the first fix of the round>...HEAD --fixes <file>`. Remove the directory once the
-   round's report arrives. Then fold them.
+   round's report arrives. Then fold them. A finding that needs a change of design ends the round instead: revise the
+   plan of the branch with all the findings of the round, as [Plan the work](#plan-the-work) says, give the change to a
+   new agent, as [Write the code](#write-the-code) says, shape the history again, as [Shape the
+   history](#shape-the-history) says, and review the whole branch again, as the first round does.
 4. If an answer of its triage or of an expert reaches you rather than the review, the review handed back its report
    too soon: set that report aside, send the answer to the review with SendMessage, addressed to the agent ID that its
    invocation returned, or else to the name it runs under, such as `expert-review`, and act only on the report it hands

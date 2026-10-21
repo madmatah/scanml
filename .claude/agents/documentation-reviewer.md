@@ -61,11 +61,11 @@ review: read what a check needs of them.
   library shipped in a build) without its `CREDITS.md` entry in the same change, or an entry that does not say what is
   reused, where, from where and under which terms.
 - **Repository content** (`.claude/rules/repository.md` > What belongs in the repository, > No real document names and >
-  No personal information): project-management material (status, roadmap, decisions, handoffs) or a task marker, in any
-  file; a file committed by accident, such as build output, a log or a temporary capture; a real document's title,
-  author or excerpt; and anything personal, such as a path of an installation, an address, a hostname or a time zone,
-  where a placeholder belongs, reported without its value, as `.claude/skills/expert-review/expert-contract.md` >
-  Evidence says.
+  No personal information): project-management material (status, roadmap, decisions, plans, handoffs) or a task
+  marker, in any file; a file committed by accident, such as build output, a log or a temporary capture; a real
+  document's title, author or excerpt; and anything personal, such as a path of an installation, an address, a
+  hostname or a time zone, where a placeholder belongs, reported without its value, as
+  `.claude/skills/expert-review/expert-contract.md` > Evidence says.
 - **Pull request template** (`.claude/rules/documents.md` > Pull request template): a timing in its checklist.
 - **Language** (`CLAUDE.md` > Language): English with American spelling, in the documents.
 

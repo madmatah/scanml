@@ -32,10 +32,14 @@ Project-management material lives in `.pm/`, a separate, private Git repository 
 and ignored by this one, never in this repository (`.claude/rules/repository.md`). `.pm/README.md` describes its layout.
 Linked worktrees do not have it: from a worktree, it is at
 `$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")/.pm`. At the start of a session, read its
-`roadmap.md` and the latest note in its `handoffs/`.
+`roadmap.md`, the latest note in its `handoffs/`, and the plan of the branch you work on, in its `plans/`.
 
 When a decision changes the project, log it in the `decisions.md` of `.pm/`, then commit and push it in that repository.
 When sessions run in parallel, hand it to the coordinating session instead ([Workflow](#workflow)).
+
+The plan of a branch is `plans/<branch>.md` in `.pm/`, at the path above even from a worktree. Commit and push it there
+each time the `plan-critic` agent finds a version of it ready. When sessions run in parallel, each writes the plan of
+its own branch and names it in its final report, and the coordinating session commits it.
 
 Never run `git clean` with `-ff` at the repository root: a double `-f` deletes nested repositories, including `.pm/`.
 
@@ -73,10 +77,16 @@ Production runs on this machine, from the main checkout, `~/Dev/scanmylib`, and 
 - **In a worktree, its own guidance prevails.** Claude Code also loads the `CLAUDE.md` and the rules of the main
   checkout, which encloses the worktree: those of production's release, which may be older. Where they differ, follow
   the worktree's, which describe the code you change.
+- **Plan before writing code:** a `planner` agent writes the plan of each piece of work, kept in `.pm/` ([Project
+  management](#project-management)), and a `plan-critic` agent, which did not write it, checks it against the code and
+  the rules before any code is written. Only a change that leaves the design as it is goes without a plan: a typo, a
+  mechanical rename, a dependency bump, a bug fix inside one function. A review fix stays within the plan: only a
+  change of design goes back to it. The code follows the plan: an implementation that finds it wrong stops and says
+  why, and the plan is revised and checked again before the work goes on.
 - **Parallel sessions:** when several Claude sessions work at the same time, each owns one worktree and its pull
-  request, from implementation to review fixes, and never works in another session's worktree. Only the coordinating
-  session, the one that started the others or the one the user names, writes to `.pm/`: the others put their decisions
-  and handoff notes in their final report.
+  request, from its plan to its review fixes, and never works in another session's worktree. Only the coordinating
+  session, the one that started the others or the one the user names, writes to `.pm/`, apart from the plan of each
+  session's own branch: the others put their decisions and handoff notes in their final report.
 - **Give searches and explorations to cheaper agents,** on the model and at the effort that
   `.claude/rules/configuration.md` > Claude Code automation gives for the task, through the Agent tool's `model` and
   `effort`. An agent defined in `.claude/agents/` runs as its definition says, unless a procedure raises or lowers its
@@ -127,8 +137,9 @@ Production runs on this machine, from the main checkout, `~/Dev/scanmylib`, and 
 - **Releases** are pull requests of their own, which the `release` skill prepares (`.claude/rules/releases.md`).
 - **A branch reaches `main` only through a pull request whose CI passes.** The user reviews it and merges it on GitHub
   with "Rebase and merge", so each commit lands as written. Never merge into `main` yourself.
-- **The `pull-request` skill holds the procedure:** starting a branch, stacking it on another, shaping its history,
-  reviewing it, opening and updating its pull request, showing a visible change in it, and reviewing someone else's.
+- **The `pull-request` skill holds the procedure:** starting a branch, planning its work and writing its code, stacking
+  it on another, shaping its history, reviewing it, opening and updating its pull request, showing a visible change in
+  it, and reviewing someone else's.
 
 ## Commands
 

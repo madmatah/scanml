@@ -4,6 +4,8 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color as AndroidColor
 import android.graphics.drawable.Drawable
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PixelMap
 
 internal data class PixelPosition(val x: Int, val y: Int)
 
@@ -39,6 +41,19 @@ internal fun gatherDrawnPixels(bitmap: Bitmap): List<PixelPosition> {
     val alphas = readAlphas(bitmap)
     return listPixelPositions(bitmap.width, bitmap.height).filter { alphas[it.y * bitmap.width + it.x] > 0 }
 }
+
+internal fun findMostFrequentColor(
+    pixels: PixelMap,
+    background: Color,
+    rows: IntRange = 0 until pixels.height,
+): Color = rows.asSequence()
+    .flatMap { row -> (0 until pixels.width).asSequence().map { column -> pixels[column, row] } }
+    .filter { it != background }
+    .groupingBy { it }
+    .eachCount()
+    .maxByOrNull { it.value }
+    ?.key
+    ?: Color.Unspecified
 
 private fun listPixelPositions(width: Int, height: Int): List<PixelPosition> =
     (0 until height).flatMap { row -> (0 until width).map { column -> PixelPosition(column, row) } }

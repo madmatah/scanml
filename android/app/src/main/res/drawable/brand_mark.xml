@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The mark of ic_launcher_foreground.xml without the launcher's margins, which would not scale
+     with the size a screen shows it at; BrandMarkTest keeps the two drawings alike. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="72dp"
+    android:height="72dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+    <group
+        android:translateX="-30"
+        android:translateY="-30">
+        <path
+            android:pathData="M33 43V33h10 M65 33h10v10 M75 65v10H65 M43 75H33V65"
+            android:strokeWidth="4.5"
+            android:strokeColor="@android:color/black"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+        <path
+            android:fillColor="@android:color/black"
+            android:pathData="M52.5 47.5C48 45 43 44.5 39.5 45.5v19C43 63.5 48 64 52.5 66.5Z" />
+        <path
+            android:fillColor="@android:color/black"
+            android:pathData="M55.5 47.5C60 45 65 44.5 68.5 45.5v19C65 63.5 60 64 55.5 66.5Z" />
+    </group>
+</vector>

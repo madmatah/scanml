@@ -50,6 +50,7 @@ import fr.scanmylib.db.LibraryRow
 import fr.scanmylib.model.ServerConfig
 import fr.scanmylib.ui.components.AttentionBanner
 import fr.scanmylib.ui.components.BannerSlot
+import fr.scanmylib.ui.components.BrandMark
 import fr.scanmylib.ui.components.ErrorBanner
 import fr.scanmylib.ui.components.MessageCard
 import fr.scanmylib.ui.components.ScreenTitle
@@ -248,15 +249,21 @@ private fun pcOnlineText(status: ServerStatus): String {
 
 @Composable
 private fun EmptyLibrary() {
-    Text(
-        stringResource(R.string.library_empty),
-        style = MaterialTheme.typography.bodyLarge,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        textAlign = TextAlign.Center,
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(16.dp),
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 48.dp, horizontal = 16.dp),
-    )
+    ) {
+        BrandMark()
+        Text(
+            stringResource(R.string.library_empty),
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+    }
 }
 
 /**

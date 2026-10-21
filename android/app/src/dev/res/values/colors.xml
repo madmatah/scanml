@@ -1,5 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <!-- Orange launcher icon for the development app (production: teal). -->
-    <color name="ic_launcher_background">#A84300</color>
-</resources>

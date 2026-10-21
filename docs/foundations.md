@@ -344,10 +344,9 @@ copy. `.claude/rules/documents.md` > Where a statement lives says what goes wher
 
 The tests are the specification of the business rules. To learn how a part of the system behaves, read its tests: each
 one states one rule, in a sentence, in the vocabulary of the domain. That is why the code carries no comment that states
-a rule. New test files follow one structure, so that the sentence runs from the component through the operation and the
-situations to the test's name, and a reader, and an agent, finds the arrangement, the act and the assertions in the same
-place in every file that follows it; the older files move to it (planned), as `.claude/rules/tests.md` > Structure
-says, and that file says how tests are written.
+a rule. Every test file follows one structure, so that the sentence runs from the component through the operation and
+the situations to the test's name, and a reader, and an agent, finds the arrangement, the act and the assertions in the
+same place in every file; `.claude/rules/tests.md` says how tests are written.
 
 ### Test levels
 

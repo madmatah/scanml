@@ -22,16 +22,10 @@ Tests are the specification of the business rules: to learn how a part of the sy
 
 ## Structure
 
-New test files follow one structure, so that a rule reads the same way everywhere, and its arrangement, its act and its
-assertions sit in known places. Its words are those of a framework that nests groups of tests and runs hooks around
-them: a group, a test, a hook that runs before each test of its group, and a hook that runs once before all of them. The
-section of each test framework below gives its own words for them, and how it stands in for what it lacks.
-
-A test added to, or changed in, a file written before this structure may keep that file's layout in three respects
-only: its grouping, in place of the levels and situations below; the form of the file's test names, in place of
-`should`; and its arrangement and its act in the test's body, a costly act included, in place of hooks. Every other
-rule applies to it. The older files move to the structure area by area, each area in a pull request of its own
-(planned).
+Every test file follows one structure, so that a rule reads the same way everywhere, and its arrangement, its act and
+its assertions sit in known places. Its words are those of a framework that nests groups of tests and runs hooks around
+them: a group, a test, a hook that runs before each test of its group, and a hook that runs once before all of them.
+The section of each test framework below gives its own words for them, and how it stands in for what it lacks.
 
 - **Level 1 names the component the file tests,** in domain vocabulary, as the file is named: `The ordering`, in the
   tests of `ordering`. A file tests one component; a file of integration or scenario tests may hold several subjects,

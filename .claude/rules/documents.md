@@ -26,7 +26,8 @@ Each statement has one home, so that it never drifts from a copy.
 - **A rule about what the repository holds,** its code, tests, configuration and documents, lives in `.claude/rules/`,
   once and in full, in the file of its concern.
 - **Session conduct** lives in `CLAUDE.md`: what a session reads first, its workflow, the commands, the language of the
-  repository, and one index line per rules file. Every session loads all of `CLAUDE.md`, so it stays under 200 lines.
+  repository, and one index line per rules file. Every session loads all of `CLAUDE.md`, so it stays under 20 KB, as
+  `wc -c` counts it: its size, unlike its count of lines, does not depend on where the lines wrap.
 - **The design and its reasons** live in `docs/foundations.md`. It may say what a rule protects and why, but it does not
   restate the rule.
 - **A procedure** lives in a skill, under `.claude/skills/`.

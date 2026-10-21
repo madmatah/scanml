@@ -2,6 +2,7 @@
 name: performance-reviewer
 description: Expert reviewer for performance, used by the expert-review skill. Checks wasted work, complexity, blocking and memory in the source code. Read-only.
 tools: Read, Grep, Glob
+omitClaudeMd: true
 model: opus
 effort: high
 ---

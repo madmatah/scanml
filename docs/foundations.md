@@ -304,6 +304,9 @@ copy. `.claude/rules/documents.md` > Where a statement lives says what goes wher
   session loads only those of the code it touches.
 - **Skills hold procedures** because a procedure matters only while its task runs, and a skill loads only then.
 - **This document holds the design and its reasons,** and states no rule, so that a rule changes in one place.
+- **An expert reviewer reads at least the rules files of its domain,** one hop away, so that it never chases a rule
+  across documents. It starts without the session's `CLAUDE.md` files, which would cost it tokens on every turn and
+  could steer it: the rules that apply are the checkout's.
 - **Each agent runs on the model and at the effort its task needs,** because every turn of every run pays for both, and
   a review multiplies the runs: Opus where a miss costs most or where code is written, at `xhigh` only for plans, Sonnet
   where written rules guide the check, Haiku for search. A low effort saves Haiku and Sonnet little and costs them much

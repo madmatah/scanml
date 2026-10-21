@@ -97,10 +97,13 @@ stopped carries a context that only grows.
    findings they answer: write those findings, as the review reported them, with the Write tool, to a file in a
    directory that `mktemp -d` creates outside the worktree, and run
    `/expert-review <the commit before the first fix of the round>...HEAD --fixes <file>`. Remove the directory once the
-   round's report arrives. Then fold them. A finding that needs a change of design ends the round instead: revise the
-   plan of the branch with all the findings of the round, as [Plan the work](#plan-the-work) says, give the change to a
-   new agent, as [Write the code](#write-the-code) says, shape the history again, as [Shape the
-   history](#shape-the-history) says, and review the whole branch again, as the first round does.
+   round's report arrives. A finding that needs a change of design, or that a fix brought into the code it fixed, ends
+   the round instead: revise the plan of the branch with all the findings of the round, as [Plan the
+   work](#plan-the-work) says, give the change to a new agent, as [Write the code](#write-the-code) says, shape the
+   history again, as [Shape the history](#shape-the-history) says, and review the whole branch again, as the first round
+   does. Keep the cost of each round, from its report, for the decision that `CLAUDE.md` > Workflow, "Rounds of review
+   converge, or the user decides" leaves to the user. Go on round by round as `CLAUDE.md` > Workflow, "Review before
+   pushing" and "Rounds of review converge, or the user decides" say, then fold the fixes.
 4. If an answer of its triage or of an expert reaches you rather than the review, the review handed back its report
    too soon: set that report aside, send the answer to the review with SendMessage, addressed to the agent ID that its
    invocation returned, or else to the name it runs under, such as `expert-review`, and act only on the report it hands

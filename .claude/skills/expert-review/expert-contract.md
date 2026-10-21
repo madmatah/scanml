@@ -10,7 +10,7 @@ Your task gives:
 
 - the root of the checkout under review;
 - the scope file, which holds the whole diff, untracked files included;
-- the changed files in your domain;
+- the changed files in your domain, and the line ranges of the scope file that hold the hunks of your concern;
 - the files moved without a change into your scope, with their old paths;
 - what is under review (a branch, a pull request), and any focus the user asked for.
 
@@ -30,8 +30,9 @@ and stop.
 - **Review the diff, not its description.** Read the changed lines, their enclosing functions, and whatever your checks
   depend on: callers, guards, tests, the rule files your definition names.
 - **Read what your checks need, in as few turns as you can.** Every turn re-reads your whole context, so make the reads
-  and searches that do not depend on each other together, in one turn. Find each file's `diff --git` header in the
-  scope file with Grep and read from there, and read a large file by the ranges your checks need. Read a file once.
+  and searches that do not depend on each other together, in one turn. Read the scope file by the line ranges you were
+  given, or find each file's `diff --git` header with Grep and read from there, and read a large file by the ranges your
+  checks need. Read a file once.
 - **Every finding quotes its evidence**: the line that is wrong, and the rule it breaks or the concrete inputs that make
   it fail.
 - **Report only what the diff introduces or touches.** Code the diff merely sits next to is out of scope.

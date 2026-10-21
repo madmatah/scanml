@@ -74,9 +74,4 @@ Read first: `.claude/rules/tests.md`.
 - **Test frameworks** (`.claude/rules/tests.md` > pytest, > unittest, > node:test and > JUnit): a clear violation of
   one of the rules of the framework the test runs on.
 
-A test added to, or changed in, a file written before the structure is exempt from three checks only, as
-`.claude/rules/tests.md` > Structure says: the levels and situations of its grouping, the `should` that starts its name,
-which takes the form of the file's other names, and its arrangement and act in its body, a costly act included. Every
-other check applies to it.
-
 Leave the correctness of what a test checks to the other experts.

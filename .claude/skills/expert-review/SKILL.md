@@ -69,7 +69,9 @@ skill names, with no value but the ones checked here, and read and search with t
      `git ls-files -z --others --exclude-standard | xargs -0 -r -n1 git diff --no-index -- /dev/null`.
 3. **List the changed files** from the same sources with `--name-status`, and the added ones. A move that Git has
    recorded, committed or staged, shows as `R100` when the file did not change; a plain `mv` that is not staged shows as
-   a deletion and an addition, and is reviewed as such. If no file appears at all, say "Nothing to review" and stop.
+   a deletion and an addition, and is reviewed as such. If no file appears at all, say "Nothing to review" and stop,
+   unless the commits hold an `amend!` commit, which changes only a message: then check the commits, as "Check the
+   commit messages" below says, and report.
 4. **Scan the added lines of `scope.diff` for secrets and personal paths**, with Grep. Patterns:
    - `gh[pousr]_[A-Za-z0-9]{36}` and `github_pat_[A-Za-z0-9_]{20,}`;
    - `hf_[A-Za-z0-9]{30,}`, a Hugging Face token;
@@ -87,11 +89,14 @@ skill names, with no value but the ones checked here, and read and search with t
 5. **Check the commit messages:** write `git log --format='%h %s%n%n%b' <commits>` to `<dir>/commits.txt`, and read it
    against `CLAUDE.md` > Workflow, "Commits", "A commit scope names where the change belongs", "A commit message says
    why" and "A commit footer holds only what tools read", and a release's own commit, `chore(release): X.Y.Z`, against
-   `.claude/rules/releases.md`, "Pull requests never change `VERSION`", which gives it its header:
-   - in a round of fixes, which reviews the fixups before they are folded, check that each `fixup!` commit names a
-     commit of the branch, by a first line that holds, after `fixup! `, that commit's whole header, and check any other
-     commit against the bullets below, which the fixups meet once folded;
-   - outside a round of fixes, a `fixup!` or `squash!` commit that is still there is `blocking`;
+   `.claude/rules/releases.md`, "Pull requests never change `VERSION`", which gives it its header, instead:
+   - in a round of fixes, which reviews the fixups before they are folded, check that each `fixup!` and `amend!` commit
+     names a commit of the branch, by a first line that holds, after `fixup! ` or `amend! `, that commit's whole header,
+     as `git log --format='%h %s' origin/main..<start>` lists them, written to `<dir>/branch.txt`, where a branch
+     stacked on another also lists its base's, whose fixups `.claude/skills/pull-request/SKILL.md` > Fold review fixes
+     catches; check the new message that an `amend!` commit carries, and check any
+     other commit against the bullets below, which the fixups meet once folded;
+   - outside a round of fixes, a `fixup!`, `amend!` or `squash!` commit that is still there is `blocking`;
    - a message that holds a secret, or what `.claude/rules/repository.md` > What belongs in the repository, > No real
      document names or > No personal information forbids, is `blocking`, since a pushed commit cannot be taken back:
      search `<dir>/commits.txt` with the patterns of the scan above, and read it for what no pattern finds: document

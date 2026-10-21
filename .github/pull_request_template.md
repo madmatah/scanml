@@ -37,7 +37,7 @@
 
 ### History
 
-- [ ] Each commit is atomic, and its message follows `CLAUDE.md` > Workflow: the header of "Commits" with the scope of "A commit scope names where the change belongs", a body that says why unless the change speaks for itself, and a footer as "A commit footer holds only what tools read" says; no `fixup!` commit is left.
+- [ ] Each commit is atomic, and its message follows `CLAUDE.md` > Workflow: the header of "Commits" with the scope of "A commit scope names where the change belongs", a body that says why unless the change speaks for itself, and a footer as "A commit footer holds only what tools read" says; no `fixup!`, `amend!` or `squash!` commit is left.
 
 ### Documentation
 

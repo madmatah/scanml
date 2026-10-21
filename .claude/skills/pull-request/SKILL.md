@@ -8,7 +8,10 @@ description: Takes a change to ScanMyLib from a new branch to a merged pull requ
 `CLAUDE.md` > Workflow holds the rules this procedure applies. Below, `<base>` is `origin/main`, or the unmerged branch
 the work is stacked on, and `<worktree>` the branch's worktree, `~/Dev/scanmylib/.claude/worktrees/<topic>`. The shell
 may be back in the main checkout between two calls, where a rebase or a commit would move production's release
-(`CLAUDE.md` > Production): every command of the branch below starts with `cd <worktree> &&`.
+(`CLAUDE.md` > Production): every command of the branch below starts with `cd <worktree> &&`. Write each file that this
+procedure names, such as the findings of a round or a commit message, with the Write tool, never through a shell: in a
+heredoc, or in `git commit -m "…"`, the backquoted text that findings and messages quote runs as commands. Give git a
+message from a file in a directory that `mktemp -d` creates outside the worktree, with `git commit -F <file>`.
 
 ## Start a branch
 
@@ -102,10 +105,18 @@ what it does without building it.
 
 ## Fold review fixes
 
-1. Commit each fix with `cd <worktree> && git commit --fixup=<commit>`, naming the commit it belongs to.
+1. Commit each fix with `cd <worktree> && git commit --fixup=<commit>`, naming the commit it belongs to. A fix to the
+   message of a commit goes in an `amend!` commit, since a `fixup!` commit keeps the message of its target: in a
+   directory that `mktemp -d` creates outside the worktree, write, with the Write tool, a file whose first line is
+   `amend! ` followed by the header of the commit, whole, as `git log -1 --format=%s <commit>` prints it, since
+   autosquash matches that line, then a blank line and the whole new message; run
+   `cd <worktree> && GIT_EDITOR="cp <file>" git commit --fixup=reword:<commit>`, or `--fixup=amend:<commit>` to fold the
+   staged changes with it, and remove the directory. Neither `-m` nor `-F` combines with these forms.
 2. Run `cd <worktree> && GIT_SEQUENCE_EDITOR=: git rebase -i --autosquash <base>`. Git before 2.44 ignores
    `--autosquash` without `-i`, and the `-i` form works with every version.
-3. Check the commits again, as [Shape the history](#shape-the-history) does.
+3. Check that `cd <worktree> && git log --format=%s <base>..HEAD` lists no `fixup!`, `amend!` or `squash!` commit, or
+   else drop it, commit its fix again as above and fold again, then check the commits again, as [Shape the
+   history](#shape-the-history) does.
 4. Push with `cd <worktree> && git push --force-with-lease`, then keep the body true: update every section the fixes
    changed.
 

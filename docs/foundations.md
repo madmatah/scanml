@@ -394,14 +394,16 @@ Every branch goes through `/expert-review` before its pull request. It is a proj
 - **The orchestrator confirms every blocking and should-fix finding** before reporting it, and lists the findings it
   dropped with their counter-evidence, so the report makes no claim it has not checked. It also holds every suggested
   fix to the project's rules, since an expert reads only those of its domain.
+- **A new agent fixes each round,** from a brief: an agent resumed round after round re-reads its whole, growing
+  context on every turn, which costs more than the review it answers.
 - **The report says what the review cost,** agent by agent, so that the cost of the rounds shows while it builds up,
   and the decision to go on weighs it.
 - **A target other than the current branch is checked out outside the repository**, so a reviewed `CLAUDE.md` never
   loads as an instruction.
 - **Reviews can run at the same time, from the same checkout:** each one keeps its scope in a temporary directory of
   its own.
-- **The report ends the review.** It suggests a fix for each finding but applies none: the session that wrote the code
-  fixes or answers each one, and the user decides at the merge.
+- **The report ends the review.** It suggests a fix for each finding but applies none: the session that owns the branch
+  answers each one or has a fixer agent fix it, and the user decides at the merge.
 
 ## References
 

@@ -84,9 +84,11 @@ Production runs on this machine, from the main checkout, `~/Dev/scanmylib`, and 
   change of design goes back to it. The code follows the plan: an implementation that finds it wrong stops and says
   why, and the plan is revised and checked again before the work goes on.
 - **Parallel sessions:** when several Claude sessions work at the same time, each owns one worktree and its pull
-  request, from its plan to its review fixes, and never works in another session's worktree. Only the coordinating
-  session, the one that started the others or the one the user names, writes to `.pm/`, apart from the plan of each
-  session's own branch: the others put their decisions and handoff notes in their final report.
+  request, from its plan to its review fixes, and never works in another session's worktree. A round of review fixes
+  goes to a new `fixer` agent in that worktree, as the `pull-request` skill says, never back to the agent that wrote the
+  branch, whose context only grows. Only the coordinating session, the one that started the others or the one the user
+  names, writes to `.pm/`, apart from the plan of each session's own branch: the others put their decisions and handoff
+  notes in their final report.
 - **Give searches and explorations to cheaper agents,** on the model and at the effort that
   `.claude/rules/configuration.md` > Claude Code automation gives for the task, through the Agent tool's `model` and
   `effort`. An agent defined in `.claude/agents/` runs as its definition says, unless a procedure raises or lowers its

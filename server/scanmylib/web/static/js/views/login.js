@@ -31,7 +31,7 @@ export function mountLogin(root, { setTitle, onSignedIn, message }) {
       type: 'button',
       class: 'btn btn-icon',
       'aria-pressed': 'false',
-      'aria-label': t('Show token'),
+      'aria-label': t('Show the access token'),
     },
     icon('eye'),
   );
@@ -82,7 +82,7 @@ export function mountLogin(root, { setTitle, onSignedIn, message }) {
     const visible = token.type === 'password';
     token.type = visible ? 'text' : 'password';
     reveal.setAttribute('aria-pressed', String(visible));
-    reveal.setAttribute('aria-label', visible ? t('Hide token') : t('Show token'));
+    reveal.setAttribute('aria-label', visible ? t('Hide the access token') : t('Show the access token'));
     reveal.replaceChildren(icon(visible ? 'eye-off' : 'eye'));
   });
 
@@ -103,7 +103,7 @@ export function mountLogin(root, { setTitle, onSignedIn, message }) {
     } catch (failure) {
       error.textContent =
         failure instanceof ApiError && failure.status === 401
-          ? t('Invalid token. Check it and try again.')
+          ? t('Invalid access token. Check it and try again.')
           : errorMessage(failure, t('Could not sign in.'));
       error.hidden = false;
       token.select();

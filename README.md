@@ -76,8 +76,8 @@ The services restart automatically with Docker (`restart: unless-stopped`); ther
    asks once to allow installs from the browser.
 3. Open the ScanMyLib app. On the **Pair with PC** screen, tap **Scan the QR code** and aim at the QR code of **Pair the
    app with this PC**: the app then knows the PC's address and its access token. Without a QR code reader, type the **PC
-   address** and the **Token** shown under the QR code into the app's **PC address** and **Access token** fields, then
-   tap **Test and pair**.
+   address** and the **Access token** shown under the QR code into the app's **PC address** and **Access token** fields,
+   then tap **Test and pair**.
 
 **Updates.** Once paired, the app asks the PC which app it publishes, when the library shows or is refreshed, at most
 once an hour, and again once the library reaches the PC if it could not before. When it is newer, the library shows

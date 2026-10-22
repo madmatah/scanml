@@ -63,8 +63,8 @@ export default {
   'Copy': 'Copier',
   'Delete': 'Supprimer',
   'Could not delete.': 'Suppression impossible.',
-  'Show token': 'Afficher le jeton',
-  'Hide token': 'Masquer le jeton',
+  'Show the access token': 'Afficher le jeton d’accès',
+  'Hide the access token': 'Masquer le jeton d’accès',
 
   // Labels of the API's values (lib/labels.js)
   'Queued': 'En attente',
@@ -146,7 +146,7 @@ export default {
     'Le serveur crée ce jeton à son premier démarrage, dans le fichier {file} de son dossier de données. Un lien de la forme {link} vous connecte directement.',
   'Enter the access token.': 'Saisissez le jeton d’accès.',
   'Signing in…': 'Connexion…',
-  'Invalid token. Check it and try again.': 'Jeton invalide. Vérifiez-le et réessayez.',
+  'Invalid access token. Check it and try again.': 'Jeton d’accès invalide. Vérifiez-le et réessayez.',
 
   // Library (views/library.js) and the document form (components/dialogs.js)
   '{count} being read': '{count} en lecture',
@@ -473,8 +473,7 @@ export default {
   'Test and pair': 'Tester et associer',
   'PC address': 'Adresse du PC',
   'Address copied.': 'Adresse copiée.',
-  'Token': 'Jeton',
-  'Token copied.': 'Jeton copié.',
+  'Access token copied.': 'Jeton d’accès copié.',
   'Two steps: install the Android app, then pair it with this PC.':
     'Deux étapes : installer l’application Android, puis l’associer à ce PC.',
 };

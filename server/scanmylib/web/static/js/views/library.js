@@ -43,7 +43,7 @@ function coverageSummary(coverage) {
       : t('No numbered page');
   }
   const parts = [t('Pages {label}', { label: coverage.label || formatRanges(coverage.ranges ?? []) })];
-  if (coverage.gaps?.length) parts.push(t('missing {ranges}', { ranges: formatRanges(coverage.gaps) }));
+  if (coverage.gaps?.length) parts.push(t('not scanned yet: {ranges}', { ranges: formatRanges(coverage.gaps) }));
   return parts.join(' · ');
 }
 

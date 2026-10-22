@@ -520,6 +520,31 @@ class CaptureViewModelTest {
             }
         }
 
+        class WhenAPhotoWasTaken {
+            @get:Rule
+            val mainDispatcher = MainDispatcherRule()
+
+            @get:Rule
+            val folder = TemporaryFolder()
+
+            private lateinit var closings: List<CameraClose>
+
+            @OptIn(ExperimentalCoroutinesApi::class)
+            @Before
+            fun leave() = runTest {
+                val screen = openTheCamera(createStagingArea(folder))
+                screen.photograph("photo 1")
+                screen.leave()
+                advanceUntilIdle()
+                closings = screen.closings
+            }
+
+            @Test
+            fun `should close keeping the photos, so that whoever opened the camera knows that it added pages`() {
+                assertEquals(listOf(CameraClose(werePhotosKept = true)), closings)
+            }
+        }
+
         class WhenAPhotoIsBeingSaved {
             @get:Rule
             val mainDispatcher = MainDispatcherRule()
@@ -633,7 +658,7 @@ class CaptureViewModelTest {
             val folder = TemporaryFolder()
 
             private lateinit var scannedContents: List<String>
-            private var closingCount by Delegates.notNull<Int>()
+            private lateinit var closings: List<CameraClose>
             private lateinit var runContents: List<String>
 
             @OptIn(ExperimentalCoroutinesApi::class)
@@ -645,13 +670,13 @@ class CaptureViewModelTest {
                 screen.photograph("photo 1")
                 screen.discardTheVisit()
                 advanceUntilIdle()
-                closingCount = screen.closingCount
+                closings = screen.closings
                 runContents = readContents(staging)
             }
 
             @Test
-            fun `should close the screen`() {
-                assertEquals(1, closingCount)
+            fun `should close the screen once, without the photos`() {
+                assertEquals(listOf(CameraClose(werePhotosKept = false)), closings)
             }
 
             @Test
@@ -787,8 +812,12 @@ private class CameraScreen(val viewModel: CaptureViewModel, scope: CoroutineScop
     private val receivedMessages = mutableListOf<CaptureMessage>()
     private val shots = Channel<Shot>(Channel.UNLIMITED)
 
-    var closingCount = 0
-        private set
+    private val receivedClosings = mutableListOf<CameraClose>()
+
+    /** Each close of the screen, which it handles at once while it is in front, as the nav host closes it. */
+    val closings: List<CameraClose> get() = receivedClosings.toList()
+
+    val closingCount: Int get() = receivedClosings.size
 
     var captureCount = 0
         private set
@@ -796,7 +825,14 @@ private class CameraScreen(val viewModel: CaptureViewModel, scope: CoroutineScop
     val messages: List<CaptureMessage> get() = receivedMessages.toList()
 
     init {
-        scope.launch { viewModel.closed.collect { closingCount++ } }
+        scope.launch {
+            viewModel.uiState.collect { state ->
+                state.closing?.let { close ->
+                    receivedClosings += close
+                    viewModel.onCloseHandled(close)
+                }
+            }
+        }
         scope.launch { viewModel.messages.collect { receivedMessages += it } }
     }
 

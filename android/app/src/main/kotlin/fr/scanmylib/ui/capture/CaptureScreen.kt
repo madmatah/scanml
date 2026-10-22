@@ -76,7 +76,6 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -126,7 +125,11 @@ import kotlinx.coroutines.launch
  */
 @Composable
 fun CaptureScreen(
-    onClose: () -> Unit,
+    /**
+     * Closes the camera, saying whether this visit kept photos, which then wait in the run, and
+     * returns whether it closed.
+     */
+    onClose: (werePhotosKept: Boolean) -> Boolean,
     /** Closes the camera, keeping this visit's photos, for another source on the same run. */
     onSwitchSource: (ScanSource) -> Unit,
     viewModel: CaptureViewModel = viewModel(factory = CaptureViewModel.Factory),
@@ -157,7 +160,7 @@ fun CaptureScreen(
                     deniedForGood = deniedForGood,
                     onRequest = { requestPermission.launch(Manifest.permission.CAMERA) },
                     onOpenSettings = context::openAppSettings,
-                    onClose = onClose,
+                    onClose = { onClose(false) },
                 )
             }
         }
@@ -165,17 +168,20 @@ fun CaptureScreen(
 }
 
 @Composable
-private fun CameraCapture(viewModel: CaptureViewModel, onClose: () -> Unit, onSwitchSource: (ScanSource) -> Unit) {
+private fun CameraCapture(
+    viewModel: CaptureViewModel,
+    onClose: (werePhotosKept: Boolean) -> Boolean,
+    onSwitchSource: (ScanSource) -> Unit,
+) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val resources = LocalResources.current
     val snackbarHostState = remember { SnackbarHostState() }
-    val currentOnClose by rememberUpdatedState(onClose)
     val haptics = LocalHapticFeedback.current
     val animationsOff = remember(context) { context.animationsOff() }
+    CameraCloseEffect(state.closing, onClose = onClose, onCloseHandled = viewModel::onCloseHandled)
     LaunchedEffect(viewModel) {
-        launch { viewModel.closed.collect { currentOnClose() } }
         viewModel.messages.collect {
             if (it != CaptureMessage.PhotosNotDeleted) haptics.performHapticFeedback(HapticFeedbackType.Reject)
             // A photo not taken is a page missing: the message stays long enough to be noticed.
@@ -320,7 +326,7 @@ private fun CameraCapture(viewModel: CaptureViewModel, onClose: () -> Unit, onSw
     // saved. The pages from before the visit are not this screen's: with no photo of its own, it
     // closes at once.
     fun close() {
-        if (state.photoCount == 0) onClose() else leaving = true
+        if (state.photoCount == 0) onClose(false) else leaving = true
     }
     BackHandler(enabled = state.photoCount > 0) { leaving = true }
 

@@ -6,7 +6,6 @@ import androidx.compose.runtime.getValue
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.APPLICATION_KEY
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.compose.dropUnlessResumed
 import androidx.lifecycle.viewmodel.CreationExtras
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -153,7 +152,11 @@ fun ScanMyLibNavHost(navController: NavHostController, paired: Boolean, share: L
         composable<CaptureRoute> { entry ->
             CaptureScreen(
                 // Once only, even if "Done" is tapped twice: the document screen must stay.
-                onClose = dropUnlessResumed { navController.navigateUp() },
+                onClose = { _ ->
+                    val isResumed = entry.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
+                    if (isResumed) navController.navigateUp()
+                    isResumed
+                },
                 onSwitchSource = { source ->
                     if (entry.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
                         navController.previousBackStackEntry?.savedStateHandle?.set(KEY_SWITCH_SOURCE, source.name)

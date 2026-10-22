@@ -105,7 +105,7 @@ export default {
   'OCR: {state}': 'OCR : {state}',
   'unknown': 'inconnu',
   'Book': 'Livre',
-  'Document': 'Document',
+  'Other': 'Autre',
   'p. {label}': 'p. {label}',
   'No number': 'Sans numéro',
   'Page with no number': 'Page sans numéro',
@@ -175,10 +175,10 @@ export default {
   'Title': 'Titre',
   'Author': 'Auteur',
   '(optional)': '(facultatif)',
-  'Type': 'Type',
-  'Bound book: straighten curved pages': 'Livre relié : redresser les pages courbées',
-  'Flattens the curvature of the pages near the binding before OCR (a little slower).':
-    'Aplatit la courbure des pages près de la reliure avant l’OCR (un peu plus lent).',
+  'Kind': 'Type',
+  'Flatten curved pages': 'Aplatir les pages courbées',
+  'For pages curved near the binding; done by the PC, a little slower.':
+    'Pour les pages courbées près de la reliure ; fait par le PC, un peu plus lent.',
   'Notes': 'Notes',
   'The title is required.': 'Le titre est obligatoire.',
   'Could not save.': 'Enregistrement impossible.',
@@ -231,7 +231,7 @@ export default {
   'Export': 'Exporter',
   'Include the original photos in the archive': 'Inclure les photos originales dans l’archive',
   'Folder on the PC': 'Dossier sur le PC',
-  'Curved-page straightening': 'Redressement des pages courbées',
+  'Curved pages flattened': 'Pages courbées aplaties',
   'No numbered page: capture order.': 'Aucune page numérotée : ordre de prise de vue.',
   'In the reading order of document.md, with pages placed by hand.':
     'Dans l’ordre de lecture de document.md, avec des pages placées à la main.',

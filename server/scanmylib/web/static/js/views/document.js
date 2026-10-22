@@ -464,7 +464,7 @@ export function mountDocument(root, { route, signal, monitor, setTitle }) {
     setChildren(
       meta,
       h('li', { class: 'chip' }, documentKind(doc.kind)),
-      doc.unwarp && h('li', { class: 'chip chip-accent' }, t('Curved-page straightening')),
+      doc.unwarp && h('li', { class: 'chip chip-accent' }, t('Curved pages flattened')),
     );
     notes.textContent = doc.notes || '';
     notes.hidden = !doc.notes;

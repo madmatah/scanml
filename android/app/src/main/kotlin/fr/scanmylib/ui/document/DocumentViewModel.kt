@@ -1,6 +1,5 @@
 package fr.scanmylib.ui.document
 
-import android.database.sqlite.SQLiteFullException
 import android.util.Log
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
@@ -169,14 +168,6 @@ class DocumentViewModel(
 }
 
 /**
- * Whether [freeBytes] is too little for Google's scanner to hand its pages over: it writes each
- * page, a few megabytes, before returning them, and then the app copies them.
- */
-internal fun isStorageLow(freeBytes: Long): Boolean = freeBytes < LOW_STORAGE_BYTES
-
-private const val LOW_STORAGE_BYTES = 100L * 1024 * 1024
-
-/**
  * Whether the message says that the user must act: it then shows longer (about ten seconds rather
  * than four), with a close button.
  */
@@ -188,10 +179,3 @@ internal val DocumentMessage.important: Boolean get() = when (this) {
     DocumentMessage.PageBusy,
     -> false
 }
-
-/** Whether [this] failed because the phone's storage is full (files or database). */
-internal fun Throwable.isStorageFull(): Boolean = generateSequence(this) { it.cause }.take(MAX_CAUSES).any {
-    it is SQLiteFullException || it.message?.contains("ENOSPC") == true
-}
-
-private const val MAX_CAUSES = 10

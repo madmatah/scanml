@@ -9,10 +9,16 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.navigation.toRoute
+import fr.scanmylib.library.CopySource
 import fr.scanmylib.library.PageNumbering
 import fr.scanmylib.library.PhotoImportResult
+import fr.scanmylib.library.Preparation
+import fr.scanmylib.library.PreparationOutcome
+import fr.scanmylib.library.RunPreparation
 import fr.scanmylib.library.StagedPage
 import fr.scanmylib.library.StagingArea
+import fr.scanmylib.library.isStorageFull
+import fr.scanmylib.library.isStorageLow
 import fr.scanmylib.model.ScanSource
 import fr.scanmylib.model.ScannerMode
 import fr.scanmylib.settings.SettingsRepository
@@ -22,7 +28,6 @@ import java.io.IOException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -55,6 +60,7 @@ data class ScanUiState(
     val stagedPages: List<StagedPage> = emptyList(),
     /** Scanned or imported images being copied to the run. */
     val preparation: Preparation? = null,
+    val outcome: PreparationOutcome? = null,
     /** The run is being queued for upload. */
     val sending: Boolean = false,
 ) {
@@ -74,27 +80,14 @@ data class ScanUiState(
     }
 }
 
-/** Scanned or imported images being copied to the run: [done] of [total] so far. */
-data class Preparation(val done: Int, val total: Int, val cancellable: Boolean)
-
 /** One-off messages about the pages to send, shown in a snackbar. */
 sealed interface ScanMessage {
     data class PagesQueued(val count: Int) : ScanMessage
 
-    /** Scanned or imported images could not be copied to the run. */
-    data object ImportFailed : ScanMessage
-
     /** The run could not be queued for upload; it stays as it was. */
     data object SendFailed : ScanMessage
 
-    /** Like [ImportFailed] or [SendFailed], because the phone's storage is full. */
     data object StorageFull : ScanMessage
-
-    /**
-     * Photos left out of an import, by reason: a format the server refuses, over its size limits,
-     * or unreadable. One message for them all.
-     */
-    data class PhotosSkipped(val unsupported: Int, val tooLarge: Int, val unreadable: Int) : ScanMessage
 
     /** Images on their way to the run were cut short when the app was last closed. */
     data object AddingInterrupted : ScanMessage
@@ -113,6 +106,7 @@ class ScanViewModel(
     private val savedState: SavedStateHandle,
     private val documentId: String,
     private val staging: StagingArea,
+    private val runPreparation: RunPreparation,
     private val settings: SettingsRepository,
     private val addScannedPages: suspend (pages: List<Uri>, onProgress: (Int) -> Unit) -> Unit,
     private val addPhotos: suspend (photos: List<Uri>, onProgress: (Int) -> Unit) -> PhotoImportResult,
@@ -123,11 +117,6 @@ class ScanViewModel(
     private val io: CoroutineDispatcher = Dispatchers.IO,
 ) : ViewModel() {
 
-    private val preparation = MutableStateFlow<Preparation?>(null)
-    private var preparationJob: Job? = null
-
-    /** Tells the current preparation from one canceled but still winding down. */
-    private var preparationId = 0
     private val sending = MutableStateFlow(false)
     private val messageChannel = Channel<ScanMessage>(Channel.BUFFERED)
 
@@ -154,10 +143,15 @@ class ScanViewModel(
     val scanState: StateFlow<ScanUiState> = combine(
         scanForm,
         staging.observe(documentId),
-        preparation,
+        runPreparation.observe(documentId),
         sending,
     ) { form, stagedPages, preparation, sending ->
-        form.copy(stagedPages = stagedPages, preparation = preparation, sending = sending)
+        form.copy(
+            stagedPages = stagedPages,
+            preparation = preparation.preparation,
+            outcome = preparation.outcome,
+            sending = sending,
+        )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ScanUiState())
 
     init {
@@ -202,17 +196,24 @@ class ScanViewModel(
             }
             return
         }
-        // Not cancellable: the scanned pages exist nowhere else.
-        prepare(pages.size, cancellable = false) { onProgress -> addScannedPages(pages, onProgress) }
+        // The copy outlives this view model: it refers to none of it.
+        val addPagesToRun = addScannedPages
+        runPreparation.start(documentId, CopySource.SCANNED_PAGES, pages.size) { onProgress ->
+            addPagesToRun(pages, onProgress)
+            null
+        }
     }
 
     /** Photos chosen in the photo picker: they join the run, in the order they were taken. */
     fun onPhotosPicked(photos: List<Uri>) {
         if (photos.isEmpty()) return
-        prepare(photos.size, cancellable = true) { onProgress ->
-            val result = addPhotos(photos, onProgress)
+        val addPhotosToRun = addPhotos
+        runPreparation.start(documentId, CopySource.GALLERY_PHOTOS, photos.size) { onProgress ->
+            val result = addPhotosToRun(photos, onProgress)
             if (result.unsupported + result.tooLarge + result.unreadable > 0) {
-                messageChannel.send(ScanMessage.PhotosSkipped(result.unsupported, result.tooLarge, result.unreadable))
+                PreparationOutcome.PhotosSkipped(result.unsupported, result.tooLarge, result.unreadable)
+            } else {
+                null
             }
         }
     }
@@ -238,32 +239,13 @@ class ScanViewModel(
         return true
     }
 
-    /** Runs [addPages], which reports how many of the [total] images it has copied so far. */
-    private fun prepare(total: Int, cancellable: Boolean, addPages: suspend (onProgress: (Int) -> Unit) -> Unit) {
-        val id = ++preparationId
-        preparation.value = Preparation(done = 0, total = total, cancellable = cancellable)
-        preparationJob = viewModelScope.launch {
-            try {
-                addPages { done -> if (id == preparationId) preparation.value = Preparation(done, total, cancellable) }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                // Whatever the images' provider throws: IOException, SecurityException, but also
-                // the runtime exceptions a content provider passes across the binder.
-                onImportFailed(e)
-            } finally {
-                if (id == preparationId) preparation.value = null
-            }
-        }
-    }
-
     /** Stops an import: the copies made so far are deleted; the photos stay in the gallery. */
     fun cancelPreparation() {
-        if (preparation.value?.cancellable != true) return
-        // A read in progress (a cloud photo...) may take a while to give up: no need to wait.
-        preparationId++
-        preparationJob?.cancel()
-        preparation.value = null
+        runPreparation.cancel(documentId)
+    }
+
+    fun dismissOutcome() {
+        runPreparation.dismissOutcome(documentId)
     }
 
     /** Google's scanner is about to open: whatever failed before, it works on this phone. */
@@ -327,11 +309,6 @@ class ScanViewModel(
         }
     }
 
-    private suspend fun onImportFailed(error: Exception) {
-        Log.e(TAG, "could not save the pages of the run", error)
-        messageChannel.send(if (error.isStorageFull()) ScanMessage.StorageFull else ScanMessage.ImportFailed)
-    }
-
     fun discard() {
         viewModelScope.launch { staging.discard(documentId) }
     }
@@ -365,6 +342,7 @@ class ScanViewModel(
                     savedState,
                     documentId,
                     container.staging,
+                    container.runPreparation,
                     container.settings,
                     addScannedPages = { pages, onProgress ->
                         scanImporter.addScannedPages(documentId, pages, onProgress)
@@ -380,14 +358,12 @@ class ScanViewModel(
 }
 
 /**
- * Whether the message says that pages were left out or could be lost, or that the user must act:
+ * Whether the message says that pages could be lost, or that the user must act:
  * it then shows longer (about ten seconds rather than four), with a close button.
  */
 internal val ScanMessage.important: Boolean get() = when (this) {
-    is ScanMessage.PhotosSkipped,
     ScanMessage.AddingInterrupted,
     ScanMessage.StorageFull,
-    ScanMessage.ImportFailed,
     ScanMessage.SendFailed,
     ScanMessage.ScannerUnavailable,
     ScanMessage.ScannerFailed,

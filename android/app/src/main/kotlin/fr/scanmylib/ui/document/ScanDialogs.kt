@@ -63,6 +63,7 @@ import androidx.compose.ui.window.DialogProperties
 import coil3.compose.AsyncImage
 import fr.scanmylib.R
 import fr.scanmylib.library.PageNumbering
+import fr.scanmylib.library.Preparation
 import fr.scanmylib.library.StagedPage
 import fr.scanmylib.model.ScanSource
 import fr.scanmylib.ui.components.LocalImage
@@ -338,10 +339,10 @@ private fun StagedPagesStrip(pages: List<StagedPage>, onClick: (StagedPage) -> U
 @Composable
 fun PreparingPagesDialog(preparation: Preparation, onCancel: () -> Unit) {
     AlertDialog(
-        onDismissRequest = { if (preparation.cancellable) onCancel() },
-        properties = DialogProperties(dismissOnBackPress = preparation.cancellable, dismissOnClickOutside = false),
+        onDismissRequest = { if (preparation.isCancellable) onCancel() },
+        properties = DialogProperties(dismissOnBackPress = preparation.isCancellable, dismissOnClickOutside = false),
         confirmButton = {
-            if (preparation.cancellable) {
+            if (preparation.isCancellable) {
                 TextButton(onClick = onCancel) { Text(stringResource(R.string.cancel)) }
             }
         },

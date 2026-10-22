@@ -57,7 +57,7 @@ const ENGINE_STATE = {
 
 const DOCUMENT_KIND = {
   book: () => t('Book'),
-  document: () => t('Document'),
+  document: () => t('Other'),
 };
 
 /** The entry of `map` for an API value, translated now; null for unknown values. */

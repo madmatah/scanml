@@ -18,7 +18,7 @@ export default {
   'Skip to content': 'Aller au contenu',
   'Main navigation': 'Navigation principale',
   'Library': 'Bibliothèque',
-  'Pairing': 'Appairage',
+  'Pairing': 'Association',
   'header|Sign out': 'Déconnexion',
   'Loading…': 'Chargement…',
   'Could not load': 'Chargement impossible',
@@ -63,8 +63,8 @@ export default {
   'Copy': 'Copier',
   'Delete': 'Supprimer',
   'Could not delete.': 'Suppression impossible.',
-  'Show token': 'Afficher le jeton',
-  'Hide token': 'Masquer le jeton',
+  'Show the access token': 'Afficher le jeton d’accès',
+  'Hide the access token': 'Masquer le jeton d’accès',
 
   // Labels of the API's values (lib/labels.js)
   'Queued': 'En file',
@@ -146,7 +146,7 @@ export default {
     'Le serveur crée ce jeton à son premier démarrage, dans le fichier {file} de son dossier de données. Un lien de la forme {link} vous connecte directement.',
   'Enter the access token.': 'Saisissez le jeton d’accès.',
   'Signing in…': 'Connexion…',
-  'Invalid token. Check it and try again.': 'Jeton invalide. Vérifiez-le et réessayez.',
+  'Invalid access token. Check it and try again.': 'Jeton d’accès invalide. Vérifiez-le et réessayez.',
 
   // Library (views/library.js) and the document form (components/dialogs.js)
   '{count} being read': '{count} en lecture',
@@ -167,7 +167,7 @@ export default {
   'Your library is empty': 'Votre bibliothèque est vide',
   'Create a document, then add photos to it from this browser, or scan directly with the Android app.':
     'Créez un document puis ajoutez-y des photos depuis ce navigateur, ou scannez directement avec l’application Android.',
-  'Pair the phone': 'Appairer le téléphone',
+  'Pair the phone': 'Associer le téléphone',
   'No document matches {query}.': 'Aucun document ne correspond à {query}.',
   'Could not refresh the library.': 'Actualisation de la bibliothèque impossible.',
   'Create document': 'Créer le document',
@@ -472,8 +472,7 @@ export default {
   'Test and pair': 'Tester et associer',
   'PC address': 'Adresse du PC',
   'Address copied.': 'Adresse copiée.',
-  'Token': 'Jeton',
-  'Token copied.': 'Jeton copié.',
+  'Access token copied.': 'Jeton d’accès copié.',
   'Two steps: install the Android app, then pair it with this PC.':
     'Deux étapes : installer l’application Android, puis l’associer à ce PC.',
 };

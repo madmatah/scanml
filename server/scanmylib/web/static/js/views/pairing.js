@@ -51,7 +51,7 @@ function copyField({ label, value, secret = false, copiedMessage }) {
         type: 'button',
         class: 'btn btn-icon',
         'aria-pressed': 'false',
-        'aria-label': t('Show token'),
+        'aria-label': t('Show the access token'),
       },
       icon('eye'),
     );
@@ -59,7 +59,7 @@ function copyField({ label, value, secret = false, copiedMessage }) {
       const visible = input.type === 'password';
       input.type = visible ? 'text' : 'password';
       reveal.setAttribute('aria-pressed', String(visible));
-      reveal.setAttribute('aria-label', visible ? t('Hide token') : t('Show token'));
+      reveal.setAttribute('aria-label', visible ? t('Hide the access token') : t('Show the access token'));
       reveal.replaceChildren(icon(visible ? 'eye-off' : 'eye'));
     });
     controls.push(reveal);
@@ -179,7 +179,12 @@ function pairCard(pairing) {
       }),
     ),
     copyField({ label: t('PC address'), value: pairing.url, copiedMessage: t('Address copied.') }),
-    copyField({ label: t('Token'), value: pairing.token, secret: true, copiedMessage: t('Token copied.') }),
+    copyField({
+      label: t('Access token'),
+      value: pairing.token,
+      secret: true,
+      copiedMessage: t('Access token copied.'),
+    }),
   );
 }
 

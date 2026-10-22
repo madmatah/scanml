@@ -223,8 +223,8 @@ export function mountReader(root, { route, signal, setTitle }) {
         'p',
         {},
         tn(
-          '{count} page is still waiting for OCR: it will be added to the text once processed.',
-          '{count} pages are still waiting for OCR: they will be added to the text once processed.',
+          '{count} page is still waiting to be read: its text will be added once ready.',
+          '{count} pages are still waiting to be read: their text will be added once ready.',
           waiting,
         ),
       ),
@@ -233,9 +233,9 @@ export function mountReader(root, { route, signal, setTitle }) {
   }
 
   function emptyMessage(doc) {
-    if (waitingPages(doc)) return t('Its pages are still waiting for OCR: their text will appear here once processed.');
+    if (waitingPages(doc)) return t('Its pages are still waiting to be read: their text will appear here once ready.');
     if (doc.stats?.pages) {
-      return t('None of its pages is in the document: they failed, are excluded or are duplicates.');
+      return t('None of its pages is in the document: they couldn’t be read, are excluded or are duplicates.');
     }
     return t('This document has no page yet: add some from its screen or with the Android app.');
   }

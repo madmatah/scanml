@@ -2,7 +2,7 @@
   "id": "/",
   "name": "ScanMyLib",
   "short_name": "ScanMyLib",
-  "description": "Scan your books and documents with your phone; OCR runs on your PC.",
+  "description": "Scan your books and documents with your phone; your PC reads their text.",
   "lang": "en",
   "dir": "ltr",
   "start_url": "/",

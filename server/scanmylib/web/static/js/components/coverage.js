@@ -49,7 +49,7 @@ export function renderCoverage(coverage) {
       h(
         'p',
         { class: 'muted' },
-        t('No page number known yet: the coverage will appear once numbered pages have been processed.'),
+        t('No page number known yet: the coverage will appear once the PC has read numbered pages.'),
       ),
       unnumberedNote,
     );

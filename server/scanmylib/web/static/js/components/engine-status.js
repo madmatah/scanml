@@ -132,8 +132,8 @@ function bannerFor(monitor) {
   if (ocr.reachable === false || ocr.state === 'unreachable') {
     return banner(
       'danger',
-      t('The OCR engine is unreachable.'),
-      t('Received photos are kept and will be processed as soon as the {container} container responds again.', {
+      t('Text recognition isn’t available.'),
+      t('Received pages wait on the PC: their text will be read as soon as the {container} container responds again.', {
         container: quoted('ocr'),
       }),
     );
@@ -141,7 +141,7 @@ function bannerFor(monitor) {
   if (ocr.state === 'error') {
     return banner(
       'danger',
-      t('The OCR engine could not start.'),
+      t('Text recognition is failing.'),
       ocr.last_error ||
         t('Check the logs of the {container} container. The pages stay in the queue.', {
           container: quoted('ocr'),

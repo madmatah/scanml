@@ -27,9 +27,10 @@ function statusChips(doc) {
   const { stats } = doc;
   return [
     h('li', { class: 'chip' }, documentKind(doc.kind)),
-    stats.processing > 0 && h('li', { class: 'chip chip-info' }, t('{count} in progress', { count: stats.processing })),
+    stats.processing > 0 && h('li', { class: 'chip chip-info' }, t('{count} being read', { count: stats.processing })),
     stats.queued > 0 && h('li', { class: 'chip chip-warn' }, t('{count} queued', { count: stats.queued })),
-    stats.error > 0 && h('li', { class: 'chip chip-danger' }, tn('{count} error', '{count} errors', stats.error)),
+    stats.error > 0 &&
+      h('li', { class: 'chip chip-danger' }, tn('{count} couldn’t be read', '{count} couldn’t be read', stats.error)),
     stats.excluded > 0 && h('li', { class: 'chip' }, tn('{count} excluded', '{count} excluded', stats.excluded)),
     stats.duplicates > 0 && h('li', { class: 'chip' }, tn('{count} duplicate', '{count} duplicates', stats.duplicates)),
   ];
@@ -74,7 +75,7 @@ function documentCard(doc) {
             { class: 'meter', 'aria-hidden': 'true' },
             h('span', { class: 'meter-fill', style: { width: `${Math.round(doneRatio * 100)}%` } }),
           ),
-          h('span', {}, `${stats.done} / ${tn('{count} page processed', '{count} pages processed', stats.pages)}`),
+          h('span', {}, `${stats.done} / ${tn('{count} page: text ready', '{count} pages: text ready', stats.pages)}`),
         ),
         h('p', { class: 'doc-card-coverage' }, coverageSummary(doc.coverage)),
         h('ul', { class: 'chips', role: 'list' }, statusChips(doc)),

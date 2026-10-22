@@ -433,8 +433,9 @@ export function createPageOrganizer({ save, reset, reload, onDone }) {
     const outside = latest ? latest.pages.length - order.length : 0;
     outsideNote.hidden = outside === 0;
     outsideNote.textContent = tn(
-      '{count} page is outside the document (waiting for OCR, failed, excluded or duplicate): ' + 'it is not affected.',
-      '{count} pages are outside the document (waiting for OCR, failed, excluded or duplicates): ' +
+      '{count} page is outside the document (waiting to be read, couldn’t be read, excluded or duplicate): ' +
+        'it is not affected.',
+      '{count} pages are outside the document (waiting to be read, couldn’t be read, excluded or duplicates): ' +
         'they are not affected.',
       outside,
       { count: outside },

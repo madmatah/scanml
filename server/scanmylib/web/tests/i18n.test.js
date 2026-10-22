@@ -376,7 +376,7 @@ describe('The translation', () => {
       'Skip to content',
       'header|Sign out',
       'Library',
-      'page status|Done',
+      'page status|Failed',
       '{count} page',
       'Drag a page to move it: if it is selected, the whole selection follows it. Click: select, Shift+click: ' +
         'range, Ctrl+click: add or remove. Esc cancels a move.',
@@ -732,11 +732,11 @@ describe('The translation', () => {
       describe('When the catalog also translates the message in a context', () => {
         let text;
         beforeEach(() => {
-          text = t('Done');
+          text = t('Failed');
         });
 
         it('should take the translation without context', () => {
-          assert.equal(text, FRENCH.Done);
+          assert.equal(text, FRENCH.Failed);
         });
       });
 
@@ -758,11 +758,11 @@ describe('The translation', () => {
       let text;
       beforeEach(() => {
         setLocale(ENGLISH_PREFERENCES);
-        text = tc('page status', 'Done');
+        text = tc('page status', 'Failed');
       });
 
       it('should give the message itself, without its context', () => {
-        assert.equal(text, 'Done');
+        assert.equal(text, 'Failed');
       });
     });
 
@@ -771,12 +771,12 @@ describe('The translation', () => {
       let textWithoutContext;
       beforeEach(() => {
         setLocale(FRENCH_PREFERENCES);
-        textInContext = tc('page status', 'Done');
-        textWithoutContext = t('Done');
+        textInContext = tc('page status', 'Failed');
+        textWithoutContext = t('Failed');
       });
 
       it('should take the translation of the message in its context', () => {
-        assert.equal(textInContext, FRENCH['page status|Done']);
+        assert.equal(textInContext, FRENCH['page status|Failed']);
       });
 
       it('should translate the message otherwise than without context, where the English is ambiguous', () => {

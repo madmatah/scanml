@@ -193,7 +193,7 @@ function reportSettledUploads({ detail: counts }) {
     const failures = tn('{count} failure', '{count} failures', failed);
     toast(t('{sent}, {failures}: see the document’s upload list.', { sent, failures }), { tone: 'error' });
   } else {
-    toast(t('{sent}: OCR will process them.', { sent }), { tone: 'success' });
+    toast(t('{sent}: the PC will read their text.', { sent }), { tone: 'success' });
   }
 }
 

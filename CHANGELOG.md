@@ -7,6 +7,25 @@ The notable changes of each release of ScanMyLib. The format is based on
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-22
+
+### Added
+
+- App: its own mark, an open book in scan corners, as its launcher icon and on the empty library; the dev app's icon
+  is cream on orange, with a "dev" tag in its themed icon (Android 13 and later)
+- App: banners for what needs the user, in ocher or red, each with one action: try the PC again, open the settings,
+  or send the document again
+- App: page states as badges that grow with the text, and pages shown as paper with their number, so that no state is
+  cut at a larger text size
+- App: icons for the PC, the phone and uploads in place of clouds, since nothing goes to a cloud
+- App: TalkBack names every switch, and jumps between the headings of the settings, the library and the document
+- App: the document's summary in the same colors as the library's cards, whatever the theme
+
+### Security
+
+- App: text from the PC shows on one line, without the characters a reader cannot see, and cut to a set length, so
+  that a long or garbled title cannot fill a screen or hide what it shows
+
 ## [0.4.0] - 2026-10-19
 
 ### Added
@@ -75,7 +94,8 @@ The notable changes of each release of ScanMyLib. The format is based on
 
 - OCR: read the whole request body before refusing a request
 
-[unreleased]: https://github.com/madmatah/scanml/compare/v0.4.0...HEAD
+[unreleased]: https://github.com/madmatah/scanml/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/madmatah/scanml/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/madmatah/scanml/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/madmatah/scanml/compare/v0.2.3...v0.3.0
 [0.2.3]: https://github.com/madmatah/scanml/tree/v0.2.3

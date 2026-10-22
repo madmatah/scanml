@@ -48,6 +48,8 @@ enum class FlashSetting(val imageCaptureMode: Int) {
 /** A photo being taken: the camera writes it to [file]. */
 data class Shot(val file: File, val takenAt: Instant)
 
+data class CameraClose(val werePhotosKept: Boolean)
+
 data class CaptureUiState(
     /**
      * The photos of this visit to the camera, those of a visit interrupted by the end of the
@@ -67,6 +69,11 @@ data class CaptureUiState(
     val finishing: Boolean = false,
     /** Where this visit starts in the run is known: until then, no photo is taken. */
     val ready: Boolean = false,
+    /**
+     * The screen must close. Kept until the screen has closed, so that a close set while the
+     * screen is not in front waits for it.
+     */
+    val closing: CameraClose? = null,
 ) {
     /** Photos of this visit, saved or on their way: leaving the screen must not lose them. */
     val photoCount: Int get() = pages.size + if (shooting) 1 else 0
@@ -98,8 +105,8 @@ class CaptureViewModel(
 
     private val shooting = MutableStateFlow(false)
     private val finishing = MutableStateFlow(false)
+    private val closing = MutableStateFlow<CameraClose?>(null)
     private val messageChannel = Channel<CaptureMessage>(Channel.BUFFERED)
-    private val closedChannel = Channel<Unit>(Channel.CONFLATED)
 
     /** The photo being taken, once its file is chosen. */
     private var currentShot: Shot? = null
@@ -116,24 +123,23 @@ class CaptureViewModel(
 
     val messages: Flow<CaptureMessage> = messageChannel.receiveAsFlow()
 
-    /** Emits when the screen must close: this visit's photos are kept ([finish]) or deleted ([discard]). */
-    val closed: Flow<Unit> = closedChannel.receiveAsFlow()
+    private val progress: Flow<Progress> = combine(shooting, finishing, closing, ::Progress)
 
     val uiState: StateFlow<CaptureUiState> = combine(
         staging.observe(documentId),
         visitStart,
         savedState.getStateFlow(KEY_FLASH, FlashSetting.OFF.name),
-        shooting,
-        finishing,
-    ) { run, start, flash, shooting, finishing ->
+        progress,
+    ) { run, start, flashName, visitProgress ->
         val visit = if (start == null) emptyList() else run.filter { it.seq > start }
         CaptureUiState(
             pages = visit,
             waiting = if (start == null) 0 else run.size - visit.size,
-            flash = storedEnum(flash, FlashSetting.OFF),
-            shooting = shooting,
-            finishing = finishing,
+            flash = storedEnum(flashName, FlashSetting.OFF),
+            shooting = visitProgress.shooting,
+            finishing = visitProgress.finishing,
             ready = start != null,
+            closing = visitProgress.closing,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), CaptureUiState())
 
@@ -207,7 +213,7 @@ class CaptureViewModel(
         try {
             staging.add(documentId, listOf(StagingInput(shot.file, shot.takenAt)))
             shotDone(shot)
-            if (finishing.value) close()
+            if (finishing.value) close(werePhotosKept = true)
         } catch (e: IOException) {
             deleteQuietly(shot.file)
             fail(e, CaptureMessage.ShotNotSaved)
@@ -240,12 +246,17 @@ class CaptureViewModel(
      * the run. If that photo fails instead, the screen stays, to say so.
      */
     fun finish() {
-        if (shooting.value) finishing.value = true else close()
+        if (shooting.value) finishing.value = true else close(werePhotosKept = true)
     }
 
-    private fun close() {
+    private fun close(werePhotosKept: Boolean) {
         finishing.value = false
-        closedChannel.trySend(Unit)
+        closing.value = CameraClose(werePhotosKept)
+    }
+
+    /** The screen closed for [close]: a close set since then still waits. */
+    fun onCloseHandled(close: CameraClose) {
+        closing.compareAndSet(close, null)
     }
 
     /** Deletes a photo of this visit, e.g. a blurred one, to take it again. */
@@ -260,9 +271,9 @@ class CaptureViewModel(
     }
 
     /**
-     * Deletes the photos of this visit, the one on its way included, then emits [closed]. The pages
-     * from before the visit stay in the run. If a photo cannot be deleted, the screen stays to say
-     * so, with the photos left.
+     * Deletes the photos of this visit, the one on its way included, then closes the screen. The
+     * pages from before the visit stay in the run. If a photo cannot be deleted, the screen stays to
+     * say so, with the photos left.
      */
     fun discard() {
         currentShot?.let(abandonedShots::add)
@@ -278,7 +289,7 @@ class CaptureViewModel(
                     return@launch
                 }
             }
-            closedChannel.send(Unit)
+            close(werePhotosKept = false)
         }
     }
 
@@ -315,6 +326,8 @@ class CaptureViewModel(
         }
     }
 }
+
+private data class Progress(val shooting: Boolean, val finishing: Boolean, val closing: CameraClose?)
 
 /** CameraX closed the camera before the photo was saved: the screen left, the phone locked... */
 private fun Exception.isCameraClosed(): Boolean =

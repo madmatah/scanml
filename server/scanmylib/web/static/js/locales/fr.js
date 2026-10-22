@@ -13,8 +13,8 @@
  */
 export default {
   // Shared: index.html, main.js, navigation, states, errors, formats
-  'ScanMyLib: scan your books and documents with your phone; OCR runs on your PC.':
-    'ScanMyLib : numérisez vos livres et documents avec votre téléphone, l’OCR tourne sur votre PC.',
+  'ScanMyLib: scan your books and documents with your phone; your PC reads their text.':
+    'ScanMyLib : scannez vos livres et documents avec votre téléphone, votre PC en lit le texte.',
   'Skip to content': 'Aller au contenu',
   'Main navigation': 'Navigation principale',
   'Library': 'Bibliothèque',
@@ -39,7 +39,7 @@ export default {
   '{count} photo sent': { one: '{count} photo envoyée', other: '{count} photos envoyées' },
   '{count} failure': { one: '{count} échec', other: '{count} échecs' },
   '{sent}, {failures}: see the document’s upload list.': '{sent}, {failures} : voir la liste des envois du document.',
-  '{sent}: OCR will process them.': '{sent} : l’OCR va les traiter.',
+  '{sent}: the PC will read their text.': '{sent} : le PC va en lire le texte.',
   'An unexpected error occurred.': 'Une erreur inattendue est survenue.',
   'The ScanMyLib server is not responding. Check that it is running and that you are on the same network.':
     'Le serveur ScanMyLib ne répond pas. Vérifiez qu’il est démarré et que vous êtes sur le même réseau.',
@@ -67,14 +67,14 @@ export default {
   'Hide token': 'Masquer le jeton',
 
   // Labels of the API's values (lib/labels.js)
-  'Queued': 'En attente',
-  'OCR in progress': 'OCR en cours',
-  'page status|Done': 'Terminée',
-  'Error': 'Erreur',
+  'Queued': 'En file',
+  'Reading…': 'Lecture…',
+  'Text ready': 'Texte prêt',
+  'page status|Failed': 'Échec',
   'manual': 'manuel',
   'Number typed by hand': 'Numéro saisi à la main',
   'detected': 'détecté',
-  'Number read on the page by OCR': 'Numéro lu sur la page par l’OCR',
+  'Number detected on the page': 'Numéro détecté sur la page',
   'hint': 'indice',
   'Number given from the phone': 'Numéro indiqué depuis le téléphone',
   'inferred': 'déduit',
@@ -130,10 +130,10 @@ export default {
   '{count} in queue': '{count} en file',
   'Retrying every 3 seconds. Check that the PC is on and that the {service} service is running.':
     'Nouvelle tentative toutes les 3 secondes. Vérifiez que le PC est allumé et que le service {service} tourne.',
-  'The OCR engine is unreachable.': 'Le moteur OCR est injoignable.',
-  'Received photos are kept and will be processed as soon as the {container} container responds again.':
-    'Les photos reçues sont conservées et seront traitées dès que le conteneur {container} répondra de nouveau.',
-  'The OCR engine could not start.': 'Le moteur OCR n’a pas pu démarrer.',
+  'Text recognition isn’t available.': 'La lecture du texte est indisponible.',
+  'Received pages wait on the PC: their text will be read as soon as the {container} container responds again.':
+    'Les pages reçues attendent sur le PC : leur texte sera lu dès que le conteneur {container} répondra de nouveau.',
+  'Text recognition is failing.': 'La lecture du texte est en panne.',
   'Check the logs of the {container} container. The pages stay in the queue.':
     'Consultez les journaux du conteneur {container}. Les pages restent en file d’attente.',
 
@@ -149,15 +149,15 @@ export default {
   'Invalid token. Check it and try again.': 'Jeton invalide. Vérifiez-le et réessayez.',
 
   // Library (views/library.js) and the document form (components/dialogs.js)
-  '{count} in progress': '{count} en cours',
-  '{count} queued': '{count} en attente',
-  '{count} error': { one: '{count} erreur', other: '{count} erreurs' },
+  '{count} being read': '{count} en lecture',
+  '{count} queued': '{count} en file',
+  '{count} couldn’t be read': { one: '{count} échec de lecture', other: '{count} échecs de lecture' },
   '{count} excluded': { one: '{count} exclue', other: '{count} exclues' },
   '{count} duplicate': { one: '{count} doublon', other: '{count} doublons' },
   '{count} unnumbered page': { one: '{count} page non numérotée', other: '{count} pages non numérotées' },
   'No numbered page': 'Aucune page numérotée',
   'missing {ranges}': 'manque {ranges}',
-  '{count} page processed': { one: '{count} page traitée', other: '{count} pages traitées' },
+  '{count} page: text ready': { one: '{count} page : texte prêt', other: '{count} pages : texte prêt' },
   'Updated {time}': 'Modifié {time}',
   'Search for a title, an author…': 'Rechercher un titre, un auteur…',
   'Search the library': 'Rechercher dans la bibliothèque',
@@ -190,15 +190,15 @@ export default {
   'Nothing tells where they go: they are at the end of the document, in capture order. “Organize” can put them in their place.':
     'Rien ne permet de les placer : elles sont à la fin du document, dans l’ordre de prise de vue. « Organiser » permet de les mettre à leur place.',
   'Not in the document yet': 'Pas encore intégrées',
-  'Waiting for OCR or failed: they will join the document once processed.':
-    'En attente d’OCR ou en erreur : elles rejoindront le document une fois traitées.',
+  'Waiting to be read, or couldn’t be read: they will join the document once their text is ready.':
+    'En attente de lecture, ou en échec : elles rejoindront le document une fois leur texte prêt.',
   'Excluded': 'Exclues',
   'Left out of document.md.': 'Ignorées dans document.md.',
   'Duplicates': 'Doublons',
   'Replaced by a newer scan of the same page number.': 'Remplacées par un scan plus récent du même numéro de page.',
   'Pages': 'Pages',
-  'Processed': 'Traitées',
-  'Processing': 'En cours',
+  'Being read': 'En lecture',
+  'Couldn’t be read': 'Échecs de lecture',
   'one page|Excluded': 'Exclue',
   'Duplicate': 'Doublon',
   'Import photos': 'Importer des photos',
@@ -250,8 +250,8 @@ export default {
   'Page {page}: scanned': 'Page {page} : numérisée',
   'Pages {range}: missing': 'Pages {range} : manquantes',
   'Pages {range}: scanned': 'Pages {range} : numérisées',
-  'No page number known yet: the coverage will appear once numbered pages have been processed.':
-    'Aucun numéro de page connu pour l’instant : la couverture s’affichera dès que des pages numérotées auront été traitées.',
+  'No page number known yet: the coverage will appear once the PC has read numbered pages.':
+    'Aucun numéro de page connu pour l’instant : la couverture s’affichera dès que le PC aura lu des pages numérotées.',
   'Scanned pages: {scanned}. Missing pages: {missing}.': 'Pages numérisées : {scanned}. Pages manquantes : {missing}.',
   'All pages from {min} to {max} are scanned.': 'Toutes les pages de {min} à {max} sont numérisées.',
   '{fraction} pages between {min} and {max} ({percent})': '{fraction} pages entre {min} et {max} ({percent})',
@@ -299,11 +299,12 @@ export default {
   'Unnumbered pages ({count})': 'Pages non numérotées ({count})',
   'Nothing tells where they go: they are at the end of the document. Drag them to their place.':
     'Rien ne permet de les placer : elles sont à la fin du document. Glissez-les à leur place.',
-  '{count} page is outside the document (waiting for OCR, failed, excluded or duplicate): it is not affected.': {
-    one: '{count} page est hors du document (en attente d’OCR, en erreur, exclue ou doublon) : elle n’est pas concernée.',
-    other:
-      '{count} pages sont hors du document (en attente d’OCR, en erreur, exclues ou doublons) : elles ne sont pas concernées.',
-  },
+  '{count} page is outside the document (waiting to be read, couldn’t be read, excluded or duplicate): it is not affected.':
+    {
+      one: '{count} page est hors du document (en attente de lecture, en échec, exclue ou doublon) : elle n’est pas concernée.',
+      other:
+        '{count} pages sont hors du document (en attente de lecture, en échec, exclues ou doublons) : elles ne sont pas concernées.',
+    },
   '{count} page selected out of {total}': {
     one: '{count} page sélectionnée sur {total}',
     other: '{count} pages sélectionnées sur {total}',
@@ -339,12 +340,12 @@ export default {
   '{series} · photo no. {seq}': '{series} · photo n° {seq}',
   'Rotation': 'Rotation',
   'Dimensions': 'Dimensions',
-  'OCR engine': 'Moteur OCR',
-  'OCR duration': 'Durée de l’OCR',
+  'Text recognition engine': 'Moteur de lecture du texte',
+  'Text recognition time': 'Durée de la lecture',
   'Recognized text': 'Texte reconnu',
   '{count} character': { one: '{count} caractère', other: '{count} caractères' },
   'Illustrations': 'Illustrations',
-  'OCR performed': 'OCR effectué le',
+  'Text read on': 'Texte lu le',
   'File key': 'Clé des fichiers',
   'No known number: the page is at the place chosen with “Organize”.':
     'Aucun numéro connu : la page est à la place choisie avec « Organiser ».',
@@ -360,7 +361,7 @@ export default {
   'Page number': 'Numéro de page',
   'Rotate 90° to the left': 'Pivoter de 90° vers la gauche',
   'Rotate 90° to the right': 'Pivoter de 90° vers la droite',
-  'Run OCR again': 'Relancer l’OCR',
+  'Read the text again': 'Relancer la lecture',
   'Full width': 'Pleine largeur',
   'Original': 'Original',
   'Raw Markdown': 'Markdown brut',
@@ -369,8 +370,8 @@ export default {
   'Rotate': 'Pivoter',
   'Scan': 'Scan',
   'Technical details': 'Détails techniques',
-  'OCR failed.': 'L’OCR a échoué.',
-  'You can run OCR again or rotate the page.': 'Vous pouvez relancer l’OCR ou pivoter la page.',
+  'Couldn’t read the text.': 'Échec de la lecture.',
+  'You can read the text again or rotate the page.': 'Vous pouvez relancer la lecture ou pivoter la page.',
   'Details: {error}': 'Détail : {error}',
   'Duplicate.': 'Doublon.',
   'A newer scan has the same number and replaces it in the document.':
@@ -378,9 +379,8 @@ export default {
   'See the page kept': 'Voir la page retenue',
   'Page excluded.': 'Page exclue.',
   'It does not appear in document.md.': 'Elle n’apparaît pas dans document.md.',
-  'Page queued for OCR…': 'Page en file d’attente pour l’OCR…',
-  'OCR in progress…': 'OCR en cours…',
-  'No text: the OCR of this page failed.': 'Pas de texte : l’OCR de cette page a échoué.',
+  'Waiting to be read…': 'En attente de lecture…',
+  'No text: this page couldn’t be read.': 'Pas de texte : la lecture de cette page a échoué.',
   'Empty Markdown.': 'Markdown vide.',
   'No text recognized on this page.': 'Aucun texte reconnu sur cette page.',
   'Original scan, {page}': 'Scan original, {page}',
@@ -395,13 +395,13 @@ export default {
   'Enter a whole page number between 1 and 9999.': 'Saisissez un numéro de page entier, entre 1 et 9999.',
   'Number {number} saved.': 'Numéro {number} enregistré.',
   'Manual number cleared.': 'Numéro manuel effacé.',
-  'Page rotated: its OCR will run again.': 'Page pivotée : son OCR va être relancé.',
+  'Page rotated: its text will be read again.': 'Page pivotée : son texte va être relu.',
   'Page excluded from the document.': 'Page exclue du document.',
   'Page put back in the document.': 'Page réintégrée au document.',
-  'OCR restarted for this page.': 'OCR relancé pour cette page.',
+  'The text of this page will be read again.': 'Le texte de cette page va être relu.',
   'Delete this page?': 'Supprimer cette page ?',
-  'The scan and its OCR results will be moved to the library’s trash (.trash), then the document will be reassembled.':
-    'Le scan et ses résultats d’OCR seront déplacés dans la corbeille de la bibliothèque (.trash), puis le document sera réassemblé.',
+  'The scan, its text and its illustrations will be moved to the library’s trash (.trash), then the document will be reassembled.':
+    'Le scan, son texte et ses illustrations seront déplacés dans la corbeille de la bibliothèque (.trash), puis le document sera réassemblé.',
   'Delete page': 'Supprimer la page',
   'Page deleted.': 'Page supprimée.',
   'Markdown copied.': 'Markdown copié.',
@@ -415,14 +415,14 @@ export default {
   'Reading': 'Lecture',
   'Back to the document': 'Retour au document',
   'Refresh': 'Actualiser',
-  '{count} page is still waiting for OCR: it will be added to the text once processed.': {
-    one: '{count} page attend encore l’OCR : elle s’ajoutera au texte une fois traitée.',
-    other: '{count} pages attendent encore l’OCR : elles s’ajouteront au texte une fois traitées.',
+  '{count} page is still waiting to be read: its text will be added once ready.': {
+    one: '{count} page attend encore d’être lue : son texte s’ajoutera une fois prêt.',
+    other: '{count} pages attendent encore d’être lues : leur texte s’ajoutera une fois prêt.',
   },
-  'Its pages are still waiting for OCR: their text will appear here once processed.':
-    'Ses pages attendent encore l’OCR : leur texte apparaîtra ici une fois traitées.',
-  'None of its pages is in the document: they failed, are excluded or are duplicates.':
-    'Aucune de ses pages n’est intégrée au document : elles sont en erreur, exclues ou en double.',
+  'Its pages are still waiting to be read: their text will appear here once ready.':
+    'Ses pages attendent encore d’être lues : leur texte apparaîtra ici une fois prêt.',
+  'None of its pages is in the document: they couldn’t be read, are excluded or are duplicates.':
+    'Aucune de ses pages n’est intégrée au document : elles n’ont pas pu être lues, sont exclues ou en double.',
   'This document has no page yet: add some from its screen or with the Android app.':
     'Ce document n’a pas encore de page : ajoutez-en depuis son écran ou avec l’application Android.',
   'Nothing to read yet': 'Rien à lire pour l’instant',

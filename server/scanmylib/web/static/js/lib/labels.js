@@ -6,14 +6,14 @@ import { t, tc } from './i18n.js';
 
 const PAGE_STATUS = {
   queued: () => ({ label: t('Queued'), tone: 'warn' }),
-  processing: () => ({ label: t('OCR in progress'), tone: 'info' }),
-  done: () => ({ label: tc('page status', 'Done'), tone: 'ok' }),
-  error: () => ({ label: t('Error'), tone: 'danger' }),
+  processing: () => ({ label: t('Reading…'), tone: 'info' }),
+  done: () => ({ label: t('Text ready'), tone: 'ok' }),
+  error: () => ({ label: tc('page status', 'Failed'), tone: 'danger' }),
 };
 
 const NUMBER_SOURCE = {
   manual: () => ({ label: t('manual'), description: t('Number typed by hand') }),
-  detected: () => ({ label: t('detected'), description: t('Number read on the page by OCR') }),
+  detected: () => ({ label: t('detected'), description: t('Number detected on the page') }),
   hint: () => ({ label: t('hint'), description: t('Number given from the phone') }),
   inferred: () => ({
     label: t('inferred'),

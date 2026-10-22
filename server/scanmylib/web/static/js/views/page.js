@@ -66,11 +66,11 @@ function detailRows(page) {
     ],
     [t('Rotation'), `${page.rotation ?? 0}°`],
     [t('Dimensions'), page.width && page.height ? `${page.width} × ${page.height} px` : null],
-    [t('OCR engine'), ocr.engine],
-    [t('OCR duration'), isPresent(ocr.duration_s) ? formatSeconds(ocr.duration_s) : null],
+    [t('Text recognition engine'), ocr.engine],
+    [t('Text recognition time'), isPresent(ocr.duration_s) ? formatSeconds(ocr.duration_s) : null],
     [t('Recognized text'), isPresent(ocr.chars) ? tn('{count} character', '{count} characters', ocr.chars) : null],
     [t('Illustrations'), isPresent(ocr.images) ? String(ocr.images) : null],
-    [t('OCR performed'), ocr.at ? formatDateTime(ocr.at) : null],
+    [t('Text read on'), ocr.at ? formatDateTime(ocr.at) : null],
     [t('File key'), page.key && h('code', {}, page.key)],
   ];
   return rows
@@ -159,7 +159,7 @@ export function mountPage(root, { route, signal, setTitle }) {
   const rotateRightButton = iconButton('rotate-right', t('Rotate 90° to the right'));
   const rotateLabelId = uniqueId('rotate-label');
   const excludeButton = h('button', { type: 'button', class: 'btn' });
-  const reprocessButton = h('button', { type: 'button', class: 'btn' }, icon('refresh'), t('Run OCR again'));
+  const reprocessButton = h('button', { type: 'button', class: 'btn' }, icon('refresh'), t('Read the text again'));
   const deleteButton = h('button', { type: 'button', class: 'btn btn-danger' }, icon('trash'), t('Delete'));
 
   const scanImage = h('img', { alt: '', decoding: 'async' });
@@ -326,9 +326,9 @@ export function mountPage(root, { route, signal, setTitle }) {
           h(
             'p',
             {},
-            h('strong', {}, t('OCR failed.')),
+            h('strong', {}, t('Couldn’t read the text.')),
             ' ',
-            t('You can run OCR again or rotate the page.'),
+            t('You can read the text again or rotate the page.'),
             page.error && h('span', { class: 'notice-detail' }, t('Details: {error}', { error: page.error })),
           ),
         ),
@@ -376,11 +376,11 @@ export function mountPage(root, { route, signal, setTitle }) {
           'div',
           { class: 'state state-loading', role: 'status' },
           h('span', { class: 'spinner', 'aria-hidden': 'true' }),
-          h('span', {}, page.status === 'queued' ? t('Page queued for OCR…') : t('OCR in progress…')),
+          h('span', {}, page.status === 'queued' ? t('Waiting to be read…') : t('Reading…')),
         ),
       );
     } else if (page.status === 'error' && !hasMarkdown) {
-      textBody.replaceChildren(h('p', { class: 'state' }, t('No text: the OCR of this page failed.')));
+      textBody.replaceChildren(h('p', { class: 'state' }, t('No text: this page couldn’t be read.')));
     } else if (showMarkdown) {
       textBody.replaceChildren(
         hasMarkdown
@@ -562,13 +562,13 @@ export function mountPage(root, { route, signal, setTitle }) {
   onActivate(rotateLeftButton, () => {
     act(
       () => api.updatePage(pageId, { rotation: ((page.rotation ?? 0) + 270) % 360 }),
-      t('Page rotated: its OCR will run again.'),
+      t('Page rotated: its text will be read again.'),
     );
   });
   onActivate(rotateRightButton, () => {
     act(
       () => api.updatePage(pageId, { rotation: ((page.rotation ?? 0) + 90) % 360 }),
-      t('Page rotated: its OCR will run again.'),
+      t('Page rotated: its text will be read again.'),
     );
   });
   onActivate(excludeButton, () => {
@@ -579,13 +579,13 @@ export function mountPage(root, { route, signal, setTitle }) {
     );
   });
   onActivate(reprocessButton, () => {
-    act(() => api.reprocessPage(pageId), t('OCR restarted for this page.'));
+    act(() => api.reprocessPage(pageId), t('The text of this page will be read again.'));
   });
   onActivate(deleteButton, async () => {
     const confirmed = await confirmDialog({
       title: t('Delete this page?'),
       message: t(
-        'The scan and its OCR results will be moved to the library’s trash (.trash), ' +
+        'The scan, its text and its illustrations will be moved to the library’s trash (.trash), ' +
           'then the document will be reassembled.',
       ),
       confirmLabel: t('Delete page'),

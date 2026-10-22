@@ -11,8 +11,9 @@
  *
  * - t(message, values): `{name}` in the message is replaced by `values.name`.
  * - tc(context, message, values): for an English message that needs
- *   different translations depending on where it appears ("Done" for a
- *   button, or for a page status); its catalog key is "context|message".
+ *   different translations depending on where it appears ("Failed" for a
+ *   page status, or in the engine's details); its catalog key is
+ *   "context|message".
  * - tn(singular, plural, count, values): the form for `count`, chosen by the
  *   plural rules of the language; `{count}` is the number formatted for the
  *   locale, unless `values.count` is given.

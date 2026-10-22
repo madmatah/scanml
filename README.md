@@ -173,13 +173,13 @@ The web UI is served by the PC on port 8765 (`http://localhost:8765`), and can b
 Its header shows the state of the OCR engine.
 
 - **Library**: every document with its cover, its pages and its coverage.
-- **Document**: the grid of pages (in the document, unnumbered, waiting for OCR or failed, excluded, duplicates), the
+- **Document**: the grid of pages (in the document, unnumbered, waiting to be read or failed, excluded, duplicates), the
   coverage, the downloads of `document.md` and of a `.zip` archive, and:
   - **Read document**: the whole document in reading order, as in `document.md`, with its formulas typeset. A marker at
     the start of each page opens that page, and a list of the pages jumps to any of them.
   - **Organize**: reorder the pages by hand (see "Page order").
 - **Page**: the scan next to the recognized text, the page number (a number typed by hand corrects it), rotation,
-  exclusion from the document, new OCR run, deletion.
+  exclusion from the document, reading the text again, deletion.
 - **Pairing**: installing the app and pairing a phone.
 
 ## Output

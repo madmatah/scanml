@@ -133,7 +133,7 @@ export function documentDialog({ heading, submitLabel, initial = {}, withNotes =
         h('label', { for: ids.author }, t('Author'), ' ', h('span', { class: 'optional' }, t('(optional)'))),
         author,
       ),
-      h('fieldset', { class: 'field' }, h('legend', {}, t('Type')), h('div', { class: 'segmented' }, kindChoices)),
+      h('fieldset', { class: 'field' }, h('legend', {}, t('Kind')), h('div', { class: 'segmented' }, kindChoices)),
       h(
         'label',
         { class: 'checkbox' },
@@ -141,11 +141,11 @@ export function documentDialog({ heading, submitLabel, initial = {}, withNotes =
         h(
           'span',
           {},
-          h('span', { class: 'checkbox-label' }, t('Bound book: straighten curved pages')),
+          h('span', { class: 'checkbox-label' }, t('Flatten curved pages')),
           h(
             'span',
             { id: ids.unwarpHint, class: 'hint' },
-            t('Flattens the curvature of the pages near the binding before OCR (a little slower).'),
+            t('For pages curved near the binding; done by the PC, a little slower.'),
           ),
         ),
       ),

@@ -11,9 +11,10 @@ export function pageMarkerText(label) {
   return label ? t('Page {label}', { label }) : t('Unnumbered page');
 }
 
-/** Gap in the numbering: "Missing pages: 13–44", "Missing page: 13". */
 export function missingPagesText(range) {
-  return /[–-]/.test(range) ? t('Missing pages: {range}', { range }) : t('Missing page: {range}', { range });
+  return /[–-]/.test(range)
+    ? t('Pages not scanned yet: {range}', { range })
+    : t('Page not scanned yet: {range}', { range });
 }
 
 /** Heading before the pages that could not be placed. */
@@ -23,8 +24,9 @@ export function unnumberedHeadingText() {
 
 /**
  * Writes the markers of the document HTML (GET /api/documents/{id}/html,
- * children of `content`) in the UI language. The server writes them in
- * English and gives their data as attributes:
+ * children of `content`) in the UI's words and language. The server writes
+ * them in English, with its own words for a gap, and gives their data as
+ * attributes:
  * <p class="page-marker" data-label="42"> (empty for a page without number),
  * <p class="missing-pages" data-range="13–44"> and <h2 class="unnumbered">.
  * A marker without its attribute keeps the server's text.

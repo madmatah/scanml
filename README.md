@@ -16,7 +16,7 @@ Phone (ScanMyLib app)  ──Wi-Fi──▶  PC: api ──socket──▶ OCR s
 ## Features
 
 - **Partial, out-of-order scanning.** Pages arrive in any order, in several batches; they are put back in order from
-  their printed page numbers, and the coverage ("1–12, 45–60") shows what is missing.
+  their printed page numbers, and the coverage ("1–12, 45–60") shows which pages are not scanned yet.
 - **Structured output.** One Markdown file per document and per page, tables in HTML, formulas in LaTeX, illustrations
   cropped into image files, plus a machine-readable index of the library.
 - **Untrusted OCR stack kept apart.** PaddlePaddle, vLLM and the model run in a container with no network, no access to
@@ -142,7 +142,7 @@ Pages can arrive in any order, in several batches.
 - **Manual order**: in the web UI, on a document, the **Organize** button. Drag and drop a page or a selection
   (Shift+click for a range), or use **Move selection…**. The displayed numbers do not change, only the order does.
   **Restore automatic order** undoes everything.
-- **Coverage**: "1–12, 45–60" and the missing pages are shown in the app and the web UI.
+- **Coverage**: "1–12, 45–60" and the pages not scanned yet are shown in the app and the web UI.
 - **Rescanned page**: the most recent one replaces the old one, which stays visible as a duplicate.
 
 ## OCR engine

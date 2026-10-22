@@ -156,7 +156,7 @@ export default {
   '{count} duplicate': { one: '{count} doublon', other: '{count} doublons' },
   '{count} unnumbered page': { one: '{count} page non numérotée', other: '{count} pages non numérotées' },
   'No numbered page': 'Aucune page numérotée',
-  'missing {ranges}': 'manque {ranges}',
+  'not scanned yet: {ranges}': 'pas encore scannées : {ranges}',
   '{count} page: text ready': { one: '{count} page traitée', other: '{count} pages traitées' },
   'Updated {time}': 'Modifié {time}',
   'Search for a title, an author…': 'Rechercher un titre, un auteur…',
@@ -247,17 +247,18 @@ export default {
   'Document {title} moved to the trash.': 'Document {title} déplacé dans la corbeille.',
   'Folder path copied.': 'Chemin du dossier copié.',
   'Could not copy: select the path by hand.': 'Copie impossible : sélectionnez le chemin à la main.',
-  'Page {page}: missing': 'Page {page} : manquante',
-  'Page {page}: scanned': 'Page {page} : numérisée',
-  'Pages {range}: missing': 'Pages {range} : manquantes',
-  'Pages {range}: scanned': 'Pages {range} : numérisées',
+  'Page {page}: not scanned yet': 'Page {page} : pas encore scannée',
+  'Page {page}: scanned': 'Page {page} : scannée',
+  'Pages {range}: not scanned yet': 'Pages {range} : pas encore scannées',
+  'Pages {range}: scanned': 'Pages {range} : scannées',
   'No page number known yet: the coverage will appear once the PC has read numbered pages.':
     'Aucun numéro de page connu pour l’instant : la couverture s’affichera dès que le PC aura lu des pages numérotées.',
-  'Scanned pages: {scanned}. Missing pages: {missing}.': 'Pages numérisées : {scanned}. Pages manquantes : {missing}.',
-  'All pages from {min} to {max} are scanned.': 'Toutes les pages de {min} à {max} sont numérisées.',
+  'Scanned pages: {scanned}. Not scanned yet: {missing}.':
+    'Pages scannées : {scanned}. Pas encore scannées : {missing}.',
+  'All pages from {min} to {max} are scanned.': 'Toutes les pages de {min} à {max} sont scannées.',
   '{fraction} pages between {min} and {max} ({percent})': '{fraction} pages entre {min} et {max} ({percent})',
-  'Scanned': 'Numérisées',
-  'Missing': 'Manquantes',
+  'Scanned': 'Scannées',
+  'Not scanned yet': 'Pas encore scannées',
   'missing pages|none': 'aucune',
 
   // Organizing the pages (components/page-organizer.js)
@@ -429,8 +430,8 @@ export default {
   'Nothing to read yet': 'Rien à lire pour l’instant',
   'Could not refresh.': 'Actualisation impossible.',
   'Unnumbered page': 'Page non numérotée',
-  'Missing page: {range}': 'Page manquante : {range}',
-  'Missing pages: {range}': 'Pages manquantes : {range}',
+  'Page not scanned yet: {range}': 'Page pas encore scannée : {range}',
+  'Pages not scanned yet: {range}': 'Pages pas encore scannées : {range}',
   '{label} (position {position})': '{label} (position {position})',
 
   // Pairing (views/pairing.js); the quoted labels are those of the Android app

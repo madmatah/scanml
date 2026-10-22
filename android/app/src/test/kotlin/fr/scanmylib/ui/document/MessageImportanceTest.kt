@@ -12,9 +12,9 @@ import org.junit.runners.Parameterized
 @RunWith(Enclosed::class)
 class MessageImportanceTest {
     @RunWith(Enclosed::class)
-    class TheImportantProperty {
+    class TheImportantPropertyOfAScanMessage {
         @RunWith(Parameterized::class)
-        class WhenTheMessageIsAboutPagesLeftOutOrLost(private val case: String, private val message: DocumentMessage) {
+        class WhenTheMessageIsAboutPagesLeftOutOrLost(private val case: String, private val message: ScanMessage) {
             private var isImportant by Delegates.notNull<Boolean>()
 
             @Before
@@ -33,15 +33,39 @@ class MessageImportanceTest {
                 fun messages(): List<Array<Any>> = listOf(
                     arrayOf(
                         "photos skipped",
-                        DocumentMessage.PhotosSkipped(unsupported = 1, tooLarge = 0, unreadable = 2),
+                        ScanMessage.PhotosSkipped(unsupported = 1, tooLarge = 0, unreadable = 2),
                     ),
-                    arrayOf("adding interrupted", DocumentMessage.AddingInterrupted),
-                    arrayOf("storage full", DocumentMessage.StorageFull),
-                    arrayOf("send failed", DocumentMessage.SendFailed),
+                    arrayOf("adding interrupted", ScanMessage.AddingInterrupted),
+                    arrayOf("storage full", ScanMessage.StorageFull),
+                    arrayOf("send failed", ScanMessage.SendFailed),
                 )
             }
         }
 
+        @RunWith(Parameterized::class)
+        class WhenTheMessageIsRoutine(private val case: String, private val message: ScanMessage) {
+            private var isImportant by Delegates.notNull<Boolean>()
+
+            @Before
+            fun weighTheMessage() {
+                isImportant = message.important
+            }
+
+            @Test
+            fun `should go away by itself`() {
+                assertFalse(case, isImportant)
+            }
+
+            companion object {
+                @JvmStatic
+                @Parameterized.Parameters(name = "{0}")
+                fun messages(): List<Array<Any>> = listOf(arrayOf("pages queued", ScanMessage.PagesQueued(4)))
+            }
+        }
+    }
+
+    @RunWith(Enclosed::class)
+    class TheImportantPropertyOfADocumentMessage {
         @RunWith(Parameterized::class)
         class WhenTheMessageIsRoutine(private val case: String, private val message: DocumentMessage) {
             private var isImportant by Delegates.notNull<Boolean>()
@@ -60,7 +84,6 @@ class MessageImportanceTest {
                 @JvmStatic
                 @Parameterized.Parameters(name = "{0}")
                 fun messages(): List<Array<Any>> = listOf(
-                    arrayOf("pages queued", DocumentMessage.PagesQueued(4)),
                     arrayOf("PC unreachable", DocumentMessage.Unreachable),
                     arrayOf("page busy", DocumentMessage.PageBusy),
                 )

@@ -100,9 +100,10 @@ fun DocumentScreen(
     switchToSource: ScanSource? = null,
     onSwitchHandled: () -> Unit = {},
     viewModel: DocumentViewModel = viewModel(factory = DocumentViewModel.Factory),
+    scanViewModel: ScanViewModel = viewModel(factory = ScanViewModel.Factory),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    val scan by viewModel.scanState.collectAsStateWithLifecycle()
+    val scan by scanViewModel.scanState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val resources = LocalResources.current
     // While visible, the screen follows the upload of the pages, then their processing on the PC.
@@ -111,16 +112,16 @@ fun DocumentScreen(
         lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) { viewModel.keepUpToDate() }
     }
     val launchScanner = rememberDocumentScanner(
-        onScanned = viewModel::onPagesScanned,
-        onStarted = viewModel::onScannerStarted,
-        onUnavailable = viewModel::onScannerUnavailable,
-        onFailed = viewModel::onScannerFailed,
+        onScanned = scanViewModel::onPagesScanned,
+        onStarted = scanViewModel::onScannerStarted,
+        onUnavailable = scanViewModel::onScannerUnavailable,
+        onFailed = scanViewModel::onScannerFailed,
     )
     // The system photo picker needs no storage permission (it falls back to the document picker
     // on phones without it). One contract: a new one at each recomposition would register the
     // launcher again each time.
     val pickPhotosContract = remember { PickMultipleVisualMedia() }
-    val pickPhotos = rememberLauncherForActivityResult(pickPhotosContract, viewModel::onPhotosPicked)
+    val pickPhotos = rememberLauncherForActivityResult(pickPhotosContract, scanViewModel::onPhotosPicked)
     val importPhotos = {
         try {
             // In the order the photos are chosen: the order kept for photos without a date.
@@ -131,12 +132,12 @@ fun DocumentScreen(
                     .build(),
             )
         } catch (e: ActivityNotFoundException) {
-            viewModel.onPhotoPickerUnavailable(e)
+            scanViewModel.onPhotoPickerUnavailable(e)
         }
     }
     // A camera opens at once, with no question: the numbering is set while reviewing the pages.
     val openCamera = { camera: ScanSource, makeDefault: Boolean ->
-        if (makeDefault) viewModel.makeDefaultCamera(camera)
+        if (makeDefault) scanViewModel.makeDefaultCamera(camera)
         when (camera) {
             ScanSource.GOOGLE_SCANNER -> launchScanner(scan.scannerMode)
             ScanSource.CAMERA -> onOpenCamera()
@@ -146,7 +147,16 @@ fun DocumentScreen(
     val currentOpenCamera by rememberUpdatedState(openCamera)
     LaunchedEffect(viewModel) {
         viewModel.messages.collect { message ->
-            if (message == DocumentMessage.ScannerUnavailable && scan.hasCamera) {
+            snackbarHostState.showSnackbar(
+                message.text(resources),
+                withDismissAction = message.important,
+                duration = if (message.important) SnackbarDuration.Long else SnackbarDuration.Short,
+            )
+        }
+    }
+    LaunchedEffect(scanViewModel) {
+        scanViewModel.messages.collect { message ->
+            if (message == ScanMessage.ScannerUnavailable && scan.hasCamera) {
                 // The app's camera works without Google Play services.
                 val result = snackbarHostState.showSnackbar(
                     message.text(resources),
@@ -165,15 +175,15 @@ fun DocumentScreen(
         }
     }
     var choosingCamera by rememberSaveable { mutableStateOf(false) }
-    LaunchedEffect(viewModel, sharedPhotos) {
-        if (sharedPhotos.isNotEmpty()) viewModel.importSharedPhotos(sharedPhotos)
+    LaunchedEffect(scanViewModel, sharedPhotos) {
+        if (sharedPhotos.isNotEmpty()) scanViewModel.importSharedPhotos(sharedPhotos)
     }
     // Again once the settings are read: before, the default camera is not known.
-    LaunchedEffect(viewModel, scanOnOpen, scan.loaded) {
-        if (scanOnOpen && scan.loaded && viewModel.takeActionOnOpen()) currentOpenCamera(scan.camera, false)
+    LaunchedEffect(scanViewModel, scanOnOpen, scan.loaded) {
+        if (scanOnOpen && scan.loaded && scanViewModel.takeActionOnOpen()) currentOpenCamera(scan.camera, false)
     }
-    LaunchedEffect(viewModel, importOnOpen) {
-        if (importOnOpen && viewModel.takeActionOnOpen()) importPhotos()
+    LaunchedEffect(scanViewModel, importOnOpen) {
+        if (importOnOpen && scanViewModel.takeActionOnOpen()) importPhotos()
     }
     LaunchedEffect(switchToSource, scan.loaded) {
         val source = switchToSource ?: return@LaunchedEffect
@@ -217,17 +227,17 @@ fun DocumentScreen(
         )
     }
     scan.preparation?.let { preparation ->
-        PreparingPagesDialog(preparation, onCancel = viewModel::cancelPreparation)
+        PreparingPagesDialog(preparation, onCancel = scanViewModel::cancelPreparation)
     }
     if (reviewVisible) {
         ScanReviewDialog(
             scan = scan,
             snackbarHostState = snackbarHostState,
-            onFirstPageChange = viewModel::onFirstPageChange,
-            onConsecutiveChange = viewModel::onConsecutiveChange,
-            onConfirm = viewModel::confirmScan,
-            onDiscard = viewModel::discardScan,
-            onRemovePage = viewModel::removeStagedPage,
+            onFirstPageChange = scanViewModel::onFirstPageChange,
+            onConsecutiveChange = scanViewModel::onConsecutiveChange,
+            onConfirm = scanViewModel::send,
+            onDiscard = scanViewModel::discard,
+            onRemovePage = scanViewModel::removePage,
             onScanMore = { camera -> openCamera(camera, false) },
             onImportMore = importPhotos,
             // The run stays on the phone; the library shows it waits.
@@ -562,20 +572,21 @@ private fun DocumentGone() {
 
 private fun DocumentMessage.text(resources: Resources): String = when (this) {
     DocumentMessage.Unreachable -> resources.getString(R.string.message_pc_unreachable)
-
     DocumentMessage.TokenRefused -> resources.getString(R.string.message_token_refused)
-
     is DocumentMessage.ServerError -> resources.getString(R.string.message_server_error, sanitizeTextFromPc(detail))
+    DocumentMessage.PageBusy -> resources.getString(R.string.message_page_busy)
+}
 
-    is DocumentMessage.PagesQueued -> resources.getQuantityString(R.plurals.message_pages_queued, count, count)
+private fun ScanMessage.text(resources: Resources): String = when (this) {
+    is ScanMessage.PagesQueued -> resources.getQuantityString(R.plurals.message_pages_queued, count, count)
 
-    DocumentMessage.ImportFailed -> resources.getString(R.string.message_import_failed)
+    ScanMessage.ImportFailed -> resources.getString(R.string.message_import_failed)
 
-    DocumentMessage.SendFailed -> resources.getString(R.string.message_send_failed)
+    ScanMessage.SendFailed -> resources.getString(R.string.message_send_failed)
 
-    DocumentMessage.StorageFull -> resources.getString(R.string.message_storage_full)
+    ScanMessage.StorageFull -> resources.getString(R.string.message_storage_full)
 
-    is DocumentMessage.PhotosSkipped -> listOfNotNull(
+    is ScanMessage.PhotosSkipped -> listOfNotNull(
         unsupported.takeIf { it > 0 }?.let {
             resources.getQuantityString(R.plurals.message_unsupported_photos, it, it)
         },
@@ -583,15 +594,13 @@ private fun DocumentMessage.text(resources: Resources): String = when (this) {
         unreadable.takeIf { it > 0 }?.let { resources.getQuantityString(R.plurals.message_unreadable_photos, it, it) },
     ).joinToString(" ")
 
-    DocumentMessage.AddingInterrupted -> resources.getString(R.string.message_adding_interrupted)
+    ScanMessage.AddingInterrupted -> resources.getString(R.string.message_adding_interrupted)
 
-    DocumentMessage.SettingNotSaved -> resources.getString(R.string.message_setting_not_saved)
+    ScanMessage.SettingNotSaved -> resources.getString(R.string.message_setting_not_saved)
 
-    DocumentMessage.ScannerUnavailable -> resources.getString(R.string.message_scanner_unavailable)
+    ScanMessage.ScannerUnavailable -> resources.getString(R.string.message_scanner_unavailable)
 
-    DocumentMessage.ScannerFailed -> resources.getString(R.string.message_scanner_failed)
+    ScanMessage.ScannerFailed -> resources.getString(R.string.message_scanner_failed)
 
-    DocumentMessage.PhotoPickerUnavailable -> resources.getString(R.string.message_photo_picker_unavailable)
-
-    DocumentMessage.PageBusy -> resources.getString(R.string.message_page_busy)
+    ScanMessage.PhotoPickerUnavailable -> resources.getString(R.string.message_photo_picker_unavailable)
 }

@@ -93,11 +93,6 @@ class ScanImporter(
             onUnreadable = { photo, e -> Log.w(TAG, "photo not imported: $photo", e) },
         )
 
-    /** Deletes [documentId]'s run. */
-    suspend fun discard(documentId: String) {
-        staging.discard(documentId)
-    }
-
     /**
      * Queues the pages of [documentId]'s run for upload, as one session numbered with [numbering].
      * Either all pages are queued, or none and the run stays as it was.

@@ -31,10 +31,6 @@ class MessageImportanceTest {
                 @JvmStatic
                 @Parameterized.Parameters(name = "{0}")
                 fun messages(): List<Array<Any>> = listOf(
-                    arrayOf(
-                        "photos skipped",
-                        ScanMessage.PhotosSkipped(unsupported = 1, tooLarge = 0, unreadable = 2),
-                    ),
                     arrayOf("adding interrupted", ScanMessage.AddingInterrupted),
                     arrayOf("storage full", ScanMessage.StorageFull),
                     arrayOf("send failed", ScanMessage.SendFailed),

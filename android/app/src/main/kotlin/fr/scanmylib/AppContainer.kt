@@ -14,6 +14,7 @@ import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import fr.scanmylib.api.ScanMyLibApi
 import fr.scanmylib.db.ScanMyLibDatabase
 import fr.scanmylib.library.LibraryRepository
+import fr.scanmylib.library.RunPreparation
 import fr.scanmylib.library.ScanFileStore
 import fr.scanmylib.library.ScanImporter
 import fr.scanmylib.library.StagingArea
@@ -90,6 +91,8 @@ class AppContainer(private val context: Context) {
     val scanImporter by lazy {
         ScanImporter(context, database.pendingPageDao(), scanFiles, staging, syncScheduler, clock)
     }
+
+    val runPreparation by lazy { RunPreparation(applicationScope) }
 
     val pairing by lazy { PairingManager(settings, library, syncScheduler, updates) }
 

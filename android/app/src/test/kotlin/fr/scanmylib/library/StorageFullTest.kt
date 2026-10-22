@@ -1,4 +1,4 @@
-package fr.scanmylib.ui.document
+package fr.scanmylib.library
 
 import java.io.IOException
 import kotlin.properties.Delegates

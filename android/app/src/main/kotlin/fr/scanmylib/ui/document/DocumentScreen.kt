@@ -73,6 +73,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import fr.scanmylib.R
 import fr.scanmylib.db.DocumentEntity
 import fr.scanmylib.db.PendingPageEntity
+import fr.scanmylib.library.PreparationOutcome
 import fr.scanmylib.model.ScanSource
 import fr.scanmylib.ui.components.BackButton
 import fr.scanmylib.ui.components.BannerSlot
@@ -173,6 +174,17 @@ fun DocumentScreen(
                 )
             }
         }
+    }
+    // The copies keep their outcome until it is dismissed, so that it shows even once the screen
+    // was left while they ran.
+    LaunchedEffect(scanViewModel, scan.outcome) {
+        val outcome = scan.outcome ?: return@LaunchedEffect
+        snackbarHostState.showSnackbar(
+            outcome.text(resources),
+            withDismissAction = true,
+            duration = SnackbarDuration.Long,
+        )
+        scanViewModel.dismissOutcome()
     }
     var choosingCamera by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(scanViewModel, sharedPhotos) {
@@ -579,14 +591,17 @@ private fun DocumentMessage.text(resources: Resources): String = when (this) {
 
 private fun ScanMessage.text(resources: Resources): String = when (this) {
     is ScanMessage.PagesQueued -> resources.getQuantityString(R.plurals.message_pages_queued, count, count)
-
-    ScanMessage.ImportFailed -> resources.getString(R.string.message_import_failed)
-
     ScanMessage.SendFailed -> resources.getString(R.string.message_send_failed)
-
     ScanMessage.StorageFull -> resources.getString(R.string.message_storage_full)
+    ScanMessage.AddingInterrupted -> resources.getString(R.string.message_adding_interrupted)
+    ScanMessage.SettingNotSaved -> resources.getString(R.string.message_setting_not_saved)
+    ScanMessage.ScannerUnavailable -> resources.getString(R.string.message_scanner_unavailable)
+    ScanMessage.ScannerFailed -> resources.getString(R.string.message_scanner_failed)
+    ScanMessage.PhotoPickerUnavailable -> resources.getString(R.string.message_photo_picker_unavailable)
+}
 
-    is ScanMessage.PhotosSkipped -> listOfNotNull(
+private fun PreparationOutcome.text(resources: Resources): String = when (this) {
+    is PreparationOutcome.PhotosSkipped -> listOfNotNull(
         unsupported.takeIf { it > 0 }?.let {
             resources.getQuantityString(R.plurals.message_unsupported_photos, it, it)
         },
@@ -594,13 +609,7 @@ private fun ScanMessage.text(resources: Resources): String = when (this) {
         unreadable.takeIf { it > 0 }?.let { resources.getQuantityString(R.plurals.message_unreadable_photos, it, it) },
     ).joinToString(" ")
 
-    ScanMessage.AddingInterrupted -> resources.getString(R.string.message_adding_interrupted)
+    PreparationOutcome.ImportFailed -> resources.getString(R.string.message_import_failed)
 
-    ScanMessage.SettingNotSaved -> resources.getString(R.string.message_setting_not_saved)
-
-    ScanMessage.ScannerUnavailable -> resources.getString(R.string.message_scanner_unavailable)
-
-    ScanMessage.ScannerFailed -> resources.getString(R.string.message_scanner_failed)
-
-    ScanMessage.PhotoPickerUnavailable -> resources.getString(R.string.message_photo_picker_unavailable)
+    PreparationOutcome.StorageFull -> resources.getString(R.string.message_storage_full)
 }

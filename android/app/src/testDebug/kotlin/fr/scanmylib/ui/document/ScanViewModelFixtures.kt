@@ -1,9 +1,11 @@
 package fr.scanmylib.ui.document
 
+import android.net.Uri
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.lifecycle.SavedStateHandle
 import fr.scanmylib.library.PageNumbering
 import fr.scanmylib.library.PhotoImportResult
+import fr.scanmylib.library.RunPreparation
 import fr.scanmylib.library.StagedPage
 import fr.scanmylib.library.StagingArea
 import fr.scanmylib.library.StagingInput
@@ -11,6 +13,7 @@ import fr.scanmylib.settings.SettingsRepository
 import java.io.File
 import java.io.IOException
 import java.time.Instant
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -61,23 +64,54 @@ internal suspend fun TestScope.stageThreePages(
         StagingInput(image, SCAN_TIME.plusSeconds(index.toLong()))
     }
     val stagedPages = staging.add(DOCUMENT_ID, inputs)
+    val queue = FakeUploadQueue(staging, sendRefusal)
+    val viewModel = makeViewModel(folder, staging, sendRun = queue::send)
+    backgroundScope.launch { viewModel.scanState.collect {} }
+    viewModel.scanState.first { it.loaded && it.stagedPages == stagedPages }
+    return ThreePagesToSend(staging, queue, viewModel, stagedPages)
+}
+
+@OptIn(ExperimentalCoroutinesApi::class)
+internal fun TestScope.makeViewModel(
+    folder: TemporaryFolder,
+    staging: StagingArea,
+    addScannedPages: suspend (List<Uri>, (Int) -> Unit) -> Unit = { _, _ -> },
+    addPhotos: suspend (List<Uri>, (Int) -> Unit) -> PhotoImportResult = { _, _ -> PhotoImportResult(added = 0) },
+    sendRun: suspend (PageNumbering) -> Int = { 0 },
+): ScanViewModel {
     val dataStore = PreferenceDataStoreFactory.create(scope = backgroundScope) {
         File(folder.root, "settings.preferences_pb")
     }
-    val queue = FakeUploadQueue(staging, sendRefusal)
-    val viewModel = ScanViewModel(
+    return ScanViewModel(
         SavedStateHandle(),
         DOCUMENT_ID,
         staging,
+        RunPreparation(this),
         SettingsRepository(dataStore),
-        addScannedPages = { _, _ -> },
-        addPhotos = { _, _ -> PhotoImportResult(added = 0) },
-        sendRun = queue::send,
+        addScannedPages = addScannedPages,
+        addPhotos = addPhotos,
+        sendRun = sendRun,
         freeStorage = { Long.MAX_VALUE },
         hasCamera = true,
         io = UnconfinedTestDispatcher(testScheduler),
     )
-    backgroundScope.launch { viewModel.scanState.collect {} }
-    viewModel.scanState.first { it.loaded && it.stagedPages == stagedPages }
-    return ThreePagesToSend(staging, queue, viewModel, stagedPages)
+}
+
+/** Stands in for the copy of Google's scanner's pages: it waits on [gate] once the first page is copied. */
+internal class FakeScanner(private val staging: StagingArea, private val gate: CompletableDeferred<Unit>) {
+    val firstPageCopied = CompletableDeferred<Unit>()
+
+    suspend fun copy(pages: List<Uri>, onProgress: (Int) -> Unit) {
+        val copies = pages.mapIndexed { index, page ->
+            val copy = staging.incomingFile(DOCUMENT_ID)
+            copy.writeText(page.toString())
+            onProgress(index + 1)
+            if (index == 0) {
+                firstPageCopied.complete(Unit)
+                gate.await()
+            }
+            StagingInput(copy, SCAN_TIME)
+        }
+        staging.add(DOCUMENT_ID, copies)
+    }
 }

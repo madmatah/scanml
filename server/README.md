@@ -150,7 +150,7 @@ curl -s -H "$T" -F file=@page.jpg -F page_id=$(cat /proc/sys/kernel/random/uuid)
   (`data-label=""` and "Unnumbered page" for a page without number), gaps as
   `<p class="missing-pages" data-range="13–44">Missing pages: 13–44</p>` ("Missing page: 13" for one page),
   unnumbered pages after `<h2 class="unnumbered">Unnumbered pages</h2>`. These texts are English: the web UI
-  translates them from the classes and data attributes. Images point to
+  shows them in its own words and in the user's language, from the classes and data attributes. Images point to
   `/api/documents/{id}/files/images/…` (authenticated, same origin).
   The Markdown of a page longer than 128 KiB (no real OCR page comes close) is
   previewed as escaped text, `<pre class="markdown-source">…</pre>`.

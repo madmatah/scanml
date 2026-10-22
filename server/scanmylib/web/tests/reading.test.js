@@ -78,7 +78,10 @@ function buildDocumentContent() {
 
 function buildOlderServerContent() {
   return {
-    children: [buildElement('section.page', { children: [buildElement('p.page-marker', { text: 'Page 99' })] })],
+    children: [
+      buildElement('section.page', { children: [buildElement('p.page-marker', { text: 'Page 99' })] }),
+      buildElement('p.missing-pages', { text: 'Missing pages: 100–104' }),
+    ],
   };
 }
 
@@ -100,7 +103,7 @@ describe('The reading view', () => {
       { type: 'page', key: 'k-1', marker: 'Page 1' },
       { type: 'page', key: 'k-plate', marker: 'Unnumbered page' },
       { type: 'page', key: 'k-2', marker: 'Page 2' },
-      { type: 'gap', text: 'Missing pages: 3–5' },
+      { type: 'gap', text: 'Pages not scanned yet: 3–5' },
       { type: 'page', key: 'k-6', marker: 'Page 6–7' },
       { type: 'heading', text: 'Unnumbered pages' },
       { type: 'page', key: 'k-notes', marker: 'Unnumbered page' },
@@ -127,7 +130,7 @@ describe('The reading view', () => {
           [1, 'p. 1'],
           [2, 'No number (position 3)'],
           [3, 'p. 2'],
-          ['gap', 'Missing pages: 3–5'],
+          ['gap', 'Pages not scanned yet: 3–5'],
           [4, 'p. 6–7'],
           ['group', 'Unnumbered pages'],
           [5, 'No number (position 6)'],
@@ -260,27 +263,27 @@ describe('The reading view', () => {
   });
 
   describe('The missingPagesText() function', () => {
-    describe('When several pages are missing', () => {
+    describe('When several pages are not scanned yet', () => {
       const range = '13–44';
       let marker;
       beforeEach(() => {
         marker = missingPagesText(range);
       });
 
-      it('should write in English that the pages of the range are missing, as the server does', () => {
-        assert.equal(marker, 'Missing pages: 13–44');
+      it('should name a range of pages not scanned yet in the words of the coverage', () => {
+        assert.equal(marker, 'Pages not scanned yet: 13–44');
       });
     });
 
-    describe('When one page is missing', () => {
+    describe('When one page is not scanned yet', () => {
       const range = '13';
       let marker;
       beforeEach(() => {
         marker = missingPagesText(range);
       });
 
-      it('should write in English that the page is missing, in the singular, as the server does', () => {
-        assert.equal(marker, 'Missing page: 13');
+      it('should name one page not scanned yet in the singular, in the words of the coverage', () => {
+        assert.equal(marker, 'Page not scanned yet: 13');
       });
     });
   });
@@ -300,17 +303,21 @@ describe('The reading view', () => {
     describe('When the UI is in English', () => {
       describe('When the markers carry their data attributes', () => {
         let content;
-        let textsBefore;
-        let textsAfter;
         beforeEach(() => {
           content = buildDocumentContent();
-          textsBefore = readTexts(content);
           localizeMarkers(content);
-          textsAfter = readTexts(content);
         });
 
-        it('should leave the markers as the server wrote them', () => {
-          assert.deepEqual(textsAfter, textsBefore);
+        it('should write the gaps in the words of the coverage, rather than the server’s', () => {
+          assert.deepEqual(readTexts(content), [
+            'Page 12',
+            'Pages not scanned yet: 13–44',
+            'Page 45',
+            'Page not scanned yet: 46',
+            'Page 47–48',
+            'Unnumbered pages',
+            'Unnumbered page',
+          ]);
         });
       });
 
@@ -325,7 +332,7 @@ describe('The reading view', () => {
           textsAfter = readTexts(content);
         });
 
-        it('should leave the marker as the server wrote it', () => {
+        it('should leave the markers as the server wrote them', () => {
           assert.deepEqual(textsAfter, textsBefore);
         });
       });
@@ -346,9 +353,9 @@ describe('The reading view', () => {
         it('should translate each marker from its data attributes', () => {
           assert.deepEqual(readTexts(content), [
             fillTemplate(FRENCH['Page {label}'], { label: '12' }),
-            fillTemplate(FRENCH['Missing pages: {range}'], { range: '13–44' }),
+            fillTemplate(FRENCH['Pages not scanned yet: {range}'], { range: '13–44' }),
             fillTemplate(FRENCH['Page {label}'], { label: '45' }),
-            fillTemplate(FRENCH['Missing page: {range}'], { range: '46' }),
+            fillTemplate(FRENCH['Page not scanned yet: {range}'], { range: '46' }),
             fillTemplate(FRENCH['Page {label}'], { label: '47–48' }),
             FRENCH['Unnumbered pages'],
             FRENCH['Unnumbered page'],
@@ -363,8 +370,8 @@ describe('The reading view', () => {
           localizeMarkers(content);
         });
 
-        it('should keep the text the server wrote', () => {
-          assert.deepEqual(readTexts(content), ['Page 99']);
+        it('should keep the text the server wrote, since only the data attributes give what to write', () => {
+          assert.deepEqual(readTexts(content), ['Page 99', 'Missing pages: 100–104']);
         });
       });
     });

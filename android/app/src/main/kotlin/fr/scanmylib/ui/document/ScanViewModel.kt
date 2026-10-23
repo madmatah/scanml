@@ -369,7 +369,7 @@ class ScanViewModel(
     fun removePage(page: StagedPage) {
         viewModelScope.launch {
             try {
-                staging.remove(documentId, page)
+                staging.delete(documentId, page)
             } catch (e: IOException) {
                 Log.w(TAG, "staged page not deleted", e)
             }

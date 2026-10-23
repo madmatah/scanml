@@ -1,11 +1,17 @@
 package fr.scanmylib.ui.document
 
+import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.getOrNull
@@ -14,6 +20,7 @@ import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.SemanticsNodeInteractionsProvider
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasContentDescription
@@ -48,7 +55,10 @@ import java.io.File
 import java.time.Instant
 import kotlin.math.roundToInt
 import kotlin.properties.Delegates
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -472,6 +482,142 @@ class ReviewScreenTest {
             }
         }
 
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenTheSecondTileIsRemoved {
+            @get:Rule
+            val compose = createComposeRule()
+
+            @OptIn(ExperimentalTestApi::class)
+            @Before
+            fun removeTheSecondPage() {
+                compose.setContent {
+                    var scan by remember { mutableStateOf(FOUR_PAGES) }
+                    ScanMyLibTheme {
+                        ReviewContentOf(
+                            scan,
+                            onRemovePage = { page ->
+                                scan = scan.copy(stagedPages = scan.stagedPages - page, removedPage = page)
+                            },
+                        )
+                    }
+                }
+                compose.onNodeWithContentDescription(SECOND_PAGE_AUTO).performCustomAccessibilityActionWithLabel(REMOVE)
+            }
+
+            @Test
+            fun `should give the focus to the page that takes its place`() {
+                compose.onNodeWithContentDescription(SECOND_OF_THREE_AUTO).assertIsFocused()
+            }
+        }
+
+        @RunWith(ParameterizedRobolectricTestRunner::class)
+        @GraphicsMode(GraphicsMode.Mode.NATIVE)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenAPageIsRemoved(private val theme: String, private val dark: Boolean) {
+            @get:Rule
+            val compose = createComposeRule()
+
+            @Before
+            fun waitNineSecondsAndAHalf() {
+                compose.mainClock.autoAdvance = false
+                compose.setContent { ScanMyLibTheme(dark = dark) { ReviewContentOf(SECOND_PAGE_REMOVED) } }
+                compose.mainClock.advanceTimeBy(UNDO_STILL_OFFERED_MILLISECONDS)
+                compose.onRoot().captureRoboImage("build/outputs/roborazzi/review-page-removed-$theme.png")
+            }
+
+            @Test
+            fun `should still offer to undo the removal`() {
+                compose.onNodeWithText(UNDO).assertIsDisplayed()
+            }
+
+            companion object {
+                @JvmStatic
+                @ParameterizedRobolectricTestRunner.Parameters(name = "in the {0} theme")
+                fun themes(): List<Array<Any>> = THEMES
+            }
+        }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenAPageIsRemovedWhileAMessageShows {
+            @get:Rule
+            val compose = createComposeRule()
+
+            @Before
+            fun removeAPage() {
+                compose.mainClock.autoAdvance = false
+                compose.setContent {
+                    val snackbarHostState = remember { SnackbarHostState() }
+                    var scan by remember { mutableStateOf(FOUR_PAGES) }
+                    LaunchedEffect(Unit) {
+                        launch { snackbarHostState.showSnackbar(EARLIER_MESSAGE, duration = SnackbarDuration.Long) }
+                        delay(SNACKBAR_ANIMATION_MILLISECONDS)
+                        scan = SECOND_PAGE_REMOVED
+                    }
+                    ScanMyLibTheme { ReviewContentOf(scan, snackbarHostState = snackbarHostState) }
+                }
+                compose.mainClock.advanceTimeBy(MESSAGE_SHOWN_THEN_REPLACED_BY_UNDO_MILLISECONDS)
+            }
+
+            @Test
+            fun `should offer the undo at once, in place of the message`() {
+                compose.onNodeWithText(UNDO).assertIsDisplayed()
+            }
+        }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenAPageIsRemovedAndUndoIsTapped {
+            @get:Rule
+            val compose = createComposeRule()
+
+            private lateinit var restoredPages: MutableList<StagedPage>
+
+            @Before
+            fun tapUndo() {
+                restoredPages = mutableListOf()
+                compose.mainClock.autoAdvance = false
+                compose.setContent {
+                    ScanMyLibTheme { ReviewContentOf(SECOND_PAGE_REMOVED, onRestorePage = { restoredPages += it }) }
+                }
+                compose.mainClock.advanceTimeBy(UNDO_STILL_OFFERED_MILLISECONDS)
+                compose.onNodeWithText(UNDO).performClick()
+                compose.mainClock.advanceTimeBy(SNACKBAR_ANIMATION_MILLISECONDS)
+            }
+
+            @Test
+            fun `should put the page back`() {
+                assertEquals(listOf(FOUR_PAGES.stagedPages[1]), restoredPages)
+            }
+        }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenTheUndoRunsOut {
+            @get:Rule
+            val compose = createComposeRule()
+
+            private lateinit var deletedPages: MutableList<StagedPage>
+
+            @Before
+            fun waitTenSeconds() {
+                deletedPages = mutableListOf()
+                compose.mainClock.autoAdvance = false
+                compose.setContent {
+                    ScanMyLibTheme {
+                        ReviewContentOf(SECOND_PAGE_REMOVED, onDeleteRemovedPage = { deletedPages += it })
+                    }
+                }
+                compose.mainClock.advanceTimeBy(UNDO_OFFERED_MILLISECONDS + SNACKBAR_ANIMATION_MILLISECONDS)
+            }
+
+            @Test
+            fun `should delete the page for good`() {
+                assertEquals(listOf(FOUR_PAGES.stagedPages[1]), deletedPages)
+            }
+        }
+
         @RunWith(ParameterizedRobolectricTestRunner::class)
         @GraphicsMode(GraphicsMode.Mode.NATIVE)
         @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
@@ -624,6 +770,135 @@ class ReviewScreenTest {
                 assertEquals(listOf(0, 1), closingCounts)
             }
         }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenTheScreenResumesFromASourceThatReturnedNothing {
+            @get:Rule
+            val mainDispatcher = MainDispatcherRule()
+
+            @get:Rule
+            val folder = TemporaryFolder()
+
+            @get:Rule
+            val compose = createComposeRule()
+
+            private var closingCount by Delegates.notNull<Int>()
+
+            @Before
+            fun resumeFromTheSource() = runTest {
+                val review = showTheReview(compose, stagePages(folder, pageCount = 1))
+                openASourceAfterRemovingTheOnlyPage(compose, review)
+                review.run.viewModel.onPagesScanned(emptyList())
+                compose.waitForIdle()
+                resumeTheScreen(compose, review)
+                closingCount = review.closingCount
+            }
+
+            @Test
+            fun `should close, as the source is over and nothing is left`() {
+                assertEquals(1, closingCount)
+            }
+        }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenScannedPagesArriveBeforeTheScreenResumes {
+            @get:Rule
+            val mainDispatcher = MainDispatcherRule()
+
+            @get:Rule
+            val folder = TemporaryFolder()
+
+            @get:Rule
+            val compose = createComposeRule()
+
+            private var closingCount by Delegates.notNull<Int>()
+
+            @Before
+            fun resumeWhileTheyAreCopied() = runTest {
+                val copyGate = CompletableDeferred<Unit>()
+                val run = stagePages(folder, pageCount = 1, addScannedPages = { _, _ -> copyGate.await() })
+                val review = showTheReview(compose, run)
+                openASourceAfterRemovingTheOnlyPage(compose, review)
+                run.viewModel.onPagesScanned(listOf(Uri.parse(SCANNED_PAGE)))
+                run.viewModel.onSourceClosed()
+                run.viewModel.scanState.first { it.preparing }
+                compose.waitForIdle()
+                resumeTheScreen(compose, review)
+                closingCount = review.closingCount
+                copyGate.complete(Unit)
+            }
+
+            @Test
+            fun `should stay open while they are copied`() {
+                assertEquals(0, closingCount)
+            }
+
+            companion object {
+                private const val SCANNED_PAGE = "file:///scanner/page-1.jpg"
+            }
+        }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenASourceIsAskedForWhileTheScreenIsOnlyStarted {
+            @get:Rule
+            val mainDispatcher = MainDispatcherRule()
+
+            @get:Rule
+            val folder = TemporaryFolder()
+
+            @get:Rule
+            val compose = createComposeRule()
+
+            private var cameraOpeningCount by Delegates.notNull<Int>()
+
+            @Before
+            fun askForASource() = runTest {
+                val review = showTheReview(compose, stageThreePages(folder), switchToSource = ScanSource.CAMERA)
+                cameraOpeningCount = review.cameraOpeningCount
+            }
+
+            @Test
+            fun `should not open it yet, since the screen's resume would end it`() {
+                assertEquals(0, cameraOpeningCount)
+            }
+        }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenASourceIsAskedForAndTheScreenResumes {
+            @get:Rule
+            val mainDispatcher = MainDispatcherRule()
+
+            @get:Rule
+            val folder = TemporaryFolder()
+
+            @get:Rule
+            val compose = createComposeRule()
+
+            private var cameraOpeningCount by Delegates.notNull<Int>()
+            private var isSourceOpen by Delegates.notNull<Boolean>()
+
+            @Before
+            fun resume() = runTest {
+                val review = showTheReview(compose, stageThreePages(folder), switchToSource = ScanSource.CAMERA)
+                resumeTheScreen(compose, review)
+                cameraOpeningCount = review.cameraOpeningCount
+                isSourceOpen = review.run.viewModel.scanState.value.isSourceOpen
+            }
+
+            @Test
+            fun `should open it once`() {
+                assertEquals(1, cameraOpeningCount)
+            }
+
+            @Test
+            fun `should keep it open, so that the review stays for what it returns`() {
+                assertTrue(isSourceOpen)
+            }
+        }
     }
 }
 
@@ -640,6 +915,15 @@ private const val DELETE_KEY = "delete"
 private const val SCAN = "Scan"
 private const val IMPORT = "Import"
 private const val SCAN_WITH = "Scan with…"
+private const val SECOND_OF_THREE_AUTO = "Page 2 of 3, number auto"
+private const val UNDO = "Undo"
+private const val EARLIER_MESSAGE = "Settings not saved"
+private const val UNDO_STILL_OFFERED_MILLISECONDS = 9_500L
+private const val UNDO_OFFERED_MILLISECONDS = 10_000L
+private const val SNACKBAR_ANIMATION_MILLISECONDS = 500L
+
+// The message's two animations, then the undo's.
+private const val MESSAGE_SHOWN_THEN_REPLACED_BY_UNDO_MILLISECONDS = 3 * SNACKBAR_ANIMATION_MILLISECONDS
 
 private val THEMES = listOf(arrayOf<Any>("light", false), arrayOf<Any>("dark", true))
 
@@ -661,6 +945,11 @@ private val FOUR_PAGES = ScanUiState(
 private val IMPORTING_FOUR_PHOTOS = FOUR_PAGES.copy(
     stagedPages = emptyList(),
     preparation = Preparation(done = 2, total = 4, imagesToAdd = 4, isCancellable = true),
+)
+
+private val SECOND_PAGE_REMOVED = FOUR_PAGES.copy(
+    stagedPages = FOUR_PAGES.stagedPages - FOUR_PAGES.stagedPages[1],
+    removedPage = FOUR_PAGES.stagedPages[1],
 )
 
 private val PHOTOS_SKIPPED =
@@ -705,18 +994,24 @@ private class ScreenLifecycle(state: Lifecycle.State) : LifecycleOwner {
 /** The review of [run], drawn while its entry is only started, as under a source in front of it. */
 private class ReviewOnScreen(val run: RunUnderReview, val lifecycle: ScreenLifecycle) {
     var closingCount = 0
+    var cameraOpeningCount = 0
 }
 
-private fun showTheReview(compose: ComposeContentTestRule, run: RunUnderReview): ReviewOnScreen {
+private fun showTheReview(
+    compose: ComposeContentTestRule,
+    run: RunUnderReview,
+    switchToSource: ScanSource? = null,
+): ReviewOnScreen {
     val review = ReviewOnScreen(run, ScreenLifecycle(Lifecycle.State.STARTED))
+    var sourceToSwitchTo by mutableStateOf(switchToSource)
     compose.setContent {
         CompositionLocalProvider(LocalLifecycleOwner provides review.lifecycle) {
             ScanMyLibTheme {
                 ReviewScreen(
                     onClose = { review.closingCount++ },
-                    onOpenCamera = {},
-                    switchToSource = null,
-                    onSwitchHandled = {},
+                    onOpenCamera = { review.cameraOpeningCount++ },
+                    switchToSource = sourceToSwitchTo,
+                    onSwitchHandled = { sourceToSwitchTo = null },
                     viewModel = run.viewModel,
                 )
             }
@@ -733,6 +1028,16 @@ private suspend fun emptyTheRunElsewhere(compose: ComposeContentTestRule, review
     compose.waitForIdle()
 }
 
+/** The only page removed, then a source opened, which makes the removal final: the run is empty. */
+private suspend fun openASourceAfterRemovingTheOnlyPage(compose: ComposeContentTestRule, review: ReviewOnScreen) {
+    val viewModel = review.run.viewModel
+    viewModel.removePage(review.run.stagedPages.single())
+    viewModel.scanState.first { it.removedPage != null }
+    viewModel.onAddingPages()
+    viewModel.scanState.first { it.stagedPages.isEmpty() && it.removedPage == null && it.isSourceOpen }
+    compose.waitForIdle()
+}
+
 private fun resumeTheScreen(compose: ComposeContentTestRule, review: ReviewOnScreen) {
     compose.runOnIdle { review.lifecycle.moveTo(Lifecycle.State.RESUMED) }
     compose.waitForIdle()
@@ -744,11 +1049,14 @@ private fun ReviewContentOf(
     onSend: () -> Unit = {},
     onDelete: () -> Unit = {},
     onRemovePage: (StagedPage) -> Unit = {},
+    onRestorePage: (StagedPage) -> Unit = {},
+    onDeleteRemovedPage: (StagedPage) -> Unit = {},
     onDismissOutcome: () -> Unit = {},
+    snackbarHostState: SnackbarHostState = remember { SnackbarHostState() },
 ) {
     ReviewContent(
         scan = scan,
-        snackbarHostState = remember { SnackbarHostState() },
+        snackbarHostState = snackbarHostState,
         onClose = {},
         onFirstPageChange = {},
         onConsecutiveChange = {},
@@ -757,6 +1065,8 @@ private fun ReviewContentOf(
         onDismissAddingInterrupted = {},
         onEnlargePage = {},
         onRemovePage = onRemovePage,
+        onRestorePage = onRestorePage,
+        onDeleteRemovedPage = onDeleteRemovedPage,
         onScan = {},
         onImport = {},
         onChooseCamera = {},

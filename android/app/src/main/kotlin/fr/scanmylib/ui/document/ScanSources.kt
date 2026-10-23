@@ -16,7 +16,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.platform.LocalResources
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.currentStateAsState
 import fr.scanmylib.R
 import fr.scanmylib.model.ScanSource
 
@@ -28,11 +31,8 @@ class ScanSources(
 )
 
 /**
- * Registers the sources of pages for the screen that calls it: Google's scanner and the photo
- * picker, whose results join [viewModel]'s run, and the app's camera, a screen of its own
- * ([onOpenCamera]). [onPagesReturned] follows a source that returned pages. A [switchToSource]
- * opens at once, once the settings are read ([onSwitchHandled]): the camera screen asks for it when
- * it could not open the camera. The run's messages show in [snackbarHostState].
+ * The view model hears when a source opens and when it returns, since its result reaches only the
+ * launchers of the screen that calls this: the screen must stay until then.
  */
 @Composable
 fun rememberScanSources(
@@ -48,12 +48,20 @@ fun rememberScanSources(
     val currentOnPagesReturned by rememberUpdatedState(onPagesReturned)
     val launchScanner = rememberDocumentScanner(
         onScanned = { pages ->
+            // The copy first: the run is then never read as empty and closed meanwhile.
             viewModel.onPagesScanned(pages)
+            viewModel.onSourceClosed()
             if (pages.isNotEmpty()) currentOnPagesReturned()
         },
         onStarted = viewModel::onScannerStarted,
-        onUnavailable = viewModel::onScannerUnavailable,
-        onFailed = viewModel::onScannerFailed,
+        onUnavailable = { error ->
+            viewModel.onScannerUnavailable(error)
+            viewModel.onSourceClosed()
+        },
+        onFailed = { error ->
+            viewModel.onScannerFailed(error)
+            viewModel.onSourceClosed()
+        },
     )
     // The system photo picker needs no storage permission (it falls back to the document picker
     // on phones without it). One contract: a new one at each recomposition would register the
@@ -61,9 +69,11 @@ fun rememberScanSources(
     val pickPhotosContract = remember { PickMultipleVisualMedia() }
     val pickPhotos = rememberLauncherForActivityResult(pickPhotosContract) { photos: List<Uri> ->
         viewModel.onPhotosPicked(photos)
+        viewModel.onSourceClosed()
         if (photos.isNotEmpty()) currentOnPagesReturned()
     }
     val importPhotos = {
+        viewModel.onAddingPages()
         try {
             // In the order the photos are chosen: the order kept for photos without a date.
             pickPhotos.launch(
@@ -74,12 +84,22 @@ fun rememberScanSources(
             )
         } catch (e: ActivityNotFoundException) {
             viewModel.onPhotoPickerUnavailable(e)
+            viewModel.onSourceClosed()
         }
     }
     val open = { source: ScanSource ->
         when (source) {
-            ScanSource.GOOGLE_SCANNER -> launchScanner(scan.scannerMode)
-            ScanSource.CAMERA -> onOpenCamera()
+            ScanSource.GOOGLE_SCANNER -> {
+                viewModel.onAddingPages()
+                launchScanner(scan.scannerMode)
+            }
+
+            // The camera screen adds its photos itself; the screen hears its return when it resumes.
+            ScanSource.CAMERA -> {
+                viewModel.onAddingPages()
+                onOpenCamera()
+            }
+
             ScanSource.PHOTO_PICKER -> importPhotos()
         }
     }
@@ -104,9 +124,12 @@ fun rememberScanSources(
             }
         }
     }
-    LaunchedEffect(switchToSource, scan.loaded) {
+    val lifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
+    val isResumed = lifecycleState.isAtLeast(Lifecycle.State.RESUMED)
+    // Once resumed: the screen's resume ends an open source, which would end one opened before it.
+    LaunchedEffect(switchToSource, scan.loaded, isResumed) {
         val source = switchToSource ?: return@LaunchedEffect
-        if (!scan.loaded) return@LaunchedEffect
+        if (!scan.loaded || !isResumed) return@LaunchedEffect
         onSwitchHandled()
         currentOpen(source)
     }
@@ -120,4 +143,5 @@ private fun ScanMessage.text(resources: Resources): String = when (this) {
     ScanMessage.ScannerUnavailable -> resources.getString(R.string.message_scanner_unavailable)
     ScanMessage.ScannerFailed -> resources.getString(R.string.message_scanner_failed)
     ScanMessage.PhotoPickerUnavailable -> resources.getString(R.string.message_photo_picker_unavailable)
+    ScanMessage.PageNotRestored -> resources.getString(R.string.message_page_not_restored)
 }

@@ -64,6 +64,8 @@ class NothingToReviewTest {
                     ),
                     arrayOf("the run is being sent", EMPTY_RUN.copy(sending = true)),
                     arrayOf("the review has already ended", EMPTY_RUN.copy(reviewEnd = ReviewEnd.PagesSent(count = 2))),
+                    arrayOf("the removal of the last page can still be undone", EMPTY_RUN.copy(removedPage = PAGE)),
+                    arrayOf("a source of pages is open and has not returned", EMPTY_RUN.copy(isSourceOpen = true)),
                 )
             }
         }

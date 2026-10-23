@@ -59,24 +59,35 @@ internal class RunUnderReview(
     val stagedPages: List<StagedPage>,
 )
 
-/**
- * Three pages in the run, which the view model shows; their send waits for [sendGate], if any,
- * then fails with [sendRefusal], if any.
- */
-@OptIn(ExperimentalCoroutinesApi::class)
+/** Three pages in the run, which the view model shows; their send waits for [sendGate], if any. */
 internal suspend fun TestScope.stageThreePages(
     folder: TemporaryFolder,
     sendGate: CompletableDeferred<Unit>? = null,
     sendRefusal: Exception? = null,
+): RunUnderReview = stagePages(folder, pageCount = 3, sendGate, sendRefusal)
+
+/**
+ * [pageCount] pages in the run, which the view model shows; their send waits for [sendGate], if
+ * any, then fails with [sendRefusal], if any; Google's scanner's pages are copied with
+ * [addScannedPages].
+ */
+@OptIn(ExperimentalCoroutinesApi::class)
+internal suspend fun TestScope.stagePages(
+    folder: TemporaryFolder,
+    pageCount: Int,
+    sendGate: CompletableDeferred<Unit>? = null,
+    sendRefusal: Exception? = null,
+    addScannedPages: suspend (List<Uri>, (Int) -> Unit) -> Unit = { _, _ -> },
 ): RunUnderReview {
     val staging = StagingArea(File(folder.root, "staging"), io = UnconfinedTestDispatcher(testScheduler))
-    val inputs = (1..3).map { index ->
-        val image = staging.incomingFile(DOCUMENT_ID)
-        image.writeBytes(byteArrayOf(index.toByte()))
-        StagingInput(image, SCAN_TIME.plusSeconds(index.toLong()))
-    }
-    val stagedPages = staging.add(DOCUMENT_ID, inputs)
-    return showTheRun(folder, staging, stagedPages, sendGate, sendRefusal)
+    val stagedPages = staging.add(DOCUMENT_ID, writeImages(staging, pageCount))
+    return showTheRun(folder, staging, stagedPages, sendGate, sendRefusal, addScannedPages)
+}
+
+internal suspend fun writeImages(staging: StagingArea, count: Int): List<StagingInput> = (1..count).map { index ->
+    val image = staging.incomingFile(DOCUMENT_ID)
+    image.writeBytes(byteArrayOf(index.toByte()))
+    StagingInput(image, SCAN_TIME.plusSeconds(index.toLong()))
 }
 
 /** A document without pages to send, which the view model shows. */
@@ -103,10 +114,11 @@ private suspend fun TestScope.showTheRun(
     stagedPages: List<StagedPage>,
     sendGate: CompletableDeferred<Unit>? = null,
     sendRefusal: Exception? = null,
+    addScannedPages: suspend (List<Uri>, (Int) -> Unit) -> Unit = { _, _ -> },
 ): RunUnderReview {
     val queue = FakeUploadQueue(staging, sendGate, sendRefusal)
     val preparation = RunPreparation(this)
-    val viewModel = makeViewModel(folder, staging, preparation = preparation, sendRun = queue::send)
+    val viewModel = makeViewModel(folder, staging, preparation, addScannedPages, sendRun = queue::send)
     backgroundScope.launch { viewModel.scanState.collect {} }
     viewModel.scanState.first { it.loaded && it.isRunRead && it.stagedPages == stagedPages }
     return RunUnderReview(staging, preparation, queue, viewModel, stagedPages)
@@ -135,6 +147,7 @@ internal fun TestScope.makeViewModel(
         sendRun = sendRun,
         freeStorage = { Long.MAX_VALUE },
         hasCamera = true,
+        applicationScope = this,
         io = UnconfinedTestDispatcher(testScheduler),
     )
 }

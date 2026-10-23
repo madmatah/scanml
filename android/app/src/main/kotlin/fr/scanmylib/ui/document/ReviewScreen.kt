@@ -36,8 +36,10 @@ import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -50,16 +52,21 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.currentStateAsState
@@ -105,6 +112,8 @@ fun ReviewScreen(
     LaunchedEffect(isResumed, scan.hasNothingToReview) {
         if (isResumed && scan.hasNothingToReview) viewModel.closeReview()
     }
+    // Every source returns before the screen resumes, the camera's screen included.
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.onSourceClosed() }
     BackHandler(onBack = viewModel::closeReview)
     var choosingCamera by rememberSaveable { mutableStateOf(false) }
     // The page shown large, by file.
@@ -121,6 +130,8 @@ fun ReviewScreen(
         onDismissAddingInterrupted = viewModel::dismissAddingInterrupted,
         onEnlargePage = { page -> if (!scan.sending) shownPage = page.file.path },
         onRemovePage = viewModel::removePage,
+        onRestorePage = viewModel::restorePage,
+        onDeleteRemovedPage = viewModel::deleteRemovedPage,
         onScan = { sources.open(scan.camera) },
         onImport = sources.importPhotos,
         onChooseCamera = { choosingCamera = true },
@@ -168,6 +179,8 @@ internal fun ReviewContent(
     onDismissAddingInterrupted: () -> Unit,
     onEnlargePage: (StagedPage) -> Unit,
     onRemovePage: (StagedPage) -> Unit,
+    onRestorePage: (StagedPage) -> Unit,
+    onDeleteRemovedPage: (StagedPage) -> Unit,
     onScan: () -> Unit,
     onImport: () -> Unit,
     onChooseCamera: () -> Unit,
@@ -181,6 +194,9 @@ internal fun ReviewContent(
     val count = scan.stagedPages.size
     val numbering = scan.numbering
     var isConfirmingDelete by rememberSaveable { mutableStateOf(false) }
+    RemovalUndo(scan.removedPage, snackbarHostState, onRestorePage, onDeleteRemovedPage)
+    // The tile that takes the focus once a page is removed, by file.
+    var pageToFocus by remember { mutableStateOf<String?>(null) }
     Scaffold(
         modifier = modifier,
         topBar = {
@@ -228,12 +244,26 @@ internal fun ReviewContent(
                 }
             }
             itemsIndexed(scan.stagedPages, key = { _, page -> page.file.path }) { index, page ->
+                val focusRequester = remember { FocusRequester() }
+                if (page.file.path == pageToFocus) {
+                    LaunchedEffect(Unit) {
+                        // Once the tile is laid out, so that it can take the focus.
+                        withFrameNanos {}
+                        focusRequester.requestFocus()
+                        pageToFocus = null
+                    }
+                }
                 StagedPageTile(
                     position = index + 1,
                     count = count,
                     numberHint = numbering?.hintFor(index),
                     onEnlarge = { onEnlargePage(page) },
-                    onRemove = { onRemovePage(page) }.takeUnless { scan.sending },
+                    onRemove = {
+                        val nextPage = scan.stagedPages.getOrNull(index + 1) ?: scan.stagedPages.getOrNull(index - 1)
+                        pageToFocus = nextPage?.file?.path
+                        onRemovePage(page)
+                    }.takeUnless { scan.sending },
+                    modifier = Modifier.focusRequester(focusRequester),
                     image = { imageModifier -> pageImage(page, imageModifier) },
                 )
             }
@@ -268,6 +298,37 @@ internal fun ReviewContent(
             },
             onDismiss = { isConfirmingDelete = false },
         )
+    }
+}
+
+/**
+ * "Page removed · Undo", for as long as [removedPage]'s removal can be undone: undone with the
+ * action, final once the snackbar ends. A removal that a newer one replaces ends without either:
+ * the view model has made it final.
+ */
+@Composable
+private fun RemovalUndo(
+    removedPage: StagedPage?,
+    snackbarHostState: SnackbarHostState,
+    onRestorePage: (StagedPage) -> Unit,
+    onDeleteRemovedPage: (StagedPage) -> Unit,
+) {
+    val resources = LocalResources.current
+    val currentOnRestorePage by rememberUpdatedState(onRestorePage)
+    val currentOnDeleteRemovedPage by rememberUpdatedState(onDeleteRemovedPage)
+    LaunchedEffect(removedPage) {
+        val page = removedPage ?: return@LaunchedEffect
+        // In place of a message showing: the undo is offered for its own time, not after it.
+        snackbarHostState.currentSnackbarData?.dismiss()
+        val ending = snackbarHostState.showSnackbar(
+            resources.getString(R.string.review_page_removed),
+            actionLabel = resources.getString(R.string.undo),
+            duration = SnackbarDuration.Long,
+        )
+        when (ending) {
+            SnackbarResult.ActionPerformed -> currentOnRestorePage(page)
+            SnackbarResult.Dismissed -> currentOnDeleteRemovedPage(page)
+        }
     }
 }
 

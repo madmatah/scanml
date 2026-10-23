@@ -11,10 +11,10 @@ const MIN_LABEL_SPACING = 0.09;
 
 function rangeTitle([start, end], missing) {
   if (start === end) {
-    return missing ? t('Page {page}: missing', { page: start }) : t('Page {page}: scanned', { page: start });
+    return missing ? t('Page {page}: not scanned yet', { page: start }) : t('Page {page}: scanned', { page: start });
   }
   const range = formatRange([start, end]);
-  return missing ? t('Pages {range}: missing', { range }) : t('Pages {range}: scanned', { range });
+  return missing ? t('Pages {range}: not scanned yet', { range }) : t('Pages {range}: scanned', { range });
 }
 
 /**
@@ -49,7 +49,7 @@ export function renderCoverage(coverage) {
       h(
         'p',
         { class: 'muted' },
-        t('No page number known yet: the coverage will appear once numbered pages have been processed.'),
+        t('No page number known yet: the coverage will appear once the PC has read numbered pages.'),
       ),
       unnumberedNote,
     );
@@ -67,7 +67,7 @@ export function renderCoverage(coverage) {
 
   const scannedLabel = coverage.label || formatRanges(ranges);
   const description = gaps.length
-    ? t('Scanned pages: {scanned}. Missing pages: {missing}.', { scanned: scannedLabel, missing: formatRanges(gaps) })
+    ? t('Scanned pages: {scanned}. Not scanned yet: {missing}.', { scanned: scannedLabel, missing: formatRanges(gaps) })
     : t('All pages from {min} to {max} are scanned.', { min, max });
 
   const bar = h(
@@ -124,7 +124,7 @@ export function renderCoverage(coverage) {
       h(
         'div',
         {},
-        h('dt', {}, h('span', { class: 'swatch is-missing', 'aria-hidden': 'true' }), t('Missing')),
+        h('dt', {}, h('span', { class: 'swatch is-missing', 'aria-hidden': 'true' }), t('Not scanned yet')),
         h('dd', {}, gaps.length ? formatRanges(gaps) : tc('missing pages', 'none')),
       ),
     ),

@@ -35,7 +35,7 @@ const PAGE_GROUPS = {
   }),
   pending: () => ({
     title: t('Not in the document yet'),
-    hint: t('Waiting for OCR or failed: they will join the document once processed.'),
+    hint: t('Waiting to be read, or couldn’t be read: they will join the document once their text is ready.'),
   }),
   excluded: () => ({ title: t('Excluded'), hint: t('Left out of document.md.') }),
   duplicate: () => ({ title: t('Duplicates'), hint: t('Replaced by a newer scan of the same page number.') }),
@@ -43,10 +43,10 @@ const PAGE_GROUPS = {
 
 const STATS = [
   { key: 'pages', label: () => t('Pages') },
-  { key: 'done', label: () => t('Processed') },
+  { key: 'done', label: () => t('Text ready') },
   { key: 'queued', label: () => t('Queued'), tone: 'warn' },
-  { key: 'processing', label: () => t('Processing'), tone: 'info' },
-  { key: 'error', label: () => t('Failed'), tone: 'danger' },
+  { key: 'processing', label: () => t('Being read'), tone: 'info' },
+  { key: 'error', label: () => t('Couldn’t be read'), tone: 'danger' },
   { key: 'excluded', label: () => t('Excluded') },
   { key: 'duplicates', label: () => t('Duplicates') },
 ];
@@ -464,7 +464,7 @@ export function mountDocument(root, { route, signal, monitor, setTitle }) {
     setChildren(
       meta,
       h('li', { class: 'chip' }, documentKind(doc.kind)),
-      doc.unwarp && h('li', { class: 'chip chip-accent' }, t('Curved-page straightening')),
+      doc.unwarp && h('li', { class: 'chip chip-accent' }, t('Curved pages flattened')),
     );
     notes.textContent = doc.notes || '';
     notes.hidden = !doc.notes;

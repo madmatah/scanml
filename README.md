@@ -16,7 +16,7 @@ Phone (ScanMyLib app)  ──Wi-Fi──▶  PC: api ──socket──▶ OCR s
 ## Features
 
 - **Partial, out-of-order scanning.** Pages arrive in any order, in several batches; they are put back in order from
-  their printed page numbers, and the coverage ("1–12, 45–60") shows what is missing.
+  their printed page numbers, and the coverage ("1–12, 45–60") shows which pages are not scanned yet.
 - **Structured output.** One Markdown file per document and per page, tables in HTML, formulas in LaTeX, illustrations
   cropped into image files, plus a machine-readable index of the library.
 - **Untrusted OCR stack kept apart.** PaddlePaddle, vLLM and the model run in a container with no network, no access to
@@ -76,8 +76,8 @@ The services restart automatically with Docker (`restart: unless-stopped`); ther
    asks once to allow installs from the browser.
 3. Open the ScanMyLib app. On the **Pair with PC** screen, tap **Scan the QR code** and aim at the QR code of **Pair the
    app with this PC**: the app then knows the PC's address and its access token. Without a QR code reader, type the **PC
-   address** and the **Token** shown under the QR code into the app's **PC address** and **Access token** fields, then
-   tap **Test and pair**.
+   address** and the **Access token** shown under the QR code into the app's **PC address** and **Access token** fields,
+   then tap **Test and pair**.
 
 **Updates.** Once paired, the app asks the PC which app it publishes, when the library shows or is refreshed, at most
 once an hour, and again once the library reaches the PC if it could not before. When it is newer, the library shows
@@ -142,7 +142,7 @@ Pages can arrive in any order, in several batches.
 - **Manual order**: in the web UI, on a document, the **Organize** button. Drag and drop a page or a selection
   (Shift+click for a range), or use **Move selection…**. The displayed numbers do not change, only the order does.
   **Restore automatic order** undoes everything.
-- **Coverage**: "1–12, 45–60" and the missing pages are shown in the app and the web UI.
+- **Coverage**: "1–12, 45–60" and the pages not scanned yet are shown in the app and the web UI.
 - **Rescanned page**: the most recent one replaces the old one, which stays visible as a duplicate.
 
 ## OCR engine
@@ -173,13 +173,13 @@ The web UI is served by the PC on port 8765 (`http://localhost:8765`), and can b
 Its header shows the state of the OCR engine.
 
 - **Library**: every document with its cover, its pages and its coverage.
-- **Document**: the grid of pages (in the document, unnumbered, waiting for OCR or failed, excluded, duplicates), the
+- **Document**: the grid of pages (in the document, unnumbered, waiting to be read or failed, excluded, duplicates), the
   coverage, the downloads of `document.md` and of a `.zip` archive, and:
   - **Read document**: the whole document in reading order, as in `document.md`, with its formulas typeset. A marker at
     the start of each page opens that page, and a list of the pages jumps to any of them.
   - **Organize**: reorder the pages by hand (see "Page order").
 - **Page**: the scan next to the recognized text, the page number (a number typed by hand corrects it), rotation,
-  exclusion from the document, new OCR run, deletion.
+  exclusion from the document, reading the text again, deletion.
 - **Pairing**: installing the app and pairing a phone.
 
 ## Output

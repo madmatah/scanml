@@ -111,8 +111,8 @@ page's `key` and `data-label` its `page_label` (empty for an unnumbered page);
 (`data-range`: "13–44", or "13" for one page) and `<h2 class="unnumbered">`
 precedes the unplaced pages. These elements hold English text ("Page 42",
 "Unnumbered page", "Missing pages: 13–44", "Missing page: 13", "Unnumbered
-pages"); their classes and data attributes let the web UI show them in the
-user's language. Formulas are `<div class="math-display">` /
+pages"); their classes and data attributes let the web UI show them in its
+own words and in the user's language. Formulas are `<div class="math-display">` /
 `<span class="math-inline">` elements holding the TeX as text. The web UI's
 reading view (`#/documents/<id>/read`) is built on this: it links each page
 marker to the page (found by `key` in `GET /api/documents/{id}`), lists the

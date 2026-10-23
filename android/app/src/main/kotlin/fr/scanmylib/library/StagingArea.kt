@@ -140,23 +140,6 @@ class StagingArea(
         }
     }
 
-    /**
-     * Deletes the pages of [documentId]'s run after position [seq], e.g. the photos of one visit to
-     * the camera; the pages up to [seq] stay.
-     *
-     * @throws IOException if a page could not be deleted; the others are.
-     */
-    suspend fun removeAfter(documentId: String, seq: Int) {
-        mutex.withLock {
-            val run = loadLocked(documentId)
-            val left = withContext(io) {
-                run.filter { it.seq > seq && !it.file.delete() && it.file.exists() }
-            }
-            runs.update { it + (documentId to run.filter { page -> page.seq <= seq || page in left }) }
-            if (left.isNotEmpty()) throw IOException("cannot delete ${left.first().file}")
-        }
-    }
-
     /** Deletes [documentId]'s run. */
     suspend fun discard(documentId: String) {
         mutex.withLock {

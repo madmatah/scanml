@@ -322,13 +322,15 @@ private fun CameraCapture(
     // The photo shown large, by file: a photo landing meanwhile does not take its place.
     var shownPhoto by rememberSaveable { mutableStateOf<String?>(null) }
 
-    // Photos taken in this visit, or on their way: leaving asks first, and waits for the one being
-    // saved. The pages from before the visit are not this screen's: with no photo of its own, it
-    // closes at once.
+    // Only this visit's photos are the user's to keep or discard: the pages it did not take wait in
+    // the run whatever the answer.
     fun close() {
         if (state.photoCount == 0) onClose(false) else leaving = true
     }
-    BackHandler(enabled = state.photoCount > 0) { leaving = true }
+    // Also while leaving is refused: Back would otherwise leave the screen, and cancel a discard.
+    BackHandler(enabled = state.photoCount > 0 || !state.canLeave) {
+        if (state.canLeave) leaving = true
+    }
 
     Box(Modifier.fillMaxSize()) {
         AndroidView(factory = { previewView }, modifier = Modifier.fillMaxSize())
@@ -353,6 +355,7 @@ private fun CameraCapture(
                 },
                 // This visit's photos are in the run already: the other source adds to them.
                 onSwitchSource = onSwitchSource,
+                canSwitchSource = state.canSwitchSource,
                 modifier = Modifier.align(Alignment.Center),
             )
         } else if (state.finishing) {
@@ -360,7 +363,7 @@ private fun CameraCapture(
         }
 
         val closeButton = @Composable { modifier: Modifier ->
-            IconButton(onClick = ::close, modifier = modifier) {
+            IconButton(onClick = ::close, enabled = state.canLeave, modifier = modifier) {
                 Icon(painterResource(R.drawable.ic_close), contentDescription = stringResource(R.string.close))
             }
         }
@@ -384,7 +387,7 @@ private fun CameraCapture(
         }
         val shutter = @Composable { modifier: Modifier ->
             ShutterButton(
-                enabled = streaming && state.ready && !state.shooting && !state.finishing,
+                enabled = streaming && state.canShoot,
                 saving = state.shooting,
                 onClick = takePhoto,
                 modifier = modifier,
@@ -394,7 +397,7 @@ private fun CameraCapture(
             // Also while a photo is being saved: the screen then closes once it has joined the run.
             FilledTonalButton(
                 onClick = viewModel::finish,
-                enabled = state.photoCount > 0 && !state.finishing,
+                enabled = state.canFinish,
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                 modifier = modifier,
             ) {
@@ -545,6 +548,7 @@ private fun CameraProblem(
     @StringRes problem: Int,
     onRetry: () -> Unit,
     onSwitchSource: (ScanSource) -> Unit,
+    canSwitchSource: Boolean,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -562,10 +566,10 @@ private fun CameraProblem(
             textAlign = TextAlign.Center,
         )
         Button(onClick = onRetry) { Text(stringResource(R.string.retry)) }
-        OutlinedButton(onClick = { onSwitchSource(ScanSource.GOOGLE_SCANNER) }) {
+        OutlinedButton(onClick = { onSwitchSource(ScanSource.GOOGLE_SCANNER) }, enabled = canSwitchSource) {
             Text(stringResource(R.string.scan_source_google))
         }
-        TextButton(onClick = { onSwitchSource(ScanSource.PHOTO_PICKER) }) {
+        TextButton(onClick = { onSwitchSource(ScanSource.PHOTO_PICKER) }, enabled = canSwitchSource) {
             Text(stringResource(R.string.scan_source_picker))
         }
     }
@@ -683,7 +687,7 @@ private fun LastPhotoDialog(page: StagedPage, onDelete: () -> Unit, onDismiss: (
 
 /**
  * Asks whether to keep the [count] photos of this visit. Its buttons name their scope, and the
- * [waiting] pages from before the visit are said to be safe: deleting never reaches them.
+ * [waiting] pages that the visit did not take are said to be safe: deleting never reaches them.
  */
 @Composable
 private fun LeaveDialog(count: Int, waiting: Int, onKeep: () -> Unit, onDiscard: () -> Unit, onDismiss: () -> Unit) {

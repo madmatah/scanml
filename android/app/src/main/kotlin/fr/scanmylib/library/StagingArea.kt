@@ -130,7 +130,7 @@ class StagingArea(
     }
 
     /** Deletes one page of [documentId]'s run. */
-    suspend fun remove(documentId: String, page: StagedPage) {
+    suspend fun delete(documentId: String, page: StagedPage) {
         mutex.withLock {
             val run = loadLocked(documentId)
             withContext(io) {

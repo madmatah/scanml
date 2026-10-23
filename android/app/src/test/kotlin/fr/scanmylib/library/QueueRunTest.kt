@@ -134,7 +134,7 @@ class QueueRunTest {
                     "deleted" to CLOCK.instant(),
                     "b" to CLOCK.instant(),
                 )
-                staging.remove(DOCUMENT, shots[1])
+                staging.delete(DOCUMENT, shots[1])
                 val scans = ScanFileStore(folder.newFolder("scans"))
                 val numbering = PageNumbering(firstPage = null, consecutive = true)
                 queueRun(DOCUMENT, staging.pages(DOCUMENT), numbering, scans, CLOCK, staging.sendJournal(DOCUMENT)) {

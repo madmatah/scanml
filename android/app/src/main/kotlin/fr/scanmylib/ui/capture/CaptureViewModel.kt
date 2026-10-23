@@ -253,7 +253,7 @@ class CaptureViewModel(
     fun deletePage(page: StagedPage) {
         viewModelScope.launch {
             try {
-                staging.remove(documentId, page)
+                staging.delete(documentId, page)
             } catch (e: IOException) {
                 Log.w(TAG, "photo not deleted", e)
             }
@@ -286,7 +286,7 @@ class CaptureViewModel(
         var isEveryPhotoDeleted = true
         for (photo in staging.pages(documentId).filter { it.file.name in photoNames }) {
             try {
-                staging.remove(documentId, photo)
+                staging.delete(documentId, photo)
             } catch (e: IOException) {
                 Log.w(TAG, "photo not deleted", e)
                 isEveryPhotoDeleted = false

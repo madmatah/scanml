@@ -96,7 +96,7 @@ class StagingAreaTest {
             }
         }
 
-        class WhenTheLastTwoPagesWereRemoved {
+        class WhenTheLastTwoPagesWereDeleted {
             @get:Rule
             val folder = TemporaryFolder()
 
@@ -106,7 +106,7 @@ class StagingAreaTest {
             fun addAnImage() = runTest {
                 val staging = StagingArea(resolveStagingRoot(folder))
                 shootTwoScansAndTwoPhotos(staging)
-                removeThePhotos(staging)
+                deleteThePhotos(staging)
                 position = staging.shoot("next", SHOT_TIME.plusSeconds(4)).seq
             }
 
@@ -523,7 +523,7 @@ class StagingAreaTest {
     }
 
     @RunWith(Enclosed::class)
-    class TheRemoveMethod {
+    class TheDeleteMethod {
         class WhenAPhotoIsDeletedDuringTheRun {
             @get:Rule
             val folder = TemporaryFolder()
@@ -580,7 +580,7 @@ class StagingAreaTest {
             fun retakeTheLastPhoto() = runTest {
                 val staging = StagingArea(resolveStagingRoot(folder))
                 staging.shoot("a", SHOT_TIME)
-                staging.remove(DOCUMENT, staging.shoot("blurred b", SHOT_TIME.plusSeconds(2)))
+                staging.delete(DOCUMENT, staging.shoot("blurred b", SHOT_TIME.plusSeconds(2)))
                 staging.shoot("b", SHOT_TIME.plusSeconds(5))
                 pageContents = restartTheProcess(resolveStagingRoot(folder)).readContents(DOCUMENT)
             }
@@ -1068,7 +1068,7 @@ private suspend fun deleteTheSecondOfThreePhotos(staging: StagingArea): StagedPa
     staging.shoot("a", SHOT_TIME)
     val blurred = staging.shoot("b", SHOT_TIME.plusSeconds(2))
     staging.shoot("c", SHOT_TIME.plusSeconds(4))
-    staging.remove(DOCUMENT, blurred)
+    staging.delete(DOCUMENT, blurred)
     return blurred
 }
 
@@ -1079,8 +1079,8 @@ private suspend fun shootTwoScansAndTwoPhotos(staging: StagingArea) {
     staging.shoot("photo 2", SHOT_TIME.plusSeconds(3))
 }
 
-private suspend fun removeThePhotos(staging: StagingArea) {
-    staging.pages(DOCUMENT).filter { it.file.readText().startsWith("photo") }.forEach { staging.remove(DOCUMENT, it) }
+private suspend fun deleteThePhotos(staging: StagingArea) {
+    staging.pages(DOCUMENT).filter { it.file.readText().startsWith("photo") }.forEach { staging.delete(DOCUMENT, it) }
 }
 
 private suspend fun leaveAnImageOnItsWay(root: File): StagingArea = StagingArea(root).apply {
@@ -1097,7 +1097,7 @@ private suspend fun askForInterruptedImages(staging: StagingArea): Boolean = sta
 private suspend fun leaveAPageAndAnEmptiedRunInEarlierProcesses(root: File) {
     StagingArea(root).shoot("a", SHOT_TIME)
     StagingArea(root).shoot("b", SHOT_TIME, OTHER_DOCUMENT)
-    StagingArea(root).remove(OTHER_DOCUMENT, StagingArea(root).pages(OTHER_DOCUMENT).single())
+    StagingArea(root).delete(OTHER_DOCUMENT, StagingArea(root).pages(OTHER_DOCUMENT).single())
 }
 
 private fun moveThenFail(page: StagedPage, outbox: File): Nothing {

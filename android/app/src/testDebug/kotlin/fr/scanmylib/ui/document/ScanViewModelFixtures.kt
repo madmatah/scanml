@@ -28,13 +28,19 @@ private val SCAN_TIME = Instant.parse("2026-10-12T08:00:00Z")
 internal data class QueuedPage(val stagedName: String, val hint: Int?)
 
 /**
- * Stands in for the upload queue: it takes the run's files away, as the real one moves them, or
- * throws [refusal], if any, and leaves them in the run, as the real one does when it fails.
+ * Stands in for the upload queue: once [gate] opens, if any, it takes the run's files away, as the
+ * real one moves them, or throws [refusal], if any, and leaves them in the run, as the real one
+ * does when it fails.
  */
-internal class FakeUploadQueue(private val staging: StagingArea, private val refusal: Exception? = null) {
+internal class FakeUploadQueue(
+    private val staging: StagingArea,
+    private val gate: CompletableDeferred<Unit>? = null,
+    private val refusal: Exception? = null,
+) {
     val pages = mutableListOf<QueuedPage>()
 
     suspend fun send(numbering: PageNumbering): Int = staging.send(DOCUMENT_ID) { run ->
+        gate?.await()
         refusal?.let { throw it }
         run.forEachIndexed { index, page ->
             if (!page.file.delete()) throw IOException("cannot take ${page.file}")
@@ -44,19 +50,25 @@ internal class FakeUploadQueue(private val staging: StagingArea, private val ref
     }
 }
 
-internal class ThreePagesToSend(
+/** A document's run, which [viewModel] shows, and the copies into it. */
+internal class RunUnderReview(
     val staging: StagingArea,
+    val preparation: RunPreparation,
     val queue: FakeUploadQueue,
     val viewModel: ScanViewModel,
     val stagedPages: List<StagedPage>,
 )
 
-/** Three pages in the run, which the view model shows; their send fails with [sendRefusal], if any. */
+/**
+ * Three pages in the run, which the view model shows; their send waits for [sendGate], if any,
+ * then fails with [sendRefusal], if any.
+ */
 @OptIn(ExperimentalCoroutinesApi::class)
 internal suspend fun TestScope.stageThreePages(
     folder: TemporaryFolder,
+    sendGate: CompletableDeferred<Unit>? = null,
     sendRefusal: Exception? = null,
-): ThreePagesToSend {
+): RunUnderReview {
     val staging = StagingArea(File(folder.root, "staging"), io = UnconfinedTestDispatcher(testScheduler))
     val inputs = (1..3).map { index ->
         val image = staging.incomingFile(DOCUMENT_ID)
@@ -64,17 +76,47 @@ internal suspend fun TestScope.stageThreePages(
         StagingInput(image, SCAN_TIME.plusSeconds(index.toLong()))
     }
     val stagedPages = staging.add(DOCUMENT_ID, inputs)
-    val queue = FakeUploadQueue(staging, sendRefusal)
-    val viewModel = makeViewModel(folder, staging, sendRun = queue::send)
+    return showTheRun(folder, staging, stagedPages, sendGate, sendRefusal)
+}
+
+/** A document without pages to send, which the view model shows. */
+@OptIn(ExperimentalCoroutinesApi::class)
+internal suspend fun TestScope.makeEmptyRun(folder: TemporaryFolder): RunUnderReview {
+    val staging = StagingArea(File(folder.root, "staging"), io = UnconfinedTestDispatcher(testScheduler))
+    return showTheRun(folder, staging, stagedPages = emptyList())
+}
+
+/** A document whose images on their way to the run were cut short by the end of the previous process. */
+@OptIn(ExperimentalCoroutinesApi::class)
+internal suspend fun TestScope.makeRunCutShort(folder: TemporaryFolder): RunUnderReview {
+    val root = File(folder.root, "staging")
+    val incoming = File(root, "$DOCUMENT_ID/incoming")
+    incoming.mkdirs()
+    File(incoming, "cut-short.tmp").writeBytes(byteArrayOf(1))
+    val staging = StagingArea(root, io = UnconfinedTestDispatcher(testScheduler))
+    return showTheRun(folder, staging, stagedPages = emptyList())
+}
+
+private suspend fun TestScope.showTheRun(
+    folder: TemporaryFolder,
+    staging: StagingArea,
+    stagedPages: List<StagedPage>,
+    sendGate: CompletableDeferred<Unit>? = null,
+    sendRefusal: Exception? = null,
+): RunUnderReview {
+    val queue = FakeUploadQueue(staging, sendGate, sendRefusal)
+    val preparation = RunPreparation(this)
+    val viewModel = makeViewModel(folder, staging, preparation = preparation, sendRun = queue::send)
     backgroundScope.launch { viewModel.scanState.collect {} }
-    viewModel.scanState.first { it.loaded && it.stagedPages == stagedPages }
-    return ThreePagesToSend(staging, queue, viewModel, stagedPages)
+    viewModel.scanState.first { it.loaded && it.isRunRead && it.stagedPages == stagedPages }
+    return RunUnderReview(staging, preparation, queue, viewModel, stagedPages)
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
 internal fun TestScope.makeViewModel(
     folder: TemporaryFolder,
     staging: StagingArea,
+    preparation: RunPreparation = RunPreparation(this),
     addScannedPages: suspend (List<Uri>, (Int) -> Unit) -> Unit = { _, _ -> },
     addPhotos: suspend (List<Uri>, (Int) -> Unit) -> PhotoImportResult = { _, _ -> PhotoImportResult(added = 0) },
     sendRun: suspend (PageNumbering) -> Int = { 0 },
@@ -86,7 +128,7 @@ internal fun TestScope.makeViewModel(
         SavedStateHandle(),
         DOCUMENT_ID,
         staging,
-        RunPreparation(this),
+        preparation,
         SettingsRepository(dataStore),
         addScannedPages = addScannedPages,
         addPhotos = addPhotos,

@@ -1,0 +1,767 @@
+package fr.scanmylib.ui.document
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.SemanticsNodeInteractionsProvider
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.hasAnyDescendant
+import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasScrollToKeyAction
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isHeading
+import androidx.compose.ui.test.junit4.ComposeContentTestRule
+import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performCustomAccessibilityActionWithLabel
+import androidx.compose.ui.test.performScrollToKey
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.LifecycleRegistry
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.github.takahirom.roborazzi.ExperimentalRoborazziApi
+import com.github.takahirom.roborazzi.RobolectricDeviceQualifiers
+import com.github.takahirom.roborazzi.captureRoboImage
+import com.github.takahirom.roborazzi.captureScreenRoboImage
+import fr.scanmylib.MainDispatcherRule
+import fr.scanmylib.library.Preparation
+import fr.scanmylib.library.PreparationOutcome
+import fr.scanmylib.library.StagedPage
+import fr.scanmylib.model.ScanSource
+import fr.scanmylib.ui.isPoliteLiveRegion
+import fr.scanmylib.ui.theme.ScanMyLibTheme
+import java.io.File
+import java.time.Instant
+import kotlin.math.roundToInt
+import kotlin.properties.Delegates
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Before
+import org.junit.Rule
+import org.junit.Test
+import org.junit.experimental.runners.Enclosed
+import org.junit.rules.TemporaryFolder
+import org.junit.runner.RunWith
+import org.robolectric.ParameterizedRobolectricTestRunner
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
+
+@RunWith(Enclosed::class)
+class ReviewScreenTest {
+    @RunWith(Enclosed::class)
+    class TheReviewContentFunction {
+        @RunWith(ParameterizedRobolectricTestRunner::class)
+        @GraphicsMode(GraphicsMode.Mode.NATIVE)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenFourPagesWaitToBeSent(private val theme: String, private val dark: Boolean) {
+            @get:Rule
+            val compose = createComposeRule()
+
+            @Before
+            fun drawTheReview() {
+                compose.setContent { ScanMyLibTheme(dark = dark) { ReviewContentOf(FOUR_PAGES) } }
+                compose.onRoot().captureRoboImage("build/outputs/roborazzi/review-pages-$theme.png")
+            }
+
+            @Test
+            fun `should say how many pages wait to be sent, as a heading`() {
+                compose.onNode(hasText(FOUR_PAGES_TO_SEND) and isHeading()).assertIsDisplayed()
+            }
+
+            @Test
+            fun `should offer to send the four pages`() {
+                compose.onNodeWithText(SEND_FOUR_PAGES).assertIsEnabled()
+            }
+
+            @Test
+            fun `should read each page's place and number in words`() {
+                compose.onNodeWithContentDescription(SECOND_PAGE_AUTO).assertIsDisplayed()
+            }
+
+            @Test
+            fun `should let TalkBack enlarge a page, by name`() {
+                assertEquals(ENLARGE, readClickLabel(compose, SECOND_PAGE_AUTO))
+            }
+
+            @Test
+            fun `should let TalkBack remove each page, since no icon is there to tap`() {
+                assertEquals(
+                    FOUR_PAGES.stagedPages.size,
+                    compose.onAllNodes(hasRemoveAction()).fetchSemanticsNodes().size,
+                )
+            }
+
+            companion object {
+                @JvmStatic
+                @ParameterizedRobolectricTestRunner.Parameters(name = "in the {0} theme")
+                fun themes(): List<Array<Any>> = THEMES
+            }
+        }
+
+        @RunWith(ParameterizedRobolectricTestRunner::class)
+        @GraphicsMode(GraphicsMode.Mode.NATIVE)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenFourPagesWaitAndScrolledToTheEnd(private val theme: String, private val dark: Boolean) {
+            @get:Rule
+            val compose = createComposeRule()
+
+            @Before
+            fun drawTheEnd() {
+                compose.setContent { ScanMyLibTheme(dark = dark) { ReviewContentOf(FOUR_PAGES) } }
+                compose.onNode(hasScrollToKeyAction()).performScrollToKey(DELETE_KEY)
+                compose.onRoot().captureRoboImage("build/outputs/roborazzi/review-pages-end-$theme.png")
+            }
+
+            @Test
+            fun `should offer to add pages with the camera, from the gallery, or with another camera`() {
+                compose.onNodeWithText(SCAN).assertIsDisplayed()
+                compose.onNodeWithText(IMPORT).assertIsDisplayed()
+                compose.onNodeWithText(SCAN_WITH).assertIsDisplayed()
+            }
+
+            companion object {
+                @JvmStatic
+                @ParameterizedRobolectricTestRunner.Parameters(name = "in the {0} theme")
+                fun themes(): List<Array<Any>> = THEMES
+            }
+        }
+
+        @RunWith(ParameterizedRobolectricTestRunner::class)
+        @GraphicsMode(GraphicsMode.Mode.NATIVE)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone, fontScale = 2f)
+        class WhenFourPagesWaitAndTheTextIsTwiceItsSizeAndScrolledToTheEnd(
+            private val theme: String,
+            private val dark: Boolean,
+        ) {
+            @get:Rule
+            val compose = createComposeRule()
+
+            @Before
+            fun drawTheEnd() {
+                compose.setContent { ScanMyLibTheme(dark = dark) { ReviewContentOf(FOUR_PAGES) } }
+                compose.onNode(hasScrollToKeyAction()).performScrollToKey(DELETE_KEY)
+                compose.onRoot().captureRoboImage("build/outputs/roborazzi/review-pages-large-text-end-$theme.png")
+            }
+
+            @Test
+            fun `should offer to add pages with the camera, from the gallery, or with another camera`() {
+                compose.onNodeWithText(SCAN).assertIsDisplayed()
+                compose.onNodeWithText(IMPORT).assertIsDisplayed()
+                compose.onNodeWithText(SCAN_WITH).assertIsDisplayed()
+            }
+
+            companion object {
+                @JvmStatic
+                @ParameterizedRobolectricTestRunner.Parameters(name = "in the {0} theme")
+                fun themes(): List<Array<Any>> = THEMES
+            }
+        }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenTheFirstPageIs32 {
+            @get:Rule
+            val compose = createComposeRule()
+
+            @Before
+            fun drawTheReview() {
+                compose.setContent { ScanMyLibTheme { ReviewContentOf(FOUR_PAGES.copy(firstPage = "32")) } }
+            }
+
+            @Test
+            fun `should read the number the second page is sent with`() {
+                compose.onNodeWithContentDescription(SECOND_PAGE_33).assertIsDisplayed()
+            }
+
+            companion object {
+                private const val SECOND_PAGE_33 = "Page 2 of 4, number 33"
+            }
+        }
+
+        @RunWith(ParameterizedRobolectricTestRunner::class)
+        @GraphicsMode(GraphicsMode.Mode.NATIVE)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone, fontScale = 2f)
+        class WhenFourPagesWaitAndTheTextIsTwiceItsSize(private val theme: String, private val dark: Boolean) {
+            @get:Rule
+            val compose = createComposeRule()
+
+            @Before
+            fun drawTheReview() {
+                compose.setContent { ScanMyLibTheme(dark = dark) { ReviewContentOf(FOUR_PAGES) } }
+                compose.onRoot().captureRoboImage("build/outputs/roborazzi/review-pages-large-text-$theme.png")
+            }
+
+            @Test
+            fun `should lay the pages out in two columns, as large as the text allows`() {
+                assertEquals(2, countColumnsOfTheFirstTwoPages(compose))
+            }
+
+            @Test
+            fun `should show the first page number field whole`() {
+                assertTrue(isShownWhole(compose, FIRST_PAGE_NUMBER))
+            }
+
+            @Test
+            fun `should show the send button whole`() {
+                assertTrue(isShownWhole(compose, SEND_FOUR_PAGES))
+            }
+
+            companion object {
+                private const val FIRST_PAGE_NUMBER = "First page number"
+
+                @JvmStatic
+                @ParameterizedRobolectricTestRunner.Parameters(name = "in the {0} theme")
+                fun themes(): List<Array<Any>> = THEMES
+            }
+        }
+
+        @RunWith(ParameterizedRobolectricTestRunner::class)
+        @GraphicsMode(GraphicsMode.Mode.NATIVE)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenPagesAreBeingImportedIntoAnEmptyRun(private val theme: String, private val dark: Boolean) {
+            @get:Rule
+            val compose = createComposeRule()
+
+            @Before
+            fun drawTheReview() {
+                compose.setContent { ScanMyLibTheme(dark = dark) { ReviewContentOf(IMPORTING_FOUR_PHOTOS) } }
+                compose.onRoot().captureRoboImage("build/outputs/roborazzi/review-preparing-$theme.png")
+            }
+
+            @Test
+            fun `should count the photos being imported among the pages to send`() {
+                compose.onNodeWithText(FOUR_PAGES_TO_SEND).assertIsDisplayed()
+            }
+
+            @Test
+            fun `should show the progress of the import`() {
+                compose.onNodeWithText(PROGRESS).assertIsDisplayed()
+            }
+
+            @Test
+            fun `should not send before the photos are in, so that none is left out`() {
+                compose.onNodeWithText(PREPARING).assertIsNotEnabled()
+            }
+
+            @Test
+            fun `should let the import be canceled`() {
+                compose.onNodeWithText(CANCEL).assertIsDisplayed()
+            }
+
+            companion object {
+                private const val PROGRESS = "Preparing pages: 2 of 4"
+                private const val PREPARING = "Preparing…"
+
+                @JvmStatic
+                @ParameterizedRobolectricTestRunner.Parameters(name = "in the {0} theme")
+                fun themes(): List<Array<Any>> = THEMES
+            }
+        }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenPagesAreBeingImportedIntoAnEmptyRunAndScrolledToTheEnd {
+            @get:Rule
+            val compose = createComposeRule()
+
+            @Before
+            fun drawTheEnd() {
+                compose.setContent { ScanMyLibTheme { ReviewContentOf(IMPORTING_FOUR_PHOTOS) } }
+                compose.onNode(hasScrollToKeyAction()).performScrollToKey(DELETE_KEY)
+            }
+
+            @Test
+            fun `should not delete the pages while the photos come in, which would join the run once deleted`() {
+                compose.onNodeWithText(DELETE_THESE_PAGES).assertIsNotEnabled()
+            }
+        }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenScannedPagesAreBeingCopied {
+            @get:Rule
+            val compose = createComposeRule()
+
+            @Before
+            fun drawTheReview() {
+                val preparation = Preparation(done = 2, total = 4, imagesToAdd = 4, isCancellable = false)
+                compose.setContent {
+                    ScanMyLibTheme { ReviewContentOf(IMPORTING_FOUR_PHOTOS.copy(preparation = preparation)) }
+                }
+            }
+
+            @Test
+            fun `should not offer to cancel, since the scanned pages exist nowhere else`() {
+                assertEquals(0, compose.onAllNodesWithText(CANCEL).fetchSemanticsNodes().size)
+            }
+        }
+
+        @RunWith(ParameterizedRobolectricTestRunner::class)
+        @GraphicsMode(GraphicsMode.Mode.NATIVE)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenPhotosWereSkipped(private val theme: String, private val dark: Boolean) {
+            @get:Rule
+            val compose = createComposeRule()
+
+            @Before
+            fun drawTheReview() {
+                compose.setContent { ScanMyLibTheme(dark = dark) { ReviewContentOf(PHOTOS_SKIPPED) } }
+                compose.onRoot().captureRoboImage("build/outputs/roborazzi/review-photos-skipped-$theme.png")
+            }
+
+            @Test
+            fun `should say so from a region that stays, so that it is read out`() {
+                compose.onNode(isPoliteLiveRegion() and hasAnyDescendant(hasText(TWO_SKIPPED, substring = true)))
+                    .assertExists()
+            }
+
+            companion object {
+                @JvmStatic
+                @ParameterizedRobolectricTestRunner.Parameters(name = "in the {0} theme")
+                fun themes(): List<Array<Any>> = THEMES
+            }
+        }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenPhotosWereSkippedAndOkIsTapped {
+            @get:Rule
+            val compose = createComposeRule()
+
+            private lateinit var dismissals: MutableList<Unit>
+
+            @Before
+            fun tapOk() {
+                dismissals = mutableListOf()
+                compose.setContent {
+                    ScanMyLibTheme { ReviewContentOf(PHOTOS_SKIPPED, onDismissOutcome = { dismissals += Unit }) }
+                }
+                compose.onNodeWithText(OK).performClick()
+            }
+
+            @Test
+            fun `should dismiss the banner`() {
+                assertEquals(1, dismissals.size)
+            }
+        }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenTheAppWasClosedWhileAddingPages {
+            @get:Rule
+            val compose = createComposeRule()
+
+            @Before
+            fun drawTheReview() {
+                compose.setContent { ScanMyLibTheme { ReviewContentOf(FOUR_PAGES.copy(wasAddingInterrupted = true)) } }
+            }
+
+            @Test
+            fun `should ask to check the pages, and to add those missing`() {
+                compose.onNode(isPoliteLiveRegion() and hasAnyDescendant(hasText(ADDING_INTERRUPTED))).assertExists()
+            }
+
+            companion object {
+                private const val ADDING_INTERRUPTED = "The app was closed while pages were being added: " +
+                    "check the pages waiting to be sent, and add any missing ones again."
+            }
+        }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenTheFirstPageIsInvalid {
+            @get:Rule
+            val compose = createComposeRule()
+
+            @Before
+            fun drawTheReview() {
+                compose.setContent { ScanMyLibTheme { ReviewContentOf(FOUR_PAGES.copy(firstPage = "0")) } }
+            }
+
+            @Test
+            fun `should not send, so that no page is numbered wrong`() {
+                compose.onNodeWithText(SEND_FOUR_PAGES).assertIsNotEnabled()
+            }
+        }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenSendIsTapped {
+            @get:Rule
+            val compose = createComposeRule()
+
+            private lateinit var sends: MutableList<Unit>
+
+            @Before
+            fun tapSend() {
+                sends = mutableListOf()
+                compose.setContent { ScanMyLibTheme { ReviewContentOf(FOUR_PAGES, onSend = { sends += Unit }) } }
+                compose.onNodeWithText(SEND_FOUR_PAGES).performClick()
+            }
+
+            @Test
+            fun `should send the pages at once, with no question`() {
+                assertEquals(1, sends.size)
+            }
+        }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenPagesAreBeingSent {
+            @get:Rule
+            val compose = createComposeRule()
+
+            @Before
+            fun drawTheReview() {
+                compose.setContent { ScanMyLibTheme { ReviewContentOf(FOUR_PAGES.copy(sending = true)) } }
+            }
+
+            @Test
+            fun `should not close, so that the send ends the review`() {
+                compose.onNode(hasContentDescription(CLOSE)).assertIsNotEnabled()
+            }
+
+            @Test
+            fun `should not let TalkBack remove a page that is being sent`() {
+                assertEquals(0, compose.onAllNodes(hasRemoveAction()).fetchSemanticsNodes().size)
+            }
+
+            companion object {
+                private const val CLOSE = "Close and keep the pages"
+            }
+        }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenTheRemoveActionOfTheSecondTileIsInvoked {
+            @get:Rule
+            val compose = createComposeRule()
+
+            private lateinit var removedPages: MutableList<StagedPage>
+
+            @OptIn(ExperimentalTestApi::class)
+            @Before
+            fun removeTheSecondPage() {
+                removedPages = mutableListOf()
+                compose.setContent {
+                    ScanMyLibTheme { ReviewContentOf(FOUR_PAGES, onRemovePage = { removedPages += it }) }
+                }
+                compose.onNodeWithContentDescription(SECOND_PAGE_AUTO).performCustomAccessibilityActionWithLabel(REMOVE)
+            }
+
+            @Test
+            fun `should remove that page`() {
+                assertEquals(listOf(FOUR_PAGES.stagedPages[1]), removedPages)
+            }
+        }
+
+        @RunWith(ParameterizedRobolectricTestRunner::class)
+        @GraphicsMode(GraphicsMode.Mode.NATIVE)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenDeleteTheseFourPagesIsTapped(private val theme: String, private val dark: Boolean) {
+            @get:Rule
+            val compose = createComposeRule()
+
+            @OptIn(ExperimentalRoborazziApi::class)
+            @Before
+            fun tapDelete() {
+                compose.setContent { ScanMyLibTheme(dark = dark) { ReviewContentOf(FOUR_PAGES) } }
+                tapDeleteTheseFourPages(compose)
+                compose.waitForIdle()
+                // The whole screen: the dialog has a window of its own.
+                captureScreenRoboImage("build/outputs/roborazzi/review-delete-$theme.png")
+            }
+
+            @Test
+            fun `should ask first, since the pages exist nowhere else`() {
+                compose.onNodeWithText(DELETE_FOUR_PAGES).assertIsDisplayed()
+            }
+
+            companion object {
+                private const val DELETE_FOUR_PAGES = "Delete 4 pages?"
+
+                @JvmStatic
+                @ParameterizedRobolectricTestRunner.Parameters(name = "in the {0} theme")
+                fun themes(): List<Array<Any>> = THEMES
+            }
+        }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenDeleteTheseFourPagesIsTappedAndConfirmed {
+            @get:Rule
+            val compose = createComposeRule()
+
+            private lateinit var deletions: MutableList<Unit>
+
+            @Before
+            fun confirmTheDeletion() {
+                deletions = mutableListOf()
+                compose.setContent { ScanMyLibTheme { ReviewContentOf(FOUR_PAGES, onDelete = { deletions += Unit }) } }
+                tapDeleteTheseFourPages(compose)
+                compose.onNodeWithText(DELETE).performClick()
+            }
+
+            @Test
+            fun `should delete the pages`() {
+                assertEquals(1, deletions.size)
+            }
+
+            companion object {
+                private const val DELETE = "Delete"
+            }
+        }
+    }
+
+    @RunWith(Enclosed::class)
+    class TheReviewScreenFunction {
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenTheRunEmptiesWhileTheScreenIsOnlyStarted {
+            @get:Rule
+            val mainDispatcher = MainDispatcherRule()
+
+            @get:Rule
+            val folder = TemporaryFolder()
+
+            @get:Rule
+            val compose = createComposeRule()
+
+            private var closingCount by Delegates.notNull<Int>()
+            private lateinit var reviewEnds: List<ReviewEnd?>
+
+            @Before
+            fun emptyTheRun() = runTest {
+                val review = showTheReview(compose, stageThreePages(folder))
+                emptyTheRunElsewhere(compose, review)
+                closingCount = review.closingCount
+                reviewEnds = listOf(review.run.viewModel.scanState.value.reviewEnd)
+            }
+
+            @Test
+            fun `should stay open, so that a source's launcher stays registered`() {
+                assertEquals(0, closingCount)
+            }
+
+            @Test
+            fun `should not end the review yet`() {
+                assertEquals(listOf(null), reviewEnds)
+            }
+        }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenTheRunEmptiesWhileTheScreenIsOnlyStartedAndTheScreenResumes {
+            @get:Rule
+            val mainDispatcher = MainDispatcherRule()
+
+            @get:Rule
+            val folder = TemporaryFolder()
+
+            @get:Rule
+            val compose = createComposeRule()
+
+            private var closingCount by Delegates.notNull<Int>()
+
+            @Before
+            fun resume() = runTest {
+                val review = showTheReview(compose, stageThreePages(folder))
+                emptyTheRunElsewhere(compose, review)
+                resumeTheScreen(compose, review)
+                closingCount = review.closingCount
+            }
+
+            @Test
+            fun `should close, as nothing is left to review`() {
+                assertEquals(1, closingCount)
+            }
+        }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenTheReviewEndsWhileTheScreenIsOnlyStarted {
+            @get:Rule
+            val mainDispatcher = MainDispatcherRule()
+
+            @get:Rule
+            val folder = TemporaryFolder()
+
+            @get:Rule
+            val compose = createComposeRule()
+
+            private lateinit var closingCounts: List<Int>
+
+            @Before
+            fun sendThenResume() = runTest {
+                val review = showTheReview(compose, stageThreePages(folder))
+                review.run.viewModel.send()
+                review.run.viewModel.scanState.first { it.reviewEnd != null }
+                compose.waitForIdle()
+                val closingCountWhileStarted = review.closingCount
+                resumeTheScreen(compose, review)
+                closingCounts = listOf(closingCountWhileStarted, review.closingCount)
+            }
+
+            @Test
+            fun `should leave only once resumed`() {
+                assertEquals(listOf(0, 1), closingCounts)
+            }
+        }
+    }
+}
+
+private const val FOUR_PAGES_TO_SEND = "4 pages to send"
+private const val SEND_FOUR_PAGES = "Send 4 pages"
+private const val SECOND_PAGE_AUTO = "Page 2 of 4, number auto"
+private const val ENLARGE = "Enlarge"
+private const val REMOVE = "Remove"
+private const val CANCEL = "Cancel"
+private const val OK = "OK"
+private const val TWO_SKIPPED = "2 photos"
+private const val DELETE_THESE_PAGES = "Delete these pages"
+private const val DELETE_KEY = "delete"
+private const val SCAN = "Scan"
+private const val IMPORT = "Import"
+private const val SCAN_WITH = "Scan with…"
+
+private val THEMES = listOf(arrayOf<Any>("light", false), arrayOf<Any>("dark", true))
+
+private val PAPER = Color(0xFFF3EEDF)
+
+private val FOUR_PAGES = ScanUiState(
+    defaultCamera = ScanSource.GOOGLE_SCANNER,
+    loaded = true,
+    isRunRead = true,
+    stagedPages = (1..4).map { position ->
+        StagedPage(
+            File("/staging/run/$position.jpg"),
+            seq = position,
+            capturedAt = Instant.parse("2026-10-12T08:00:00Z").plusSeconds(position.toLong()),
+        )
+    },
+)
+
+private val IMPORTING_FOUR_PHOTOS = FOUR_PAGES.copy(
+    stagedPages = emptyList(),
+    preparation = Preparation(done = 2, total = 4, imagesToAdd = 4, isCancellable = true),
+)
+
+private val PHOTOS_SKIPPED =
+    FOUR_PAGES.copy(outcome = PreparationOutcome.PhotosSkipped(unsupported = 2, tooLarge = 0, unreadable = 0))
+
+private fun hasRemoveAction(): SemanticsMatcher = SemanticsMatcher("has the action $REMOVE") { node ->
+    node.config.getOrNull(SemanticsActions.CustomActions).orEmpty().any { it.label == REMOVE }
+}
+
+private fun readClickLabel(screen: SemanticsNodeInteractionsProvider, description: String): String? =
+    screen.onNodeWithContentDescription(description).fetchSemanticsNode().config
+        .getOrNull(SemanticsActions.OnClick)?.label
+
+private fun countColumnsOfTheFirstTwoPages(screen: SemanticsNodeInteractionsProvider): Int =
+    listOf("Page 1 of 4, number auto", SECOND_PAGE_AUTO).map { page ->
+        screen.onNodeWithContentDescription(page).fetchSemanticsNode().positionInRoot.x.roundToInt()
+    }.toSet().size
+
+private fun isShownWhole(screen: SemanticsNodeInteractionsProvider, text: String): Boolean {
+    val root = screen.onRoot().fetchSemanticsNode().boundsInRoot
+    val bounds = screen.onNodeWithText(text).fetchSemanticsNode().boundsInRoot
+    return bounds.height > 0 && root.contains(bounds.topLeft) && bounds.bottom <= root.bottom &&
+        bounds.right <= root.right
+}
+
+private fun tapDeleteTheseFourPages(screen: SemanticsNodeInteractionsProvider) {
+    screen.onNode(hasScrollToKeyAction()).performScrollToKey(DELETE_KEY)
+    screen.onNodeWithText(DELETE_THESE_PAGES).performClick()
+}
+
+/** The lifecycle of the review's entry, which a test moves by hand. */
+private class ScreenLifecycle(state: Lifecycle.State) : LifecycleOwner {
+    private val registry = LifecycleRegistry.createUnsafe(this).apply { currentState = state }
+
+    override val lifecycle: Lifecycle get() = registry
+
+    fun moveTo(state: Lifecycle.State) {
+        registry.currentState = state
+    }
+}
+
+/** The review of [run], drawn while its entry is only started, as under a source in front of it. */
+private class ReviewOnScreen(val run: RunUnderReview, val lifecycle: ScreenLifecycle) {
+    var closingCount = 0
+}
+
+private fun showTheReview(compose: ComposeContentTestRule, run: RunUnderReview): ReviewOnScreen {
+    val review = ReviewOnScreen(run, ScreenLifecycle(Lifecycle.State.STARTED))
+    compose.setContent {
+        CompositionLocalProvider(LocalLifecycleOwner provides review.lifecycle) {
+            ScanMyLibTheme {
+                ReviewScreen(
+                    onClose = { review.closingCount++ },
+                    onOpenCamera = {},
+                    switchToSource = null,
+                    onSwitchHandled = {},
+                    viewModel = run.viewModel,
+                )
+            }
+        }
+    }
+    compose.waitForIdle()
+    return review
+}
+
+/** The run's pages deleted by something else than the review, which the review sees go. */
+private suspend fun emptyTheRunElsewhere(compose: ComposeContentTestRule, review: ReviewOnScreen) {
+    review.run.staging.discard(DOCUMENT_ID)
+    review.run.viewModel.scanState.first { it.hasNothingToReview }
+    compose.waitForIdle()
+}
+
+private fun resumeTheScreen(compose: ComposeContentTestRule, review: ReviewOnScreen) {
+    compose.runOnIdle { review.lifecycle.moveTo(Lifecycle.State.RESUMED) }
+    compose.waitForIdle()
+}
+
+@Composable
+private fun ReviewContentOf(
+    scan: ScanUiState,
+    onSend: () -> Unit = {},
+    onDelete: () -> Unit = {},
+    onRemovePage: (StagedPage) -> Unit = {},
+    onDismissOutcome: () -> Unit = {},
+) {
+    ReviewContent(
+        scan = scan,
+        snackbarHostState = remember { SnackbarHostState() },
+        onClose = {},
+        onFirstPageChange = {},
+        onConsecutiveChange = {},
+        onCancelPreparation = {},
+        onDismissOutcome = onDismissOutcome,
+        onDismissAddingInterrupted = {},
+        onEnlargePage = {},
+        onRemovePage = onRemovePage,
+        onScan = {},
+        onImport = {},
+        onChooseCamera = {},
+        onSend = onSend,
+        onDelete = onDelete,
+        pageImage = { _, modifier -> Box(modifier.background(PAPER)) },
+    )
+}

@@ -31,9 +31,33 @@ class MessageImportanceTest {
                 @JvmStatic
                 @Parameterized.Parameters(name = "{0}")
                 fun messages(): List<Array<Any>> = listOf(
-                    arrayOf("adding interrupted", ScanMessage.AddingInterrupted),
                     arrayOf("storage full", ScanMessage.StorageFull),
                     arrayOf("send failed", ScanMessage.SendFailed),
+                )
+            }
+        }
+
+        @RunWith(Parameterized::class)
+        class WhenTheMessageAsksTheUserToAct(private val case: String, private val message: ScanMessage) {
+            private var isImportant by Delegates.notNull<Boolean>()
+
+            @Before
+            fun weighTheMessage() {
+                isImportant = message.important
+            }
+
+            @Test
+            fun `should show longer`() {
+                assertTrue(case, isImportant)
+            }
+
+            companion object {
+                @JvmStatic
+                @Parameterized.Parameters(name = "{0}")
+                fun messages(): List<Array<Any>> = listOf(
+                    arrayOf("scanner unavailable", ScanMessage.ScannerUnavailable),
+                    arrayOf("scanner failed", ScanMessage.ScannerFailed),
+                    arrayOf("photo picker unavailable", ScanMessage.PhotoPickerUnavailable),
                 )
             }
         }
@@ -55,7 +79,7 @@ class MessageImportanceTest {
             companion object {
                 @JvmStatic
                 @Parameterized.Parameters(name = "{0}")
-                fun messages(): List<Array<Any>> = listOf(arrayOf("pages queued", ScanMessage.PagesQueued(4)))
+                fun messages(): List<Array<Any>> = listOf(arrayOf("setting not saved", ScanMessage.SettingNotSaved))
             }
         }
     }

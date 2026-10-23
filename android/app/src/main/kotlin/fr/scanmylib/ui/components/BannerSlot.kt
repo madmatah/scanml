@@ -1,6 +1,8 @@
 package fr.scanmylib.ui.components
 
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.runtime.Composable
@@ -17,9 +19,10 @@ import androidx.compose.ui.unit.dp
  * that appears in it is read out.
  */
 @Composable
-fun BannerSlot(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
-    Box(
-        modifier
+fun BannerSlot(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = modifier
             .fillMaxWidth()
             .heightIn(min = 1.dp)
             .semantics { liveRegion = LiveRegionMode.Polite },

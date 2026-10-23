@@ -3,11 +3,15 @@ package fr.scanmylib.ui
 import android.net.Uri
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.APPLICATION_KEY
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.compose.dropUnlessResumed
 import androidx.lifecycle.viewmodel.CreationExtras
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavBackStackEntry
+import androidx.navigation.NavController
+import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -18,6 +22,8 @@ import fr.scanmylib.model.ScanSource
 import fr.scanmylib.settings.storedEnum
 import fr.scanmylib.ui.capture.CaptureScreen
 import fr.scanmylib.ui.document.DocumentScreen
+import fr.scanmylib.ui.document.ReviewScreen
+import fr.scanmylib.ui.document.ScanViewModel
 import fr.scanmylib.ui.library.AfterCreate
 import fr.scanmylib.ui.library.LibraryScreen
 import fr.scanmylib.ui.library.NewDocumentScreen
@@ -52,6 +58,10 @@ data class NewDocumentRoute(val forShare: Boolean = false)
 /** "Add to…": choosing the document that receives photos shared from another app. */
 @Serializable
 data object ShareRoute
+
+/** The pages to send of a document, above the document, whose run it shares. */
+@Serializable
+data class ReviewRoute(val documentId: String)
 
 /** The camera screen, taking photos for a document. */
 @Serializable
@@ -143,6 +153,7 @@ fun ScanMyLibNavHost(navController: NavHostController, paired: Boolean, share: L
                 // in a new task: Back returns to the app that shared them instead.
                 onBack = { if (navController.previousBackStackEntry != null) navController.navigateUp() else onExit() },
                 onOpenCamera = { navController.navigate(CaptureRoute(route.documentId)) { launchSingleTop = true } },
+                onOpenReview = { navController.openReview(route.documentId) },
                 sharedPhotos = if (route.importShared) share.orEmpty() else emptyList(),
                 scanOnOpen = route.scanOnOpen,
                 importOnOpen = route.importOnOpen,
@@ -150,10 +161,28 @@ fun ScanMyLibNavHost(navController: NavHostController, paired: Boolean, share: L
                 onSwitchHandled = { entry.savedStateHandle[KEY_SWITCH_SOURCE] = null },
             )
         }
+        composable<ReviewRoute> { entry ->
+            val documentId = entry.toRoute<ReviewRoute>().documentId
+            // The document's own: the review, its banner and its Scan button show one run.
+            val documentEntry = remember(entry) { navController.getBackStackEntry<DocumentRoute>() }
+            val switchTo by entry.savedStateHandle.getStateFlow<String?>(KEY_SWITCH_SOURCE, null)
+                .collectAsStateWithLifecycle()
+            ReviewScreen(
+                // Once only: the document must stay.
+                onClose = {
+                    if (entry.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) navController.navigateUp()
+                },
+                onOpenCamera = { navController.navigate(CaptureRoute(documentId)) { launchSingleTop = true } },
+                switchToSource = switchTo?.let { storedEnum(it, ScanSource.DEFAULT) },
+                onSwitchHandled = { entry.savedStateHandle[KEY_SWITCH_SOURCE] = null },
+                viewModel = viewModel(documentEntry, factory = ScanViewModel.Factory),
+            )
+        }
         composable<CaptureRoute> { entry ->
+            val documentId = entry.toRoute<CaptureRoute>().documentId
             CaptureScreen(
-                // Once only, even if "Done" is tapped twice: the document screen must stay.
-                onClose = dropUnlessResumed { navController.navigateUp() },
+                // Once only, even if "Done" is tapped twice: the screen below must stay.
+                onClose = { werePhotosKept -> navController.closeCameraIfResumed(entry, documentId, werePhotosKept) },
                 onSwitchSource = { source ->
                     if (entry.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
                         navController.previousBackStackEntry?.savedStateHandle?.set(KEY_SWITCH_SOURCE, source.name)
@@ -169,6 +198,29 @@ fun ScanMyLibNavHost(navController: NavHostController, paired: Boolean, share: L
                 onUnpaired = { startOver(PairingRoute) },
             )
         }
+    }
+}
+
+internal fun NavController.openReview(documentId: String) {
+    navigate(ReviewRoute(documentId)) { launchSingleTop = true }
+}
+
+internal fun NavController.closeCameraIfResumed(
+    camera: NavBackStackEntry,
+    documentId: String,
+    werePhotosKept: Boolean,
+): Boolean {
+    val isResumed = camera.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
+    if (isResumed) closeCamera(documentId, werePhotosKept)
+    return isResumed
+}
+
+internal fun NavController.closeCamera(documentId: String, werePhotosKept: Boolean) {
+    val wasOpenedFromTheReview = previousBackStackEntry?.destination?.hasRoute<ReviewRoute>() == true
+    if (werePhotosKept && !wasOpenedFromTheReview) {
+        navigate(ReviewRoute(documentId)) { popUpTo<CaptureRoute> { inclusive = true } }
+    } else {
+        navigateUp()
     }
 }
 

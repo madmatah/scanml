@@ -37,7 +37,7 @@ private fun scannerOptions(mode: ScannerMode) = GmsDocumentScannerOptions.Builde
  * [onStarted]: the scanner is about to open, so it works on this phone. [onUnavailable]: it could
  * not be started (Google Play services missing, outdated or disabled, its module not downloaded
  * yet...). [onFailed]: anything else went wrong (the screen left meanwhile, a result that cannot
- * be read), which says nothing about the phone.
+ * be read, its start canceled), which says nothing about the phone.
  */
 @Composable
 fun rememberDocumentScanner(
@@ -81,6 +81,10 @@ fun rememberDocumentScanner(
                         }
                     }
                     .addOnFailureListener { currentOnUnavailable(it) }
+                    // Reported, so that the screen does not wait for a scanner that never opens.
+                    .addOnCanceledListener {
+                        currentOnFailed(IllegalStateException("the scanner's start was canceled"))
+                    }
             } catch (e: Exception) {
                 // Google Play services can be missing, outdated or disabled on the phone.
                 currentOnUnavailable(e)

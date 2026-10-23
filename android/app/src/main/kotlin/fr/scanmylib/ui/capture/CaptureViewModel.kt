@@ -30,6 +30,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -48,6 +49,8 @@ enum class FlashSetting(val imageCaptureMode: Int) {
 /** A photo being taken: the camera writes it to [file]. */
 data class Shot(val file: File, val takenAt: Instant)
 
+data class CameraClose(val werePhotosKept: Boolean)
+
 data class CaptureUiState(
     /**
      * The photos of this visit to the camera, those of a visit interrupted by the end of the
@@ -55,8 +58,9 @@ data class CaptureUiState(
      */
     val pages: List<StagedPage> = emptyList(),
     /**
-     * Pages of the run from before this visit (scanned, imported, or photographed in an earlier
-     * visit): they wait to be sent, and this screen never touches them.
+     * Pages of the run that this visit did not take (scanned, imported, or photographed in an
+     * earlier visit, before this one or during it): they wait to be sent, and this screen never
+     * touches them.
      */
     val waiting: Int = 0,
     /** Off by default: on paper, the flash mostly adds glare. */
@@ -65,11 +69,30 @@ data class CaptureUiState(
     val shooting: Boolean = false,
     /** The user is done: the screen closes once the photo being saved has joined the run. */
     val finishing: Boolean = false,
-    /** Where this visit starts in the run is known: until then, no photo is taken. */
+    /**
+     * The user chose to discard the visit: its photos are being deleted, and the screen closes
+     * once they are. Nothing the screen offers may cancel that choice meanwhile.
+     */
+    val isDiscarding: Boolean = false,
+    /** The run is read: until then, the screen cannot tell what the user may lose. */
     val ready: Boolean = false,
+    /**
+     * The screen must close. Kept until the screen has closed, so that a close set while the
+     * screen is not in front waits for it.
+     */
+    val closing: CameraClose? = null,
 ) {
     /** Photos of this visit, saved or on their way: leaving the screen must not lose them. */
     val photoCount: Int get() = pages.size + if (shooting) 1 else 0
+
+    val canLeave: Boolean get() = isStaying(isDiscarding, closing)
+
+    val canFinish: Boolean get() = photoCount > 0 && !finishing && isStaying(isDiscarding, closing)
+
+    val canShoot: Boolean get() = ready && isShutterFree(shooting, finishing, isDiscarding, closing)
+
+    /** Not while the visit is discarded: another source would close the screen with its photos. */
+    val canSwitchSource: Boolean get() = !isDiscarding
 }
 
 /** One-off messages shown in a snackbar. */
@@ -98,52 +121,40 @@ class CaptureViewModel(
 
     private val shooting = MutableStateFlow(false)
     private val finishing = MutableStateFlow(false)
+    private val isDiscarding = MutableStateFlow(false)
+    private val closing = MutableStateFlow<CameraClose?>(null)
     private val messageChannel = Channel<CaptureMessage>(Channel.BUFFERED)
-    private val closedChannel = Channel<Unit>(Channel.CONFLATED)
-
-    /** The photo being taken, once its file is chosen. */
-    private var currentShot: Shot? = null
-
-    /** Photos still on their way when the run was discarded: they go nowhere. */
-    private val abandonedShots = mutableSetOf<Shot>()
 
     /**
-     * The run's highest position when the camera opened: the pages after it are this visit's
-     * photos. Saved with the screen, so that it survives the end of the process, and so that the
-     * run's directory alone still describes the run.
+     * The file names of the photos this visit added to the run: scanned pages or photos imported
+     * meanwhile join the run too, and this screen must never show or delete them. Saved with the
+     * screen, so that it survives the end of the process.
      */
-    private val visitStart: StateFlow<Int?> = savedState.getStateFlow(KEY_VISIT_START, null)
+    private val visitPhotoNames: StateFlow<List<String>> = savedState.getStateFlow(KEY_VISIT_PHOTOS, emptyList())
 
     val messages: Flow<CaptureMessage> = messageChannel.receiveAsFlow()
 
-    /** Emits when the screen must close: this visit's photos are kept ([finish]) or deleted ([discard]). */
-    val closed: Flow<Unit> = closedChannel.receiveAsFlow()
+    private val progress: Flow<Progress> = combine(shooting, finishing, isDiscarding, closing, ::Progress)
 
     val uiState: StateFlow<CaptureUiState> = combine(
         staging.observe(documentId),
-        visitStart,
+        visitPhotoNames,
         savedState.getStateFlow(KEY_FLASH, FlashSetting.OFF.name),
-        shooting,
-        finishing,
-    ) { run, start, flash, shooting, finishing ->
-        val visit = if (start == null) emptyList() else run.filter { it.seq > start }
+        progress,
+    ) { run, photoNameList, flashName, visitProgress ->
+        val photoNames = photoNameList.toSet()
+        val visit = run.filter { it.file.name in photoNames }
         CaptureUiState(
             pages = visit,
-            waiting = if (start == null) 0 else run.size - visit.size,
-            flash = storedEnum(flash, FlashSetting.OFF),
-            shooting = shooting,
-            finishing = finishing,
-            ready = start != null,
+            waiting = run.size - visit.size,
+            flash = storedEnum(flashName, FlashSetting.OFF),
+            shooting = visitProgress.shooting,
+            finishing = visitProgress.finishing,
+            isDiscarding = visitProgress.isDiscarding,
+            ready = true,
+            closing = visitProgress.closing,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), CaptureUiState())
-
-    init {
-        if (visitStart.value == null) {
-            viewModelScope.launch {
-                savedState[KEY_VISIT_START] = staging.pages(documentId).maxOfOrNull { it.seq } ?: 0
-            }
-        }
-    }
 
     fun cycleFlash() {
         savedState[KEY_FLASH] = uiState.value.flash.next.name
@@ -152,11 +163,11 @@ class CaptureViewModel(
     /**
      * Takes a photo: [capture] must start writing it to the shot's file, then report the outcome
      * with [onShotSaved] or [onShotFailed]. Does nothing and returns false while the previous
-     * photo is still being taken, so that a double tap does not take the same page twice, once the
-     * user is done, and until this visit's start in the run is known.
+     * photo is still being taken, so that a double tap does not take the same page twice, and once
+     * the user is done or discards the visit, or the screen closes.
      */
     fun shoot(capture: (Shot) -> Unit): Boolean {
-        if (shooting.value || finishing.value || visitStart.value == null) return false
+        if (!isShutterFree(shooting.value, finishing.value, isDiscarding.value, closing.value)) return false
         shooting.value = true
         val takenAt = clock.instant()
         viewModelScope.launch {
@@ -167,7 +178,6 @@ class CaptureViewModel(
                 return@launch
             }
             val shot = Shot(file, takenAt)
-            currentShot = shot
             try {
                 capture(shot)
             } catch (e: IllegalStateException) {
@@ -186,13 +196,12 @@ class CaptureViewModel(
         viewModelScope.launch {
             // The camera closed under the photo (the phone locked, the app left...): CameraX does
             // not report a photo it was already writing, but finishes writing it all the same.
-            if (shot !in abandonedShots && error.isCameraClosed() && awaitPhoto(shot.file)) {
+            if (error.isCameraClosed() && awaitPhoto(shot.file)) {
                 Log.i(TAG, "photo written after the camera closed")
                 keep(shot)
                 return@launch
             }
             deleteQuietly(shot.file)
-            if (abandon(shot)) return@launch
             val notWritten = error is ImageCaptureException && error.imageCaptureError == ImageCapture.ERROR_FILE_IO
             fail(error, if (notWritten) CaptureMessage.ShotNotSaved else CaptureMessage.ShotFailed)
         }
@@ -200,59 +209,51 @@ class CaptureViewModel(
 
     /** Adds the photo written for [shot] to the run, then closes the screen if the user is done. */
     private suspend fun keep(shot: Shot) {
-        if (abandon(shot)) {
-            deleteQuietly(shot.file)
-            return
-        }
         try {
-            staging.add(documentId, listOf(StagingInput(shot.file, shot.takenAt)))
-            shotDone(shot)
-            if (finishing.value) close()
+            val added = staging.add(documentId, listOf(StagingInput(shot.file, shot.takenAt)))
+            savedState[KEY_VISIT_PHOTOS] = ArrayList(visitPhotoNames.value + added.map { it.file.name })
+            shooting.value = false
+            if (finishing.value) close(werePhotosKept = true)
         } catch (e: IOException) {
             deleteQuietly(shot.file)
             fail(e, CaptureMessage.ShotNotSaved)
         }
     }
 
-    /** True if [shot] belongs to a discarded run: it is then done with, silently. */
-    private fun abandon(shot: Shot): Boolean {
-        if (!abandonedShots.remove(shot)) return false
-        shotDone(shot)
-        return true
-    }
-
-    private fun shotDone(shot: Shot) {
-        if (currentShot == shot) currentShot = null
-        shooting.value = false
-    }
-
     private suspend fun fail(error: Exception, message: CaptureMessage) {
         Log.w(TAG, "photo not taken", error)
-        currentShot = null
         shooting.value = false
         // The user stays to see what happened, and to take the photo again.
         finishing.value = false
-        messageChannel.send(message)
+        // A photo of a discarded visit goes nowhere: its loss is no news.
+        if (!isDiscarding.value) messageChannel.send(message)
     }
 
     /**
      * Closes the screen, keeping the photos: right away, or once the photo being taken has joined
-     * the run. If that photo fails instead, the screen stays, to say so.
+     * the run. If that photo fails instead, the screen stays, to say so. Does nothing while the
+     * visit is discarded, or the screen closes already.
      */
     fun finish() {
-        if (shooting.value) finishing.value = true else close()
+        if (!isStaying(isDiscarding.value, closing.value)) return
+        if (shooting.value) finishing.value = true else close(werePhotosKept = true)
     }
 
-    private fun close() {
+    private fun close(werePhotosKept: Boolean) {
         finishing.value = false
-        closedChannel.trySend(Unit)
+        closing.value = CameraClose(werePhotosKept)
+    }
+
+    /** The screen closed for [close]: a close set since then still waits. */
+    fun onCloseHandled(close: CameraClose) {
+        closing.compareAndSet(close, null)
     }
 
     /** Deletes a photo of this visit, e.g. a blurred one, to take it again. */
     fun deletePage(page: StagedPage) {
         viewModelScope.launch {
             try {
-                staging.remove(documentId, page)
+                staging.delete(documentId, page)
             } catch (e: IOException) {
                 Log.w(TAG, "photo not deleted", e)
             }
@@ -260,26 +261,38 @@ class CaptureViewModel(
     }
 
     /**
-     * Deletes the photos of this visit, the one on its way included, then emits [closed]. The pages
-     * from before the visit stay in the run. If a photo cannot be deleted, the screen stays to say
-     * so, with the photos left.
+     * Deletes the photos of this visit, the one on its way included, then closes the screen, once. If
+     * a photo cannot be deleted, the screen stays to say so, with the photos left.
      */
     fun discard() {
-        currentShot?.let(abandonedShots::add)
+        if (isDiscarding.value) return
         finishing.value = false
-        val start = visitStart.value
+        isDiscarding.value = true
         viewModelScope.launch {
-            if (start != null) {
-                try {
-                    withContext(NonCancellable) { staging.removeAfter(documentId, start) }
-                } catch (e: IOException) {
-                    Log.w(TAG, "photos not deleted", e)
-                    messageChannel.send(CaptureMessage.PhotosNotDeleted)
-                    return@launch
-                }
+            // Once the photo on its way has joined the run, or failed, the visit names all its photos.
+            shooting.first { !it }
+            if (!withContext(NonCancellable) { deleteTheVisitPhotos() }) {
+                isDiscarding.value = false
+                messageChannel.send(CaptureMessage.PhotosNotDeleted)
+                return@launch
             }
-            closedChannel.send(Unit)
+            close(werePhotosKept = false)
         }
+    }
+
+    /** Whether every photo of this visit is deleted: a photo that resists leaves the others deleted. */
+    private suspend fun deleteTheVisitPhotos(): Boolean {
+        val photoNames = visitPhotoNames.value.toSet()
+        var isEveryPhotoDeleted = true
+        for (photo in staging.pages(documentId).filter { it.file.name in photoNames }) {
+            try {
+                staging.delete(documentId, photo)
+            } catch (e: IOException) {
+                Log.w(TAG, "photo not deleted", e)
+                isEveryPhotoDeleted = false
+            }
+        }
+        return isEveryPhotoDeleted
     }
 
     /** Whether CameraX's [photo] file appears complete within [LATE_PHOTO_WAIT_MS]. */
@@ -299,10 +312,10 @@ class CaptureViewModel(
     companion object {
         private const val TAG = "Capture"
         private const val KEY_FLASH = "capture_flash"
-        private const val KEY_VISIT_START = "capture_visit_start"
+        private const val KEY_VISIT_PHOTOS = "capture_visit_photos"
 
         /** How long a photo whose camera closed may take to appear: its JPEG and EXIF writing. */
-        private const val LATE_PHOTO_WAIT_MS = 5_000
+        internal const val LATE_PHOTO_WAIT_MS = 5_000
         private const val LATE_PHOTO_POLL_MS = 100
 
         val Factory = viewModelFactory {
@@ -315,6 +328,22 @@ class CaptureViewModel(
         }
     }
 }
+
+private data class Progress(
+    val shooting: Boolean,
+    val finishing: Boolean,
+    val isDiscarding: Boolean,
+    val closing: CameraClose?,
+)
+
+private fun isShutterFree(shooting: Boolean, finishing: Boolean, isDiscarding: Boolean, closing: CameraClose?) =
+    !shooting && !finishing && isStaying(isDiscarding, closing)
+
+/**
+ * Not while the visit is discarded, which leaving or keeping its photos would cancel, nor once a
+ * close waits for the screen, which closes it already.
+ */
+private fun isStaying(isDiscarding: Boolean, closing: CameraClose?) = !isDiscarding && closing == null
 
 /** CameraX closed the camera before the photo was saved: the screen left, the phone locked... */
 private fun Exception.isCameraClosed(): Boolean =

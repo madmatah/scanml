@@ -5,9 +5,9 @@ import android.content.pm.PackageInstaller
 import android.util.Log
 import fr.scanmylib.api.ApiException
 import fr.scanmylib.api.ScanMyLibApi
+import fr.scanmylib.library.isStorageFull
 import fr.scanmylib.model.ServerConfig
 import fr.scanmylib.settings.SettingsRepository
-import fr.scanmylib.ui.document.isStorageFull
 import java.io.File
 import java.io.IOException
 import java.time.Clock

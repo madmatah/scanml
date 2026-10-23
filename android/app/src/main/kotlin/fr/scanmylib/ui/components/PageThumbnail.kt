@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -52,11 +53,8 @@ fun PageThumbnail(
         is PageLabel.Spread -> stringResource(R.string.page_description_spread, label.firstPage, label.lastPage, status)
     }
     val openLabel = stringResource(R.string.page_open)
-    Box(
+    PageFrame(
         modifier = modifier
-            .aspectRatio(PAGE_ASPECT_RATIO)
-            .clip(MaterialTheme.shapes.extraSmall)
-            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, MaterialTheme.shapes.extraSmall)
             // In place of the words drawn over the image, and of the tap's own, which it clears too.
             .clearAndSetSemantics {
                 contentDescription = description
@@ -105,8 +103,19 @@ fun PageThumbnail(
     }
 }
 
+@Composable
+fun PageFrame(modifier: Modifier = Modifier, content: @Composable BoxScope.() -> Unit) {
+    Box(
+        modifier = modifier
+            .aspectRatio(PAGE_ASPECT_RATIO)
+            .clip(MaterialTheme.shapes.extraSmall)
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, MaterialTheme.shapes.extraSmall),
+        content = content,
+    )
+}
+
 // A4's sides, 1:√2: most pages are close to it.
-private const val PAGE_ASPECT_RATIO = 1f / 1.414f
+internal const val PAGE_ASPECT_RATIO = 1f / 1.414f
 
 private const val SET_ASIDE_ALPHA = 0.5f
 

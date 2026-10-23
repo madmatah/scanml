@@ -40,7 +40,9 @@ data class StagingInput(val file: File, val capturedAt: Instant)
  * offered again when the document is opened.
  *
  * Images are written in an `incoming` subdirectory first and join the run once complete; what an
- * interrupted shot or copy leaves there is deleted when the run is first read by a new process.
+ * interrupted shot or copy leaves there is deleted when the run is first read by a new process. A
+ * page the user removes waits in a `removed` subdirectory, out of the run, until the removal is
+ * undone or made final; a new process deletes what is left there too.
  *
  * @param io the dispatcher of the disk's work; tests give their own, to run it in a fixed order.
  * @param recoverSend called when a run is first read by a new process and holds the journal of a
@@ -111,7 +113,8 @@ class StagingArea(
         val added = mutableListOf<StagedPage>()
         try {
             withContext(io) {
-                var seq = run.maxOfOrNull { it.seq } ?: 0
+                // After the removed pages too, so that a page put back never shares a position.
+                var seq = maxOf(run.maxOfOrNull { it.seq } ?: 0, readRemovedPositions(documentId).maxOrNull() ?: 0)
                 for (input in inputs) {
                     if (input.file.length() == 0L) throw IOException("empty image: ${input.file}")
                     FileOutputStream(input.file, true).use { it.fd.sync() }
@@ -129,31 +132,50 @@ class StagingArea(
         added
     }
 
-    /** Deletes one page of [documentId]'s run. */
     suspend fun remove(documentId: String, page: StagedPage) {
+        mutex.withLock {
+            val run = loadLocked(documentId)
+            // Not cancellable once the page moves: the run in memory must follow its files.
+            withContext(NonCancellable + io) {
+                val removed = File(directory(documentId), REMOVED)
+                if (!removed.isDirectory && !removed.mkdirs()) throw IOException("cannot create $removed")
+                if (!page.file.renameTo(removedFile(documentId, page))) throw IOException("cannot remove ${page.file}")
+                runs.update { it + (documentId to run - page) }
+            }
+        }
+    }
+
+    suspend fun restore(documentId: String, page: StagedPage) {
+        mutex.withLock {
+            val run = loadLocked(documentId)
+            // Not cancellable once the page moves: the run in memory must follow its files.
+            withContext(NonCancellable + io) {
+                if (page.file.exists()) {
+                    throw IOException("cannot restore ${page.file}: a page of that name is in the run")
+                }
+                if (!removedFile(documentId, page).renameTo(page.file)) throw IOException("cannot restore ${page.file}")
+                runs.update { it + (documentId to (run + page).sortedWith(PAGE_ORDER)) }
+            }
+        }
+    }
+
+    suspend fun deleteRemoved(documentId: String, page: StagedPage) {
+        mutex.withLock {
+            withContext(io) {
+                val file = removedFile(documentId, page)
+                if (!file.delete() && file.exists()) throw IOException("cannot delete $file")
+            }
+        }
+    }
+
+    /** Deletes one page of [documentId]'s run. */
+    suspend fun delete(documentId: String, page: StagedPage) {
         mutex.withLock {
             val run = loadLocked(documentId)
             withContext(io) {
                 if (!page.file.delete() && page.file.exists()) throw IOException("cannot delete ${page.file}")
             }
             runs.update { it + (documentId to run - page) }
-        }
-    }
-
-    /**
-     * Deletes the pages of [documentId]'s run after position [seq], e.g. the photos of one visit to
-     * the camera; the pages up to [seq] stay.
-     *
-     * @throws IOException if a page could not be deleted; the others are.
-     */
-    suspend fun removeAfter(documentId: String, seq: Int) {
-        mutex.withLock {
-            val run = loadLocked(documentId)
-            val left = withContext(io) {
-                run.filter { it.seq > seq && !it.file.delete() && it.file.exists() }
-            }
-            runs.update { it + (documentId to run.filter { page -> page.seq <= seq || page in left }) }
-            if (left.isNotEmpty()) throw IOException("cannot delete ${left.first().file}")
         }
     }
 
@@ -186,8 +208,9 @@ class StagingArea(
                 val left = run.filter { it.file.exists() }
                 runs.update { it + (documentId to left) }
                 if (left.isEmpty()) {
-                    // Only removed when empty: a shot may still be on its way.
+                    // Only removed when empty: a shot may still be on its way, a removal undone.
                     File(directory(documentId), INCOMING).delete()
+                    File(directory(documentId), REMOVED).delete()
                     directory(documentId).delete()
                 }
             }
@@ -233,12 +256,19 @@ class StagingArea(
             val incoming = File(directory, INCOMING)
             val cutShort = incoming.listFiles().orEmpty().isNotEmpty()
             incoming.deleteRecursively()
+            File(directory, REMOVED).deleteRecursively()
             directory.listFiles().orEmpty().mapNotNull(::parseFileName).sortedWith(PAGE_ORDER) to cutShort
         }
         if (cutShort) interrupted += documentId
         runs.update { it + (documentId to run) }
         return run
     }
+
+    private fun removedFile(documentId: String, page: StagedPage): File =
+        File(File(directory(documentId), REMOVED), page.file.name)
+
+    private fun readRemovedPositions(documentId: String): List<Int> =
+        File(directory(documentId), REMOVED).listFiles().orEmpty().mapNotNull { parseFileName(it)?.seq }
 
     private fun directory(documentId: String): File {
         // Document ids are UUIDs (generated by the phone or the web UI): never a path.
@@ -248,6 +278,7 @@ class StagingArea(
 
     companion object {
         private const val INCOMING = "incoming"
+        private const val REMOVED = "removed"
         private const val SEND_JOURNAL = "sending"
         private val DOCUMENT_ID = Regex("[A-Za-z0-9-]{1,64}")
         private val FILE_NAME = Regex("""(\d{1,9})_(\d{1,15})\.jpg""")

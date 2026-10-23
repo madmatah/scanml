@@ -3,8 +3,15 @@ package fr.scanmylib.library
 import java.io.File
 import java.io.IOException
 import java.time.Instant
+import kotlin.coroutines.CoroutineContext
 import kotlin.properties.Delegates
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestCoroutineScheduler
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -96,7 +103,27 @@ class StagingAreaTest {
             }
         }
 
-        class WhenThePagesAfterAPositionWereRemoved {
+        class WhenTheLastPageWasRemoved {
+            @get:Rule
+            val folder = TemporaryFolder()
+
+            private var position by Delegates.notNull<Int>()
+
+            @Before
+            fun addAnImage() = runTest {
+                val staging = StagingArea(resolveStagingRoot(folder))
+                val pages = shootThreePages(staging)
+                staging.remove(DOCUMENT, pages.last())
+                position = staging.shoot("d", SHOT_TIME.plusSeconds(6)).seq
+            }
+
+            @Test
+            fun `should number the next page after the removed one, so that it can come back to its place`() {
+                assertEquals(4, position)
+            }
+        }
+
+        class WhenTheLastTwoPagesWereDeleted {
             @get:Rule
             val folder = TemporaryFolder()
 
@@ -106,8 +133,7 @@ class StagingAreaTest {
             fun addAnImage() = runTest {
                 val staging = StagingArea(resolveStagingRoot(folder))
                 shootTwoScansAndTwoPhotos(staging)
-                removeThePhotos(staging)
-                removeThePhotos(staging)
+                deleteThePhotos(staging)
                 position = staging.shoot("next", SHOT_TIME.plusSeconds(4)).seq
             }
 
@@ -290,6 +316,31 @@ class StagingAreaTest {
             @Test
             fun `should delete the unfinished image`() {
                 assertFalse(isUnfinishedImageKept)
+            }
+        }
+
+        class WhenTheProcessEndedWithAPageRemoved {
+            @get:Rule
+            val folder = TemporaryFolder()
+
+            private lateinit var pageContents: List<String>
+            private var isRemovedImageKept by Delegates.notNull<Boolean>()
+
+            @Before
+            fun readTheRunInTheNextProcess() = runTest {
+                val removed = removeTheSecondOfThreePages(StagingArea(resolveStagingRoot(folder)))
+                pageContents = restartTheProcess(resolveStagingRoot(folder)).readContents(DOCUMENT)
+                isRemovedImageKept = isOnDisk(folder, removed)
+            }
+
+            @Test
+            fun `should keep the other pages`() {
+                assertEquals(listOf("a", "c"), pageContents)
+            }
+
+            @Test
+            fun `should delete the removed page, whose undo ended with the process`() {
+                assertFalse(isRemovedImageKept)
             }
         }
 
@@ -525,6 +576,149 @@ class StagingAreaTest {
 
     @RunWith(Enclosed::class)
     class TheRemoveMethod {
+        class WhenTheSecondOfThreePagesIsRemoved {
+            @get:Rule
+            val folder = TemporaryFolder()
+
+            private lateinit var pageContents: List<String>
+            private var isImageKept by Delegates.notNull<Boolean>()
+
+            @Before
+            fun removeIt() = runTest {
+                val staging = StagingArea(resolveStagingRoot(folder))
+                val removed = removeTheSecondOfThreePages(staging)
+                pageContents = staging.readContents(DOCUMENT)
+                isImageKept = isOnDisk(folder, removed)
+            }
+
+            @Test
+            fun `should take it out of the run, so that it is neither sent nor counted`() {
+                assertEquals(listOf("a", "c"), pageContents)
+            }
+
+            @Test
+            fun `should keep its image, so that the removal can be undone`() {
+                assertTrue(isImageKept)
+            }
+        }
+
+        class WhenTheCallerIsCanceledAsThePageMoves {
+            @get:Rule
+            val folder = TemporaryFolder()
+
+            private lateinit var pagesInTheRun: List<String>
+            private lateinit var filesOfTheRun: List<String>
+
+            @Before
+            fun removeAsTheCallerIsCanceled() = runTest {
+                val disk = CancelingDisk(testScheduler)
+                val staging = StagingArea(resolveStagingRoot(folder), disk)
+                val pages = shootThreePages(staging)
+                disk.cancelAfterItsWork(launch(start = CoroutineStart.LAZY) { staging.remove(DOCUMENT, pages[1]) })
+                pagesInTheRun = staging.pages(DOCUMENT).map { it.file.name }
+                filesOfTheRun = listPageFiles(folder)
+            }
+
+            @Test
+            fun `should keep the run in step with its files`() {
+                assertEquals(filesOfTheRun, pagesInTheRun)
+            }
+        }
+    }
+
+    @RunWith(Enclosed::class)
+    class TheRestoreMethod {
+        class WhenARemovedPageIsRestored {
+            @get:Rule
+            val folder = TemporaryFolder()
+
+            private lateinit var pageContents: List<String>
+
+            @Before
+            fun restoreIt() = runTest {
+                val staging = StagingArea(resolveStagingRoot(folder))
+                val removed = removeTheSecondOfThreePages(staging)
+                staging.restore(DOCUMENT, removed)
+                pageContents = staging.readContents(DOCUMENT)
+            }
+
+            @Test
+            fun `should put it back in its place`() {
+                assertEquals(listOf("a", "b", "c"), pageContents)
+            }
+        }
+
+        class WhenAPageOfTheSameNameIsThere {
+            @get:Rule
+            val folder = TemporaryFolder()
+
+            private lateinit var restoreThePage: suspend () -> Unit
+
+            @Before
+            fun takeItsName() = runTest {
+                val staging = StagingArea(resolveStagingRoot(folder))
+                val removed = removeTheSecondOfThreePages(staging)
+                removed.file.writeText("another page")
+                restoreThePage = { staging.restore(DOCUMENT, removed) }
+            }
+
+            @Test
+            fun `should refuse, so that no page is overwritten`() = runTest {
+                val failure = runCatching { restoreThePage() }.exceptionOrNull()
+                assertTrue("$failure", failure is IOException)
+                assertTrue("${failure?.message}", failure?.message.orEmpty().endsWith(NAME_TAKEN))
+            }
+        }
+
+        class WhenTheCallerIsCanceledAsThePageMoves {
+            @get:Rule
+            val folder = TemporaryFolder()
+
+            private lateinit var pagesInTheRun: List<String>
+            private lateinit var filesOfTheRun: List<String>
+
+            @Before
+            fun restoreAsTheCallerIsCanceled() = runTest {
+                val disk = CancelingDisk(testScheduler)
+                val staging = StagingArea(resolveStagingRoot(folder), disk)
+                val removed = removeTheSecondOfThreePages(staging)
+                disk.cancelAfterItsWork(launch(start = CoroutineStart.LAZY) { staging.restore(DOCUMENT, removed) })
+                pagesInTheRun = staging.pages(DOCUMENT).map { it.file.name }
+                filesOfTheRun = listPageFiles(folder)
+            }
+
+            @Test
+            fun `should keep the run in step with its files`() {
+                assertEquals(filesOfTheRun, pagesInTheRun)
+            }
+        }
+    }
+
+    @RunWith(Enclosed::class)
+    class TheDeleteRemovedMethod {
+        class WhenARemovedPageIsDeleted {
+            @get:Rule
+            val folder = TemporaryFolder()
+
+            private var isImageKept by Delegates.notNull<Boolean>()
+
+            @Before
+            fun deleteIt() = runTest {
+                val staging = StagingArea(resolveStagingRoot(folder))
+                val removed = removeTheSecondOfThreePages(staging)
+                staging.deleteRemoved(DOCUMENT, removed)
+                isImageKept = isOnDisk(folder, removed)
+            }
+
+            @Test
+            fun `should delete its image for good`() {
+                assertFalse(isImageKept)
+            }
+        }
+    }
+
+    @RunWith(Enclosed::class)
+    class TheDeleteMethod {
         class WhenAPhotoIsDeletedDuringTheRun {
             @get:Rule
             val folder = TemporaryFolder()
@@ -581,7 +775,7 @@ class StagingAreaTest {
             fun retakeTheLastPhoto() = runTest {
                 val staging = StagingArea(resolveStagingRoot(folder))
                 staging.shoot("a", SHOT_TIME)
-                staging.remove(DOCUMENT, staging.shoot("blurred b", SHOT_TIME.plusSeconds(2)))
+                staging.delete(DOCUMENT, staging.shoot("blurred b", SHOT_TIME.plusSeconds(2)))
                 staging.shoot("b", SHOT_TIME.plusSeconds(5))
                 pageContents = restartTheProcess(resolveStagingRoot(folder)).readContents(DOCUMENT)
             }
@@ -589,57 +783,6 @@ class StagingAreaTest {
             @Test
             fun `should keep the order of the run`() {
                 assertEquals(listOf("a", "b"), pageContents)
-            }
-        }
-    }
-
-    @RunWith(Enclosed::class)
-    class TheRemoveAfterMethod {
-        class WhenPagesFollowThePosition {
-            @get:Rule
-            val folder = TemporaryFolder()
-
-            private lateinit var pageContents: List<String>
-            private lateinit var nextProcessPageContents: List<String>
-
-            @Before
-            fun removeThePagesAfterIt() = runTest {
-                val staging = StagingArea(resolveStagingRoot(folder))
-                shootTwoScansAndTwoPhotos(staging)
-                removeThePhotos(staging)
-                pageContents = staging.readContents(DOCUMENT)
-                nextProcessPageContents = restartTheProcess(resolveStagingRoot(folder)).readContents(DOCUMENT)
-            }
-
-            @Test
-            fun `should keep the pages up to the position`() {
-                assertEquals(listOf("scanned 1", "scanned 2"), pageContents)
-            }
-
-            @Test
-            fun `should delete the others for good`() {
-                assertEquals(listOf("scanned 1", "scanned 2"), nextProcessPageContents)
-            }
-        }
-
-        class WhenThePagesAfterThePositionWereRemovedAlready {
-            @get:Rule
-            val folder = TemporaryFolder()
-
-            private var pageCount by Delegates.notNull<Int>()
-
-            @Before
-            fun removeThePagesAfterItAgain() = runTest {
-                val staging = StagingArea(resolveStagingRoot(folder))
-                shootTwoScansAndTwoPhotos(staging)
-                removeThePhotos(staging)
-                removeThePhotos(staging)
-                pageCount = staging.pages(DOCUMENT).size
-            }
-
-            @Test
-            fun `should remove nothing, since nothing follows the last page`() {
-                assertEquals(2, pageCount)
             }
         }
     }
@@ -739,6 +882,25 @@ class StagingAreaTest {
             @Test
             fun `should leave no page for the next process`() {
                 assertEquals(emptyList<StagedPage>(), nextProcessPages)
+            }
+        }
+
+        class WhenAPageWasRemoved {
+            @get:Rule
+            val folder = TemporaryFolder()
+
+            private lateinit var handedOver: List<String>
+
+            @Before
+            fun sendTheRun() = runTest {
+                val staging = StagingArea(resolveStagingRoot(folder))
+                removeTheSecondOfThreePages(staging)
+                handedOver = staging.send(DOCUMENT) { run -> run.map { it.file.readText() } }
+            }
+
+            @Test
+            fun `should hand over only the pages of the run`() {
+                assertEquals(listOf("a", "c"), handedOver)
             }
         }
 
@@ -1070,6 +1232,7 @@ private const val DOCUMENT = "6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b"
 private const val OTHER_DOCUMENT = "0a1b2c3d-4e5f-4a6b-8c7d-8e9f0a1b2c3d"
 private const val DATABASE_FULL = "database full"
 private const val INTERRUPTED = "interrupted"
+private const val NAME_TAKEN = "a page of that name is in the run"
 private val SHOT_TIME: Instant = Instant.parse("2026-10-12T18:15:30.123Z")
 
 /** A page that may be missing, held in a non-null value so that a test fails when no hook ran. */
@@ -1120,9 +1283,53 @@ private suspend fun deleteTheSecondOfThreePhotos(staging: StagingArea): StagedPa
     staging.shoot("a", SHOT_TIME)
     val blurred = staging.shoot("b", SHOT_TIME.plusSeconds(2))
     staging.shoot("c", SHOT_TIME.plusSeconds(4))
-    staging.remove(DOCUMENT, blurred)
+    staging.delete(DOCUMENT, blurred)
     return blurred
 }
+
+private suspend fun shootThreePages(staging: StagingArea): List<StagedPage> = listOf(
+    staging.shoot("a", SHOT_TIME),
+    staging.shoot("b", SHOT_TIME.plusSeconds(2)),
+    staging.shoot("c", SHOT_TIME.plusSeconds(4)),
+)
+
+private suspend fun removeTheSecondOfThreePages(staging: StagingArea): StagedPage {
+    val removed = shootThreePages(staging)[1]
+    staging.remove(DOCUMENT, removed)
+    return removed
+}
+
+/**
+ * The disk's dispatcher, on the test's scheduler, which cancels the act it was given, if any, right
+ * after each block, as when the screen that asked is closed while the disk works.
+ */
+private class CancelingDisk(scheduler: TestCoroutineScheduler) : CoroutineDispatcher() {
+    private val disk = StandardTestDispatcher(scheduler)
+    private var act: Job? = null
+
+    override fun dispatch(context: CoroutineContext, block: Runnable) {
+        disk.dispatch(context) {
+            block.run()
+            act?.cancel()
+        }
+    }
+
+    /** Runs [act], once the run is read, so that its first work on the disk is the page's move. */
+    suspend fun cancelAfterItsWork(act: Job) {
+        this.act = act
+        act.start()
+        act.join()
+        this.act = null
+    }
+}
+
+/** The names of the page files in the run's directory, in order. */
+private fun listPageFiles(folder: TemporaryFolder): List<String> =
+    File(resolveStagingRoot(folder), DOCUMENT).listFiles().orEmpty().filter { it.isFile }.map { it.name }.sorted()
+
+/** Whether [page]'s image is anywhere in the staging area, in the run or out of it. */
+private fun isOnDisk(folder: TemporaryFolder, page: StagedPage): Boolean =
+    resolveStagingRoot(folder).walk().any { it.isFile && it.name == page.file.name }
 
 private suspend fun shootTwoScansAndTwoPhotos(staging: StagingArea) {
     staging.shoot("scanned 1", SHOT_TIME)
@@ -1131,8 +1338,8 @@ private suspend fun shootTwoScansAndTwoPhotos(staging: StagingArea) {
     staging.shoot("photo 2", SHOT_TIME.plusSeconds(3))
 }
 
-private suspend fun removeThePhotos(staging: StagingArea) {
-    staging.removeAfter(DOCUMENT, 2)
+private suspend fun deleteThePhotos(staging: StagingArea) {
+    staging.pages(DOCUMENT).filter { it.file.readText().startsWith("photo") }.forEach { staging.delete(DOCUMENT, it) }
 }
 
 private suspend fun leaveAnImageOnItsWay(root: File): StagingArea = StagingArea(root).apply {
@@ -1149,7 +1356,7 @@ private suspend fun askForInterruptedImages(staging: StagingArea): Boolean = sta
 private suspend fun leaveAPageAndAnEmptiedRunInEarlierProcesses(root: File) {
     StagingArea(root).shoot("a", SHOT_TIME)
     StagingArea(root).shoot("b", SHOT_TIME, OTHER_DOCUMENT)
-    StagingArea(root).remove(OTHER_DOCUMENT, StagingArea(root).pages(OTHER_DOCUMENT).single())
+    StagingArea(root).delete(OTHER_DOCUMENT, StagingArea(root).pages(OTHER_DOCUMENT).single())
 }
 
 private fun moveThenFail(page: StagedPage, outbox: File): Nothing {

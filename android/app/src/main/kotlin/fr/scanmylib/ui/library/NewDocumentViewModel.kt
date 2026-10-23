@@ -5,9 +5,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import fr.scanmylib.library.isStorageFull
 import fr.scanmylib.model.DocumentKind
 import fr.scanmylib.ui.container
-import fr.scanmylib.ui.document.isStorageFull
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow

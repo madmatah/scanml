@@ -117,12 +117,21 @@ Tailscale…) rather than exposing the port to the Internet.
   are. JPEG, PNG and WebP are accepted (no HEIC). A photo that cannot be read (a cloud photo while offline…) or that is
   too large (over 40 MB or 120 megapixels) is skipped with a message; the others are imported.
 - **Share** from the gallery or another app: select photos, then **Share › ScanMyLib**, and choose their document (or
-  create one). They join its pages to send, as with **Import**; Back then returns to the gallery.
-- **Before sending**, the pages wait on the phone: tap a thumbnail to see it full size or remove it, **Add pages** to
-  scan more or import photos, **Send N pages** to queue them for upload. **Later** (or Back) keeps them on the phone,
-  and the library then shows "N pages to send". **Delete these pages** asks for confirmation, since these pages exist
-  nowhere else.
-- **First page number** (optional, before sending): for pages without a printed number that should be numbered. With
+  create one). They join its pages to send, as with **Import**, and the review of the pages to send opens; Back then
+  returns to the document, then to the gallery.
+- **Before sending**, the pages wait on the phone, on a screen of their own, "N pages to send", which opens as soon as
+  a camera or the photo picker returns pages: tap a page to see it full screen, use the last tile to add more
+  (**Scan**, **Import**, or **Scan with…** for the other camera), and **Send N pages** to queue them for upload. Full
+  screen, swipe to the next or the previous page, pinch to zoom up to 2.5×, or double-tap to zoom to 2× and back
+  (TalkBack: **Zoom in** and **Zoom out**), and **Remove** the page shown; TalkBack also removes a page from its tile.
+  **Undo** puts a removed page back in its place for 10 seconds, until another page is removed, a camera or the photo
+  picker opens, or the review ends.
+  While pages are being prepared, their progress shows there, and an import can be canceled; leaving meanwhile loses
+  none of them. Pages scanned during an import join the run as soon as they are copied, without waiting for its photos.
+  **Close** (or Back) keeps the pages on the phone and returns to the document, whose banner then says "N pages to
+  send" with **Review**; the library shows them too. **Delete these pages** asks for confirmation, since these pages
+  exist nowhere else.
+- **First page number** (optional, in the review): for pages without a printed number that should be numbered. With
   **Consecutive pages** (on by default), the following pages get the next numbers. Leave it blank for front matter
   (cover, title page, preface).
 

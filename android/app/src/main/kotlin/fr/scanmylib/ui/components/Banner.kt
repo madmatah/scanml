@@ -26,8 +26,9 @@ fun AttentionBanner(
     actionLabel: String,
     onAction: () -> Unit,
     modifier: Modifier = Modifier,
+    actionModifier: Modifier = Modifier,
 ) {
-    Banner(text, icon, actionLabel, onAction, pickStatusColors(StatusTone.ATTENTION), modifier)
+    Banner(text, icon, actionLabel, onAction, pickStatusColors(StatusTone.ATTENTION), modifier, actionModifier)
 }
 
 @Composable
@@ -37,8 +38,9 @@ fun ErrorBanner(
     actionLabel: String,
     onAction: () -> Unit,
     modifier: Modifier = Modifier,
+    actionModifier: Modifier = Modifier,
 ) {
-    Banner(text, icon, actionLabel, onAction, pickStatusColors(StatusTone.FAILURE), modifier)
+    Banner(text, icon, actionLabel, onAction, pickStatusColors(StatusTone.FAILURE), modifier, actionModifier)
 }
 
 @Composable
@@ -48,7 +50,8 @@ private fun Banner(
     actionLabel: String,
     onAction: () -> Unit,
     colors: StatusColors,
-    modifier: Modifier = Modifier,
+    modifier: Modifier,
+    actionModifier: Modifier,
 ) {
     Surface(
         color = colors.container,
@@ -69,7 +72,7 @@ private fun Banner(
             TextButton(
                 onClick = onAction,
                 colors = ButtonDefaults.textButtonColors(contentColor = colors.content),
-                modifier = Modifier.align(Alignment.End),
+                modifier = actionModifier.align(Alignment.End),
             ) {
                 Text(actionLabel)
             }

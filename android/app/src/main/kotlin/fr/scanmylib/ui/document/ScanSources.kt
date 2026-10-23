@@ -114,10 +114,8 @@ fun rememberScanSources(
 }
 
 private fun ScanMessage.text(resources: Resources): String = when (this) {
-    is ScanMessage.PagesQueued -> resources.getQuantityString(R.plurals.message_pages_queued, count, count)
     ScanMessage.SendFailed -> resources.getString(R.string.message_send_failed)
     ScanMessage.StorageFull -> resources.getString(R.string.message_storage_full)
-    ScanMessage.AddingInterrupted -> resources.getString(R.string.message_adding_interrupted)
     ScanMessage.SettingNotSaved -> resources.getString(R.string.message_setting_not_saved)
     ScanMessage.ScannerUnavailable -> resources.getString(R.string.message_scanner_unavailable)
     ScanMessage.ScannerFailed -> resources.getString(R.string.message_scanner_failed)

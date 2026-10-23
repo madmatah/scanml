@@ -5,6 +5,7 @@ package fr.scanmylib.ui.document
 import android.content.res.Resources
 import android.net.Uri
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,6 +22,7 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyGridScope
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -41,11 +43,15 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalWindowInfo
@@ -62,13 +68,14 @@ import androidx.compose.ui.unit.min
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.currentStateAsState
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import fr.scanmylib.R
 import fr.scanmylib.db.DocumentEntity
 import fr.scanmylib.db.PendingPageEntity
-import fr.scanmylib.library.PreparationOutcome
 import fr.scanmylib.model.ScanSource
+import fr.scanmylib.ui.components.AttentionBanner
 import fr.scanmylib.ui.components.BackButton
 import fr.scanmylib.ui.components.BannerSlot
 import fr.scanmylib.ui.components.ErrorBanner
@@ -80,11 +87,13 @@ import fr.scanmylib.ui.components.pageStatsText
 import fr.scanmylib.ui.components.sanitizeTextFromPc
 import fr.scanmylib.ui.theme.cardColor
 import java.io.File
+import kotlinx.coroutines.launch
 
 @Composable
 fun DocumentScreen(
     onBack: () -> Unit,
     onOpenCamera: () -> Unit,
+    onOpenReview: () -> Unit,
     /** Photos shared from another app, to import into the run when the screen first opens. */
     sharedPhotos: List<Uri> = emptyList(),
     /** Opens the default camera when the screen first opens, once the settings are read. */
@@ -106,11 +115,16 @@ fun DocumentScreen(
     LaunchedEffect(viewModel, lifecycleOwner) {
         lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) { viewModel.keepUpToDate() }
     }
+    val currentOnOpenReview by rememberUpdatedState(onOpenReview)
+    val openReview = {
+        scanViewModel.onReviewOpened()
+        currentOnOpenReview()
+    }
     val sources = rememberScanSources(
         viewModel = scanViewModel,
         snackbarHostState = snackbarHostState,
         onOpenCamera = onOpenCamera,
-        onPagesReturned = {},
+        onPagesReturned = openReview,
         switchToSource = switchToSource,
         onSwitchHandled = onSwitchHandled,
     )
@@ -124,20 +138,9 @@ fun DocumentScreen(
             )
         }
     }
-    // The copies keep their outcome until it is dismissed, so that it shows even once the screen
-    // was left while they ran.
-    LaunchedEffect(scanViewModel, scan.outcome) {
-        val outcome = scan.outcome ?: return@LaunchedEffect
-        snackbarHostState.showSnackbar(
-            outcome.text(resources),
-            withDismissAction = true,
-            duration = SnackbarDuration.Long,
-        )
-        scanViewModel.dismissOutcome()
-    }
     var choosingCamera by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(scanViewModel, sharedPhotos) {
-        if (sharedPhotos.isNotEmpty()) scanViewModel.importSharedPhotos(sharedPhotos)
+        if (scanViewModel.importSharedPhotos(sharedPhotos)) openReview()
     }
     // Again once the settings are read: before, the default camera is not known.
     LaunchedEffect(scanViewModel, scanOnOpen, scan.loaded) {
@@ -150,15 +153,15 @@ fun DocumentScreen(
     var selectedLocalPage by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedServerPage by rememberSaveable { mutableStateOf<String?>(null) }
     val document = state.document
-    // A run waiting for confirmation shows unless more pages are being added to it.
-    val reviewVisible = !scan.preparing && scan.stagedPages.isNotEmpty()
-    // Messages show in the review dialog: behind it, they would be dimmed.
-    val messagesInDialog = reviewVisible
+    // Only while resumed: the end is told once the review has left, on the document.
+    val lifecycleState by lifecycleOwner.lifecycle.currentStateAsState()
+    val isResumed = lifecycleState.isAtLeast(Lifecycle.State.RESUMED)
 
     DocumentContent(
         state = state,
-        camera = scan.camera,
-        canScan = scan.loaded,
+        scan = scan,
+        reviewEnd = scan.reviewEnd.takeIf { isResumed },
+        snackbarHostState = snackbarHostState,
         localImage = viewModel::localImage,
         onBack = onBack,
         onRefresh = viewModel::refresh,
@@ -168,7 +171,10 @@ fun DocumentScreen(
         onChooseCamera = { choosingCamera = true },
         onOpenLocalPage = { selectedLocalPage = it },
         onOpenServerPage = { selectedServerPage = it },
-        snackbarHost = { if (!messagesInDialog) SnackbarHost(snackbarHostState) },
+        onReview = openReview,
+        onDismissOutcome = scanViewModel::dismissOutcome,
+        onDismissAddingInterrupted = scanViewModel::dismissAddingInterrupted,
+        onReviewEndShown = scanViewModel::onReviewEndShown,
     )
 
     if (choosingCamera && document != null) {
@@ -180,24 +186,6 @@ fun DocumentScreen(
                 sources.open(camera)
             },
             onDismiss = { choosingCamera = false },
-        )
-    }
-    scan.preparation?.let { preparation ->
-        PreparingPagesDialog(preparation, onCancel = scanViewModel::cancelPreparation)
-    }
-    if (reviewVisible) {
-        ScanReviewDialog(
-            scan = scan,
-            snackbarHostState = snackbarHostState,
-            onFirstPageChange = scanViewModel::onFirstPageChange,
-            onConsecutiveChange = scanViewModel::onConsecutiveChange,
-            onConfirm = scanViewModel::send,
-            onDiscard = scanViewModel::discard,
-            onRemovePage = scanViewModel::removePage,
-            onScanMore = sources.open,
-            onImportMore = sources.importPhotos,
-            // The run stays on the phone; the library shows it waits.
-            onLater = onBack,
         )
     }
     state.pages.local.firstOrNull { it.id == selectedLocalPage }?.let { page ->
@@ -219,12 +207,13 @@ fun DocumentScreen(
     }
 }
 
-/** Apart from the view model, so that a test draws the document from invented state. */
+/** Apart from the view models, so that a test draws the document from invented state. */
 @Composable
 internal fun DocumentContent(
     state: DocumentUiState,
-    camera: ScanSource,
-    canScan: Boolean,
+    scan: ScanUiState,
+    reviewEnd: ReviewEnd?,
+    snackbarHostState: SnackbarHostState,
     localImage: (PendingPageEntity) -> File?,
     onBack: () -> Unit,
     onRefresh: () -> Unit,
@@ -234,10 +223,44 @@ internal fun DocumentContent(
     onChooseCamera: () -> Unit,
     onOpenLocalPage: (pageId: String) -> Unit,
     onOpenServerPage: (pageId: String) -> Unit,
-    snackbarHost: @Composable () -> Unit,
+    onReview: () -> Unit,
+    onDismissOutcome: () -> Unit,
+    onDismissAddingInterrupted: () -> Unit,
+    onReviewEndShown: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val document = state.document
+    val pages = state.pages
+    val gridState = rememberLazyGridState()
+    val focusRequesters = remember { ReviewEndFocusRequesters() }
+    var focusTarget by remember { mutableStateOf<ReviewEndFocus?>(null) }
+    val resources = LocalResources.current
+    // The snackbar outlives the effect, which the end's clearing cancels.
+    val snackbarScope = rememberCoroutineScope()
+    val currentOnReviewEndShown by rememberUpdatedState(onReviewEndShown)
+    LaunchedEffect(reviewEnd) {
+        val end = reviewEnd ?: return@LaunchedEffect
+        currentOnReviewEndShown()
+        focusTarget = end.focusTarget
+        val message = end.message(resources) ?: return@LaunchedEffect
+        snackbarScope.launch { snackbarHostState.showSnackbar(message) }
+    }
+    val hasReviewButton = scan.preparing || scan.stagedPages.isNotEmpty()
+    val isFocusTargetPlaced = when (focusTarget) {
+        ReviewEndFocus.REVIEW_BUTTON -> document != null && hasReviewButton
+        ReviewEndFocus.PAGES_ON_THE_PHONE -> document != null && pages.local.isNotEmpty()
+        ReviewEndFocus.SCAN_BUTTON -> document != null
+        null -> false
+    }
+    LaunchedEffect(focusTarget, isFocusTargetPlaced) {
+        val target = focusTarget ?: return@LaunchedEffect
+        if (!isFocusTargetPlaced) return@LaunchedEffect
+        if (target == ReviewEndFocus.PAGES_ON_THE_PHONE) gridState.scrollToItem(PAGES_ON_THE_PHONE_INDEX)
+        // Once the target is laid out, so that it can take the focus.
+        withFrameNanos {}
+        focusRequesters.of(target).requestFocus()
+        focusTarget = null
+    }
     Scaffold(
         modifier = modifier,
         topBar = {
@@ -267,15 +290,16 @@ internal fun DocumentContent(
                         modifier = Modifier.semantics { contentDescription = importLabel },
                     )
                     ScanButton(
-                        camera = camera,
-                        enabled = canScan,
+                        camera = scan.camera,
+                        enabled = scan.loaded,
                         onScan = onScan,
                         onChooseCamera = onChooseCamera,
+                        modifier = Modifier.focusRequester(focusRequesters.scanButton),
                     )
                 }
             }
         },
-        snackbarHost = snackbarHost,
+        snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { padding ->
         PullToRefreshBox(
             isRefreshing = state.refreshing,
@@ -296,25 +320,33 @@ internal fun DocumentContent(
                     contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 88.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
+                    state = gridState,
                     modifier = Modifier.fillMaxSize(),
                 ) {
                     fullWidthItem("summary") {
                         Column {
                             DocumentSummary(document)
-                            BannerSlot {
+                            val hasBanner = document.uploadError != null || scan.outcome != null ||
+                                hasReviewButton || scan.wasAddingInterrupted
+                            BannerSlot(Modifier.padding(top = if (hasBanner) 8.dp else 0.dp)) {
                                 document.uploadError?.let { error ->
                                     ErrorBanner(
                                         stringResource(R.string.document_upload_refused, sanitizeTextFromPc(error)),
                                         R.drawable.ic_error,
                                         stringResource(R.string.retry),
                                         onRetryDocumentUpload,
-                                        modifier = Modifier.padding(top = 8.dp),
                                     )
                                 }
+                                PagesToSendBanner(
+                                    scan = scan,
+                                    onReview = onReview,
+                                    onDismissAddingInterrupted = onDismissAddingInterrupted,
+                                    reviewButtonModifier = Modifier.focusRequester(focusRequesters.reviewButton),
+                                )
+                                scan.outcome?.let { outcome -> PreparationOutcomeBanner(outcome, onDismissOutcome) }
                             }
                         }
                     }
-                    val pages = state.pages
                     if (pages.local.isNotEmpty()) {
                         fullWidthItem("local") {
                             SectionHeader(
@@ -323,6 +355,9 @@ internal fun DocumentContent(
                                     pages.local.size,
                                     pages.local.size,
                                 ),
+                                modifier = Modifier
+                                    .focusRequester(focusRequesters.pagesOnThePhone)
+                                    .focusable(),
                             )
                         }
                         items(pages.local, key = { it.id }) { page ->
@@ -356,7 +391,13 @@ internal fun DocumentContent(
  * cameras to choose from ([onChooseCamera]). Disabled until the default camera is known.
  */
 @Composable
-private fun ScanButton(camera: ScanSource, enabled: Boolean, onScan: () -> Unit, onChooseCamera: () -> Unit) {
+private fun ScanButton(
+    camera: ScanSource,
+    enabled: Boolean,
+    onScan: () -> Unit,
+    onChooseCamera: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val chooseLabel = stringResource(R.string.document_choose_camera)
     val cameraLabel = stringResource(camera.labelRes())
     Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -371,7 +412,7 @@ private fun ScanButton(camera: ScanSource, enabled: Boolean, onScan: () -> Unit,
             Row(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
+                modifier = modifier
                     .fillMaxHeight()
                     .combinedClickable(
                         enabled = enabled,
@@ -402,6 +443,79 @@ private fun ScanButton(camera: ScanSource, enabled: Boolean, onScan: () -> Unit,
         }
     }
 }
+
+/**
+ * The pages waiting on the phone, which the review shows: while they are being prepared, the count
+ * of images only, so that the banner is read out once per copy rather than at each image.
+ */
+@Composable
+private fun PagesToSendBanner(
+    scan: ScanUiState,
+    onReview: () -> Unit,
+    onDismissAddingInterrupted: () -> Unit,
+    reviewButtonModifier: Modifier,
+) {
+    val pageCount = scan.stagedPages.size
+    val preparation = scan.preparation
+    if (preparation == null && pageCount == 0) {
+        if (scan.wasAddingInterrupted) {
+            AttentionBanner(
+                stringResource(R.string.document_adding_interrupted_no_pages),
+                R.drawable.ic_outbox,
+                stringResource(R.string.banner_dismiss),
+                onDismissAddingInterrupted,
+            )
+        }
+        return
+    }
+    val text = when {
+        preparation != null ->
+            pluralStringResource(R.plurals.document_preparing_pages, preparation.total, preparation.total)
+
+        scan.wasAddingInterrupted ->
+            pluralStringResource(R.plurals.document_pages_to_send_interrupted, pageCount, pageCount)
+
+        else -> pluralStringResource(R.plurals.document_pages_to_send, pageCount, pageCount)
+    }
+    AttentionBanner(
+        text,
+        R.drawable.ic_outbox,
+        stringResource(R.string.document_review),
+        onReview,
+        actionModifier = reviewButtonModifier,
+    )
+}
+
+/** Where the focus goes once the review has ended: where the user goes on from. */
+private enum class ReviewEndFocus { REVIEW_BUTTON, PAGES_ON_THE_PHONE, SCAN_BUTTON }
+
+private class ReviewEndFocusRequesters {
+    val reviewButton = FocusRequester()
+    val pagesOnThePhone = FocusRequester()
+    val scanButton = FocusRequester()
+
+    fun of(target: ReviewEndFocus): FocusRequester = when (target) {
+        ReviewEndFocus.REVIEW_BUTTON -> reviewButton
+        ReviewEndFocus.PAGES_ON_THE_PHONE -> pagesOnThePhone
+        ReviewEndFocus.SCAN_BUTTON -> scanButton
+    }
+}
+
+private val ReviewEnd.focusTarget: ReviewEndFocus get() = when (this) {
+    ReviewEnd.PagesKept -> ReviewEndFocus.REVIEW_BUTTON
+    is ReviewEnd.PagesSent -> ReviewEndFocus.PAGES_ON_THE_PHONE
+    is ReviewEnd.PagesDeleted, ReviewEnd.Emptied -> ReviewEndFocus.SCAN_BUTTON
+}
+
+private fun ReviewEnd.message(resources: Resources): String? = when (this) {
+    ReviewEnd.PagesKept -> resources.getString(R.string.review_pages_kept)
+    is ReviewEnd.PagesSent -> resources.getQuantityString(R.plurals.message_pages_queued, count, count)
+    is ReviewEnd.PagesDeleted -> resources.getQuantityString(R.plurals.review_pages_deleted, count, count)
+    ReviewEnd.Emptied -> null
+}
+
+// The summary, then the header of the pages on the phone.
+private const val PAGES_ON_THE_PHONE_INDEX = 1
 
 // A page's tile widens with the text, so that its badge is never cut, up to two columns on a phone.
 private val TILE_MIN_WIDTH = 104.dp
@@ -531,18 +645,4 @@ private fun DocumentMessage.text(resources: Resources): String = when (this) {
     DocumentMessage.TokenRefused -> resources.getString(R.string.message_token_refused)
     is DocumentMessage.ServerError -> resources.getString(R.string.message_server_error, sanitizeTextFromPc(detail))
     DocumentMessage.PageBusy -> resources.getString(R.string.message_page_busy)
-}
-
-private fun PreparationOutcome.text(resources: Resources): String = when (this) {
-    is PreparationOutcome.PhotosSkipped -> listOfNotNull(
-        unsupported.takeIf { it > 0 }?.let {
-            resources.getQuantityString(R.plurals.message_unsupported_photos, it, it)
-        },
-        tooLarge.takeIf { it > 0 }?.let { resources.getQuantityString(R.plurals.message_too_large_photos, it, it) },
-        unreadable.takeIf { it > 0 }?.let { resources.getQuantityString(R.plurals.message_unreadable_photos, it, it) },
-    ).joinToString(" ")
-
-    PreparationOutcome.ImportFailed -> resources.getString(R.string.message_import_failed)
-
-    PreparationOutcome.StorageFull -> resources.getString(R.string.message_storage_full)
 }

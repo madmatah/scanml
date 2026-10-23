@@ -146,13 +146,10 @@
         <item quantity="many">%d photos à ajouter : choisissez leur document.</item>
         <item quantity="other">%d photos à ajouter : choisissez leur document.</item>
     </plurals>
-    <string name="scan_preparing">Préparation des pages…</string>
-    <string name="scan_preparing_progress">%1$d sur %2$d</string>
     <string name="scan_first_page">Numéro de la première page</string>
     <string name="scan_first_page_help">Facultatif. Laissez vide pour les pages sans numéro (couverture, préface…).</string>
     <string name="scan_first_page_invalid">Un nombre de 1 à %1$d</string>
     <string name="scan_consecutive">Pages consécutives</string>
-    <string name="scan_consecutive_help">Les pages suivantes prennent les numéros suivants.</string>
     <plurals name="scan_review_confirm">
         <item quantity="one">Envoyer %d page</item>
         <item quantity="many">Envoyer %d pages</item>
@@ -160,7 +157,6 @@
     </plurals>
     <string name="scan_review_discard">Supprimer ces pages</string>
     <string name="scan_review_add">Ajouter des pages</string>
-    <string name="scan_review_later">Plus tard</string>
     <string name="scan_review_page">Page %1$d sur %2$d</string>
     <string name="scan_review_remove_page">Retirer cette page</string>
     <string name="scan_discard_message">Rien n’a encore été envoyé au PC : la suppression est définitive.</string>
@@ -168,6 +164,19 @@
     <string name="scan_summary_none">Le PC garde le numéro imprimé s’il le lit.</string>
     <string name="scan_summary_first_only">Numéro indiqué pour la première page : %1$d.</string>
     <string name="scan_summary_range">Numéros indiqués : %1$d à %2$d.</string>
+    <string name="review_close">Fermer et garder les pages</string>
+    <string name="review_preparing">Préparation des pages : %1$d sur %2$d</string>
+    <string name="review_preparing_button">Préparation…</string>
+    <string name="review_sending">Envoi…</string>
+    <string name="review_number_auto">Auto</string>
+    <string name="review_page_description">Page %1$d sur %2$d, numéro %3$d</string>
+    <string name="review_page_description_auto">Page %1$d sur %2$d, numéro auto</string>
+    <string name="review_enlarge">Agrandir</string>
+    <string name="review_remove">Retirer</string>
+    <string name="review_pages_kept">Pages gardées sur le téléphone</string>
+    <string name="banner_dismiss">OK</string>
+    <string name="document_review">Vérifier</string>
+    <string name="document_adding_interrupted_no_pages">L’appli a été fermée pendant l’ajout de pages : ajoutez-les de nouveau.</string>
     <string name="message_pc_unreachable">PC injoignable : affichage des dernières données connues.</string>
     <string name="message_token_refused">Le PC ne reconnaît plus ce téléphone : associez-le à nouveau.</string>
     <string name="message_server_error">Erreur du PC : %1$s</string>
@@ -313,6 +322,26 @@
         <item quantity="one">Supprimer %d page ?</item>
         <item quantity="many">Supprimer %d pages ?</item>
         <item quantity="other">Supprimer %d pages ?</item>
+    </plurals>
+    <plurals name="review_pages_deleted">
+        <item quantity="one">%d page supprimée du téléphone</item>
+        <item quantity="many">%d pages supprimées du téléphone</item>
+        <item quantity="other">%d pages supprimées du téléphone</item>
+    </plurals>
+    <plurals name="document_pages_to_send">
+        <item quantity="one">%d page à envoyer, pas encore sur le PC.</item>
+        <item quantity="many">%d pages à envoyer, pas encore sur le PC.</item>
+        <item quantity="other">%d pages à envoyer, pas encore sur le PC.</item>
+    </plurals>
+    <plurals name="document_pages_to_send_interrupted">
+        <item quantity="one">%d page à envoyer. L’appli a été fermée pendant l’ajout : vérifiez-la, et ajoutez celles qui manquent.</item>
+        <item quantity="many">%d pages à envoyer. L’appli a été fermée pendant l’ajout : vérifiez-les, et ajoutez celles qui manquent.</item>
+        <item quantity="other">%d pages à envoyer. L’appli a été fermée pendant l’ajout : vérifiez-les, et ajoutez celles qui manquent.</item>
+    </plurals>
+    <plurals name="document_preparing_pages">
+        <item quantity="one">Préparation de %d page…</item>
+        <item quantity="many">Préparation de %d pages…</item>
+        <item quantity="other">Préparation de %d pages…</item>
     </plurals>
     <plurals name="message_pages_queued">
         <item quantity="one">%d page en route vers le PC</item>

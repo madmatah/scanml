@@ -63,11 +63,22 @@ data class ScanUiState(
     val outcome: PreparationOutcome? = null,
     /** The run is being queued for upload. */
     val sending: Boolean = false,
+    /** The pages of the run are known: until then, an empty [stagedPages] says nothing. */
+    val isRunRead: Boolean = false,
+    val wasAddingInterrupted: Boolean = false,
+    val reviewEnd: ReviewEnd? = null,
 ) {
     /** Null while the first page field is invalid. */
     val numbering: PageNumbering? get() = PageNumbering.fromInput(firstPage, consecutive)
 
     val preparing: Boolean get() = preparation != null
+
+    val pageCount: Int get() = stagedPages.size + (preparation?.imagesToAdd ?: 0)
+
+    val canSend: Boolean get() = numbering != null && stagedPages.isNotEmpty() && !preparing && !sending
+
+    val hasNothingToReview: Boolean
+        get() = isRunRead && stagedPages.isEmpty() && !preparing && outcome == null && !sending && reviewEnd == null
 
     /**
      * The camera "Scan" opens: the default one; the app's camera while Google's scanner is known
@@ -80,17 +91,22 @@ data class ScanUiState(
     }
 }
 
+sealed interface ReviewEnd {
+    data object PagesKept : ReviewEnd
+
+    data class PagesSent(val count: Int) : ReviewEnd
+
+    data class PagesDeleted(val count: Int) : ReviewEnd
+
+    data object Emptied : ReviewEnd
+}
+
 /** One-off messages about the pages to send, shown in a snackbar. */
 sealed interface ScanMessage {
-    data class PagesQueued(val count: Int) : ScanMessage
-
     /** The run could not be queued for upload; it stays as it was. */
     data object SendFailed : ScanMessage
 
     data object StorageFull : ScanMessage
-
-    /** Images on their way to the run were cut short when the app was last closed. */
-    data object AddingInterrupted : ScanMessage
 
     data object SettingNotSaved : ScanMessage
 
@@ -118,6 +134,7 @@ class ScanViewModel(
 ) : ViewModel() {
 
     private val sending = MutableStateFlow(false)
+    private val reviewEnd = MutableStateFlow<ReviewEnd?>(null)
     private val messageChannel = Channel<ScanMessage>(Channel.BUFFERED)
 
     val messages: Flow<ScanMessage> = messageChannel.receiveAsFlow()
@@ -127,8 +144,9 @@ class ScanViewModel(
     private val scanForm: Flow<ScanUiState> = combine(
         savedState.getStateFlow(KEY_FIRST_PAGE, ""),
         savedState.getStateFlow(KEY_CONSECUTIVE, true),
+        savedState.getStateFlow(KEY_ADDING_INTERRUPTED, false),
         settings.settings,
-    ) { firstPage, consecutive, settings ->
+    ) { firstPage, consecutive, wasAddingInterrupted, settings ->
         ScanUiState(
             defaultCamera = settings.defaultCamera,
             googleScannerUnavailable = settings.googleScannerUnavailable,
@@ -137,6 +155,7 @@ class ScanViewModel(
             scannerMode = settings.scannerMode,
             firstPage = firstPage,
             consecutive = consecutive,
+            wasAddingInterrupted = wasAddingInterrupted,
         )
     }
 
@@ -145,19 +164,23 @@ class ScanViewModel(
         staging.observe(documentId),
         runPreparation.observe(documentId),
         sending,
-    ) { form, stagedPages, preparation, sending ->
+        reviewEnd,
+    ) { form, stagedPages, preparation, sending, reviewEnd ->
         form.copy(
             stagedPages = stagedPages,
             preparation = preparation.preparation,
             outcome = preparation.outcome,
             sending = sending,
+            isRunRead = true,
+            reviewEnd = reviewEnd,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ScanUiState())
 
     init {
         viewModelScope.launch {
             // The app was closed (or killed in the background) while pages were being added.
-            if (staging.takeInterrupted(documentId)) messageChannel.send(ScanMessage.AddingInterrupted)
+            // Saved, so that the banner stays until dismissed, even once the process is killed again.
+            if (staging.takeInterrupted(documentId)) savedState[KEY_ADDING_INTERRUPTED] = true
         }
     }
 
@@ -220,12 +243,13 @@ class ScanViewModel(
 
     /**
      * Photos shared from another app, for this document: they join the run like picked photos,
-     * once only, even when the screen is recreated with the same share.
+     * once only, even when the screen is recreated with the same share. Whether they started to.
      */
-    fun importSharedPhotos(photos: List<Uri>) {
-        if (savedState.get<Boolean>(KEY_SHARED_IMPORTED) == true) return
+    fun importSharedPhotos(photos: List<Uri>): Boolean {
+        if (photos.isEmpty() || savedState.get<Boolean>(KEY_SHARED_IMPORTED) == true) return false
         savedState[KEY_SHARED_IMPORTED] = true
         onPhotosPicked(photos)
+        return true
     }
 
     /**
@@ -246,6 +270,25 @@ class ScanViewModel(
 
     fun dismissOutcome() {
         runPreparation.dismissOutcome(documentId)
+    }
+
+    fun dismissAddingInterrupted() {
+        savedState[KEY_ADDING_INTERRUPTED] = false
+    }
+
+    fun closeReview() {
+        if (sending.value || reviewEnd.value != null) return
+        val scan = scanState.value
+        reviewEnd.value = if (scan.stagedPages.isEmpty() && !scan.preparing) ReviewEnd.Emptied else ReviewEnd.PagesKept
+    }
+
+    fun onReviewEndShown() {
+        reviewEnd.value = null
+    }
+
+    /** A review opens: an end left over from an earlier one would close it at once. */
+    fun onReviewOpened() {
+        reviewEnd.value = null
     }
 
     /** Google's scanner is about to open: whatever failed before, it works on this phone. */
@@ -289,14 +332,17 @@ class ScanViewModel(
     fun send() {
         val scan = scanState.value
         val numbering = scan.numbering ?: return
-        if (scan.stagedPages.isEmpty() || sending.value) return
+        if (scan.stagedPages.isEmpty() || scan.preparing || sending.value) return
         sending.value = true
         viewModelScope.launch {
             try {
                 val count = sendRun(numbering)
                 // Scanning a book in order: the next run starts after this one.
                 savedState[KEY_FIRST_PAGE] = numbering.nextFirstPage(count)?.toString().orEmpty()
-                if (count > 0) messageChannel.send(ScanMessage.PagesQueued(count))
+                savedState[KEY_ADDING_INTERRUPTED] = false
+                runPreparation.dismissOutcome(documentId)
+                // Before sending is over: the emptied run then never reads as a review left empty.
+                reviewEnd.value = ReviewEnd.PagesSent(count)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -310,6 +356,12 @@ class ScanViewModel(
     }
 
     fun discard() {
+        val scan = scanState.value
+        if (scan.preparing || sending.value) return
+        // Before the deletion: the emptied run then never reads as a review left empty.
+        reviewEnd.value = ReviewEnd.PagesDeleted(scan.stagedPages.size)
+        savedState[KEY_ADDING_INTERRUPTED] = false
+        runPreparation.dismissOutcome(documentId)
         viewModelScope.launch { staging.discard(documentId) }
     }
 
@@ -330,6 +382,7 @@ class ScanViewModel(
         private const val KEY_ACTION_ON_OPEN_DONE = "scan_action_on_open_done"
         private const val KEY_FIRST_PAGE = "scan_first_page"
         private const val KEY_CONSECUTIVE = "scan_consecutive"
+        private const val KEY_ADDING_INTERRUPTED = "scan_adding_interrupted"
         private const val MAX_FIRST_PAGE_DIGITS = 4
 
         val Factory = viewModelFactory {
@@ -362,7 +415,6 @@ class ScanViewModel(
  * it then shows longer (about ten seconds rather than four), with a close button.
  */
 internal val ScanMessage.important: Boolean get() = when (this) {
-    ScanMessage.AddingInterrupted,
     ScanMessage.StorageFull,
     ScanMessage.SendFailed,
     ScanMessage.ScannerUnavailable,
@@ -370,7 +422,5 @@ internal val ScanMessage.important: Boolean get() = when (this) {
     ScanMessage.PhotoPickerUnavailable,
     -> true
 
-    is ScanMessage.PagesQueued,
-    ScanMessage.SettingNotSaved,
-    -> false
+    ScanMessage.SettingNotSaved -> false
 }

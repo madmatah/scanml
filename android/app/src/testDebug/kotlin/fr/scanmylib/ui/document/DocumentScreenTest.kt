@@ -1,13 +1,17 @@
 package fr.scanmylib.ui.document
 
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.test.SemanticsNodeInteractionsProvider
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertWidthIsAtLeast
 import androidx.compose.ui.test.hasAnyDescendant
+import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasScrollToKeyAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createComposeRule
@@ -29,12 +33,17 @@ import fr.scanmylib.db.ServerPageEntity
 import fr.scanmylib.db.UploadFailure
 import fr.scanmylib.db.UploadState
 import fr.scanmylib.library.DocumentPages
+import fr.scanmylib.library.Preparation
+import fr.scanmylib.library.PreparationOutcome
+import fr.scanmylib.library.StagedPage
 import fr.scanmylib.model.DocumentKind
 import fr.scanmylib.model.ScanSource
 import fr.scanmylib.ui.components.MAX_TEXT_FROM_PC_GRAPHEMES
 import fr.scanmylib.ui.isPoliteLiveRegion
 import fr.scanmylib.ui.readHeadingsFromTheTop
 import fr.scanmylib.ui.theme.ScanMyLibTheme
+import java.io.File
+import java.time.Instant
 import kotlin.math.roundToInt
 import kotlin.properties.Delegates
 import org.junit.Assert.assertEquals
@@ -279,6 +288,445 @@ class DocumentScreenTest {
             }
         }
 
+        @RunWith(ParameterizedRobolectricTestRunner::class)
+        @GraphicsMode(GraphicsMode.Mode.NATIVE)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenPagesWaitToBeSent(private val theme: String, private val dark: Boolean) {
+            @get:Rule
+            val compose = createComposeRule()
+
+            @Before
+            fun drawTheDocument() {
+                compose.setContent {
+                    ScanMyLibTheme(dark = dark) { DocumentContentOf(BOOK_BEING_READ, scan = THREE_PAGES_TO_SEND) }
+                }
+                compose.onRoot().captureRoboImage("build/outputs/roborazzi/document-pages-to-send-$theme.png")
+            }
+
+            @Test
+            fun `should say how many pages wait on the phone, not on the PC yet`() {
+                compose.onNodeWithText(THREE_PAGES_TO_SEND_TEXT).assertIsDisplayed()
+            }
+
+            @Test
+            fun `should offer to review them`() {
+                compose.onNodeWithText(REVIEW).assertIsDisplayed()
+            }
+
+            companion object {
+                @JvmStatic
+                @ParameterizedRobolectricTestRunner.Parameters(name = "in the {0} theme")
+                fun themes(): List<Array<Any>> = THEMES
+            }
+        }
+
+        @RunWith(ParameterizedRobolectricTestRunner::class)
+        @GraphicsMode(GraphicsMode.Mode.NATIVE)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone, fontScale = 2f)
+        class WhenPagesWaitToBeSentAndTheTextIsTwiceItsSize(private val theme: String, private val dark: Boolean) {
+            @get:Rule
+            val compose = createComposeRule()
+
+            @Before
+            fun drawTheDocument() {
+                compose.setContent {
+                    ScanMyLibTheme(dark = dark) { DocumentContentOf(BOOK_BEING_READ, scan = THREE_PAGES_TO_SEND) }
+                }
+                compose.onRoot().captureRoboImage(
+                    "build/outputs/roborazzi/document-pages-to-send-large-text-$theme.png",
+                )
+            }
+
+            @Test
+            fun `should offer to review them`() {
+                compose.onNodeWithText(REVIEW).assertIsDisplayed()
+            }
+
+            companion object {
+                @JvmStatic
+                @ParameterizedRobolectricTestRunner.Parameters(name = "in the {0} theme")
+                fun themes(): List<Array<Any>> = THEMES
+            }
+        }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenPagesWaitToBeSentAndReviewIsTapped {
+            @get:Rule
+            val compose = createComposeRule()
+
+            private lateinit var reviews: MutableList<Unit>
+
+            @Before
+            fun tapReview() {
+                reviews = mutableListOf()
+                compose.setContent {
+                    ScanMyLibTheme {
+                        DocumentContentOf(BOOK_BEING_READ, scan = THREE_PAGES_TO_SEND, onReview = { reviews += Unit })
+                    }
+                }
+                compose.onNodeWithText(REVIEW).performClick()
+            }
+
+            @Test
+            fun `should open the review`() {
+                assertEquals(1, reviews.size)
+            }
+        }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenPagesAreBeingPrepared {
+            @get:Rule
+            val compose = createComposeRule()
+
+            @Before
+            fun drawTheDocument() {
+                compose.setContent {
+                    ScanMyLibTheme { DocumentContentOf(BOOK_BEING_READ, scan = PREPARING_FOUR_PAGES) }
+                }
+            }
+
+            @Test
+            fun `should say how many pages are being prepared, once per copy`() {
+                compose.onNodeWithText(PREPARING_FOUR_PAGES_TEXT).assertIsDisplayed()
+            }
+
+            @Test
+            fun `should offer to review them`() {
+                compose.onNodeWithText(REVIEW).assertIsDisplayed()
+            }
+
+            companion object {
+                private const val PREPARING_FOUR_PAGES_TEXT = "Preparing 4 pages…"
+            }
+        }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenTheAppWasClosedWhileAddingPagesAndNoPageIsLeft {
+            @get:Rule
+            val compose = createComposeRule()
+
+            @Before
+            fun drawTheDocument() {
+                compose.setContent {
+                    ScanMyLibTheme {
+                        DocumentContentOf(BOOK_BEING_READ, scan = NOTHING_TO_SEND.copy(wasAddingInterrupted = true))
+                    }
+                }
+            }
+
+            @Test
+            fun `should ask to add the pages again`() {
+                compose.onNodeWithText(ADDING_INTERRUPTED).assertIsDisplayed()
+            }
+
+            @Test
+            fun `should let the message be dismissed`() {
+                compose.onNodeWithText(OK).assertIsDisplayed()
+            }
+
+            @Test
+            fun `should not offer a review, since there is nothing to review`() {
+                compose.onNodeWithText(REVIEW).assertDoesNotExist()
+            }
+
+            companion object {
+                private const val ADDING_INTERRUPTED =
+                    "The app was closed while pages were being added: add them again."
+            }
+        }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenTheAppWasClosedWhileAddingPagesAndNoPageIsLeftAndOkIsTapped {
+            @get:Rule
+            val compose = createComposeRule()
+
+            private lateinit var dismissals: MutableList<Unit>
+
+            @Before
+            fun tapOk() {
+                dismissals = mutableListOf()
+                compose.setContent {
+                    ScanMyLibTheme {
+                        DocumentContentOf(
+                            BOOK_BEING_READ,
+                            scan = NOTHING_TO_SEND.copy(wasAddingInterrupted = true),
+                            onDismissAddingInterrupted = { dismissals += Unit },
+                        )
+                    }
+                }
+                compose.onNodeWithText(OK).performClick()
+            }
+
+            @Test
+            fun `should dismiss the message`() {
+                assertEquals(1, dismissals.size)
+            }
+        }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenAnImportSkippedPhotos {
+            @get:Rule
+            val compose = createComposeRule()
+
+            @Before
+            fun drawTheDocument() {
+                compose.setContent { ScanMyLibTheme { DocumentContentOf(BOOK_BEING_READ, scan = PHOTOS_SKIPPED) } }
+            }
+
+            @Test
+            fun `should say so from a region that stays, so that it is read out`() {
+                compose.onNode(isPoliteLiveRegion() and hasAnyDescendant(hasText(TWO_SKIPPED, substring = true)))
+                    .assertExists()
+            }
+
+            @Test
+            fun `should let the banner be dismissed`() {
+                compose.onNodeWithText(OK).assertIsDisplayed()
+            }
+
+            companion object {
+                private const val TWO_SKIPPED = "2 photos"
+            }
+        }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenAnImportSkippedPhotosAndOkIsTapped {
+            @get:Rule
+            val compose = createComposeRule()
+
+            private lateinit var dismissals: MutableList<Unit>
+
+            @Before
+            fun tapOk() {
+                dismissals = mutableListOf()
+                compose.setContent {
+                    ScanMyLibTheme {
+                        DocumentContentOf(
+                            BOOK_BEING_READ,
+                            scan = PHOTOS_SKIPPED,
+                            onDismissOutcome = { dismissals += Unit },
+                        )
+                    }
+                }
+                compose.onNodeWithText(OK).performClick()
+            }
+
+            @Test
+            fun `should dismiss the banner`() {
+                assertEquals(1, dismissals.size)
+            }
+        }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenThePcRejectedItAndPagesWaitToBeSent {
+            @get:Rule
+            val compose = createComposeRule()
+
+            @Before
+            fun drawTheDocument() {
+                compose.setContent {
+                    ScanMyLibTheme { DocumentContentOf(PAMPHLET_REJECTED, scan = THREE_PAGES_TO_SEND) }
+                }
+            }
+
+            @Test
+            fun `should show both banners in the one region that is read out`() {
+                compose.onNode(
+                    isPoliteLiveRegion() and
+                        hasAnyDescendant(hasText(REJECTION, substring = true)) and
+                        hasAnyDescendant(hasText(THREE_PAGES_TO_SEND_TEXT)),
+                ).assertExists()
+            }
+        }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenTheReviewEndedWithThePagesKept {
+            @get:Rule
+            val compose = createComposeRule()
+
+            private lateinit var snackbarHostState: SnackbarHostState
+            private lateinit var snackbarMessages: List<String>
+
+            @Before
+            fun endTheReview() {
+                snackbarHostState = SnackbarHostState()
+                compose.setContent {
+                    ScanMyLibTheme {
+                        DocumentContentOf(
+                            BOOK_BEING_READ,
+                            scan = THREE_PAGES_TO_SEND,
+                            reviewEnd = ReviewEnd.PagesKept,
+                            snackbarHostState = snackbarHostState,
+                        )
+                    }
+                }
+                compose.waitForIdle()
+                snackbarMessages = listOfNotNull(snackbarHostState.currentSnackbarData?.visuals?.message)
+            }
+
+            @Test
+            fun `should say that the pages are kept on the phone`() {
+                assertEquals(listOf("Pages kept on the phone"), snackbarMessages)
+            }
+
+            @Test
+            fun `should move the focus to the banner's review, where the user goes on`() {
+                compose.onNodeWithText(REVIEW).assertIsFocused()
+            }
+        }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenTheReviewEndedWithThePagesSent {
+            @get:Rule
+            val compose = createComposeRule()
+
+            private lateinit var snackbarHostState: SnackbarHostState
+            private lateinit var snackbarMessages: List<String>
+
+            @Before
+            fun endTheReview() {
+                snackbarHostState = SnackbarHostState()
+                compose.setContent {
+                    ScanMyLibTheme {
+                        DocumentContentOf(
+                            BOOK_BEING_READ,
+                            scan = THREE_PAGES_TO_SEND,
+                            reviewEnd = ReviewEnd.PagesSent(PAGE_TO_SEND_COUNT),
+                            snackbarHostState = snackbarHostState,
+                        )
+                    }
+                }
+                compose.waitForIdle()
+                snackbarMessages = listOfNotNull(snackbarHostState.currentSnackbarData?.visuals?.message)
+            }
+
+            @Test
+            fun `should say that the pages are on their way to the PC`() {
+                assertEquals(listOf("Sending 3 pages to the PC"), snackbarMessages)
+            }
+
+            @Test
+            fun `should move the focus to the pages on the phone, where the sent pages now are`() {
+                compose.onNodeWithText(PAGES_ON_THE_PHONE).assertIsFocused()
+            }
+        }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenTheReviewEndedWithThePagesDeleted {
+            @get:Rule
+            val compose = createComposeRule()
+
+            private lateinit var snackbarHostState: SnackbarHostState
+            private lateinit var snackbarMessages: List<String>
+
+            @Before
+            fun endTheReview() {
+                snackbarHostState = SnackbarHostState()
+                compose.setContent {
+                    ScanMyLibTheme {
+                        DocumentContentOf(
+                            BOOK_BEING_READ,
+                            scan = THREE_PAGES_TO_SEND,
+                            reviewEnd = ReviewEnd.PagesDeleted(DELETED_PAGE_COUNT),
+                            snackbarHostState = snackbarHostState,
+                        )
+                    }
+                }
+                compose.waitForIdle()
+                snackbarMessages = listOfNotNull(snackbarHostState.currentSnackbarData?.visuals?.message)
+            }
+
+            @Test
+            fun `should say that the pages are deleted`() {
+                assertEquals(listOf("3 pages deleted from the phone"), snackbarMessages)
+            }
+
+            @Test
+            fun `should move the focus to the scan button, where the user goes on`() {
+                compose.onNode(hasText(SCAN) and hasClickAction()).assertIsFocused()
+            }
+        }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenTheReviewEndedEmpty {
+            @get:Rule
+            val compose = createComposeRule()
+
+            private lateinit var snackbarHostState: SnackbarHostState
+            private lateinit var snackbarMessages: List<String>
+
+            @Before
+            fun endTheReview() {
+                snackbarHostState = SnackbarHostState()
+                compose.setContent {
+                    ScanMyLibTheme {
+                        DocumentContentOf(
+                            BOOK_BEING_READ,
+                            scan = THREE_PAGES_TO_SEND,
+                            reviewEnd = ReviewEnd.Emptied,
+                            snackbarHostState = snackbarHostState,
+                        )
+                    }
+                }
+                compose.waitForIdle()
+                snackbarMessages = listOfNotNull(snackbarHostState.currentSnackbarData?.visuals?.message)
+            }
+
+            @Test
+            fun `should say nothing, since nothing changed`() {
+                assertEquals(emptyList<String>(), snackbarMessages)
+            }
+
+            @Test
+            fun `should move the focus to the scan button, where the user goes on`() {
+                compose.onNode(hasText(SCAN) and hasClickAction()).assertIsFocused()
+            }
+        }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenTheReviewEnded {
+            @get:Rule
+            val compose = createComposeRule()
+
+            private lateinit var endAndSnackbar: List<Any?>
+
+            @Before
+            fun tellTheEnd() {
+                val snackbarHostState = SnackbarHostState()
+                val reviewEnd = mutableStateOf<ReviewEnd?>(ReviewEnd.PagesKept)
+                compose.setContent {
+                    ScanMyLibTheme {
+                        DocumentContentOf(
+                            BOOK_BEING_READ,
+                            scan = THREE_PAGES_TO_SEND,
+                            reviewEnd = reviewEnd.value,
+                            snackbarHostState = snackbarHostState,
+                            onReviewEndShown = { reviewEnd.value = null },
+                        )
+                    }
+                }
+                compose.waitForIdle()
+                endAndSnackbar = listOf(reviewEnd.value, snackbarHostState.currentSnackbarData?.visuals?.message)
+            }
+
+            @Test
+            fun `should clear the end before the snackbar ends, so that the end is told once and the snackbar stays`() {
+                assertEquals(listOf(null, "Pages kept on the phone"), endAndSnackbar)
+            }
+        }
+
         @RunWith(RobolectricTestRunner::class)
         @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
         class WhenItsTitleAndAuthorHoldCharactersAReaderCannotSee {
@@ -427,6 +875,13 @@ private const val PAGES_ON_THE_PC_KEY = "server"
 private const val FIRST_PAGE_ON_THE_PHONE = "Page 31, Uploading…"
 private const val REJECTION = "invalid title"
 private const val RETRY = "Retry"
+private const val REVIEW = "Review"
+private const val OK = "OK"
+private const val SCAN = "Scan"
+private const val PAGES_ON_THE_PHONE = "On the phone (4)"
+private const val PAGE_TO_SEND_COUNT = 3
+private const val DELETED_PAGE_COUNT = PAGE_TO_SEND_COUNT
+private const val THREE_PAGES_TO_SEND_TEXT = "3 pages to send, not on the PC yet."
 
 private val THEMES = listOf(arrayOf<Any>("light", false), arrayOf<Any>("dark", true))
 
@@ -525,6 +980,20 @@ private val PAMPHLET_REJECTED = DocumentUiState(
     pages = DocumentPages(local = listOf(makePageOnThePhone(1, UploadState.QUEUED)), server = emptyList()),
 )
 
+private val NOTHING_TO_SEND = ScanUiState(defaultCamera = ScanSource.GOOGLE_SCANNER, loaded = true, isRunRead = true)
+
+private val THREE_PAGES_TO_SEND = NOTHING_TO_SEND.copy(
+    stagedPages = (1..PAGE_TO_SEND_COUNT).map { position ->
+        StagedPage(File("/staging/run/$position.jpg"), seq = position, capturedAt = Instant.EPOCH)
+    },
+)
+
+private val PHOTOS_SKIPPED =
+    NOTHING_TO_SEND.copy(outcome = PreparationOutcome.PhotosSkipped(unsupported = 2, tooLarge = 0, unreadable = 0))
+
+private val PREPARING_FOUR_PAGES =
+    NOTHING_TO_SEND.copy(preparation = Preparation(done = 1, total = 4, imagesToAdd = 4, isCancellable = true))
+
 private fun makeCharacter(codePoint: Int): String = String(Character.toChars(codePoint))
 
 private fun countColumnsOfTheFirstThreePagesOnThePc(screen: SemanticsNodeInteractionsProvider): Int =
@@ -533,11 +1002,22 @@ private fun countColumnsOfTheFirstThreePagesOnThePc(screen: SemanticsNodeInterac
     }.toSet().size
 
 @Composable
-private fun DocumentContentOf(state: DocumentUiState, onRetryDocumentUpload: () -> Unit = {}) {
+private fun DocumentContentOf(
+    state: DocumentUiState,
+    scan: ScanUiState = NOTHING_TO_SEND,
+    reviewEnd: ReviewEnd? = null,
+    snackbarHostState: SnackbarHostState = remember { SnackbarHostState() },
+    onRetryDocumentUpload: () -> Unit = {},
+    onReview: () -> Unit = {},
+    onDismissOutcome: () -> Unit = {},
+    onDismissAddingInterrupted: () -> Unit = {},
+    onReviewEndShown: () -> Unit = {},
+) {
     DocumentContent(
         state = state,
-        camera = ScanSource.GOOGLE_SCANNER,
-        canScan = true,
+        scan = scan,
+        reviewEnd = reviewEnd,
+        snackbarHostState = snackbarHostState,
         localImage = { null },
         onBack = {},
         onRefresh = {},
@@ -547,6 +1027,9 @@ private fun DocumentContentOf(state: DocumentUiState, onRetryDocumentUpload: () 
         onChooseCamera = {},
         onOpenLocalPage = {},
         onOpenServerPage = {},
-        snackbarHost = {},
+        onReview = onReview,
+        onDismissOutcome = onDismissOutcome,
+        onDismissAddingInterrupted = onDismissAddingInterrupted,
+        onReviewEndShown = onReviewEndShown,
     )
 }

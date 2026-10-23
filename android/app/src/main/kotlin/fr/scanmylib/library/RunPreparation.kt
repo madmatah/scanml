@@ -12,7 +12,11 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 
-data class Preparation(val done: Int, val total: Int, val isCancellable: Boolean)
+/**
+ * [imagesToAdd] counts the images of the copies not ended yet, running or waiting, since a copy adds
+ * its images to the run only when it ends; [done] and [total] count every copy until none is left.
+ */
+data class Preparation(val done: Int, val total: Int, val imagesToAdd: Int, val isCancellable: Boolean)
 
 sealed interface PreparationOutcome {
     data class PhotosSkipped(val unsupported: Int, val tooLarge: Int, val unreadable: Int) : PreparationOutcome
@@ -160,6 +164,7 @@ class RunPreparation(private val scope: CoroutineScope) {
             Preparation(
                 done = documentCopies.sumOf { it.done },
                 total = documentCopies.sumOf { it.total },
+                imagesToAdd = waiting.sumOf { it.total },
                 isCancellable = waiting.any { it.source == CopySource.GALLERY_PHOTOS },
             )
         }

@@ -70,7 +70,10 @@ class RunPreparationTest {
 
             @Test
             fun `should show the progress of the copy`() {
-                assertEquals(Preparation(done = 2, total = 4, isCancellable = false), state.preparation)
+                assertEquals(
+                    Preparation(done = 2, total = 4, imagesToAdd = 4, isCancellable = false),
+                    state.preparation,
+                )
             }
         }
 
@@ -133,9 +136,39 @@ class RunPreparationTest {
             @Test
             fun `should count the images of both copies, and let the import be canceled`() {
                 assertEquals(
-                    Preparation(done = 2, total = 3, isCancellable = true),
+                    Preparation(done = 2, total = 3, imagesToAdd = 3, isCancellable = true),
                     stateWhileTheFirstWaits.preparation,
                 )
+            }
+        }
+
+        class WhenTheFirstOfTwoCopiesEnds {
+            @get:Rule
+            val folder = TemporaryFolder()
+
+            private lateinit var stateWhileTheSecondRuns: PreparationState
+
+            @OptIn(ExperimentalCoroutinesApi::class)
+            @Before
+            fun finishTheFirstCopy() = runTest {
+                val run = makeRun(folder)
+                val gate = CompletableDeferred<Unit>()
+                run.preparation.start(DOCUMENT_ID, CopySource.SCANNED_PAGES, total = 2) { onProgress ->
+                    run.copyPages(listOf("first-a", "first-b"), onProgress)
+                    null
+                }
+                run.preparation.start(DOCUMENT_ID, CopySource.GALLERY_PHOTOS, total = 3) { onProgress ->
+                    run.copyPages(listOf("second-a"), onProgress, beforeAdding = { gate.await() })
+                    null
+                }
+                advanceUntilIdle()
+                stateWhileTheSecondRuns = run.preparation.observe(DOCUMENT_ID).first()
+                gate.complete(Unit)
+            }
+
+            @Test
+            fun `should count only the second copy's images as still to add, since the first one's joined the run`() {
+                assertEquals(3, stateWhileTheSecondRuns.preparation?.imagesToAdd)
             }
         }
 

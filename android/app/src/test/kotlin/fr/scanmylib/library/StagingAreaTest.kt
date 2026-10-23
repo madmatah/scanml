@@ -96,7 +96,7 @@ class StagingAreaTest {
             }
         }
 
-        class WhenThePagesAfterAPositionWereRemoved {
+        class WhenTheLastTwoPagesWereRemoved {
             @get:Rule
             val folder = TemporaryFolder()
 
@@ -106,7 +106,6 @@ class StagingAreaTest {
             fun addAnImage() = runTest {
                 val staging = StagingArea(resolveStagingRoot(folder))
                 shootTwoScansAndTwoPhotos(staging)
-                removeThePhotos(staging)
                 removeThePhotos(staging)
                 position = staging.shoot("next", SHOT_TIME.plusSeconds(4)).seq
             }
@@ -589,57 +588,6 @@ class StagingAreaTest {
             @Test
             fun `should keep the order of the run`() {
                 assertEquals(listOf("a", "b"), pageContents)
-            }
-        }
-    }
-
-    @RunWith(Enclosed::class)
-    class TheRemoveAfterMethod {
-        class WhenPagesFollowThePosition {
-            @get:Rule
-            val folder = TemporaryFolder()
-
-            private lateinit var pageContents: List<String>
-            private lateinit var nextProcessPageContents: List<String>
-
-            @Before
-            fun removeThePagesAfterIt() = runTest {
-                val staging = StagingArea(resolveStagingRoot(folder))
-                shootTwoScansAndTwoPhotos(staging)
-                removeThePhotos(staging)
-                pageContents = staging.readContents(DOCUMENT)
-                nextProcessPageContents = restartTheProcess(resolveStagingRoot(folder)).readContents(DOCUMENT)
-            }
-
-            @Test
-            fun `should keep the pages up to the position`() {
-                assertEquals(listOf("scanned 1", "scanned 2"), pageContents)
-            }
-
-            @Test
-            fun `should delete the others for good`() {
-                assertEquals(listOf("scanned 1", "scanned 2"), nextProcessPageContents)
-            }
-        }
-
-        class WhenThePagesAfterThePositionWereRemovedAlready {
-            @get:Rule
-            val folder = TemporaryFolder()
-
-            private var pageCount by Delegates.notNull<Int>()
-
-            @Before
-            fun removeThePagesAfterItAgain() = runTest {
-                val staging = StagingArea(resolveStagingRoot(folder))
-                shootTwoScansAndTwoPhotos(staging)
-                removeThePhotos(staging)
-                removeThePhotos(staging)
-                pageCount = staging.pages(DOCUMENT).size
-            }
-
-            @Test
-            fun `should remove nothing, since nothing follows the last page`() {
-                assertEquals(2, pageCount)
             }
         }
     }
@@ -1132,7 +1080,7 @@ private suspend fun shootTwoScansAndTwoPhotos(staging: StagingArea) {
 }
 
 private suspend fun removeThePhotos(staging: StagingArea) {
-    staging.removeAfter(DOCUMENT, 2)
+    staging.pages(DOCUMENT).filter { it.file.readText().startsWith("photo") }.forEach { staging.remove(DOCUMENT, it) }
 }
 
 private suspend fun leaveAnImageOnItsWay(root: File): StagingArea = StagingArea(root).apply {

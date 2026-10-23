@@ -12,7 +12,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.ExperimentalTestApi
@@ -36,6 +39,8 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performCustomAccessibilityActionWithLabel
 import androidx.compose.ui.test.performScrollToKey
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeLeft
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
@@ -621,6 +626,163 @@ class ReviewScreenTest {
         @RunWith(ParameterizedRobolectricTestRunner::class)
         @GraphicsMode(GraphicsMode.Mode.NATIVE)
         @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenTheSecondPageIsEnlarged(private val theme: String, private val dark: Boolean) {
+            @get:Rule
+            val compose = createComposeRule()
+
+            @Before
+            fun enlargeIt() {
+                compose.setContent { ScanMyLibTheme(dark = dark) { ReviewContentOf(FOUR_PAGES) } }
+                enlargeTheSecondPage(compose)
+                compose.onRoot().captureRoboImage("build/outputs/roborazzi/review-page-$theme.png")
+            }
+
+            @Test
+            fun `should say which page it shows, as a heading`() {
+                compose.onNode(hasText(PAGE_2_OF_4) and isHeading()).assertIsDisplayed()
+            }
+
+            @Test
+            fun `should let TalkBack zoom in, since a pinch needs two fingers`() {
+                compose.onNode(hasCustomAction(ZOOM_IN)).assertExists()
+            }
+
+            @Test
+            fun `should offer to remove the page`() {
+                compose.onNodeWithText(REMOVE).assertIsDisplayed()
+            }
+
+            companion object {
+                @JvmStatic
+                @ParameterizedRobolectricTestRunner.Parameters(name = "in the {0} theme")
+                fun themes(): List<Array<Any>> = THEMES
+            }
+        }
+
+        @RunWith(ParameterizedRobolectricTestRunner::class)
+        @GraphicsMode(GraphicsMode.Mode.NATIVE)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone, fontScale = 2f)
+        class WhenTheSecondPageIsEnlargedAndTheTextIsTwiceItsSize(
+            private val theme: String,
+            private val dark: Boolean,
+        ) {
+            @get:Rule
+            val compose = createComposeRule()
+
+            @Before
+            fun enlargeIt() {
+                compose.setContent { ScanMyLibTheme(dark = dark) { ReviewContentOf(FOUR_PAGES) } }
+                enlargeTheSecondPage(compose)
+                compose.onRoot().captureRoboImage("build/outputs/roborazzi/review-page-large-text-$theme.png")
+            }
+
+            @Test
+            fun `should show the remove button whole`() {
+                assertTrue(isShownWhole(compose, REMOVE))
+            }
+
+            companion object {
+                @JvmStatic
+                @ParameterizedRobolectricTestRunner.Parameters(name = "in the {0} theme")
+                fun themes(): List<Array<Any>> = THEMES
+            }
+        }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenTheEnlargedPageIsSwiped {
+            @get:Rule
+            val compose = createComposeRule()
+
+            @Before
+            fun swipeIt() {
+                compose.setContent { ScanMyLibTheme { ReviewContentOf(FOUR_PAGES) } }
+                enlargeTheSecondPage(compose)
+                swipeToTheNextPage(compose)
+            }
+
+            @Test
+            fun `should show the next page`() {
+                compose.onNodeWithText(PAGE_3_OF_4).assertIsDisplayed()
+            }
+        }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenRemoveIsTappedInThePager {
+            @get:Rule
+            val compose = createComposeRule()
+
+            private lateinit var removedPages: MutableList<StagedPage>
+
+            @Before
+            fun removeTheSecondPage() {
+                removedPages = mutableListOf()
+                compose.setContent {
+                    ScanMyLibTheme { ReviewContentOf(FOUR_PAGES, onRemovePage = { removedPages += it }) }
+                }
+                enlargeTheSecondPage(compose)
+                compose.onNodeWithText(REMOVE).performClick()
+            }
+
+            @Test
+            fun `should remove the page shown`() {
+                assertEquals(listOf(FOUR_PAGES.stagedPages[1]), removedPages)
+            }
+        }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenThePageShownInThePagerLeavesTheRun {
+            @get:Rule
+            val compose = createComposeRule()
+
+            @Before
+            fun removeTheSecondPage() {
+                compose.setContent {
+                    var scan by remember { mutableStateOf(FOUR_PAGES) }
+                    ScanMyLibTheme {
+                        ReviewContentOf(
+                            scan,
+                            onRemovePage = { page ->
+                                scan = scan.copy(stagedPages = scan.stagedPages - page, removedPage = page)
+                            },
+                        )
+                    }
+                }
+                enlargeTheSecondPage(compose)
+                compose.onNodeWithText(REMOVE).performClick()
+            }
+
+            @Test
+            fun `should go on with the page that takes its place`() {
+                compose.onNode(hasText(PAGE_2_OF_3) and isHeading()).assertIsDisplayed()
+            }
+        }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenThePagerIsClosedOnTheThirdPage {
+            @get:Rule
+            val compose = createComposeRule()
+
+            @Before
+            fun closeIt() {
+                compose.setContent { ScanMyLibTheme { ReviewContentOf(FOUR_PAGES) } }
+                enlargeTheSecondPage(compose)
+                swipeToTheNextPage(compose)
+                compose.onNodeWithContentDescription(BACK).performClick()
+            }
+
+            @Test
+            fun `should give the focus to the tile of the page last shown`() {
+                compose.onNodeWithContentDescription(THIRD_PAGE_AUTO).assertIsFocused()
+            }
+        }
+
+        @RunWith(ParameterizedRobolectricTestRunner::class)
+        @GraphicsMode(GraphicsMode.Mode.NATIVE)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
         class WhenDeleteTheseFourPagesIsTapped(private val theme: String, private val dark: Boolean) {
             @get:Rule
             val compose = createComposeRule()
@@ -916,6 +1078,12 @@ private const val SCAN = "Scan"
 private const val IMPORT = "Import"
 private const val SCAN_WITH = "Scan with…"
 private const val SECOND_OF_THREE_AUTO = "Page 2 of 3, number auto"
+private const val THIRD_PAGE_AUTO = "Page 3 of 4, number auto"
+private const val PAGE_2_OF_4 = "Page 2 of 4"
+private const val PAGE_3_OF_4 = "Page 3 of 4"
+private const val PAGE_2_OF_3 = "Page 2 of 3"
+private const val ZOOM_IN = "Zoom in"
+private const val BACK = "Back"
 private const val UNDO = "Undo"
 private const val EARLIER_MESSAGE = "Settings not saved"
 private const val UNDO_STILL_OFFERED_MILLISECONDS = 9_500L
@@ -928,6 +1096,8 @@ private const val MESSAGE_SHOWN_THEN_REPLACED_BY_UNDO_MILLISECONDS = 3 * SNACKBA
 private val THEMES = listOf(arrayOf<Any>("light", false), arrayOf<Any>("dark", true))
 
 private val PAPER = Color(0xFFF3EEDF)
+private const val PAGE_WIDTH_PIXELS = 210f
+private const val PAGE_HEIGHT_PIXELS = 297f
 
 private val FOUR_PAGES = ScanUiState(
     defaultCamera = ScanSource.GOOGLE_SCANNER,
@@ -955,8 +1125,27 @@ private val SECOND_PAGE_REMOVED = FOUR_PAGES.copy(
 private val PHOTOS_SKIPPED =
     FOUR_PAGES.copy(outcome = PreparationOutcome.PhotosSkipped(unsupported = 2, tooLarge = 0, unreadable = 0))
 
-private fun hasRemoveAction(): SemanticsMatcher = SemanticsMatcher("has the action $REMOVE") { node ->
-    node.config.getOrNull(SemanticsActions.CustomActions).orEmpty().any { it.label == REMOVE }
+private fun hasRemoveAction(): SemanticsMatcher = hasCustomAction(REMOVE)
+
+private fun hasCustomAction(label: String): SemanticsMatcher = SemanticsMatcher("has the action $label") { node ->
+    node.config.getOrNull(SemanticsActions.CustomActions).orEmpty().any { it.label == label }
+}
+
+private fun enlargeTheSecondPage(screen: SemanticsNodeInteractionsProvider) {
+    screen.onNodeWithContentDescription(SECOND_PAGE_AUTO).performClick()
+}
+
+private fun swipeToTheNextPage(screen: SemanticsNodeInteractionsProvider) {
+    screen.onRoot().performTouchInput { swipeLeft() }
+}
+
+/** A blank page in portrait, of the size of a page image, drawn without a bitmap, which needs native graphics. */
+private class BlankPage : Painter() {
+    override val intrinsicSize = Size(PAGE_WIDTH_PIXELS, PAGE_HEIGHT_PIXELS)
+
+    override fun DrawScope.onDraw() {
+        drawRect(PAPER)
+    }
 }
 
 private fun readClickLabel(screen: SemanticsNodeInteractionsProvider, description: String): String? =
@@ -1063,7 +1252,6 @@ private fun ReviewContentOf(
         onCancelPreparation = {},
         onDismissOutcome = onDismissOutcome,
         onDismissAddingInterrupted = {},
-        onEnlargePage = {},
         onRemovePage = onRemovePage,
         onRestorePage = onRestorePage,
         onDeleteRemovedPage = onDeleteRemovedPage,
@@ -1073,5 +1261,6 @@ private fun ReviewContentOf(
         onSend = onSend,
         onDelete = onDelete,
         pageImage = { _, modifier -> Box(modifier.background(PAPER)) },
+        pagePainter = { _, _, _ -> remember { BlankPage() } },
     )
 }

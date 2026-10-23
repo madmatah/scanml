@@ -22,6 +22,7 @@ import androidx.compose.foundation.lazy.grid.LazyGridScope
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -57,6 +58,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalResources
@@ -64,6 +66,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
@@ -116,8 +119,6 @@ fun ReviewScreen(
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.onSourceClosed() }
     BackHandler(onBack = viewModel::closeReview)
     var choosingCamera by rememberSaveable { mutableStateOf(false) }
-    // The page shown large, by file.
-    var shownPage by rememberSaveable { mutableStateOf<String?>(null) }
 
     ReviewContent(
         scan = scan,
@@ -128,7 +129,6 @@ fun ReviewScreen(
         onCancelPreparation = viewModel::cancelPreparation,
         onDismissOutcome = viewModel::dismissOutcome,
         onDismissAddingInterrupted = viewModel::dismissAddingInterrupted,
-        onEnlargePage = { page -> if (!scan.sending) shownPage = page.file.path },
         onRemovePage = viewModel::removePage,
         onRestorePage = viewModel::restorePage,
         onDeleteRemovedPage = viewModel::deleteRemovedPage,
@@ -150,20 +150,6 @@ fun ReviewScreen(
             onDismiss = { choosingCamera = false },
         )
     }
-    val pageIndex = scan.stagedPages.indexOfFirst { it.file.path == shownPage }
-    if (pageIndex >= 0) {
-        val page = scan.stagedPages[pageIndex]
-        StagedPageDialog(
-            page = page,
-            position = pageIndex + 1,
-            count = scan.stagedPages.size,
-            onRemove = {
-                shownPage = null
-                viewModel.removePage(page)
-            },
-            onDismiss = { shownPage = null },
-        )
-    }
 }
 
 /** Apart from the view model, so that a test draws the review from invented state. */
@@ -177,7 +163,6 @@ internal fun ReviewContent(
     onCancelPreparation: () -> Unit,
     onDismissOutcome: () -> Unit,
     onDismissAddingInterrupted: () -> Unit,
-    onEnlargePage: (StagedPage) -> Unit,
     onRemovePage: (StagedPage) -> Unit,
     onRestorePage: (StagedPage) -> Unit,
     onDeleteRemovedPage: (StagedPage) -> Unit,
@@ -190,13 +175,51 @@ internal fun ReviewContent(
     pageImage: @Composable (page: StagedPage, modifier: Modifier) -> Unit = { page, imageModifier ->
         AsyncImage(page.file, contentDescription = null, contentScale = ContentScale.Fit, modifier = imageModifier)
     },
+    pagePainter: @Composable (page: StagedPage, viewport: IntSize, isZoomedIn: Boolean) -> Painter =
+        { page, viewport, isZoomedIn -> rememberPagePainter(page, viewport, isZoomedIn) },
 ) {
     val count = scan.stagedPages.size
     val numbering = scan.numbering
     var isConfirmingDelete by rememberSaveable { mutableStateOf(false) }
     RemovalUndo(scan.removedPage, snackbarHostState, onRestorePage, onDeleteRemovedPage)
-    // The tile that takes the focus once a page is removed, by file.
+    val gridState = rememberLazyGridState()
+    // The tile that takes the focus once a page is removed, or once the pager closes, by file.
     var pageToFocus by remember { mutableStateOf<String?>(null) }
+    var shownPage by rememberSaveable { mutableStateOf<String?>(null) }
+    val shownIndex = scan.stagedPages.indexOfFirst { it.file.path == shownPage }
+    LaunchedEffect(pageToFocus) {
+        val target = pageToFocus ?: return@LaunchedEffect
+        val index = scan.stagedPages.indexOfFirst { it.file.path == target }
+        if (index < 0) return@LaunchedEffect
+        // Once the grid is laid out: a tile out of sight is brought into it, where it can take the focus.
+        withFrameNanos {}
+        if (gridState.layoutInfo.visibleItemsInfo.none { it.key == target }) {
+            gridState.scrollToItem(findFirstTileIndex(scan) + index)
+        }
+    }
+    if (shownIndex >= 0) {
+        val closePager = {
+            pageToFocus = shownPage
+            shownPage = null
+        }
+        BackHandler(onBack = closePager)
+        StagedPagePager(
+            pages = scan.stagedPages,
+            firstShownPage = shownIndex,
+            canRemove = !scan.sending,
+            snackbarHostState = snackbarHostState,
+            onPageShown = { page -> shownPage = page.file.path },
+            onRemove = { page ->
+                val index = scan.stagedPages.indexOf(page)
+                shownPage = (scan.stagedPages.getOrNull(index + 1) ?: scan.stagedPages.getOrNull(index - 1))?.file?.path
+                onRemovePage(page)
+            },
+            onBack = closePager,
+            modifier = modifier,
+            pagePainter = pagePainter,
+        )
+        return
+    }
     Scaffold(
         modifier = modifier,
         topBar = {
@@ -219,6 +242,7 @@ internal fun ReviewContent(
     ) { padding ->
         LazyVerticalGrid(
             columns = GridCells.Adaptive(minSize = TILE_MIN_WIDTH),
+            state = gridState,
             contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -257,7 +281,7 @@ internal fun ReviewContent(
                     position = index + 1,
                     count = count,
                     numberHint = numbering?.hintFor(index),
-                    onEnlarge = { onEnlargePage(page) },
+                    onEnlarge = { if (!scan.sending) shownPage = page.file.path },
                     onRemove = {
                         val nextPage = scan.stagedPages.getOrNull(index + 1) ?: scan.stagedPages.getOrNull(index - 1)
                         pageToFocus = nextPage?.file?.path
@@ -487,6 +511,9 @@ private fun describeNumbering(numbering: PageNumbering?, count: Int): String {
         else -> stringResource(R.string.scan_summary_range, first, last)
     }
 }
+
+/** Where the first tile is in [ReviewContent]'s grid: after the numbering, the progress of a copy, and the banners. */
+private fun findFirstTileIndex(scan: ScanUiState): Int = if (scan.preparation == null) 2 else 3
 
 private fun LazyGridScope.fullWidthItem(key: String, content: @Composable () -> Unit) {
     item(key = key, span = { GridItemSpan(maxLineSpan) }) { content() }

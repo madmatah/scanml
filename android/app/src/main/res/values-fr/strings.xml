@@ -158,7 +158,6 @@
     <string name="scan_review_discard">Supprimer ces pages</string>
     <string name="scan_review_add">Ajouter des pages</string>
     <string name="scan_review_page">Page %1$d sur %2$d</string>
-    <string name="scan_review_remove_page">Retirer cette page</string>
     <string name="scan_discard_message">Rien n’a encore été envoyé au PC : la suppression est définitive.</string>
     <string name="scan_summary_invalid">Corrigez le numéro de la première page.</string>
     <string name="scan_summary_none">Le PC garde le numéro imprimé s’il le lit.</string>
@@ -176,6 +175,8 @@
     <string name="review_page_removed">Page retirée</string>
     <string name="undo">Annuler</string>
     <string name="message_page_not_restored">Impossible de remettre la page : scannez-la de nouveau.</string>
+    <string name="zoom_in">Zoom avant</string>
+    <string name="zoom_out">Zoom arrière</string>
     <string name="review_pages_kept">Pages gardées sur le téléphone</string>
     <string name="banner_dismiss">OK</string>
     <string name="document_review">Vérifier</string>

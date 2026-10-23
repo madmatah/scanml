@@ -4,11 +4,8 @@ package fr.scanmylib.ui.document
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.selection.toggleable
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -18,7 +15,6 @@ import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -29,16 +25,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import coil3.compose.AsyncImage
 import fr.scanmylib.R
-import fr.scanmylib.library.StagedPage
 import fr.scanmylib.model.ScanSource
 import fr.scanmylib.ui.components.descriptionRes
 import fr.scanmylib.ui.components.iconRes
@@ -113,37 +106,4 @@ fun CameraSheet(
             )
         }
     }
-}
-
-/** A page of the run, large, which can be taken out of it. */
-@Composable
-internal fun StagedPageDialog(
-    page: StagedPage,
-    position: Int,
-    count: Int,
-    onRemove: () -> Unit,
-    onDismiss: () -> Unit,
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.scan_review_page, position, count)) },
-        text = {
-            AsyncImage(
-                model = page.file,
-                contentDescription = null,
-                contentScale = ContentScale.Fit,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 480.dp),
-            )
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.close)) }
-        },
-        dismissButton = {
-            TextButton(onClick = onRemove) {
-                Text(stringResource(R.string.scan_review_remove_page), color = MaterialTheme.colorScheme.error)
-            }
-        },
-    )
 }

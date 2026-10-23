@@ -156,7 +156,6 @@
     <string name="scan_review_discard">Delete these pages</string>
     <string name="scan_review_add">Add pages</string>
     <string name="scan_review_page">Page %1$d of %2$d</string>
-    <string name="scan_review_remove_page">Remove this page</string>
     <string name="scan_discard_message">Nothing has been sent to the PC yet: deleting is permanent.</string>
     <string name="scan_summary_invalid">Fix the first page number.</string>
     <string name="scan_summary_none">The PC keeps the printed number if it reads one.</string>
@@ -174,6 +173,8 @@
     <string name="review_page_removed">Page removed</string>
     <string name="undo">Undo</string>
     <string name="message_page_not_restored">Couldn’t put the page back: scan it again.</string>
+    <string name="zoom_in">Zoom in</string>
+    <string name="zoom_out">Zoom out</string>
     <string name="review_pages_kept">Pages kept on the phone</string>
     <string name="banner_dismiss">OK</string>
     <string name="document_review">Review</string>

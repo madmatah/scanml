@@ -120,10 +120,12 @@ Tailscale…) rather than exposing the port to the Internet.
   create one). They join its pages to send, as with **Import**, and the review of the pages to send opens; Back then
   returns to the document, then to the gallery.
 - **Before sending**, the pages wait on the phone, on a screen of their own, "N pages to send", which opens as soon as
-  a camera or the photo picker returns pages: tap a page to see it full size or remove it (with TalkBack, its
-  **Remove** action), use the last tile to add more (**Scan**, **Import**, or **Scan with…** for the other camera), and
-  **Send N pages** to queue them for upload. **Undo** puts a removed page back in its place for 10 seconds, until
-  another page is removed, pages are added, or the review ends.
+  a camera or the photo picker returns pages: tap a page to see it full screen, use the last tile to add more
+  (**Scan**, **Import**, or **Scan with…** for the other camera), and **Send N pages** to queue them for upload. Full
+  screen, swipe to the next or the previous page, pinch to zoom up to 2.5×, or double-tap to zoom to 2× and back
+  (TalkBack: **Zoom in** and **Zoom out**), and **Remove** the page shown; TalkBack also removes a page from its tile.
+  **Undo** puts a removed page back in its place for 10 seconds, until another page is removed, a camera or the photo
+  picker opens, or the review ends.
   While pages are being prepared, their progress shows there, and an import can be canceled; leaving meanwhile loses
   none of them. Pages scanned during an import join the run as soon as they are copied, without waiting for its photos.
   **Close** (or Back) keeps the pages on the phone and returns to the document, whose banner then says "N pages to

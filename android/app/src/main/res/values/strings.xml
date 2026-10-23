@@ -171,6 +171,9 @@
     <string name="review_page_description_auto">Page %1$d of %2$d, number auto</string>
     <string name="review_enlarge">Enlarge</string>
     <string name="review_remove">Remove</string>
+    <string name="review_page_removed">Page removed</string>
+    <string name="undo">Undo</string>
+    <string name="message_page_not_restored">Couldn’t put the page back: scan it again.</string>
     <string name="review_pages_kept">Pages kept on the phone</string>
     <string name="banner_dismiss">OK</string>
     <string name="document_review">Review</string>

@@ -173,6 +173,9 @@
     <string name="review_page_description_auto">Page %1$d sur %2$d, numéro auto</string>
     <string name="review_enlarge">Agrandir</string>
     <string name="review_remove">Retirer</string>
+    <string name="review_page_removed">Page retirée</string>
+    <string name="undo">Annuler</string>
+    <string name="message_page_not_restored">Impossible de remettre la page : scannez-la de nouveau.</string>
     <string name="review_pages_kept">Pages gardées sur le téléphone</string>
     <string name="banner_dismiss">OK</string>
     <string name="document_review">Vérifier</string>

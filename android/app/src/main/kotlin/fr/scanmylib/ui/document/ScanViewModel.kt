@@ -27,6 +27,7 @@ import fr.scanmylib.ui.container
 import java.io.IOException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -67,6 +68,8 @@ data class ScanUiState(
     val isRunRead: Boolean = false,
     val wasAddingInterrupted: Boolean = false,
     val reviewEnd: ReviewEnd? = null,
+    val removedPage: StagedPage? = null,
+    val isSourceOpen: Boolean = false,
 ) {
     /** Null while the first page field is invalid. */
     val numbering: PageNumbering? get() = PageNumbering.fromInput(firstPage, consecutive)
@@ -78,7 +81,8 @@ data class ScanUiState(
     val canSend: Boolean get() = numbering != null && stagedPages.isNotEmpty() && !preparing && !sending
 
     val hasNothingToReview: Boolean
-        get() = isRunRead && stagedPages.isEmpty() && !preparing && outcome == null && !sending && reviewEnd == null
+        get() = isRunRead && stagedPages.isEmpty() && !preparing && outcome == null && !sending &&
+            reviewEnd == null && removedPage == null && !isSourceOpen
 
     /**
      * The camera "Scan" opens: the default one; the app's camera while Google's scanner is known
@@ -116,6 +120,8 @@ sealed interface ScanMessage {
     data object ScannerFailed : ScanMessage
 
     data object PhotoPickerUnavailable : ScanMessage
+
+    data object PageNotRestored : ScanMessage
 }
 
 class ScanViewModel(
@@ -130,11 +136,15 @@ class ScanViewModel(
     /** Free bytes on the storage that holds the runs; a binder call, run off the main thread. */
     private val freeStorage: () -> Long,
     private val hasCamera: Boolean,
+    /** Where a removal still pending when the view model ends is made final. */
+    private val applicationScope: CoroutineScope,
     private val io: CoroutineDispatcher = Dispatchers.IO,
 ) : ViewModel() {
 
     private val sending = MutableStateFlow(false)
     private val reviewEnd = MutableStateFlow<ReviewEnd?>(null)
+    private val removedPage = MutableStateFlow<StagedPage?>(null)
+    private val isSourceOpen = MutableStateFlow(false)
     private val messageChannel = Channel<ScanMessage>(Channel.BUFFERED)
 
     val messages: Flow<ScanMessage> = messageChannel.receiveAsFlow()
@@ -174,7 +184,9 @@ class ScanViewModel(
             isRunRead = true,
             reviewEnd = reviewEnd,
         )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ScanUiState())
+    }.combine(removedPage) { scan, removedPage -> scan.copy(removedPage = removedPage) }
+        .combine(isSourceOpen) { scan, isOpen -> scan.copy(isSourceOpen = isOpen) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ScanUiState())
 
     init {
         viewModelScope.launch {
@@ -277,9 +289,12 @@ class ScanViewModel(
     }
 
     fun closeReview() {
-        if (sending.value || reviewEnd.value != null) return
+        // While a source is open, the review must stay to receive what it returns: Google's
+        // scanner starts late, once Play services hand over its intent.
+        if (sending.value || reviewEnd.value != null || isSourceOpen.value) return
         val scan = scanState.value
         reviewEnd.value = if (scan.stagedPages.isEmpty() && !scan.preparing) ReviewEnd.Emptied else ReviewEnd.PagesKept
+        deletePendingRemoval()
     }
 
     fun onReviewEndShown() {
@@ -332,8 +347,9 @@ class ScanViewModel(
     fun send() {
         val scan = scanState.value
         val numbering = scan.numbering ?: return
-        if (scan.stagedPages.isEmpty() || scan.preparing || sending.value) return
+        if (scan.stagedPages.isEmpty() || scan.preparing || sending.value || isSourceOpen.value) return
         sending.value = true
+        deletePendingRemoval()
         viewModelScope.launch {
             try {
                 val count = sendRun(numbering)
@@ -357,27 +373,79 @@ class ScanViewModel(
 
     fun discard() {
         val scan = scanState.value
-        if (scan.preparing || sending.value) return
+        if (scan.preparing || sending.value || isSourceOpen.value) return
         // Before the deletion: the emptied run then never reads as a review left empty.
         reviewEnd.value = ReviewEnd.PagesDeleted(scan.stagedPages.size)
         savedState[KEY_ADDING_INTERRUPTED] = false
         runPreparation.dismissOutcome(documentId)
+        // The run's deletion takes the removed page with it.
+        removedPage.value = null
         viewModelScope.launch { staging.discard(documentId) }
     }
 
-    /** Takes one page out of the run waiting for confirmation (blurred, twice the same...). */
     fun removePage(page: StagedPage) {
+        val earlier = removedPage.value
+        // A second tap on its Remove, while the page is still on screen: it is out of the run already.
+        if (page == earlier) return
+        // Before the page leaves the run: an emptied run then never reads as nothing to review.
+        removedPage.value = page
         viewModelScope.launch {
+            // The page leaves the run first: an undo, or a send, tapped meanwhile then comes after it.
             try {
-                staging.delete(documentId, page)
+                staging.remove(documentId, page)
             } catch (e: IOException) {
-                Log.w(TAG, "staged page not deleted", e)
+                Log.w(TAG, "staged page not removed", e)
+                removedPage.compareAndSet(page, null)
+            } finally {
+                if (earlier != null) staging.deleteRemovedQuietly(documentId, earlier)
             }
         }
     }
 
+    fun restorePage(page: StagedPage) {
+        if (removedPage.value != page) return
+        viewModelScope.launch {
+            try {
+                staging.restore(documentId, page)
+            } catch (e: IOException) {
+                Log.w(TAG, "removed page not restored", e)
+                messageChannel.send(ScanMessage.PageNotRestored)
+            }
+            // Once back in the run, so that the run never reads as empty meanwhile.
+            removedPage.compareAndSet(page, null)
+        }
+    }
+
+    fun deleteRemovedPage(page: StagedPage) {
+        if (removedPage.value != page) return
+        deletePendingRemoval()
+    }
+
+    /** A removal still waiting becomes final, as the new pages follow the run as it is. */
+    fun onAddingPages() {
+        isSourceOpen.value = true
+        deletePendingRemoval()
+    }
+
+    fun onSourceClosed() {
+        isSourceOpen.value = false
+    }
+
+    override fun onCleared() {
+        val pending = removedPage.value ?: return
+        val staging = staging
+        val documentId = documentId
+        // The view model's own scope is canceled by now.
+        applicationScope.launch { staging.deleteRemovedQuietly(documentId, pending) }
+    }
+
+    private fun deletePendingRemoval() {
+        val pending = removedPage.value ?: return
+        removedPage.value = null
+        viewModelScope.launch { staging.deleteRemovedQuietly(documentId, pending) }
+    }
+
     companion object {
-        private const val TAG = "Scan"
         private const val KEY_SHARED_IMPORTED = "scan_shared_imported"
         private const val KEY_ACTION_ON_OPEN_DONE = "scan_action_on_open_done"
         private const val KEY_FIRST_PAGE = "scan_first_page"
@@ -404,15 +472,27 @@ class ScanViewModel(
                     sendRun = { numbering -> scanImporter.send(documentId, numbering) },
                     freeStorage = container::freeStorage,
                     hasCamera = container.hasCamera,
+                    applicationScope = container.applicationScope,
                 )
             }
         }
     }
 }
 
+private const val TAG = "Scan"
+
+private suspend fun StagingArea.deleteRemovedQuietly(documentId: String, page: StagedPage) {
+    try {
+        deleteRemoved(documentId, page)
+    } catch (e: IOException) {
+        // A new process deletes it.
+        Log.w(TAG, "removed page not deleted", e)
+    }
+}
+
 /**
- * Whether the message says that pages could be lost, or that the user must act:
- * it then shows longer (about ten seconds rather than four), with a close button.
+ * Whether the message says that pages could be lost, or that the user must act: it then shows
+ * longer (about ten seconds rather than four), with a close button.
  */
 internal val ScanMessage.important: Boolean get() = when (this) {
     ScanMessage.StorageFull,
@@ -420,6 +500,7 @@ internal val ScanMessage.important: Boolean get() = when (this) {
     ScanMessage.ScannerUnavailable,
     ScanMessage.ScannerFailed,
     ScanMessage.PhotoPickerUnavailable,
+    ScanMessage.PageNotRestored,
     -> true
 
     ScanMessage.SettingNotSaved -> false

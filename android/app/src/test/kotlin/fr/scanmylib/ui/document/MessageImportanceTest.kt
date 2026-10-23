@@ -33,6 +33,7 @@ class MessageImportanceTest {
                 fun messages(): List<Array<Any>> = listOf(
                     arrayOf("storage full", ScanMessage.StorageFull),
                     arrayOf("send failed", ScanMessage.SendFailed),
+                    arrayOf("page not restored", ScanMessage.PageNotRestored),
                 )
             }
         }

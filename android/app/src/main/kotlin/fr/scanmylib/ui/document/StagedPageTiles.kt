@@ -22,9 +22,14 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -35,6 +40,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.focused
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.text.style.TextAlign
@@ -68,12 +74,16 @@ fun StagedPageTile(
     }
     val enlargeLabel = stringResource(R.string.review_enlarge)
     val removeLabel = stringResource(R.string.review_remove)
+    var isFocused by remember { mutableStateOf(false) }
     Column(
         modifier = modifier
+            .onFocusChanged { isFocused = it.isFocused }
             // In place of the words drawn over the image and under it.
             .clearAndSetSemantics {
                 contentDescription = description
                 role = Role.Button
+                // Which the clearing hides, from the click below.
+                focused = isFocused
                 onClick(label = enlargeLabel) {
                     onEnlarge()
                     true

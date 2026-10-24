@@ -16,6 +16,7 @@ import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
@@ -42,6 +43,10 @@ class LibraryRepository(
     fun observeLibrary(): Flow<List<LibraryRow>> = documents.observeLibrary()
 
     fun observeDocument(id: String): Flow<DocumentEntity?> = documents.observe(id)
+
+    fun observeScannedPages(documentId: String): Flow<List<IntRange>> = documents.observe(documentId)
+        .map { document -> document?.server?.coverage?.let(::parsePageRanges).orEmpty() }
+        .distinctUntilChanged()
 
     fun observePages(documentId: String): Flow<DocumentPages> = combine(
         pendingPages.observeForDocument(documentId),

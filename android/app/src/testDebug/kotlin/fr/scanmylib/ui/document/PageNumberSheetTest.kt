@@ -158,7 +158,7 @@ class PageNumberSheetTest {
 
             @Test
             fun `should give the page 32, with the next pages following on`() {
-                assertEquals(listOf(Validation(NUMBER_32, nextPagesFollowOn = true)), validations)
+                assertEquals(listOf(Validation(FIRST_PAGE_NUMBER, nextPagesFollowOn = true)), validations)
             }
         }
 
@@ -206,7 +206,7 @@ class PageNumberSheetTest {
 
             @Test
             fun `should give the page 32 alone`() {
-                assertEquals(listOf(Validation(NUMBER_32, nextPagesFollowOn = false)), validations)
+                assertEquals(listOf(Validation(FIRST_PAGE_NUMBER, nextPagesFollowOn = false)), validations)
             }
         }
 
@@ -368,6 +368,87 @@ class PageNumberSheetTest {
             }
         }
 
+        @RunWith(ParameterizedRobolectricTestRunner::class)
+        @GraphicsMode(GraphicsMode.Mode.NATIVE)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenThePcHasPages12To31And88To90(private val theme: String, private val dark: Boolean) {
+            @get:Rule
+            val compose = createComposeRule()
+
+            @OptIn(ExperimentalRoborazziApi::class)
+            @Before
+            fun openIt() {
+                compose.setContent {
+                    ScanMyLibTheme(dark = dark) {
+                        SheetOf(FOUR_UNNUMBERED_PAGES, FIRST_PAGE, scannedPages = PAGES_12_TO_31_AND_88_TO_90)
+                    }
+                }
+                compose.waitForIdle()
+                captureScreenRoboImage("build/outputs/roborazzi/number-sheet-suggestion-$theme.png")
+            }
+
+            @Test
+            fun `should suggest the first page missing between the PC's ranges`() {
+                compose.onNodeWithText(SUGGESTION_32).assertIsDisplayed()
+            }
+
+            companion object {
+                @JvmStatic
+                @ParameterizedRobolectricTestRunner.Parameters(name = "in the {0} theme")
+                fun themes(): List<Array<Any>> = THEMES
+            }
+        }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenThePcHasPages12To31And88To90AndTheSuggestionIsTapped {
+            @get:Rule
+            val compose = createComposeRule()
+
+            private lateinit var fieldText: String
+
+            @Before
+            fun tapTheSuggestion() {
+                compose.setContent {
+                    ScanMyLibTheme {
+                        SheetOf(FOUR_UNNUMBERED_PAGES, FIRST_PAGE, scannedPages = PAGES_12_TO_31_AND_88_TO_90)
+                    }
+                }
+                compose.onNodeWithText(SUGGESTION_32).performClick()
+                fieldText = readTheField(compose)
+            }
+
+            @Test
+            fun `should put it in the field`() {
+                assertEquals(TYPED_32, fieldText)
+            }
+        }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenTheFieldHasANumber {
+            @get:Rule
+            val compose = createComposeRule()
+
+            @Before
+            fun openIt() {
+                compose.setContent {
+                    ScanMyLibTheme {
+                        SheetOf(FOUR_PAGES_FROM_32, SECOND_PAGE, scannedPages = PAGES_12_TO_31_AND_88_TO_90)
+                    }
+                }
+            }
+
+            @Test
+            fun `should suggest nothing, so that the number shown stays the one the page gets`() {
+                assertEquals(0, compose.onAllNodesWithText(SUGGESTION, substring = true).fetchSemanticsNodes().size)
+            }
+
+            companion object {
+                private const val SUGGESTION = "Suggestion"
+            }
+        }
+
         @RunWith(RobolectricTestRunner::class)
         @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
         class WhenTheKeyboardsDoneKeyIsPressed {
@@ -389,7 +470,7 @@ class PageNumberSheetTest {
 
             @Test
             fun `should validate the number, as Done does`() {
-                assertEquals(listOf(Validation(NUMBER_32, nextPagesFollowOn = true)), validations)
+                assertEquals(listOf(Validation(FIRST_PAGE_NUMBER, nextPagesFollowOn = true)), validations)
             }
         }
     }
@@ -397,17 +478,20 @@ class PageNumberSheetTest {
 
 private const val FIRST_PAGE = 0
 private const val SECOND_PAGE = 1
-private const val NUMBER_32 = 32
-private const val TYPED_32 = "32"
+private const val FIRST_PAGE_NUMBER = 32
+private const val TYPED_32 = "$FIRST_PAGE_NUMBER"
 private const val NUMBER_OF_PAGE_2 = "Number of page 2"
 private const val NEXT_PAGES_IN_SEQUENCE = "Number the following pages in sequence"
 private const val CLEAR = "Clear"
 private const val DONE = "Done"
+private const val SUGGESTION_32 = "Suggestion: 32"
 
 private val THEMES = listOf(arrayOf<Any>("light", false), arrayOf<Any>("dark", true))
 
+private val PAGES_12_TO_31_AND_88_TO_90 = listOf(12..31, 88..90)
+
 private val FOUR_UNNUMBERED_PAGES = List(4) { PageNumbering.NotGiven }
-private val FOUR_PAGES_FROM_32 = listOf(PageNumbering.Given(NUMBER_32, nextPagesFollowOn = true)) +
+private val FOUR_PAGES_FROM_32 = listOf(PageNumbering.Given(FIRST_PAGE_NUMBER, nextPagesFollowOn = true)) +
     List(3) { PageNumbering.NotGiven }
 
 private data class Validation(val number: Int?, val nextPagesFollowOn: Boolean)
@@ -420,8 +504,15 @@ private fun SheetOf(
     numberings: List<PageNumbering>,
     index: Int,
     onDone: (number: Int?, nextPagesFollowOn: Boolean) -> Unit = { _, _ -> },
+    scannedPages: List<IntRange> = emptyList(),
 ) {
-    PageNumberSheet(numberings = numberings, index = index, onDone = onDone, onDismiss = {})
+    PageNumberSheet(
+        numberings = numberings,
+        index = index,
+        scannedPages = scannedPages,
+        onDone = onDone,
+        onDismiss = {},
+    )
 }
 
 private fun type32(screen: SemanticsNodeInteractionsProvider) {

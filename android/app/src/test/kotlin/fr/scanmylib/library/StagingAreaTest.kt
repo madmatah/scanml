@@ -133,7 +133,7 @@ class StagingAreaTest {
             fun addAnImage() = runTest {
                 val staging = StagingArea(resolveStagingRoot(folder))
                 val pages = shootThreePages(staging)
-                staging.numberPage(DOCUMENT, pages.last(), TWELVE, nextPagesFollowOn = false)
+                staging.numberPage(DOCUMENT, pages.last(), GIVEN_NUMBER, nextPagesFollowOn = false)
                 staging.remove(DOCUMENT, pages.last())
                 position = staging.shoot("d", SHOT_TIME.plusSeconds(6)).seq
             }
@@ -709,7 +709,7 @@ class StagingAreaTest {
 
             @Test
             fun `should put it back with its number`() {
-                assertEquals(listOf(PageNumbering.NotGiven, TWELVE_ALONE, PageNumbering.NotGiven), numberings)
+                assertEquals(listOf(PageNumbering.NotGiven, GIVEN_ALONE, PageNumbering.NotGiven), numberings)
             }
         }
 
@@ -730,7 +730,7 @@ class StagingAreaTest {
 
             @Test
             fun `should put it back with its number`() {
-                assertEquals(listOf(PageNumbering.NotGiven, TWELVE_ALONE, PageNumbering.NotGiven), numberings)
+                assertEquals(listOf(PageNumbering.NotGiven, GIVEN_ALONE, PageNumbering.NotGiven), numberings)
             }
         }
 
@@ -1148,7 +1148,7 @@ class StagingAreaTest {
             fun numberIt() = runTest {
                 val staging = StagingArea(resolveStagingRoot(folder))
                 stagedPages = shootThreePages(staging)
-                staging.numberPage(DOCUMENT, stagedPages[0], TWELVE, nextPagesFollowOn = true)
+                staging.numberPage(DOCUMENT, stagedPages[0], GIVEN_NUMBER, nextPagesFollowOn = true)
                 filesOfTheRun = listPageFiles(folder)
                 pagesInTheRun = staging.pages(DOCUMENT)
                 pagesOnDisk = restartTheProcess(resolveStagingRoot(folder)).pages(DOCUMENT)
@@ -1157,7 +1157,7 @@ class StagingAreaTest {
             @Test
             fun `should rename its file only, since the numbers of the next pages follow from it`() {
                 val expected = listOf(
-                    StagingArea.fileName(1, stagedPages[0].capturedAt, TWELVE_WITH_THE_NEXT_PAGES),
+                    StagingArea.fileName(1, stagedPages[0].capturedAt, GIVEN_WITH_THE_NEXT_PAGES),
                     stagedPages[1].file.name,
                     stagedPages[2].file.name,
                 )
@@ -1180,7 +1180,7 @@ class StagingAreaTest {
             fun readTheRunInTheNextProcess() = runTest {
                 val staging = StagingArea(resolveStagingRoot(folder))
                 val pages = shootThreePages(staging)
-                staging.numberPage(DOCUMENT, pages[0], TWELVE, nextPagesFollowOn = true)
+                staging.numberPage(DOCUMENT, pages[0], GIVEN_NUMBER, nextPagesFollowOn = true)
                 staging.numberPage(DOCUMENT, pages[2], null, nextPagesFollowOn = true)
                 numberings = restartTheProcess(resolveStagingRoot(folder)).pages(DOCUMENT).map { it.numbering }
             }
@@ -1188,7 +1188,7 @@ class StagingAreaTest {
             @Test
             fun `should keep each page's number, since the files alone describe the run`() {
                 assertEquals(
-                    listOf(TWELVE_WITH_THE_NEXT_PAGES, PageNumbering.NotGiven, PageNumbering.Cleared),
+                    listOf(GIVEN_WITH_THE_NEXT_PAGES, PageNumbering.NotGiven, PageNumbering.Cleared),
                     numberings,
                 )
             }
@@ -1206,7 +1206,7 @@ class StagingAreaTest {
                 val staging = StagingArea(resolveStagingRoot(folder))
                 numberTheSecondOfThreePages(staging)
                 filesBefore = listPageFiles(folder)
-                staging.numberPage(DOCUMENT, staging.pages(DOCUMENT)[1], TWELVE, nextPagesFollowOn = false)
+                staging.numberPage(DOCUMENT, staging.pages(DOCUMENT)[1], GIVEN_NUMBER, nextPagesFollowOn = false)
                 filesAfter = listPageFiles(folder)
             }
 
@@ -1227,9 +1227,9 @@ class StagingAreaTest {
             fun numberItWithItsRunningNumber() = runTest {
                 val staging = StagingArea(resolveStagingRoot(folder))
                 val pages = shootThreePages(staging)
-                staging.numberPage(DOCUMENT, pages[0], TWELVE, nextPagesFollowOn = true)
+                staging.numberPage(DOCUMENT, pages[0], GIVEN_NUMBER, nextPagesFollowOn = true)
                 filesBefore = listPageFiles(folder)
-                staging.numberPage(DOCUMENT, pages[1], THIRTEEN, nextPagesFollowOn = true)
+                staging.numberPage(DOCUMENT, pages[1], NEXT_RUNNING_NUMBER, nextPagesFollowOn = true)
                 filesAfter = listPageFiles(folder)
             }
 
@@ -1250,7 +1250,7 @@ class StagingAreaTest {
             fun numberIt() = runTest {
                 val staging = StagingArea(resolveStagingRoot(folder))
                 removedPage = removeTheSecondOfThreePages(staging)
-                staging.numberPage(DOCUMENT, removedPage, TWELVE, nextPagesFollowOn = true)
+                staging.numberPage(DOCUMENT, removedPage, GIVEN_NUMBER, nextPagesFollowOn = true)
                 removedFiles = listRemovedFiles(folder)
             }
 
@@ -1270,9 +1270,9 @@ class StagingAreaTest {
             fun takeTheName() = runTest {
                 val staging = StagingArea(resolveStagingRoot(folder))
                 val page = shootThreePages(staging)[1]
-                File(page.file.parentFile, StagingArea.fileName(page.seq, page.capturedAt, TWELVE_ALONE))
+                File(page.file.parentFile, StagingArea.fileName(page.seq, page.capturedAt, GIVEN_ALONE))
                     .writeText("another page")
-                numberThePage = { staging.numberPage(DOCUMENT, page, TWELVE, nextPagesFollowOn = false) }
+                numberThePage = { staging.numberPage(DOCUMENT, page, GIVEN_NUMBER, nextPagesFollowOn = false) }
             }
 
             @Test
@@ -1297,7 +1297,7 @@ class StagingAreaTest {
                 val pages = shootThreePages(staging)
                 disk.cancelAfterItsWork(
                     launch(start = CoroutineStart.LAZY) {
-                        staging.numberPage(DOCUMENT, pages[1], TWELVE, nextPagesFollowOn = true)
+                        staging.numberPage(DOCUMENT, pages[1], GIVEN_NUMBER, nextPagesFollowOn = true)
                     },
                 )
                 pagesInTheRun = staging.pages(DOCUMENT).map { it.file.name }
@@ -1513,8 +1513,8 @@ class StagingAreaTest {
                 @Parameterized.Parameters(name = "{0}")
                 fun numberings(): List<Array<Any>> = listOf(
                     arrayOf("no number given, as the names of earlier versions", PageNumbering.NotGiven, ""),
-                    arrayOf("a number given alone", TWELVE_ALONE, "_h12"),
-                    arrayOf("a number given with the next pages", TWELVE_WITH_THE_NEXT_PAGES, "_h12c"),
+                    arrayOf("a number given alone", GIVEN_ALONE, "_h12"),
+                    arrayOf("a number given with the next pages", GIVEN_WITH_THE_NEXT_PAGES, "_h12c"),
                     arrayOf("a page cleared", PageNumbering.Cleared, "_n"),
                 )
             }
@@ -1658,11 +1658,11 @@ private const val OTHER_DOCUMENT = "0a1b2c3d-4e5f-4a6b-8c7d-8e9f0a1b2c3d"
 private const val DATABASE_FULL = "database full"
 private const val INTERRUPTED = "interrupted"
 private const val NAME_TAKEN = "a page of that name is in the run"
-private const val TWELVE = 12
-private const val THIRTEEN = 13
+private const val GIVEN_NUMBER = 12
+private const val NEXT_RUNNING_NUMBER = GIVEN_NUMBER + 1
 private const val EARLIER_VERSION_NAME = "00012_1760293530123.jpg"
-private val TWELVE_ALONE = PageNumbering.Given(TWELVE, nextPagesFollowOn = false)
-private val TWELVE_WITH_THE_NEXT_PAGES = PageNumbering.Given(TWELVE, nextPagesFollowOn = true)
+private val GIVEN_ALONE = PageNumbering.Given(GIVEN_NUMBER, nextPagesFollowOn = false)
+private val GIVEN_WITH_THE_NEXT_PAGES = PageNumbering.Given(GIVEN_NUMBER, nextPagesFollowOn = true)
 private val SHOT_TIME: Instant = Instant.parse("2026-10-12T18:15:30.123Z")
 
 /** A page that may be missing, held in a non-null value so that a test fails when no hook ran. */
@@ -1731,7 +1731,7 @@ private suspend fun removeTheSecondOfThreePages(staging: StagingArea): StagedPag
 
 private suspend fun numberTheSecondOfThreePages(staging: StagingArea): StagedPage {
     val earlier = shootThreePages(staging)[1]
-    staging.numberPage(DOCUMENT, earlier, TWELVE, nextPagesFollowOn = false)
+    staging.numberPage(DOCUMENT, earlier, GIVEN_NUMBER, nextPagesFollowOn = false)
     return earlier
 }
 

@@ -51,15 +51,6 @@ fun Page.toEntity(position: Int): ServerPageEntity = ServerPageEntity(
     thumbUrl = thumbUrl,
 )
 
-/** Formats page ranges like the server's coverage label: `[[1, 12], [45, 45]]` -> "1–12, 45". */
-fun formatPageRanges(ranges: List<List<Int>>): String = ranges.mapNotNull { range ->
-    when {
-        range.size != 2 -> null
-        range[0] == range[1] -> "${range[0]}"
-        else -> "${range[0]}–${range[1]}"
-    }
-}.joinToString(", ")
-
 /** Epoch milliseconds of an ISO-8601 time with offset, or null if it cannot be parsed. */
 fun parseServerTime(text: String): Long? = try {
     OffsetDateTime.parse(text).toInstant().toEpochMilli()

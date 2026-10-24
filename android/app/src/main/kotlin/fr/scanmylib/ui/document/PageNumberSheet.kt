@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -43,10 +44,11 @@ import fr.scanmylib.R
 import fr.scanmylib.library.MAX_PAGE_NUMBER
 import fr.scanmylib.library.PageNumberInput
 import fr.scanmylib.library.PageNumbering
-import fr.scanmylib.library.chooseNumbering
 import fr.scanmylib.library.findNextPages
 import fr.scanmylib.library.hintPages
 import fr.scanmylib.library.readPageNumber
+import fr.scanmylib.library.renumberPage
+import fr.scanmylib.library.suggestPageNumber
 import fr.scanmylib.ui.components.SettingSwitchRow
 import kotlinx.coroutines.launch
 
@@ -55,10 +57,12 @@ import kotlinx.coroutines.launch
 fun PageNumberSheet(
     numberings: List<PageNumbering>,
     index: Int,
+    scannedPages: List<IntRange>,
     onDone: (number: Int?, nextPagesFollowOn: Boolean) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val currentNumber = hintPages(numberings)[index].number
+    val hints = hintPages(numberings)
+    val currentNumber = hints[index].number
     // With the cursor after the number, so that typing goes on from it.
     var field by rememberSaveable(stateSaver = TextFieldValue.Saver) {
         val text = currentNumber?.toString().orEmpty()
@@ -116,6 +120,14 @@ fun PageNumberSheet(
                     .fillMaxWidth()
                     .focusRequester(focusRequester),
             )
+            val suggestion = suggestPageNumber(index, hints, scannedPages)
+            if (field.text.isEmpty() && suggestion != null) {
+                val suggestionText = suggestion.toString()
+                AssistChip(
+                    onClick = { field = TextFieldValue(suggestionText, TextRange(suggestionText.length)) },
+                    label = { Text(stringResource(R.string.number_sheet_suggestion, suggestion)) },
+                )
+            }
             SettingSwitchRow(
                 label = stringResource(R.string.number_sheet_next_pages),
                 checked = nextPagesFollowOn,
@@ -148,10 +160,7 @@ private fun describeNextPages(
 ): String? {
     val nextPages = findNextPages(numberings, index)
     if (nextPages.isEmpty()) return null
-    val chosen = numberings.toMutableList().apply {
-        set(index, chooseNumbering(numberings, index, number, nextPagesFollowOn))
-    }
-    val hints = hintPages(chosen)
+    val hints = hintPages(renumberPage(numberings, index, number, nextPagesFollowOn))
     val numbered = nextPages.mapNotNull { page -> hints[page].number?.let { page to it } }
     val unnumbered = nextPages.filter { hints[it].number == null }
     val numberedLine = when (numbered.size) {

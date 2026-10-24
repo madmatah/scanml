@@ -167,6 +167,7 @@
     <string name="number_sheet_title">Number of page %1$d</string>
     <string name="number_sheet_field">Page number</string>
     <string name="number_sheet_help">Empty: the PC reads the printed number.</string>
+    <string name="number_sheet_suggestion">Suggestion: %1$d</string>
     <string name="number_sheet_next_pages">Number the following pages in sequence</string>
     <string name="number_sheet_next_pages_range">Pages %1$d to %2$d: %3$d to %4$d</string>
     <string name="number_sheet_next_pages_range_one">Page %1$d: %2$d</string>

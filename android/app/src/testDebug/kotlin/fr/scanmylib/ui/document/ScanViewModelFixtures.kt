@@ -15,7 +15,9 @@ import java.io.IOException
 import java.time.Instant
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -133,6 +135,7 @@ internal fun TestScope.makeViewModel(
     addScannedPages: suspend (List<Uri>, (Int) -> Unit) -> Unit = { _, _ -> },
     addPhotos: suspend (List<Uri>, (Int) -> Unit) -> PhotoImportResult = { _, _ -> PhotoImportResult(added = 0) },
     sendRun: suspend () -> Int = { 0 },
+    scannedPages: Flow<List<IntRange>> = flowOf(emptyList()),
 ): ScanViewModel {
     val dataStore = PreferenceDataStoreFactory.create(scope = backgroundScope) {
         File(folder.root, "settings.preferences_pb")
@@ -146,6 +149,7 @@ internal fun TestScope.makeViewModel(
         addScannedPages = addScannedPages,
         addPhotos = addPhotos,
         sendRun = sendRun,
+        scannedPages = scannedPages,
         freeStorage = { Long.MAX_VALUE },
         hasCamera = true,
         applicationScope = this,

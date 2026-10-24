@@ -22,39 +22,6 @@ import org.junit.runners.Parameterized
 @RunWith(Enclosed::class)
 class LibrarySyncTest {
     @RunWith(Enclosed::class)
-    class TheFormatPageRangesFunction {
-        @RunWith(Parameterized::class)
-        class WhenGivenPageRanges(
-            private val ranges: String,
-            private val pageRanges: List<List<Int>>,
-            private val expected: String,
-        ) {
-            private lateinit var label: String
-
-            @Before
-            fun formatTheRanges() {
-                label = formatPageRanges(pageRanges)
-            }
-
-            @Test
-            fun `should write them as the server labels them`() {
-                assertEquals(ranges, expected, label)
-            }
-
-            companion object {
-                @JvmStatic
-                @Parameterized.Parameters(name = "{0}")
-                fun ranges(): List<Array<Any>> = listOf(
-                    arrayOf("a range is written with an en dash", listOf(listOf(13, 44)), "13–44"),
-                    arrayOf("a single page is written alone", listOf(listOf(2, 2), listOf(5, 9)), "2, 5–9"),
-                    arrayOf("no range gives an empty label", emptyList<List<Int>>(), ""),
-                    arrayOf("what is not a pair of pages is left out", listOf(listOf(1, 2, 3), listOf(7, 7)), "7"),
-                )
-            }
-        }
-    }
-
-    @RunWith(Enclosed::class)
     class TheParseServerTimeFunction {
         @RunWith(Parameterized::class)
         class WhenTheTimeHasAnOffset(private val time: String, private val text: String, private val expected: Long) {

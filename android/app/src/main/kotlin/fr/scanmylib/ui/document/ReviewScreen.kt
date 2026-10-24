@@ -45,6 +45,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -320,15 +321,18 @@ internal fun ReviewContent(
             pageToFocus = numberingPage ?: return@closeSheet
             numberingPage = null
         }
-        PageNumberSheet(
-            numberings = scan.stagedPages.map { it.numbering },
-            index = numberingIndex,
-            onDone = { number, nextPagesFollowOn ->
-                if (numberingPage != null) onNumberPage(scan.stagedPages[numberingIndex], number, nextPagesFollowOn)
-                closeSheet()
-            },
-            onDismiss = closeSheet,
-        )
+        key(numberingPage) {
+            PageNumberSheet(
+                numberings = scan.stagedPages.map { it.numbering },
+                index = numberingIndex,
+                scannedPages = scan.scannedPages,
+                onDone = { number, nextPagesFollowOn ->
+                    if (numberingPage != null) onNumberPage(scan.stagedPages[numberingIndex], number, nextPagesFollowOn)
+                    closeSheet()
+                },
+                onDismiss = closeSheet,
+            )
+        }
     }
     if (isConfirmingDelete) {
         DiscardRunDialog(

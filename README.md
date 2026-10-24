@@ -135,8 +135,11 @@ Tailscale…) rather than exposing the port to the Internet.
   PC to read the printed number. Tap it (TalkBack: **Change the number**) to give that page a number, for a page whose
   number is not printed. With **Number the following pages in sequence** (on by default), the next pages follow on from
   it, down to the next page given a number, as the sheet's live line says ("Pages 2 to 4: 33 to 35"); a page that
-  follows on shows a link before its number. **Clear** gives the page "Auto" again. Leave front matter (cover, title
-  page, preface) on "Auto". The numbers stay with the pages while they wait on the phone, even when the app is closed.
+  follows on shows a link before its number. While the field is empty, the sheet suggests a number (**Suggestion: 32**,
+  tap it to fill the field): the page before's number plus one, or else the first page missing between the PC's
+  ranges, or else the page after the PC's highest. **Clear** gives the page "Auto" again. Leave front matter (cover,
+  title page, preface) on "Auto". The numbers stay with the pages while they wait on the phone, even when the app is
+  closed.
 
 The web UI can also add pages to a document, from the PC or from the phone's browser: import photos, or take a photo.
 

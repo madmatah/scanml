@@ -4,6 +4,7 @@ package fr.scanmylib.ui.document
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -24,8 +25,9 @@ import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -33,6 +35,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MenuDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
@@ -236,6 +239,12 @@ internal fun ReviewContent(
                         )
                     }
                 },
+                actions = {
+                    ReviewMenu(
+                        canDelete = count > 0 && !scan.preparing && !scan.sending,
+                        onDelete = { isConfirmingDelete = true },
+                    )
+                },
             )
         },
         bottomBar = { SendBar(scan, onSend) },
@@ -302,16 +311,6 @@ internal fun ReviewContent(
                     onImport = onImport,
                     onChooseCamera = onChooseCamera,
                 )
-            }
-            fullWidthItem("delete") {
-                TextButton(
-                    onClick = { isConfirmingDelete = true },
-                    enabled = count > 0 && !scan.preparing && !scan.sending,
-                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                    modifier = Modifier.padding(top = 12.dp),
-                ) {
-                    Text(stringResource(R.string.scan_review_discard))
-                }
             }
         }
     }
@@ -440,6 +439,28 @@ private fun SendBar(scan: ScanUiState, onSend: () -> Unit) {
                     }
                 }
             }
+        }
+    }
+}
+
+/** Away from Send, so that deleting the pages is never a slip of the finger. */
+@Composable
+private fun ReviewMenu(canDelete: Boolean, onDelete: () -> Unit) {
+    var isExpanded by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { isExpanded = true }) {
+            Icon(painterResource(R.drawable.ic_more_vert), contentDescription = stringResource(R.string.review_more))
+        }
+        DropdownMenu(expanded = isExpanded, onDismissRequest = { isExpanded = false }) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.scan_review_discard)) },
+                onClick = {
+                    isExpanded = false
+                    onDelete()
+                },
+                enabled = canDelete,
+                colors = MenuDefaults.itemColors(textColor = MaterialTheme.colorScheme.error),
+            )
         }
     }
 }

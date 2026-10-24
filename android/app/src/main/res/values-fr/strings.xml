@@ -157,6 +157,7 @@
     <string name="scan_review_page">Page %1$d sur %2$d</string>
     <string name="scan_discard_message">Rien n’a encore été envoyé au PC : la suppression est définitive.</string>
     <string name="scan_summary_none">Le PC garde le numéro imprimé s’il le lit.</string>
+    <string name="review_more">Plus d’options</string>
     <string name="review_close">Fermer et garder les pages</string>
     <string name="review_preparing">Préparation des pages : %1$d sur %2$d</string>
     <string name="review_preparing_button">Préparation…</string>

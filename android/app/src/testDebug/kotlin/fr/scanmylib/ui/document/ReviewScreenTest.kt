@@ -67,6 +67,7 @@ import fr.scanmylib.library.PreparationOutcome
 import fr.scanmylib.library.StagedPage
 import fr.scanmylib.model.ScanSource
 import fr.scanmylib.ui.isPoliteLiveRegion
+import fr.scanmylib.ui.isShownWholeInItsWindow
 import fr.scanmylib.ui.theme.ScanMyLibTheme
 import java.io.File
 import java.time.Instant
@@ -154,7 +155,7 @@ class ReviewScreenTest {
             @Before
             fun drawTheEnd() {
                 compose.setContent { ScanMyLibTheme(dark = dark) { ReviewContentOf(FOUR_PAGES) } }
-                compose.onNode(hasScrollToKeyAction()).performScrollToKey(DELETE_KEY)
+                compose.onNode(hasScrollToKeyAction()).performScrollToKey(ADD_KEY)
                 compose.onRoot().captureRoboImage("build/outputs/roborazzi/review-pages-end-$theme.png")
             }
 
@@ -185,7 +186,7 @@ class ReviewScreenTest {
             @Before
             fun drawTheEnd() {
                 compose.setContent { ScanMyLibTheme(dark = dark) { ReviewContentOf(FOUR_PAGES) } }
-                compose.onNode(hasScrollToKeyAction()).performScrollToKey(DELETE_KEY)
+                compose.onNode(hasScrollToKeyAction()).performScrollToKey(ADD_KEY)
                 compose.onRoot().captureRoboImage("build/outputs/roborazzi/review-pages-large-text-end-$theme.png")
             }
 
@@ -278,14 +279,14 @@ class ReviewScreenTest {
 
         @RunWith(RobolectricTestRunner::class)
         @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
-        class WhenPagesAreBeingImportedIntoAnEmptyRunAndScrolledToTheEnd {
+        class WhenPagesAreBeingImportedIntoAnEmptyRunAndTheMenuIsOpened {
             @get:Rule
             val compose = createComposeRule()
 
             @Before
-            fun drawTheEnd() {
+            fun openTheMenu() {
                 compose.setContent { ScanMyLibTheme { ReviewContentOf(IMPORTING_FOUR_PHOTOS) } }
-                compose.onNode(hasScrollToKeyAction()).performScrollToKey(DELETE_KEY)
+                openTheReviewMenu(compose)
             }
 
             @Test
@@ -1243,6 +1244,34 @@ class ReviewScreenTest {
         @RunWith(ParameterizedRobolectricTestRunner::class)
         @GraphicsMode(GraphicsMode.Mode.NATIVE)
         @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenTheMenuIsOpened(private val theme: String, private val dark: Boolean) {
+            @get:Rule
+            val compose = createComposeRule()
+
+            @OptIn(ExperimentalRoborazziApi::class)
+            @Before
+            fun openIt() {
+                compose.setContent { ScanMyLibTheme(dark = dark) { ReviewContentOf(FOUR_PAGES) } }
+                openTheReviewMenu(compose)
+                // The whole screen: the menu has a window of its own.
+                captureScreenRoboImage("build/outputs/roborazzi/review-menu-$theme.png")
+            }
+
+            @Test
+            fun `should offer to delete the pages, away from Send`() {
+                compose.onNodeWithText(DELETE_THESE_PAGES).assertIsEnabled()
+            }
+
+            companion object {
+                @JvmStatic
+                @ParameterizedRobolectricTestRunner.Parameters(name = "in the {0} theme")
+                fun themes(): List<Array<Any>> = THEMES
+            }
+        }
+
+        @RunWith(ParameterizedRobolectricTestRunner::class)
+        @GraphicsMode(GraphicsMode.Mode.NATIVE)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
         class WhenDeleteTheseFourPagesIsTapped(private val theme: String, private val dark: Boolean) {
             @get:Rule
             val compose = createComposeRule()
@@ -1610,7 +1639,8 @@ private const val CANCEL = "Cancel"
 private const val OK = "OK"
 private const val TWO_SKIPPED = "2 photos"
 private const val DELETE_THESE_PAGES = "Delete these pages"
-private const val DELETE_KEY = "delete"
+private const val ADD_KEY = "add"
+private const val MORE_OPTIONS = "More options"
 private const val SCAN = "Scan"
 private const val IMPORT = "Import"
 private const val SCAN_WITH = "Scan with…"
@@ -1735,18 +1765,14 @@ private fun isShownWhole(screen: SemanticsNodeInteractionsProvider, text: String
         bounds.right <= root.right
 }
 
-/** Against the root of the text's own window, such as a menu's. */
-private fun isShownWholeInItsWindow(screen: SemanticsNodeInteractionsProvider, text: String): Boolean {
-    val node = screen.onNodeWithText(text).fetchSemanticsNode()
-    val root = generateSequence(node) { it.parent }.last().boundsInRoot
-    val bounds = node.boundsInRoot
-    return bounds.height > 0 && root.contains(bounds.topLeft) && bounds.bottom <= root.bottom &&
-        bounds.right <= root.right
+private fun openTheReviewMenu(compose: ComposeContentTestRule) {
+    compose.onNodeWithContentDescription(MORE_OPTIONS).performClick()
+    compose.waitForIdle()
 }
 
-private fun tapDeleteTheseFourPages(screen: SemanticsNodeInteractionsProvider) {
-    screen.onNode(hasScrollToKeyAction()).performScrollToKey(DELETE_KEY)
-    screen.onNodeWithText(DELETE_THESE_PAGES).performClick()
+private fun tapDeleteTheseFourPages(compose: ComposeContentTestRule) {
+    openTheReviewMenu(compose)
+    compose.onNodeWithText(DELETE_THESE_PAGES).performClick()
 }
 
 /** The lifecycle of the review's entry, which a test moves by hand. */

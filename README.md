@@ -130,8 +130,8 @@ Tailscale…) rather than exposing the port to the Internet.
   While pages are being prepared, their progress shows there, and an import can be canceled; leaving meanwhile loses
   none of them. Pages scanned during an import join the run as soon as they are copied, without waiting for its photos.
   **Close** (or Back) keeps the pages on the phone and returns to the document, whose banner then says "N pages to
-  send" with **Review**; the library shows them too. **Delete these pages** asks for confirmation, since these pages
-  exist nowhere else.
+  send" with **Review**; the library shows them too. **Delete these pages**, in the screen's ⋮ menu (**More options**),
+  asks for confirmation, since these pages exist nowhere else.
 - **Page numbers** (optional, in the review): each page shows its number under it, "Auto" until one is given, for the
   PC to read the printed number. Tap it (TalkBack: **Change the number**) to give that page a number, for a page whose
   number is not printed. With **Number the following pages in sequence** (on by default), the next pages follow on from

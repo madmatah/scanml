@@ -58,13 +58,13 @@ internal fun StagedPagePager(
     modifier: Modifier = Modifier,
 ) {
     val pagerState = rememberPagerState(initialPage = firstShownPage) { pages.size }
-    // By file, for the pages composed: the page shown swipes only while it is not zoomed in.
+    // By key, for the pages composed: the page shown swipes only while it is not zoomed in.
     val zoomStates = remember { mutableStateMapOf<String, ZoomState>() }
     val shownPage = pages.getOrNull(pagerState.currentPage)
     val currentPages by rememberUpdatedState(pages)
     // Derived, so that a pinch recomposes the pager only when the page shown starts or stops being zoomed in.
     val isShownPageZoomedIn by remember {
-        derivedStateOf { zoomStates[currentPages.getOrNull(pagerState.currentPage)?.file?.path]?.isZoomedIn == true }
+        derivedStateOf { zoomStates[currentPages.getOrNull(pagerState.currentPage)?.key]?.isZoomedIn == true }
     }
     val currentOnPageShown by rememberUpdatedState(onPageShown)
     LaunchedEffect(shownPage) {
@@ -93,7 +93,7 @@ internal fun StagedPagePager(
     ) { padding ->
         HorizontalPager(
             state = pagerState,
-            key = { pages[it].file.path },
+            key = { pages[it].key },
             userScrollEnabled = !isShownPageZoomedIn,
             beyondViewportPageCount = 0,
             modifier = Modifier
@@ -103,9 +103,9 @@ internal fun StagedPagePager(
             val page = pages[index]
             val zoomState = remember { ZoomState() }
             val isZoomedIn by remember(zoomState) { derivedStateOf { zoomState.isZoomedIn } }
-            DisposableEffect(page.file.path) {
-                zoomStates[page.file.path] = zoomState
-                onDispose { zoomStates.remove(page.file.path) }
+            DisposableEffect(page.key) {
+                zoomStates[page.key] = zoomState
+                onDispose { zoomStates.remove(page.key) }
             }
             BoxWithConstraints(Modifier.fillMaxSize()) {
                 val viewport = IntSize(constraints.maxWidth, constraints.maxHeight)

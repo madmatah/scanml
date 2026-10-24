@@ -4,7 +4,6 @@ package fr.scanmylib.ui.document
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -23,7 +22,6 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -35,7 +33,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
@@ -60,12 +57,10 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -73,16 +68,19 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.currentStateAsState
+import coil3.PlatformContext
 import coil3.compose.AsyncImage
+import coil3.compose.LocalPlatformContext
+import coil3.memory.MemoryCache
+import coil3.request.ImageRequest
 import fr.scanmylib.R
-import fr.scanmylib.library.PageNumbering
 import fr.scanmylib.library.Preparation
 import fr.scanmylib.library.StagedPage
 import fr.scanmylib.model.ScanSource
 import fr.scanmylib.ui.components.AttentionBanner
 import fr.scanmylib.ui.components.BannerSlot
 import fr.scanmylib.ui.components.ScreenTitle
-import fr.scanmylib.ui.components.SettingSwitchRow
+import java.io.File
 
 /** Shares the document's [viewModel], so that the review and the document show one state of the run. */
 @Composable
@@ -124,8 +122,7 @@ fun ReviewScreen(
         scan = scan,
         snackbarHostState = snackbarHostState,
         onClose = viewModel::closeReview,
-        onFirstPageChange = viewModel::onFirstPageChange,
-        onConsecutiveChange = viewModel::onConsecutiveChange,
+        onNumberPage = viewModel::numberPage,
         onCancelPreparation = viewModel::cancelPreparation,
         onDismissOutcome = viewModel::dismissOutcome,
         onDismissAddingInterrupted = viewModel::dismissAddingInterrupted,
@@ -158,8 +155,7 @@ internal fun ReviewContent(
     scan: ScanUiState,
     snackbarHostState: SnackbarHostState,
     onClose: () -> Unit,
-    onFirstPageChange: (String) -> Unit,
-    onConsecutiveChange: (Boolean) -> Unit,
+    onNumberPage: (page: StagedPage, number: Int?, nextPagesFollowOn: Boolean) -> Unit,
     onCancelPreparation: () -> Unit,
     onDismissOutcome: () -> Unit,
     onDismissAddingInterrupted: () -> Unit,
@@ -173,13 +169,12 @@ internal fun ReviewContent(
     onDelete: () -> Unit,
     modifier: Modifier = Modifier,
     pageImage: @Composable (page: StagedPage, modifier: Modifier) -> Unit = { page, imageModifier ->
-        AsyncImage(page.file, contentDescription = null, contentScale = ContentScale.Fit, modifier = imageModifier)
+        PageImage(page, imageModifier)
     },
     pagePainter: @Composable (page: StagedPage, viewport: IntSize, isZoomedIn: Boolean) -> Painter =
         { page, viewport, isZoomedIn -> rememberPagePainter(page, viewport, isZoomedIn) },
 ) {
     val count = scan.stagedPages.size
-    val numbering = scan.numbering
     var isConfirmingDelete by rememberSaveable { mutableStateOf(false) }
     RemovalUndo(scan.removedPage, snackbarHostState, onRestorePage, onDeleteRemovedPage)
     val gridState = rememberLazyGridState()
@@ -187,6 +182,11 @@ internal fun ReviewContent(
     var pageToFocus by remember { mutableStateOf<String?>(null) }
     var shownPage by rememberSaveable { mutableStateOf<String?>(null) }
     val shownIndex = scan.stagedPages.indexOfFirst { it.key == shownPage }
+    var numberingPage by rememberSaveable { mutableStateOf<String?>(null) }
+    val numberingIndex = scan.stagedPages.indexOfFirst { it.key == numberingPage }
+    LaunchedEffect(numberingIndex, scan.isRunRead) {
+        if (numberingIndex < 0 && scan.isRunRead) numberingPage = null
+    }
     LaunchedEffect(pageToFocus) {
         val target = pageToFocus ?: return@LaunchedEffect
         val index = scan.stagedPages.indexOfFirst { it.key == target }
@@ -250,7 +250,6 @@ internal fun ReviewContent(
                 .fillMaxSize()
                 .padding(padding),
         ) {
-            fullWidthItem("numbering") { NumberingRow(scan, onFirstPageChange, onConsecutiveChange) }
             scan.preparation?.let { preparation ->
                 fullWidthItem("preparation") { PreparationProgress(preparation, onCancelPreparation) }
             }
@@ -267,6 +266,7 @@ internal fun ReviewContent(
                     }
                 }
             }
+            val hints = scan.hints
             itemsIndexed(scan.stagedPages, key = { _, page -> page.key }) { index, page ->
                 val focusRequester = remember { FocusRequester() }
                 if (page.key == pageToFocus) {
@@ -280,8 +280,9 @@ internal fun ReviewContent(
                 StagedPageTile(
                     position = index + 1,
                     count = count,
-                    numberHint = numbering?.hintFor(index),
+                    hint = hints[index],
                     onEnlarge = { if (!scan.sending) shownPage = page.key },
+                    onNumber = { numberingPage = page.key }.takeUnless { scan.sending },
                     onRemove = {
                         val nextPage = scan.stagedPages.getOrNull(index + 1) ?: scan.stagedPages.getOrNull(index - 1)
                         pageToFocus = nextPage?.key
@@ -312,6 +313,22 @@ internal fun ReviewContent(
                 }
             }
         }
+    }
+    if (numberingIndex >= 0) {
+        // A second tap on Done, or Back, can come while the sheet slides away.
+        val closeSheet = closeSheet@{
+            pageToFocus = numberingPage ?: return@closeSheet
+            numberingPage = null
+        }
+        PageNumberSheet(
+            numberings = scan.stagedPages.map { it.numbering },
+            index = numberingIndex,
+            onDone = { number, nextPagesFollowOn ->
+                if (numberingPage != null) onNumberPage(scan.stagedPages[numberingIndex], number, nextPagesFollowOn)
+                closeSheet()
+            },
+            onDismiss = closeSheet,
+        )
     }
     if (isConfirmingDelete) {
         DiscardRunDialog(
@@ -356,64 +373,6 @@ private fun RemovalUndo(
     }
 }
 
-/** The first page number, and whether the following pages go on from it; side by side while they fit. */
-@Composable
-private fun NumberingRow(
-    scan: ScanUiState,
-    onFirstPageChange: (String) -> Unit,
-    onConsecutiveChange: (Boolean) -> Unit,
-) {
-    BoxWithConstraints(Modifier.fillMaxWidth()) {
-        val fitsSideBySide = maxWidth / LocalDensity.current.fontScale >= SIDE_BY_SIDE_MIN_WIDTH
-        val field = @Composable { fieldModifier: Modifier -> FirstPageField(scan, onFirstPageChange, fieldModifier) }
-        val switch = @Composable { switchModifier: Modifier ->
-            SettingSwitchRow(
-                label = stringResource(R.string.scan_consecutive),
-                checked = scan.consecutive,
-                onCheckedChange = onConsecutiveChange,
-                enabled = scan.firstPage.isNotEmpty(),
-                // The grid has margins of its own.
-                contentPadding = PaddingValues(),
-                modifier = switchModifier,
-            )
-        }
-        if (fitsSideBySide) {
-            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                field(Modifier.weight(1f))
-                switch(Modifier.weight(1f).padding(top = 4.dp))
-            }
-        } else {
-            Column {
-                field(Modifier.fillMaxWidth())
-                switch(Modifier)
-            }
-        }
-    }
-}
-
-@Composable
-private fun FirstPageField(scan: ScanUiState, onFirstPageChange: (String) -> Unit, modifier: Modifier = Modifier) {
-    val invalid = scan.numbering == null
-    OutlinedTextField(
-        value = scan.firstPage,
-        onValueChange = onFirstPageChange,
-        label = { Text(stringResource(R.string.scan_first_page)) },
-        isError = invalid,
-        supportingText = {
-            Text(
-                if (invalid) {
-                    stringResource(R.string.scan_first_page_invalid, PageNumbering.MAX_FIRST_PAGE)
-                } else {
-                    stringResource(R.string.scan_first_page_help)
-                },
-            )
-        },
-        singleLine = true,
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-        modifier = modifier,
-    )
-}
-
 /** Only an import can be canceled: Google's scanner's pages exist nowhere else. */
 @Composable
 private fun PreparationProgress(preparation: Preparation, onCancel: () -> Unit) {
@@ -449,7 +408,7 @@ private fun SendBar(scan: ScanUiState, onSend: () -> Unit) {
                     .padding(16.dp),
             ) {
                 Text(
-                    describeNumbering(scan.numbering, count),
+                    stringResource(R.string.scan_summary_none),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -499,21 +458,34 @@ private fun DiscardRunDialog(count: Int, onConfirm: () -> Unit, onDismiss: () ->
     )
 }
 
-/** What the server will receive as page-number hints, in words. */
 @Composable
-private fun describeNumbering(numbering: PageNumbering?, count: Int): String {
-    val first = numbering?.firstPage
-    val last = numbering?.lastHint(count) ?: first
-    return when {
-        numbering == null -> stringResource(R.string.scan_summary_invalid)
-        first == null -> stringResource(R.string.scan_summary_none)
-        last == null || last == first -> stringResource(R.string.scan_summary_first_only, first)
-        else -> stringResource(R.string.scan_summary_range, first, last)
-    }
+private fun PageImage(page: StagedPage, modifier: Modifier = Modifier) {
+    val context = LocalPlatformContext.current
+    val shownImage = remember { ShownImage() }
+    val request = remember(context, page.file) { buildPageImageRequest(context, page.file, shownImage.memoryCacheKey) }
+    AsyncImage(
+        request,
+        contentDescription = null,
+        contentScale = ContentScale.Fit,
+        onSuccess = { success -> shownImage.memoryCacheKey = success.result.memoryCacheKey },
+        modifier = modifier,
+    )
 }
 
-/** Where the first tile is in [ReviewContent]'s grid: after the numbering, the progress of a copy, and the banners. */
-private fun findFirstTileIndex(scan: ScanUiState): Int = if (scan.preparation == null) 2 else 3
+/** Not a state, so that each image that Coil shows recomposes nothing. */
+private class ShownImage {
+    var memoryCacheKey: MemoryCache.Key? = null
+}
+
+/** A new number renames the file, which Coil caches apart: the image it showed stands in until the new file is read. */
+internal fun buildPageImageRequest(
+    context: PlatformContext,
+    file: File,
+    shownImageKey: MemoryCache.Key?,
+): ImageRequest = ImageRequest.Builder(context).data(file).placeholderMemoryCacheKey(shownImageKey).build()
+
+/** Where the first tile is in [ReviewContent]'s grid: after the progress of a copy, and the banners. */
+private fun findFirstTileIndex(scan: ScanUiState): Int = if (scan.preparation == null) 1 else 2
 
 private fun LazyGridScope.fullWidthItem(key: String, content: @Composable () -> Unit) {
     item(key = key, span = { GridItemSpan(maxLineSpan) }) { content() }
@@ -521,6 +493,3 @@ private fun LazyGridScope.fullWidthItem(key: String, content: @Composable () -> 
 
 // Two columns on a phone, at every text size.
 private val TILE_MIN_WIDTH = 160.dp
-
-/** Width, in dp of text at its normal size, from which the numbering fields fit side by side. */
-private val SIDE_BY_SIDE_MIN_WIDTH = 340.dp

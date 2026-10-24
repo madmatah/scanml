@@ -50,7 +50,8 @@ top of `conventions.md`.
   shows none. Someone who does not tell colors apart, or who listens with TalkBack, then gets the same meaning, and a
   screen stays quiet while all goes well. Its words wrap rather than being cut, at twice the text size too.
 - **Idioms that override the naming rules:** `it` in a short lambda; `e` for a caught exception; test names in
-  backticks, as sentences, and test groups named as their phrase (`TheHintForMethod`, `WhenThePagesAreConsecutive`), in
-  tests only; composables named as nouns; and the names Android imposes (`onCreate`, `doWork`).
+  backticks, as sentences, and test groups named as their phrase (`TheHintPagesFunction`,
+  `WhenTheFirstPageIsGivenWithTheNextPages`), in tests only; composables named as nouns; and the names Android imposes
+  (`onCreate`, `doWork`).
 - **Directives:** `@Suppress("ID")` (`@Suppress("ktlint:standard:<rule>")` for ktlint), `@SuppressLint("ID")` and
   `tools:ignore`, each with its reason; `@OptIn(…)` for an experimental API, on the narrowest declaration.

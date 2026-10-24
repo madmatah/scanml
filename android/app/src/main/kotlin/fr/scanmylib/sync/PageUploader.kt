@@ -114,16 +114,8 @@ class PageUploader(
         if (image == null || !withContext(Dispatchers.IO) { image.isFile }) {
             return Failure(UploadFailure.FILE_MISSING, fileName)
         }
-        val upload = PageUpload(
-            documentId = page.documentId,
-            pageId = page.id,
-            sessionId = page.sessionId,
-            seq = page.seq,
-            capturedAt = page.capturedAt,
-            pageNumberHint = page.pageNumberHint,
-        )
         try {
-            api.uploadPage(upload, image)
+            api.uploadPage(page.toUpload(), image)
         } catch (e: ApiException) {
             return Failure(uploadFailureOf(e), e.message)
         }
@@ -138,6 +130,15 @@ class PageUploader(
 
     private data class Failure(val kind: UploadFailure, val detail: String?)
 }
+
+internal fun PendingPageEntity.toUpload(): PageUpload = PageUpload(
+    documentId = documentId,
+    pageId = id,
+    sessionId = sessionId,
+    seq = seq,
+    capturedAt = capturedAt,
+    pageNumberHint = pageNumberHint,
+)
 
 /** Classifies an API error for the upload queue: retry later, wait for the user, or give up. */
 internal fun uploadFailureOf(e: ApiException): UploadFailure = when (e) {

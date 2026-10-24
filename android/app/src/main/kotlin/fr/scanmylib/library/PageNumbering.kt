@@ -1,53 +1,94 @@
 package fr.scanmylib.library
 
+/** The server reads page numbers of up to four digits, and refuses the upload of a larger hint for good (HTTP 422). */
+const val MAX_PAGE_NUMBER = 9999
+
 /**
- * Page-number hints for the pages of one scanner run, sent as `page_number_hint`. The server
- * prefers numbers it detects itself; hints help with pages whose number is not printed.
- *
- * @property firstPage number of the first scanned page, if the user gave one.
- * @property consecutive whether the following pages are numbered on from [firstPage];
- *   otherwise only the first page gets a hint.
+ * What the user chose for the number of one page to send. Only that choice is stored, in the
+ * page's file name: the numbers that follow on from it are derived ([hintPages]), so that one
+ * choice changes one file.
  */
-data class PageNumbering(val firstPage: Int?, val consecutive: Boolean) {
+sealed interface PageNumbering {
+    data object NotGiven : PageNumbering
 
-    init {
-        require(firstPage == null || firstPage in 1..MAX_FIRST_PAGE) { "invalid first page: $firstPage" }
+    data class Given(val number: Int, val nextPagesFollowOn: Boolean) : PageNumbering {
+        init {
+            require(number in 1..MAX_PAGE_NUMBER) { "invalid page number: $number" }
+        }
     }
 
-    /**
-     * Hint for the page at [index] (0-based) in the run. Never above [MAX_FIRST_PAGE]: the server
-     * refuses the upload of a page with a larger hint (HTTP 422), so such pages get no hint.
-     */
-    fun hintFor(index: Int): Int? = when {
-        firstPage == null -> null
-        index == 0 -> firstPage
-        consecutive -> (firstPage + index).takeIf { it <= MAX_FIRST_PAGE }
-        else -> null
+    data object Cleared : PageNumbering
+}
+
+sealed interface PageHint {
+    val number: Int?
+
+    data object Auto : PageHint {
+        override val number: Int? get() = null
     }
 
-    /** The highest hint of a run of [pageCount] pages (at least one), or null if it has none. */
-    fun lastHint(pageCount: Int): Int? = (pageCount - 1 downTo 0).firstNotNullOfOrNull(::hintFor)
+    data class Given(override val number: Int) : PageHint
 
-    /**
-     * The first page of the next run when scanning on in order: the page after the last one
-     * numbered here, or null if this run did not number its pages consecutively.
-     */
-    fun nextFirstPage(pageCount: Int): Int? =
-        if (firstPage != null && consecutive) (firstPage + pageCount).takeIf { it <= MAX_FIRST_PAGE } else null
+    data class FollowingOn(override val number: Int) : PageHint
+}
 
-    companion object {
-        /** The server detects page numbers of up to four digits. */
-        const val MAX_FIRST_PAGE = 9999
+sealed interface PageNumberInput {
+    data object Empty : PageNumberInput
 
-        /**
-         * Reads the "first page" field: blank means no hint, otherwise a number from 1 to
-         * [MAX_FIRST_PAGE]. Returns null when the input is invalid.
-         */
-        fun fromInput(firstPageInput: String, consecutive: Boolean): PageNumbering? {
-            val text = firstPageInput.trim()
-            if (text.isEmpty()) return PageNumbering(firstPage = null, consecutive = consecutive)
-            val number = text.toIntOrNull()?.takeIf { it in 1..MAX_FIRST_PAGE } ?: return null
-            return PageNumbering(number, consecutive)
+    data class Valid(val number: Int) : PageNumberInput
+
+    data object Invalid : PageNumberInput
+}
+
+fun hintPages(numberings: List<PageNumbering>): List<PageHint> {
+    var runningNumber: Int? = null
+    return numberings.map { numbering ->
+        when (numbering) {
+            is PageNumbering.Given -> {
+                runningNumber = numbering.number.takeIf { numbering.nextPagesFollowOn }
+                PageHint.Given(numbering.number)
+            }
+
+            PageNumbering.Cleared -> {
+                runningNumber = null
+                PageHint.Auto
+            }
+
+            PageNumbering.NotGiven -> {
+                val number = runningNumber?.plus(1)?.takeIf { it <= MAX_PAGE_NUMBER }
+                runningNumber = number
+                if (number == null) PageHint.Auto else PageHint.FollowingOn(number)
+            }
         }
     }
 }
+
+/** A page that would take [number] anyway follows on, so that validating it unchanged renames nothing. */
+fun chooseNumbering(
+    numberings: List<PageNumbering>,
+    index: Int,
+    number: Int?,
+    nextPagesFollowOn: Boolean,
+): PageNumbering {
+    val runningNumber = findRunningNumber(numberings, index)
+    return when {
+        number == null -> if (runningNumber == null) PageNumbering.NotGiven else PageNumbering.Cleared
+        number == runningNumber && nextPagesFollowOn -> PageNumbering.NotGiven
+        else -> PageNumbering.Given(number, nextPagesFollowOn)
+    }
+}
+
+fun findNextPages(numberings: List<PageNumbering>, index: Int): IntRange {
+    val end = (index + 1 until numberings.size).firstOrNull { numberings[it] != PageNumbering.NotGiven }
+    return index + 1 until (end ?: numberings.size)
+}
+
+fun readPageNumber(text: String): PageNumberInput {
+    val trimmedText = text.trim()
+    if (trimmedText.isEmpty()) return PageNumberInput.Empty
+    val number = trimmedText.toIntOrNull()?.takeIf { it in 1..MAX_PAGE_NUMBER } ?: return PageNumberInput.Invalid
+    return PageNumberInput.Valid(number)
+}
+
+private fun findRunningNumber(numberings: List<PageNumbering>, index: Int): Int? =
+    hintPages(numberings.take(index) + PageNumbering.NotGiven)[index].number

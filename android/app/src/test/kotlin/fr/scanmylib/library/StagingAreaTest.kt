@@ -123,6 +123,27 @@ class StagingAreaTest {
             }
         }
 
+        class WhenANumberedPageWaitsInRemoved {
+            @get:Rule
+            val folder = TemporaryFolder()
+
+            private var position by Delegates.notNull<Int>()
+
+            @Before
+            fun addAnImage() = runTest {
+                val staging = StagingArea(resolveStagingRoot(folder))
+                val pages = shootThreePages(staging)
+                staging.numberPage(DOCUMENT, pages.last(), TWELVE, nextPagesFollowOn = false)
+                staging.remove(DOCUMENT, pages.last())
+                position = staging.shoot("d", SHOT_TIME.plusSeconds(6)).seq
+            }
+
+            @Test
+            fun `should number the next page after it, so that it can come back to its place`() {
+                assertEquals(4, position)
+            }
+        }
+
         class WhenTheLastTwoPagesWereDeleted {
             @get:Rule
             val folder = TemporaryFolder()
@@ -602,6 +623,28 @@ class StagingAreaTest {
             }
         }
 
+        class WhenThePageWasNumberedSince {
+            @get:Rule
+            val folder = TemporaryFolder()
+
+            private lateinit var removedFiles: List<String>
+            private lateinit var numberedName: String
+
+            @Before
+            fun removeItByItsEarlierName() = runTest {
+                val staging = StagingArea(resolveStagingRoot(folder))
+                val earlier = numberTheSecondOfThreePages(staging)
+                numberedName = staging.pages(DOCUMENT)[1].file.name
+                staging.remove(DOCUMENT, earlier)
+                removedFiles = listRemovedFiles(folder)
+            }
+
+            @Test
+            fun `should remove it under its new name`() {
+                assertEquals(listOf(numberedName), removedFiles)
+            }
+        }
+
         class WhenTheCallerIsCanceledAsThePageMoves {
             @get:Rule
             val folder = TemporaryFolder()
@@ -645,6 +688,49 @@ class StagingAreaTest {
             @Test
             fun `should put it back in its place`() {
                 assertEquals(listOf("a", "b", "c"), pageContents)
+            }
+        }
+
+        class WhenANumberedPageIsRestored {
+            @get:Rule
+            val folder = TemporaryFolder()
+
+            private lateinit var numberings: List<PageNumbering>
+
+            @Before
+            fun restoreIt() = runTest {
+                val staging = StagingArea(resolveStagingRoot(folder))
+                numberTheSecondOfThreePages(staging)
+                val numbered = staging.pages(DOCUMENT)[1]
+                staging.remove(DOCUMENT, numbered)
+                staging.restore(DOCUMENT, numbered)
+                numberings = staging.pages(DOCUMENT).map { it.numbering }
+            }
+
+            @Test
+            fun `should put it back with its number`() {
+                assertEquals(listOf(PageNumbering.NotGiven, TWELVE_ALONE, PageNumbering.NotGiven), numberings)
+            }
+        }
+
+        class WhenThePageWasNumberedJustBeforeItsRemoval {
+            @get:Rule
+            val folder = TemporaryFolder()
+
+            private lateinit var numberings: List<PageNumbering>
+
+            @Before
+            fun restoreItByItsEarlierName() = runTest {
+                val staging = StagingArea(resolveStagingRoot(folder))
+                val earlier = numberTheSecondOfThreePages(staging)
+                staging.remove(DOCUMENT, earlier)
+                staging.restore(DOCUMENT, earlier)
+                numberings = staging.pages(DOCUMENT).map { it.numbering }
+            }
+
+            @Test
+            fun `should put it back with its number`() {
+                assertEquals(listOf(PageNumbering.NotGiven, TWELVE_ALONE, PageNumbering.NotGiven), numberings)
             }
         }
 
@@ -715,6 +801,27 @@ class StagingAreaTest {
                 assertFalse(isImageKept)
             }
         }
+
+        class WhenThePageWasNumberedJustBeforeItsRemoval {
+            @get:Rule
+            val folder = TemporaryFolder()
+
+            private lateinit var removedFiles: List<String>
+
+            @Before
+            fun deleteItByItsEarlierName() = runTest {
+                val staging = StagingArea(resolveStagingRoot(folder))
+                val earlier = numberTheSecondOfThreePages(staging)
+                staging.remove(DOCUMENT, earlier)
+                staging.deleteRemoved(DOCUMENT, earlier)
+                removedFiles = listRemovedFiles(folder)
+            }
+
+            @Test
+            fun `should delete its image for good, under its new name`() {
+                assertEquals(emptyList<String>(), removedFiles)
+            }
+        }
     }
 
     @RunWith(Enclosed::class)
@@ -742,6 +849,33 @@ class StagingAreaTest {
             @Test
             fun `should leave a gap in the positions until the run is sent`() {
                 assertEquals(listOf(1, 3), positions)
+            }
+        }
+
+        class WhenThePageWasNumberedSince {
+            @get:Rule
+            val folder = TemporaryFolder()
+
+            private lateinit var pageContents: List<String>
+            private lateinit var filesOfTheRun: List<String>
+
+            @Before
+            fun deleteItByItsEarlierName() = runTest {
+                val staging = StagingArea(resolveStagingRoot(folder))
+                val earlier = numberTheSecondOfThreePages(staging)
+                staging.delete(DOCUMENT, earlier)
+                pageContents = staging.readContents(DOCUMENT)
+                filesOfTheRun = listPageFiles(folder)
+            }
+
+            @Test
+            fun `should take it out of the run`() {
+                assertEquals(listOf("a", "c"), pageContents)
+            }
+
+            @Test
+            fun `should delete its image, under its new name`() {
+                assertEquals(2, filesOfTheRun.size)
             }
         }
 
@@ -1000,6 +1134,184 @@ class StagingAreaTest {
     }
 
     @RunWith(Enclosed::class)
+    class TheNumberPageMethod {
+        class WhenTheFirstOfThreePagesGets12WithTheNextPages {
+            @get:Rule
+            val folder = TemporaryFolder()
+
+            private lateinit var stagedPages: List<StagedPage>
+            private lateinit var filesOfTheRun: List<String>
+            private lateinit var pagesInTheRun: List<StagedPage>
+            private lateinit var pagesOnDisk: List<StagedPage>
+
+            @Before
+            fun numberIt() = runTest {
+                val staging = StagingArea(resolveStagingRoot(folder))
+                stagedPages = shootThreePages(staging)
+                staging.numberPage(DOCUMENT, stagedPages[0], TWELVE, nextPagesFollowOn = true)
+                filesOfTheRun = listPageFiles(folder)
+                pagesInTheRun = staging.pages(DOCUMENT)
+                pagesOnDisk = restartTheProcess(resolveStagingRoot(folder)).pages(DOCUMENT)
+            }
+
+            @Test
+            fun `should rename its file only, since the numbers of the next pages follow from it`() {
+                val expected = listOf(
+                    StagingArea.fileName(1, stagedPages[0].capturedAt, TWELVE_WITH_THE_NEXT_PAGES),
+                    stagedPages[1].file.name,
+                    stagedPages[2].file.name,
+                )
+                assertEquals(expected, filesOfTheRun)
+            }
+
+            @Test
+            fun `should keep the run in step with its files`() {
+                assertEquals(pagesOnDisk, pagesInTheRun)
+            }
+        }
+
+        class WhenTheProcessIsRestarted {
+            @get:Rule
+            val folder = TemporaryFolder()
+
+            private lateinit var numberings: List<PageNumbering>
+
+            @Before
+            fun readTheRunInTheNextProcess() = runTest {
+                val staging = StagingArea(resolveStagingRoot(folder))
+                val pages = shootThreePages(staging)
+                staging.numberPage(DOCUMENT, pages[0], TWELVE, nextPagesFollowOn = true)
+                staging.numberPage(DOCUMENT, pages[2], null, nextPagesFollowOn = true)
+                numberings = restartTheProcess(resolveStagingRoot(folder)).pages(DOCUMENT).map { it.numbering }
+            }
+
+            @Test
+            fun `should keep each page's number, since the files alone describe the run`() {
+                assertEquals(
+                    listOf(TWELVE_WITH_THE_NEXT_PAGES, PageNumbering.NotGiven, PageNumbering.Cleared),
+                    numberings,
+                )
+            }
+        }
+
+        class WhenTheNumberDoesNotChange {
+            @get:Rule
+            val folder = TemporaryFolder()
+
+            private lateinit var filesBefore: List<String>
+            private lateinit var filesAfter: List<String>
+
+            @Before
+            fun numberItAgain() = runTest {
+                val staging = StagingArea(resolveStagingRoot(folder))
+                numberTheSecondOfThreePages(staging)
+                filesBefore = listPageFiles(folder)
+                staging.numberPage(DOCUMENT, staging.pages(DOCUMENT)[1], TWELVE, nextPagesFollowOn = false)
+                filesAfter = listPageFiles(folder)
+            }
+
+            @Test
+            fun `should rename nothing`() {
+                assertEquals(filesBefore, filesAfter)
+            }
+        }
+
+        class WhenAPageThatFollowsOnGetsItsRunningNumber {
+            @get:Rule
+            val folder = TemporaryFolder()
+
+            private lateinit var filesBefore: List<String>
+            private lateinit var filesAfter: List<String>
+
+            @Before
+            fun numberItWithItsRunningNumber() = runTest {
+                val staging = StagingArea(resolveStagingRoot(folder))
+                val pages = shootThreePages(staging)
+                staging.numberPage(DOCUMENT, pages[0], TWELVE, nextPagesFollowOn = true)
+                filesBefore = listPageFiles(folder)
+                staging.numberPage(DOCUMENT, pages[1], THIRTEEN, nextPagesFollowOn = true)
+                filesAfter = listPageFiles(folder)
+            }
+
+            @Test
+            fun `should rename nothing, since it follows on already`() {
+                assertEquals(filesBefore, filesAfter)
+            }
+        }
+
+        class WhenThePageLeftTheRun {
+            @get:Rule
+            val folder = TemporaryFolder()
+
+            private lateinit var removedPage: StagedPage
+            private lateinit var removedFiles: List<String>
+
+            @Before
+            fun numberIt() = runTest {
+                val staging = StagingArea(resolveStagingRoot(folder))
+                removedPage = removeTheSecondOfThreePages(staging)
+                staging.numberPage(DOCUMENT, removedPage, TWELVE, nextPagesFollowOn = true)
+                removedFiles = listRemovedFiles(folder)
+            }
+
+            @Test
+            fun `should leave it as it was`() {
+                assertEquals(listOf(removedPage.file.name), removedFiles)
+            }
+        }
+
+        class WhenTheNewNameIsTaken {
+            @get:Rule
+            val folder = TemporaryFolder()
+
+            private lateinit var numberThePage: suspend () -> Unit
+
+            @Before
+            fun takeTheName() = runTest {
+                val staging = StagingArea(resolveStagingRoot(folder))
+                val page = shootThreePages(staging)[1]
+                File(page.file.parentFile, StagingArea.fileName(page.seq, page.capturedAt, TWELVE_ALONE))
+                    .writeText("another page")
+                numberThePage = { staging.numberPage(DOCUMENT, page, TWELVE, nextPagesFollowOn = false) }
+            }
+
+            @Test
+            fun `should refuse, so that no page is overwritten`() = runTest {
+                val failure = runCatching { numberThePage() }.exceptionOrNull()
+                assertTrue("$failure", failure is IOException)
+                assertTrue("${failure?.message}", failure?.message.orEmpty().endsWith(NAME_TAKEN))
+            }
+        }
+
+        class WhenTheCallerIsCanceledAsThePageIsRenamed {
+            @get:Rule
+            val folder = TemporaryFolder()
+
+            private lateinit var pagesInTheRun: List<String>
+            private lateinit var filesOfTheRun: List<String>
+
+            @Before
+            fun numberAsTheCallerIsCanceled() = runTest {
+                val disk = CancelingDisk(testScheduler)
+                val staging = StagingArea(resolveStagingRoot(folder), disk)
+                val pages = shootThreePages(staging)
+                disk.cancelAfterItsWork(
+                    launch(start = CoroutineStart.LAZY) {
+                        staging.numberPage(DOCUMENT, pages[1], TWELVE, nextPagesFollowOn = true)
+                    },
+                )
+                pagesInTheRun = staging.pages(DOCUMENT).map { it.file.name }
+                filesOfTheRun = listPageFiles(folder)
+            }
+
+            @Test
+            fun `should keep the run in step with its files`() {
+                assertEquals(filesOfTheRun, pagesInTheRun)
+            }
+        }
+    }
+
+    @RunWith(Enclosed::class)
     class TheRetainRunsMethod {
         class WhenADocumentWasDeleted {
             @get:Rule
@@ -1177,6 +1489,36 @@ class StagingAreaTest {
                 assertEquals("00012_${SHOT_TIME.toEpochMilli()}.jpg", name)
             }
         }
+
+        @RunWith(Parameterized::class)
+        class WhenGivenANumbering(
+            private val kind: String,
+            private val numbering: PageNumbering,
+            private val suffix: String,
+        ) {
+            private lateinit var name: String
+
+            @Before
+            fun nameTheFile() {
+                name = StagingArea.fileName(12, SHOT_TIME, numbering)
+            }
+
+            @Test
+            fun `should hold the numbering after the capture time`() {
+                assertEquals(kind, "00012_${SHOT_TIME.toEpochMilli()}$suffix.jpg", name)
+            }
+
+            companion object {
+                @JvmStatic
+                @Parameterized.Parameters(name = "{0}")
+                fun numberings(): List<Array<Any>> = listOf(
+                    arrayOf("no number given, as the names of earlier versions", PageNumbering.NotGiven, ""),
+                    arrayOf("a number given alone", TWELVE_ALONE, "_h12"),
+                    arrayOf("a number given with the next pages", TWELVE_WITH_THE_NEXT_PAGES, "_h12c"),
+                    arrayOf("a page cleared", PageNumbering.Cleared, "_n"),
+                )
+            }
+        }
     }
 
     @RunWith(Enclosed::class)
@@ -1197,6 +1539,89 @@ class StagingAreaTest {
             @Test
             fun `should read its capture time`() {
                 assertEquals(SHOT_TIME, parsedName.page?.capturedAt)
+            }
+        }
+
+        @RunWith(Parameterized::class)
+        class WhenWrittenByTheFileNameMethod(private val kind: String, private val numbering: PageNumbering) {
+            private lateinit var parsedName: ParsedName
+
+            @Before
+            fun parseTheName() {
+                parsedName = ParsedName(StagingArea.parseFileName(File(StagingArea.fileName(12, SHOT_TIME, numbering))))
+            }
+
+            @Test
+            fun `should read the numbering it holds`() {
+                assertEquals(kind, numbering, parsedName.page?.numbering)
+            }
+
+            companion object {
+                @JvmStatic
+                @Parameterized.Parameters(name = "{0}")
+                fun numberings(): List<Array<Any>> = listOf(
+                    arrayOf("no number given", PageNumbering.NotGiven),
+                    arrayOf("1, the first page", PageNumbering.Given(1, nextPagesFollowOn = false)),
+                    arrayOf(
+                        "9999, the last page the server accepts, with the next pages",
+                        PageNumbering.Given(9999, nextPagesFollowOn = true),
+                    ),
+                    arrayOf("a page cleared", PageNumbering.Cleared),
+                )
+            }
+        }
+
+        class WhenTheNameIsOfAnEarlierVersion {
+            private lateinit var parsedName: ParsedName
+
+            @Before
+            fun parseTheName() {
+                parsedName = ParsedName(StagingArea.parseFileName(File(EARLIER_VERSION_NAME)))
+            }
+
+            @Test
+            fun `should read a page with no number given`() {
+                assertEquals(PageNumbering.NotGiven, parsedName.page?.numbering)
+            }
+        }
+
+        class WhenTheNumberHasALeadingZero {
+            private lateinit var parsedName: ParsedName
+
+            @Before
+            fun parseTheName() {
+                parsedName = ParsedName(StagingArea.parseFileName(File("00012_1760293530123_h032.jpg")))
+            }
+
+            @Test
+            fun `should read the number`() {
+                assertEquals(PageNumbering.Given(32, nextPagesFollowOn = false), parsedName.page?.numbering)
+            }
+        }
+
+        @RunWith(Parameterized::class)
+        class WhenTheSuffixCannotBeRead(private val suffix: String, private val fileName: String) {
+            private lateinit var parsedName: ParsedName
+
+            @Before
+            fun parseTheName() {
+                parsedName = ParsedName(StagingArea.parseFileName(File(fileName)))
+            }
+
+            @Test
+            fun `should read a page with no number given, so that no page is lost to a name it cannot read`() {
+                assertEquals(suffix, PageNumbering.NotGiven, parsedName.page?.numbering)
+            }
+
+            companion object {
+                @JvmStatic
+                @Parameterized.Parameters(name = "{0}")
+                fun suffixes(): List<Array<Any>> = listOf(
+                    arrayOf("page 0, which no page is", "00012_1760293530123_h0.jpg"),
+                    arrayOf("page 10000, past the last page the server accepts", "00012_1760293530123_h10000.jpg"),
+                    arrayOf("an unknown letter", "00012_1760293530123_x.jpg"),
+                    arrayOf("a page following on without a number", "00012_1760293530123_hc.jpg"),
+                )
             }
         }
 
@@ -1233,6 +1658,11 @@ private const val OTHER_DOCUMENT = "0a1b2c3d-4e5f-4a6b-8c7d-8e9f0a1b2c3d"
 private const val DATABASE_FULL = "database full"
 private const val INTERRUPTED = "interrupted"
 private const val NAME_TAKEN = "a page of that name is in the run"
+private const val TWELVE = 12
+private const val THIRTEEN = 13
+private const val EARLIER_VERSION_NAME = "00012_1760293530123.jpg"
+private val TWELVE_ALONE = PageNumbering.Given(TWELVE, nextPagesFollowOn = false)
+private val TWELVE_WITH_THE_NEXT_PAGES = PageNumbering.Given(TWELVE, nextPagesFollowOn = true)
 private val SHOT_TIME: Instant = Instant.parse("2026-10-12T18:15:30.123Z")
 
 /** A page that may be missing, held in a non-null value so that a test fails when no hook ran. */
@@ -1298,6 +1728,15 @@ private suspend fun removeTheSecondOfThreePages(staging: StagingArea): StagedPag
     staging.remove(DOCUMENT, removed)
     return removed
 }
+
+private suspend fun numberTheSecondOfThreePages(staging: StagingArea): StagedPage {
+    val earlier = shootThreePages(staging)[1]
+    staging.numberPage(DOCUMENT, earlier, TWELVE, nextPagesFollowOn = false)
+    return earlier
+}
+
+private fun listRemovedFiles(folder: TemporaryFolder): List<String> =
+    File(resolveStagingRoot(folder), "$DOCUMENT/removed").listFiles().orEmpty().map { it.name }.sorted()
 
 /**
  * The disk's dispatcher, on the test's scheduler, which cancels the act it was given, if any, right

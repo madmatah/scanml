@@ -146,10 +146,7 @@
         <item quantity="many">%d photos à ajouter : choisissez leur document.</item>
         <item quantity="other">%d photos à ajouter : choisissez leur document.</item>
     </plurals>
-    <string name="scan_first_page">Numéro de la première page</string>
-    <string name="scan_first_page_help">Facultatif. Laissez vide pour les pages sans numéro (couverture, préface…).</string>
-    <string name="scan_first_page_invalid">Un nombre de 1 à %1$d</string>
-    <string name="scan_consecutive">Pages consécutives</string>
+    <string name="page_number_invalid">Un nombre de 1 à %1$d</string>
     <plurals name="scan_review_confirm">
         <item quantity="one">Envoyer %d page</item>
         <item quantity="many">Envoyer %d pages</item>
@@ -159,10 +156,7 @@
     <string name="scan_review_add">Ajouter des pages</string>
     <string name="scan_review_page">Page %1$d sur %2$d</string>
     <string name="scan_discard_message">Rien n’a encore été envoyé au PC : la suppression est définitive.</string>
-    <string name="scan_summary_invalid">Corrigez le numéro de la première page.</string>
     <string name="scan_summary_none">Le PC garde le numéro imprimé s’il le lit.</string>
-    <string name="scan_summary_first_only">Numéro indiqué pour la première page : %1$d.</string>
-    <string name="scan_summary_range">Numéros indiqués : %1$d à %2$d.</string>
     <string name="review_close">Fermer et garder les pages</string>
     <string name="review_preparing">Préparation des pages : %1$d sur %2$d</string>
     <string name="review_preparing_button">Préparation…</string>
@@ -170,11 +164,24 @@
     <string name="review_number_auto">Auto</string>
     <string name="review_page_description">Page %1$d sur %2$d, numéro %3$d</string>
     <string name="review_page_description_auto">Page %1$d sur %2$d, numéro auto</string>
+    <string name="review_page_description_following_on">Page %1$d sur %2$d, numéro %3$d, à la suite</string>
+    <string name="review_change_number">Changer le numéro</string>
+    <string name="number_sheet_title">Numéro de la page %1$d</string>
+    <string name="number_sheet_field">Numéro de page</string>
+    <string name="number_sheet_help">Vide : le PC lira le numéro imprimé.</string>
+    <string name="number_sheet_next_pages">Numéroter les suivantes à la suite</string>
+    <string name="number_sheet_next_pages_range">Pages %1$d à %2$d : %3$d à %4$d</string>
+    <string name="number_sheet_next_pages_range_one">Page %1$d : %2$d</string>
+    <string name="number_sheet_next_pages_auto">Pages %1$d à %2$d : Auto</string>
+    <string name="number_sheet_next_pages_auto_one">Page %1$d : Auto</string>
+    <string name="number_sheet_clear">Effacer</string>
+    <string name="number_sheet_done">Valider</string>
     <string name="review_enlarge">Agrandir</string>
     <string name="review_remove">Retirer</string>
     <string name="review_page_removed">Page retirée</string>
     <string name="undo">Annuler</string>
     <string name="message_page_not_restored">Impossible de remettre la page : scannez-la de nouveau.</string>
+    <string name="message_number_not_saved">Impossible d’enregistrer le numéro : réessayez.</string>
     <string name="zoom_in">Zoom avant</string>
     <string name="zoom_out">Zoom arrière</string>
     <string name="review_pages_kept">Pages gardées sur le téléphone</string>

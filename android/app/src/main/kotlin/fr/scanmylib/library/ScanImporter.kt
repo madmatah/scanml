@@ -94,19 +94,18 @@ class ScanImporter(
         )
 
     /**
-     * Queues the pages of [documentId]'s run for upload, as one session numbered with [numbering].
+     * Queues the pages of [documentId]'s run for upload, as one session, each with its number.
      * Either all pages are queued, or none and the run stays as it was.
      *
      * @return the number of queued pages.
      */
-    suspend fun send(documentId: String, numbering: PageNumbering): Int {
+    suspend fun send(documentId: String): Int {
         val count = staging.send(documentId) { pages ->
             // Once files start moving, finish (or undo) whatever happens to the caller.
             withContext(NonCancellable) {
                 queueRun(
                     documentId,
                     pages,
-                    numbering,
                     scanFiles,
                     clock,
                     staging.sendJournal(documentId),
@@ -263,8 +262,8 @@ internal suspend fun <T> importPhotos(
 
 /**
  * Moves the [pages] of a run to [scanFiles] and records them with [insert] as one session of
- * [documentId], numbered with [numbering]. If anything fails, the files moved so far go back to
- * the run and the error is rethrown.
+ * [documentId], each with its number ([hintPages]). If anything fails, the files moved so far go
+ * back to the run and the error is rethrown.
  *
  * The moves are first written to [journal]: should the process die before the pages are recorded,
  * the next one puts them back in the run ([recoverInterruptedSend]) instead of leaving them in the
@@ -273,7 +272,6 @@ internal suspend fun <T> importPhotos(
 internal suspend fun queueRun(
     documentId: String,
     pages: List<StagedPage>,
-    numbering: PageNumbering,
     scanFiles: ScanFileStore,
     clock: Clock,
     journal: File,
@@ -282,6 +280,7 @@ internal suspend fun queueRun(
     if (pages.isEmpty()) return
     val sessionId = UUID.randomUUID().toString()
     val queuedAt = clock.millis()
+    val hints = hintPages(pages.map { it.numbering })
     val entities = pages.mapIndexed { index, page ->
         val pageId = UUID.randomUUID().toString()
         PendingPageEntity(
@@ -292,7 +291,7 @@ internal suspend fun queueRun(
             capturedAt = OffsetDateTime.ofInstant(page.capturedAt, clock.zone)
                 .truncatedTo(ChronoUnit.SECONDS)
                 .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME),
-            pageNumberHint = numbering.hintFor(index),
+            pageNumberHint = hints[index].number,
             fileName = ScanFileStore.fileName(pageId),
             state = UploadState.QUEUED,
             failure = null,

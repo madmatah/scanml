@@ -352,9 +352,9 @@ kotlinx-coroutines-test.
 - **Its words:** a group is a class nested in its parent's, without `inner`, under `@RunWith(Enclosed::class)`, which
   runs the public nested classes of a class, skips the abstract ones, and never runs a test of the class itself: a class
   holds either groups or tests. Level 1 is the class named after the file, `PageNumberingTest`, and the groups are named
-  `TheHintForMethod` or `WhenThePagesAreConsecutive`. A test is a `@Test` function named `` `should …` ``, the hook
-  before each test `@Before`, the hook that runs once `@BeforeClass` on a `@JvmStatic` function of the
-  `companion object` of a class that holds tests, and teardown `@After` and `@AfterClass`.
+  `TheHintPagesFunction` or `WhenTheFirstPageIsGivenWithTheNextPages`. A test is a `@Test` function named
+  `` `should …` ``, the hook before each test `@Before`, the hook that runs once `@BeforeClass` on a `@JvmStatic`
+  function of the `companion object` of a class that holds tests, and teardown `@After` and `@AfterClass`.
 - **A class under `@RunWith(Enclosed::class)` holds no companion object, and no other public nested class or object
   than its groups:** Kotlin compiles a companion object to a nested class, and Enclosed would run a public one as a
   group.
@@ -406,18 +406,20 @@ For example:
 @RunWith(Enclosed::class)
 class PageNumberingTest {
     @RunWith(Enclosed::class)
-    class TheHintForMethod {
-        class WhenThePagesAreConsecutive {
-            private lateinit var hints: List<Int?>
+    class TheHintPagesFunction {
+        class WhenTheFirstPageIsGivenWithTheNextPages {
+            private lateinit var numbers: List<Int?>
 
             @Before
             fun hintFourPages() {
-                hints = List(4, PageNumbering(firstPage = 13, consecutive = true)::hintFor)
+                val first = PageNumbering.Given(13, nextPagesFollowOn = true)
+                val pages = listOf(first) + List(3) { PageNumbering.NotGiven }
+                numbers = hintPages(pages).map { it.number }
             }
 
             @Test
-            fun `should number the pages on from the first one`() {
-                assertEquals(listOf(13, 14, 15, 16), hints)
+            fun `should number the next pages on from it`() {
+                assertEquals(listOf(13, 14, 15, 16), numbers)
             }
         }
     }

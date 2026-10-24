@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -31,8 +32,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
@@ -45,7 +48,9 @@ import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import fr.scanmylib.R
+import fr.scanmylib.library.PageHint
 import fr.scanmylib.model.ScanSource
 import fr.scanmylib.ui.components.PAGE_ASPECT_RATIO
 import fr.scanmylib.ui.components.PageFrame
@@ -54,25 +59,30 @@ import fr.scanmylib.ui.theme.PageChipContainer
 import fr.scanmylib.ui.theme.PageChipContent
 
 /**
- * "Remove" is an action of its own for TalkBack and Switch Access, since no icon is there to tap;
- * none while [onRemove] is null.
+ * One node for TalkBack and Switch Access, whose actions stand for the number chip and the removal,
+ * none while [onNumber] or [onRemove] is null; the chip stays a target of its own for a pointer.
  */
 @Composable
 fun StagedPageTile(
     position: Int,
     count: Int,
-    numberHint: Int?,
+    hint: PageHint,
     onEnlarge: () -> Unit,
+    onNumber: (() -> Unit)?,
     onRemove: (() -> Unit)?,
     modifier: Modifier = Modifier,
     image: @Composable (Modifier) -> Unit,
 ) {
-    val description = if (numberHint == null) {
-        stringResource(R.string.review_page_description_auto, position, count)
-    } else {
-        stringResource(R.string.review_page_description, position, count, numberHint)
+    val description = when (hint) {
+        PageHint.Auto -> stringResource(R.string.review_page_description_auto, position, count)
+
+        is PageHint.Given -> stringResource(R.string.review_page_description, position, count, hint.number)
+
+        is PageHint.FollowingOn ->
+            stringResource(R.string.review_page_description_following_on, position, count, hint.number)
     }
     val enlargeLabel = stringResource(R.string.review_enlarge)
+    val changeNumberLabel = stringResource(R.string.review_change_number)
     val removeLabel = stringResource(R.string.review_remove)
     var isFocused by remember { mutableStateOf(false) }
     Column(
@@ -89,6 +99,12 @@ fun StagedPageTile(
                     true
                 }
                 customActions = listOfNotNull(
+                    onNumber?.let { changeNumber ->
+                        CustomAccessibilityAction(changeNumberLabel) {
+                            changeNumber()
+                            true
+                        }
+                    },
                     onRemove?.let { remove ->
                         CustomAccessibilityAction(removeLabel) {
                             remove()
@@ -120,31 +136,66 @@ fun StagedPageTile(
                     .defaultMinSize(minWidth = 12.dp),
             )
         }
-        NumberStrip(numberHint)
+        NumberStrip(hint, onNumber)
     }
 }
 
 /** The number the page is sent with, under the image, where the paper's colors cannot hide it. */
 @Composable
-private fun NumberStrip(numberHint: Int?) {
+private fun NumberStrip(hint: PageHint, onNumber: (() -> Unit)?) {
     Box(
         contentAlignment = Alignment.CenterStart,
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = STRIP_MIN_HEIGHT),
     ) {
-        Text(
-            if (numberHint == null) {
-                stringResource(R.string.review_number_auto)
-            } else {
-                stringResource(R.string.page_label, numberHint.toString())
-            },
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        NumberChip(hint, onNumber)
+    }
+}
+
+/** Never told by its color alone: a number, the word "Auto", or the link icon of a number that follows on. */
+@Composable
+private fun NumberChip(hint: PageHint, onNumber: (() -> Unit)?) {
+    val colors = MaterialTheme.colorScheme
+    val (container, content) = when (hint) {
+        PageHint.Auto -> Color.Transparent to colors.onSurfaceVariant
+        is PageHint.Given -> colors.primary to colors.onPrimary
+        is PageHint.FollowingOn -> colors.secondaryContainer to colors.onSecondaryContainer
+    }
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .heightIn(min = STRIP_MIN_HEIGHT)
+            .then(if (onNumber == null) Modifier else Modifier.clickable(onClick = onNumber)),
+    ) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
-                .border(1.dp, MaterialTheme.colorScheme.outline, NUMBER_SHAPE)
+                .heightIn(min = NUMBER_CHIP_MIN_HEIGHT)
+                .background(container, NUMBER_SHAPE)
+                .then(
+                    if (hint == PageHint.Auto) Modifier.border(1.dp, colors.outline, NUMBER_SHAPE) else Modifier,
+                )
                 .padding(horizontal = 12.dp, vertical = 6.dp),
-        )
+        ) {
+            if (hint is PageHint.FollowingOn) {
+                Icon(
+                    painterResource(R.drawable.ic_link),
+                    contentDescription = null,
+                    tint = content,
+                    modifier = Modifier.size(with(LocalDensity.current) { LINK_ICON_SIZE.toDp() }),
+                )
+            }
+            Text(
+                when (val number = hint.number) {
+                    null -> stringResource(R.string.review_number_auto)
+                    else -> stringResource(R.string.page_label, number.toString())
+                },
+                style = MaterialTheme.typography.labelLarge.copy(fontFeatureSettings = TABULAR_FIGURES),
+                color = content,
+            )
+        }
     }
 }
 
@@ -221,6 +272,12 @@ fun AddPagesTile(
 }
 
 private val STRIP_MIN_HEIGHT = 48.dp
+private val NUMBER_CHIP_MIN_HEIGHT = 32.dp
+
+// In sp, so that the link grows with the number it stands before.
+private val LINK_ICON_SIZE = 16.sp
+
+internal const val TABULAR_FIGURES = "tnum"
 
 private val ORDER_BADGE_SHAPE = RoundedCornerShape(6.dp)
 private val NUMBER_SHAPE = RoundedCornerShape(8.dp)

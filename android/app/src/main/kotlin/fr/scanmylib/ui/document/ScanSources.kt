@@ -144,4 +144,5 @@ private fun ScanMessage.text(resources: Resources): String = when (this) {
     ScanMessage.ScannerFailed -> resources.getString(R.string.message_scanner_failed)
     ScanMessage.PhotoPickerUnavailable -> resources.getString(R.string.message_photo_picker_unavailable)
     ScanMessage.PageNotRestored -> resources.getString(R.string.message_page_not_restored)
+    ScanMessage.NumberNotSaved -> resources.getString(R.string.message_number_not_saved)
 }

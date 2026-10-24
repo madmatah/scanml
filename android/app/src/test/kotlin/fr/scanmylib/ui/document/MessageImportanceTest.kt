@@ -59,6 +59,7 @@ class MessageImportanceTest {
                     arrayOf("scanner unavailable", ScanMessage.ScannerUnavailable),
                     arrayOf("scanner failed", ScanMessage.ScannerFailed),
                     arrayOf("photo picker unavailable", ScanMessage.PhotoPickerUnavailable),
+                    arrayOf("number not saved, to type again", ScanMessage.NumberNotSaved),
                 )
             }
         }

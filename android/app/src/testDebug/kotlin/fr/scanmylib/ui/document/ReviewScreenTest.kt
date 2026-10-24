@@ -1,6 +1,8 @@
 package fr.scanmylib.ui.document
 
+import android.app.Dialog
 import android.net.Uri
+import android.view.KeyEvent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.SnackbarDuration
@@ -12,6 +14,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -21,16 +24,20 @@ import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.SemanticsNodeInteractionsProvider
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasScrollToKeyAction
+import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isHeading
 import androidx.compose.ui.test.junit4.ComposeContentTestRule
+import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -39,17 +46,22 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performCustomAccessibilityActionWithLabel
 import androidx.compose.ui.test.performScrollToKey
+import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import coil3.memory.MemoryCache
+import coil3.request.ImageRequest
 import com.github.takahirom.roborazzi.ExperimentalRoborazziApi
 import com.github.takahirom.roborazzi.RobolectricDeviceQualifiers
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.github.takahirom.roborazzi.captureScreenRoboImage
 import fr.scanmylib.MainDispatcherRule
+import fr.scanmylib.library.PageNumbering
 import fr.scanmylib.library.Preparation
 import fr.scanmylib.library.PreparationOutcome
 import fr.scanmylib.library.StagedPage
@@ -75,8 +87,10 @@ import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.ParameterizedRobolectricTestRunner
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import org.robolectric.shadows.ShadowDialog
 
 @RunWith(Enclosed::class)
 class ReviewScreenTest {
@@ -189,27 +203,6 @@ class ReviewScreenTest {
             }
         }
 
-        @RunWith(RobolectricTestRunner::class)
-        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
-        class WhenTheFirstPageIs32 {
-            @get:Rule
-            val compose = createComposeRule()
-
-            @Before
-            fun drawTheReview() {
-                compose.setContent { ScanMyLibTheme { ReviewContentOf(FOUR_PAGES.copy(firstPage = "32")) } }
-            }
-
-            @Test
-            fun `should read the number the second page is sent with`() {
-                compose.onNodeWithContentDescription(SECOND_PAGE_33).assertIsDisplayed()
-            }
-
-            companion object {
-                private const val SECOND_PAGE_33 = "Page 2 of 4, number 33"
-            }
-        }
-
         @RunWith(ParameterizedRobolectricTestRunner::class)
         @GraphicsMode(GraphicsMode.Mode.NATIVE)
         @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone, fontScale = 2f)
@@ -229,18 +222,11 @@ class ReviewScreenTest {
             }
 
             @Test
-            fun `should show the first page number field whole`() {
-                assertTrue(isShownWhole(compose, FIRST_PAGE_NUMBER))
-            }
-
-            @Test
             fun `should show the send button whole`() {
                 assertTrue(isShownWhole(compose, SEND_FOUR_PAGES))
             }
 
             companion object {
-                private const val FIRST_PAGE_NUMBER = "First page number"
-
                 @JvmStatic
                 @ParameterizedRobolectricTestRunner.Parameters(name = "in the {0} theme")
                 fun themes(): List<Array<Any>> = THEMES
@@ -399,20 +385,309 @@ class ReviewScreenTest {
             }
         }
 
-        @RunWith(RobolectricTestRunner::class)
+        @RunWith(ParameterizedRobolectricTestRunner::class)
+        @GraphicsMode(GraphicsMode.Mode.NATIVE)
         @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
-        class WhenTheFirstPageIsInvalid {
+        class WhenPagesWereNumbered(private val theme: String, private val dark: Boolean) {
             @get:Rule
             val compose = createComposeRule()
 
             @Before
             fun drawTheReview() {
-                compose.setContent { ScanMyLibTheme { ReviewContentOf(FOUR_PAGES.copy(firstPage = "0")) } }
+                compose.setContent { ScanMyLibTheme(dark = dark) { ReviewContentOf(NUMBERED_PAGES) } }
+                compose.onRoot().captureRoboImage("build/outputs/roborazzi/review-numbers-$theme.png")
             }
 
             @Test
-            fun `should not send, so that no page is numbered wrong`() {
-                compose.onNodeWithText(SEND_FOUR_PAGES).assertIsNotEnabled()
+            fun `should read the number given to a page`() {
+                compose.onNodeWithContentDescription(FIRST_PAGE_32).assertIsDisplayed()
+            }
+
+            @Test
+            fun `should read the number a page follows on with, as such`() {
+                compose.onNodeWithContentDescription(SECOND_PAGE_33_IN_SEQUENCE).assertIsDisplayed()
+            }
+
+            @Test
+            fun `should read a page without a number as auto`() {
+                compose.onNodeWithContentDescription(THIRD_PAGE_AUTO).assertIsDisplayed()
+            }
+
+            @Test
+            fun `should let TalkBack change the number of each page, since the chip is not a node of its own`() {
+                assertEquals(
+                    NUMBERED_PAGES.stagedPages.size,
+                    compose.onAllNodes(hasCustomAction(CHANGE_THE_NUMBER)).fetchSemanticsNodes().size,
+                )
+            }
+
+            companion object {
+                @JvmStatic
+                @ParameterizedRobolectricTestRunner.Parameters(name = "in the {0} theme")
+                fun themes(): List<Array<Any>> = THEMES
+            }
+        }
+
+        @RunWith(ParameterizedRobolectricTestRunner::class)
+        @GraphicsMode(GraphicsMode.Mode.NATIVE)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone, fontScale = 2f)
+        class WhenPagesWereNumberedAndTheTextIsTwiceItsSize(private val theme: String, private val dark: Boolean) {
+            @get:Rule
+            val compose = createComposeRule()
+
+            @Before
+            fun drawTheReview() {
+                compose.setContent { ScanMyLibTheme(dark = dark) { ReviewContentOf(NUMBERED_PAGES) } }
+                compose.onRoot().captureRoboImage("build/outputs/roborazzi/review-numbers-large-text-$theme.png")
+            }
+
+            @Test
+            fun `should keep the pages in two columns`() {
+                assertEquals(2, countColumns(compose, FIRST_PAGE_32, SECOND_PAGE_33_IN_SEQUENCE))
+            }
+
+            companion object {
+                @JvmStatic
+                @ParameterizedRobolectricTestRunner.Parameters(name = "in the {0} theme")
+                fun themes(): List<Array<Any>> = THEMES
+            }
+        }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenTheNumberOfTheSecondPageIsTapped {
+            @get:Rule
+            val compose = createComposeRule()
+
+            @Before
+            fun tapIt() {
+                compose.setContent { ScanMyLibTheme { ReviewContentOf(FOUR_PAGES) } }
+                tapTheNumberChip(compose, SECOND_PAGE_AUTO)
+            }
+
+            @Test
+            fun `should open the number sheet of that page`() {
+                compose.onNode(hasText(NUMBER_OF_PAGE_2) and isHeading()).assertIsDisplayed()
+            }
+        }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenTheChangeTheNumberActionOfTheSecondTileIsInvoked {
+            @get:Rule
+            val compose = createComposeRule()
+
+            @OptIn(ExperimentalTestApi::class)
+            @Before
+            fun invokeIt() {
+                compose.setContent { ScanMyLibTheme { ReviewContentOf(FOUR_PAGES) } }
+                compose.onNodeWithContentDescription(SECOND_PAGE_AUTO)
+                    .performCustomAccessibilityActionWithLabel(CHANGE_THE_NUMBER)
+            }
+
+            @Test
+            fun `should open the number sheet of that page`() {
+                compose.onNode(hasText(NUMBER_OF_PAGE_2) and isHeading()).assertIsDisplayed()
+            }
+        }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenANumberIsDone {
+            @get:Rule
+            val compose = createComposeRule()
+
+            private lateinit var numbered: MutableList<NumberedPage>
+
+            @OptIn(ExperimentalTestApi::class)
+            @Before
+            fun numberTheSecondPage() {
+                numbered = mutableListOf()
+                compose.setContent {
+                    ScanMyLibTheme {
+                        ReviewContentOf(
+                            FOUR_PAGES,
+                            onNumberPage = { page, number, nextPagesFollowOn ->
+                                numbered += NumberedPage(page, number, nextPagesFollowOn)
+                            },
+                        )
+                    }
+                }
+                compose.onNodeWithContentDescription(SECOND_PAGE_AUTO)
+                    .performCustomAccessibilityActionWithLabel(CHANGE_THE_NUMBER)
+                compose.onNode(hasSetTextAction()).performTextInput(TYPED_33)
+                compose.onNodeWithText(DONE).performClick()
+                compose.waitForIdle()
+            }
+
+            @Test
+            fun `should number that page`() {
+                assertEquals(
+                    listOf(NumberedPage(FOUR_PAGES.stagedPages[1], number = 33, nextPagesFollowOn = true)),
+                    numbered,
+                )
+            }
+
+            @Test
+            fun `should close the sheet`() {
+                assertEquals(0, compose.onAllNodesWithText(NUMBER_OF_PAGE_2).fetchSemanticsNodes().size)
+            }
+
+            @Test
+            fun `should give the focus back to the page`() {
+                compose.onNodeWithContentDescription(SECOND_PAGE_AUTO).assertIsFocused()
+            }
+
+            companion object {
+                private const val TYPED_33 = "33"
+            }
+        }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenDoneIsTappedTwice {
+            @get:Rule
+            val compose = createComposeRule()
+
+            private lateinit var numbered: MutableList<NumberedPage>
+
+            @OptIn(ExperimentalTestApi::class)
+            @Before
+            fun numberTheSecondPage() {
+                numbered = mutableListOf()
+                compose.setContent {
+                    ScanMyLibTheme {
+                        ReviewContentOf(
+                            FOUR_PAGES,
+                            onNumberPage = { page, number, nextPagesFollowOn ->
+                                numbered += NumberedPage(page, number, nextPagesFollowOn)
+                            },
+                        )
+                    }
+                }
+                compose.onNodeWithContentDescription(SECOND_PAGE_AUTO)
+                    .performCustomAccessibilityActionWithLabel(CHANGE_THE_NUMBER)
+                compose.onNode(hasSetTextAction()).performTextInput(TYPED_33)
+                compose.waitForIdle()
+                compose.mainClock.autoAdvance = false
+                compose.onNodeWithText(DONE).performClick()
+                compose.onNodeWithText(DONE).performClick()
+                compose.mainClock.autoAdvance = true
+                compose.waitForIdle()
+            }
+
+            @Test
+            fun `should number that page once`() {
+                assertEquals(1, numbered.size)
+            }
+
+            @Test
+            fun `should give the focus back to the page`() {
+                compose.onNodeWithContentDescription(SECOND_PAGE_AUTO).assertIsFocused()
+            }
+
+            companion object {
+                private const val TYPED_33 = "33"
+            }
+        }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenDoneIsTappedThenBackIsPressed {
+            @get:Rule
+            val compose = createComposeRule()
+
+            private lateinit var numbered: MutableList<NumberedPage>
+
+            @OptIn(ExperimentalTestApi::class)
+            @Before
+            fun numberTheSecondPage() {
+                numbered = mutableListOf()
+                compose.setContent {
+                    ScanMyLibTheme {
+                        ReviewContentOf(
+                            FOUR_PAGES,
+                            onNumberPage = { page, number, nextPagesFollowOn ->
+                                numbered += NumberedPage(page, number, nextPagesFollowOn)
+                            },
+                        )
+                    }
+                }
+                compose.onNodeWithContentDescription(SECOND_PAGE_AUTO)
+                    .performCustomAccessibilityActionWithLabel(CHANGE_THE_NUMBER)
+                compose.onNode(hasSetTextAction()).performTextInput(TYPED_33)
+                compose.waitForIdle()
+                compose.mainClock.autoAdvance = false
+                compose.onNodeWithText(DONE).performClick()
+                compose.mainClock.advanceTimeByFrame()
+                compose.runOnUiThread { pressBack(ShadowDialog.getLatestDialog()) }
+                compose.mainClock.autoAdvance = true
+                compose.waitForIdle()
+            }
+
+            @Test
+            fun `should number that page once`() {
+                assertEquals(1, numbered.size)
+            }
+
+            @Test
+            fun `should give the focus back to the page`() {
+                compose.onNodeWithContentDescription(SECOND_PAGE_AUTO).assertIsFocused()
+            }
+
+            companion object {
+                private const val TYPED_33 = "33"
+            }
+        }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenThePageOfTheOpenNumberSheetLeavesTheRun {
+            @get:Rule
+            val compose = createComposeRule()
+
+            @OptIn(ExperimentalTestApi::class)
+            @Before
+            fun removeThePage() {
+                var scan by mutableStateOf(FOUR_PAGES)
+                compose.setContent { ScanMyLibTheme { ReviewContentOf(scan) } }
+                compose.onNodeWithContentDescription(SECOND_PAGE_AUTO)
+                    .performCustomAccessibilityActionWithLabel(CHANGE_THE_NUMBER)
+                compose.waitForIdle()
+                scan = SECOND_PAGE_REMOVED
+                compose.waitForIdle()
+            }
+
+            @Test
+            fun `should close the sheet, which would number another page`() {
+                assertEquals(0, compose.onAllNodesWithText(NUMBER_OF_PAGE_2).fetchSemanticsNodes().size)
+            }
+        }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenANumberIsTypedAndTheScreenIsRecreated {
+            @get:Rule
+            val compose = createComposeRule()
+
+            @OptIn(ExperimentalTestApi::class)
+            @Before
+            fun recreateTheScreen() {
+                val restoration = StateRestorationTester(compose)
+                restoration.setContent { ScanMyLibTheme { ReviewContentOf(rememberTheRunOnceRead(FOUR_PAGES)) } }
+                compose.onNodeWithContentDescription(SECOND_PAGE_AUTO)
+                    .performCustomAccessibilityActionWithLabel(CHANGE_THE_NUMBER)
+                compose.onNode(hasSetTextAction()).performTextInput(TYPED_33)
+                restoration.emulateSavedInstanceStateRestore()
+            }
+
+            @Test
+            fun `should keep the sheet open with the number typed, once the run is read again`() {
+                compose.onNode(hasSetTextAction()).assert(hasText(TYPED_33))
+            }
+
+            companion object {
+                private const val TYPED_33 = "33"
             }
         }
 
@@ -456,6 +731,11 @@ class ReviewScreenTest {
             @Test
             fun `should not let TalkBack remove a page that is being sent`() {
                 assertEquals(0, compose.onAllNodes(hasRemoveAction()).fetchSemanticsNodes().size)
+            }
+
+            @Test
+            fun `should not let TalkBack change the number of a page that is being sent`() {
+                assertEquals(0, compose.onAllNodes(hasCustomAction(CHANGE_THE_NUMBER)).fetchSemanticsNodes().size)
             }
 
             companion object {
@@ -935,6 +1215,51 @@ class ReviewScreenTest {
 
         @RunWith(RobolectricTestRunner::class)
         @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenDoneIsTappedUnchangedOnAPageThatFollowsOn {
+            @get:Rule
+            val mainDispatcher = MainDispatcherRule()
+
+            @get:Rule
+            val folder = TemporaryFolder()
+
+            @get:Rule
+            val compose = createComposeRule()
+
+            private lateinit var fileName: String
+            private lateinit var fileNameAfter: String
+
+            @OptIn(ExperimentalTestApi::class)
+            @Before
+            fun validateItUnchanged() = runTest {
+                val run = stageThreePages(folder)
+                run.viewModel.numberPage(run.stagedPages[0], NUMBER_32, nextPagesFollowOn = true)
+                run.viewModel.scanState.first { it.stagedPages[0].numbering is PageNumbering.Given }
+                showTheReview(compose, run)
+                fileName = run.viewModel.scanState.value.stagedPages[1].file.name
+                compose.onNodeWithContentDescription(SECOND_OF_THREE_33_IN_SEQUENCE)
+                    .performCustomAccessibilityActionWithLabel(CHANGE_THE_NUMBER)
+                compose.onNodeWithText(DONE).performClick()
+                compose.waitForIdle()
+                fileNameAfter = run.staging.pages(DOCUMENT_ID)[1].file.name
+            }
+
+            @Test
+            fun `should keep it following on`() {
+                compose.onNodeWithContentDescription(SECOND_OF_THREE_33_IN_SEQUENCE).assertIsDisplayed()
+            }
+
+            @Test
+            fun `should keep its file as it was`() {
+                assertEquals(fileName, fileNameAfter)
+            }
+
+            companion object {
+                private const val SECOND_OF_THREE_33_IN_SEQUENCE = "Page 2 of 3, number 33, in sequence"
+            }
+        }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
         class WhenTheScreenResumesFromASourceThatReturnedNothing {
             @get:Rule
             val mainDispatcher = MainDispatcherRule()
@@ -1062,11 +1387,41 @@ class ReviewScreenTest {
             }
         }
     }
+
+    @RunWith(Enclosed::class)
+    class TheBuildPageImageRequestFunction {
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36])
+        class WhenANumberedPageIsRenamed {
+            private lateinit var request: ImageRequest
+
+            @Before
+            fun buildItsRequest() {
+                request = buildPageImageRequest(RuntimeEnvironment.getApplication(), RENAMED_FILE, SHOWN_IMAGE_KEY)
+            }
+
+            @Test
+            fun `should show the image of its old name until the new file is read, so that the tile never blinks`() {
+                assertEquals(SHOWN_IMAGE_KEY, request.placeholderMemoryCacheKey)
+            }
+
+            companion object {
+                private val RENAMED_FILE = File("page_h33c.jpg")
+                private val SHOWN_IMAGE_KEY = MemoryCache.Key("page.jpg")
+            }
+        }
+    }
 }
 
 private const val FOUR_PAGES_TO_SEND = "4 pages to send"
 private const val SEND_FOUR_PAGES = "Send 4 pages"
 private const val SECOND_PAGE_AUTO = "Page 2 of 4, number auto"
+private const val FIRST_PAGE_32 = "Page 1 of 4, number 32"
+private const val SECOND_PAGE_33_IN_SEQUENCE = "Page 2 of 4, number 33, in sequence"
+private const val CHANGE_THE_NUMBER = "Change the number"
+private const val NUMBER_OF_PAGE_2 = "Number of page 2"
+private const val DONE = "Done"
+private const val NUMBER_32 = 32
 private const val ENLARGE = "Enlarge"
 private const val REMOVE = "Remove"
 private const val CANCEL = "Cancel"
@@ -1112,6 +1467,17 @@ private val FOUR_PAGES = ScanUiState(
     },
 )
 
+private val NUMBERED_PAGES = FOUR_PAGES.copy(
+    stagedPages = FOUR_PAGES.stagedPages.zip(
+        listOf(
+            PageNumbering.Given(NUMBER_32, nextPagesFollowOn = true),
+            PageNumbering.NotGiven,
+            PageNumbering.Cleared,
+            PageNumbering.NotGiven,
+        ),
+    ) { page, numbering -> page.copy(numbering = numbering) },
+)
+
 private val IMPORTING_FOUR_PHOTOS = FOUR_PAGES.copy(
     stagedPages = emptyList(),
     preparation = Preparation(done = 2, total = 4, imagesToAdd = 4, isCancellable = true),
@@ -1153,9 +1519,24 @@ private fun readClickLabel(screen: SemanticsNodeInteractionsProvider, descriptio
         .getOrNull(SemanticsActions.OnClick)?.label
 
 private fun countColumnsOfTheFirstTwoPages(screen: SemanticsNodeInteractionsProvider): Int =
-    listOf("Page 1 of 4, number auto", SECOND_PAGE_AUTO).map { page ->
-        screen.onNodeWithContentDescription(page).fetchSemanticsNode().positionInRoot.x.roundToInt()
-    }.toSet().size
+    countColumns(screen, "Page 1 of 4, number auto", SECOND_PAGE_AUTO)
+
+private fun countColumns(screen: SemanticsNodeInteractionsProvider, vararg pages: String): Int = pages.map { page ->
+    screen.onNodeWithContentDescription(page).fetchSemanticsNode().positionInRoot.x.roundToInt()
+}.toSet().size
+
+/** A tap on the chip, at the start of the strip under the image: inside the tile's one node, a pointer target only. */
+private fun tapTheNumberChip(screen: SemanticsNodeInteractionsProvider, page: String) {
+    screen.onNodeWithContentDescription(page).performTouchInput {
+        val chipCenterInset = STRIP_HEIGHT.toPx() / 2
+        click(Offset(chipCenterInset, height - chipCenterInset))
+    }
+}
+
+/** What the review asked to number. */
+private data class NumberedPage(val page: StagedPage, val number: Int?, val nextPagesFollowOn: Boolean)
+
+private val STRIP_HEIGHT = 48.dp
 
 private fun isShownWhole(screen: SemanticsNodeInteractionsProvider, text: String): Boolean {
     val root = screen.onRoot().fetchSemanticsNode().boundsInRoot
@@ -1227,6 +1608,18 @@ private suspend fun openASourceAfterRemovingTheOnlyPage(compose: ComposeContentT
     compose.waitForIdle()
 }
 
+@Composable
+private fun rememberTheRunOnceRead(run: ScanUiState): ScanUiState {
+    var scan by remember { mutableStateOf(ScanUiState()) }
+    LaunchedEffect(Unit) { scan = run }
+    return scan
+}
+
+private fun pressBack(dialog: Dialog) {
+    dialog.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_BACK))
+    dialog.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_BACK))
+}
+
 private fun resumeTheScreen(compose: ComposeContentTestRule, review: ReviewOnScreen) {
     compose.runOnIdle { review.lifecycle.moveTo(Lifecycle.State.RESUMED) }
     compose.waitForIdle()
@@ -1241,14 +1634,14 @@ private fun ReviewContentOf(
     onRestorePage: (StagedPage) -> Unit = {},
     onDeleteRemovedPage: (StagedPage) -> Unit = {},
     onDismissOutcome: () -> Unit = {},
+    onNumberPage: (StagedPage, Int?, Boolean) -> Unit = { _, _, _ -> },
     snackbarHostState: SnackbarHostState = remember { SnackbarHostState() },
 ) {
     ReviewContent(
         scan = scan,
         snackbarHostState = snackbarHostState,
         onClose = {},
-        onFirstPageChange = {},
-        onConsecutiveChange = {},
+        onNumberPage = onNumberPage,
         onCancelPreparation = {},
         onDismissOutcome = onDismissOutcome,
         onDismissAddingInterrupted = {},

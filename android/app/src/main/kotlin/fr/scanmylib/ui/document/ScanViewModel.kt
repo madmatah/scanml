@@ -10,13 +10,14 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.navigation.toRoute
 import fr.scanmylib.library.CopySource
-import fr.scanmylib.library.PageNumbering
+import fr.scanmylib.library.PageHint
 import fr.scanmylib.library.PhotoImportResult
 import fr.scanmylib.library.Preparation
 import fr.scanmylib.library.PreparationOutcome
 import fr.scanmylib.library.RunPreparation
 import fr.scanmylib.library.StagedPage
 import fr.scanmylib.library.StagingArea
+import fr.scanmylib.library.hintPages
 import fr.scanmylib.library.isStorageFull
 import fr.scanmylib.library.isStorageLow
 import fr.scanmylib.model.ScanSource
@@ -37,12 +38,13 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
  * Adding pages: "Scan" opens a camera at once and "Import" the photo picker, with no question
- * before; the pages of the run then wait on the phone, with their optional numbering, until the
+ * before; the pages of the run then wait on the phone, each with its optional number, until the
  * user confirms them for upload (or discards them).
  */
 data class ScanUiState(
@@ -55,8 +57,6 @@ data class ScanUiState(
     /** The settings are read: until then, the default camera is not known. */
     val loaded: Boolean = false,
     val scannerMode: ScannerMode = ScannerMode.DEFAULT,
-    val firstPage: String = "",
-    val consecutive: Boolean = true,
     /** Pages captured, scanned or imported, waiting for the user's confirmation. */
     val stagedPages: List<StagedPage> = emptyList(),
     /** Scanned or imported images being copied to the run. */
@@ -71,14 +71,13 @@ data class ScanUiState(
     val removedPage: StagedPage? = null,
     val isSourceOpen: Boolean = false,
 ) {
-    /** Null while the first page field is invalid. */
-    val numbering: PageNumbering? get() = PageNumbering.fromInput(firstPage, consecutive)
+    val hints: List<PageHint> get() = hintPages(stagedPages.map { it.numbering })
 
     val preparing: Boolean get() = preparation != null
 
     val pageCount: Int get() = stagedPages.size + (preparation?.imagesToAdd ?: 0)
 
-    val canSend: Boolean get() = numbering != null && stagedPages.isNotEmpty() && !preparing && !sending
+    val canSend: Boolean get() = stagedPages.isNotEmpty() && !preparing && !sending
 
     val hasNothingToReview: Boolean
         get() = isRunRead && stagedPages.isEmpty() && !preparing && outcome == null && !sending &&
@@ -122,6 +121,8 @@ sealed interface ScanMessage {
     data object PhotoPickerUnavailable : ScanMessage
 
     data object PageNotRestored : ScanMessage
+
+    data object NumberNotSaved : ScanMessage
 }
 
 class ScanViewModel(
@@ -132,7 +133,7 @@ class ScanViewModel(
     private val settings: SettingsRepository,
     private val addScannedPages: suspend (pages: List<Uri>, onProgress: (Int) -> Unit) -> Unit,
     private val addPhotos: suspend (photos: List<Uri>, onProgress: (Int) -> Unit) -> PhotoImportResult,
-    private val sendRun: suspend (PageNumbering) -> Int,
+    private val sendRun: suspend () -> Int,
     /** Free bytes on the storage that holds the runs; a binder call, run off the main thread. */
     private val freeStorage: () -> Long,
     private val hasCamera: Boolean,
@@ -149,22 +150,18 @@ class ScanViewModel(
 
     val messages: Flow<ScanMessage> = messageChannel.receiveAsFlow()
 
-    // The form is kept in the saved state, as the process may be killed while the scanner or the
-    // camera is in front; the pages of the run are files (StagingArea).
+    // Kept in the saved state, as the process may be killed while the scanner or the camera is in
+    // front; the pages of the run, numbers included, are files (StagingArea).
     private val scanForm: Flow<ScanUiState> = combine(
-        savedState.getStateFlow(KEY_FIRST_PAGE, ""),
-        savedState.getStateFlow(KEY_CONSECUTIVE, true),
         savedState.getStateFlow(KEY_ADDING_INTERRUPTED, false),
         settings.settings,
-    ) { firstPage, consecutive, wasAddingInterrupted, settings ->
+    ) { wasAddingInterrupted, settings ->
         ScanUiState(
             defaultCamera = settings.defaultCamera,
             googleScannerUnavailable = settings.googleScannerUnavailable,
             hasCamera = hasCamera,
             loaded = true,
             scannerMode = settings.scannerMode,
-            firstPage = firstPage,
-            consecutive = consecutive,
             wasAddingInterrupted = wasAddingInterrupted,
         )
     }
@@ -194,14 +191,6 @@ class ScanViewModel(
             // Saved, so that the banner stays until dismissed, even once the process is killed again.
             if (staging.takeInterrupted(documentId)) savedState[KEY_ADDING_INTERRUPTED] = true
         }
-    }
-
-    fun onFirstPageChange(text: String) {
-        savedState[KEY_FIRST_PAGE] = text.filter(Char::isDigit).take(MAX_FIRST_PAGE_DIGITS)
-    }
-
-    fun onConsecutiveChange(consecutive: Boolean) {
-        savedState[KEY_CONSECUTIVE] = consecutive
     }
 
     /** Makes [camera] the one "Scan" opens from now on. */
@@ -343,18 +332,15 @@ class ScanViewModel(
         messageChannel.trySend(ScanMessage.PhotoPickerUnavailable)
     }
 
-    /** Queues the pages of the run for upload, as one session numbered as the user asked. */
+    /** Queues the pages of the run for upload, as one session, each with the number the user gave it. */
     fun send() {
         val scan = scanState.value
-        val numbering = scan.numbering ?: return
         if (scan.stagedPages.isEmpty() || scan.preparing || sending.value || isSourceOpen.value) return
         sending.value = true
         deletePendingRemoval()
         viewModelScope.launch {
             try {
-                val count = sendRun(numbering)
-                // Scanning a book in order: the next run starts after this one.
-                savedState[KEY_FIRST_PAGE] = numbering.nextFirstPage(count)?.toString().orEmpty()
+                val count = sendRun()
                 savedState[KEY_ADDING_INTERRUPTED] = false
                 runPreparation.dismissOutcome(documentId)
                 // Before sending is over: the emptied run then never reads as a review left empty.
@@ -383,10 +369,22 @@ class ScanViewModel(
         viewModelScope.launch { staging.discard(documentId) }
     }
 
+    fun numberPage(page: StagedPage, number: Int?, nextPagesFollowOn: Boolean) {
+        if (sending.value) return
+        viewModelScope.launch {
+            try {
+                staging.numberPage(documentId, page, number, nextPagesFollowOn)
+            } catch (e: IOException) {
+                Log.w(TAG, "page not numbered", e)
+                messageChannel.send(ScanMessage.NumberNotSaved)
+            }
+        }
+    }
+
     fun removePage(page: StagedPage) {
         val earlier = removedPage.value
         // A second tap on its Remove, while the page is still on screen: it is out of the run already.
-        if (page == earlier) return
+        if (page.key == earlier?.key) return
         // Before the page leaves the run: an emptied run then never reads as nothing to review.
         removedPage.value = page
         viewModelScope.launch {
@@ -395,7 +393,7 @@ class ScanViewModel(
                 staging.remove(documentId, page)
             } catch (e: IOException) {
                 Log.w(TAG, "staged page not removed", e)
-                removedPage.compareAndSet(page, null)
+                removedPage.update { if (it?.key == page.key) null else it }
             } finally {
                 if (earlier != null) staging.deleteRemovedQuietly(documentId, earlier)
             }
@@ -403,7 +401,7 @@ class ScanViewModel(
     }
 
     fun restorePage(page: StagedPage) {
-        if (removedPage.value != page) return
+        if (removedPage.value?.key != page.key) return
         viewModelScope.launch {
             try {
                 staging.restore(documentId, page)
@@ -412,12 +410,12 @@ class ScanViewModel(
                 messageChannel.send(ScanMessage.PageNotRestored)
             }
             // Once back in the run, so that the run never reads as empty meanwhile.
-            removedPage.compareAndSet(page, null)
+            removedPage.update { if (it?.key == page.key) null else it }
         }
     }
 
     fun deleteRemovedPage(page: StagedPage) {
-        if (removedPage.value != page) return
+        if (removedPage.value?.key != page.key) return
         deletePendingRemoval()
     }
 
@@ -448,10 +446,7 @@ class ScanViewModel(
     companion object {
         private const val KEY_SHARED_IMPORTED = "scan_shared_imported"
         private const val KEY_ACTION_ON_OPEN_DONE = "scan_action_on_open_done"
-        private const val KEY_FIRST_PAGE = "scan_first_page"
-        private const val KEY_CONSECUTIVE = "scan_consecutive"
         private const val KEY_ADDING_INTERRUPTED = "scan_adding_interrupted"
-        private const val MAX_FIRST_PAGE_DIGITS = 4
 
         val Factory = viewModelFactory {
             initializer {
@@ -469,7 +464,7 @@ class ScanViewModel(
                         scanImporter.addScannedPages(documentId, pages, onProgress)
                     },
                     addPhotos = { photos, onProgress -> scanImporter.addPhotos(documentId, photos, onProgress) },
-                    sendRun = { numbering -> scanImporter.send(documentId, numbering) },
+                    sendRun = { scanImporter.send(documentId) },
                     freeStorage = container::freeStorage,
                     hasCamera = container.hasCamera,
                     applicationScope = container.applicationScope,
@@ -501,6 +496,7 @@ internal val ScanMessage.important: Boolean get() = when (this) {
     ScanMessage.ScannerFailed,
     ScanMessage.PhotoPickerUnavailable,
     ScanMessage.PageNotRestored,
+    ScanMessage.NumberNotSaved,
     -> true
 
     ScanMessage.SettingNotSaved -> false

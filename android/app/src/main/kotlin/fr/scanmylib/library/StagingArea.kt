@@ -27,8 +27,14 @@ import kotlinx.coroutines.withContext
  * @property capturedAt when the page was photographed: the time of the shot, the EXIF time of an
  *   imported photo, or the time of the scanner run.
  */
-data class StagedPage(val file: File, val seq: Int, val capturedAt: Instant) {
-    val key: String get() = "${seq}_${capturedAt.toEpochMilli()}"
+data class StagedPage(
+    val file: File,
+    val seq: Int,
+    val capturedAt: Instant,
+    val numbering: PageNumbering = PageNumbering.NotGiven,
+) {
+    /** Its identity in the run, which a new number keeps: the number changes the file's name, never these. */
+    val key: String = "${seq}_${capturedAt.toEpochMilli()}"
 }
 
 /** A complete image written in a [StagingArea.incomingFile], to add to a run. */
@@ -37,9 +43,10 @@ data class StagingInput(val file: File, val capturedAt: Instant)
 /**
  * Pages captured, scanned or imported for a document, kept in the app's private storage until the
  * user sends them to the upload queue or discards them: one run per document, in its own
- * directory. Each page is a file named after its position and capture time, so the directory
- * alone describes the run: it survives the process being killed and the app being closed, and is
- * offered again when the document is opened.
+ * directory. Each page is a file named after its position, its capture time and the number the
+ * user gave it, so the directory alone describes the run: it survives the process being killed and
+ * the app being closed, and is offered again when the document is opened. Every operation on a page
+ * finds its file by the page's [StagedPage.key], since its name changes with its number.
  *
  * Images are written in an `incoming` subdirectory first and join the run once complete; what an
  * interrupted shot or copy leaves there is deleted when the run is first read by a new process. A
@@ -137,12 +144,15 @@ class StagingArea(
     suspend fun remove(documentId: String, page: StagedPage) {
         mutex.withLock {
             val run = loadLocked(documentId)
+            val current = run.firstOrNull { it.key == page.key } ?: throw IOException("cannot remove ${page.file}")
             // Not cancellable once the page moves: the run in memory must follow its files.
             withContext(NonCancellable + io) {
                 val removed = File(directory(documentId), REMOVED)
                 if (!removed.isDirectory && !removed.mkdirs()) throw IOException("cannot create $removed")
-                if (!page.file.renameTo(removedFile(documentId, page))) throw IOException("cannot remove ${page.file}")
-                runs.update { it + (documentId to run - page) }
+                if (!current.file.renameTo(File(removed, current.file.name))) {
+                    throw IOException("cannot remove ${current.file}")
+                }
+                runs.update { it + (documentId to run - current) }
             }
         }
     }
@@ -152,11 +162,13 @@ class StagingArea(
             val run = loadLocked(documentId)
             // Not cancellable once the page moves: the run in memory must follow its files.
             withContext(NonCancellable + io) {
-                if (page.file.exists()) {
-                    throw IOException("cannot restore ${page.file}: a page of that name is in the run")
+                val removed = findRemoved(documentId, page) ?: throw IOException("cannot restore ${page.file}")
+                val restored = removed.copy(file = File(directory(documentId), removed.file.name))
+                if (restored.file.exists()) {
+                    throw IOException("cannot restore ${restored.file}: a page of that name is in the run")
                 }
-                if (!removedFile(documentId, page).renameTo(page.file)) throw IOException("cannot restore ${page.file}")
-                runs.update { it + (documentId to (run + page).sortedWith(PAGE_ORDER)) }
+                if (!removed.file.renameTo(restored.file)) throw IOException("cannot restore ${restored.file}")
+                runs.update { it + (documentId to (run + restored).sortedWith(PAGE_ORDER)) }
             }
         }
     }
@@ -164,7 +176,7 @@ class StagingArea(
     suspend fun deleteRemoved(documentId: String, page: StagedPage) {
         mutex.withLock {
             withContext(io) {
-                val file = removedFile(documentId, page)
+                val file = findRemoved(documentId, page)?.file ?: return@withContext
                 if (!file.delete() && file.exists()) throw IOException("cannot delete $file")
             }
         }
@@ -174,10 +186,34 @@ class StagingArea(
     suspend fun delete(documentId: String, page: StagedPage) {
         mutex.withLock {
             val run = loadLocked(documentId)
+            val current = run.firstOrNull { it.key == page.key } ?: return@withLock
             withContext(io) {
-                if (!page.file.delete() && page.file.exists()) throw IOException("cannot delete ${page.file}")
+                if (!current.file.delete() && current.file.exists()) throw IOException("cannot delete ${current.file}")
             }
-            runs.update { it + (documentId to run - page) }
+            runs.update { it + (documentId to run - current) }
+        }
+    }
+
+    suspend fun numberPage(documentId: String, page: StagedPage, number: Int?, nextPagesFollowOn: Boolean) {
+        mutex.withLock {
+            val run = loadLocked(documentId)
+            val index = run.indexOfFirst { it.key == page.key }
+            if (index < 0) return@withLock
+            val current = run[index]
+            val numbering = chooseNumbering(run.map { it.numbering }, index, number, nextPagesFollowOn)
+            if (numbering == current.numbering) return@withLock
+            val numbered = current.copy(
+                file = File(directory(documentId), fileName(current.seq, current.capturedAt, numbering)),
+                numbering = numbering,
+            )
+            // Not cancellable once the page moves: the run in memory must follow its files.
+            withContext(NonCancellable + io) {
+                if (numbered.file.exists()) {
+                    throw IOException("cannot number ${current.file}: a page of that name is in the run")
+                }
+                if (!current.file.renameTo(numbered.file)) throw IOException("cannot number ${current.file}")
+                runs.update { it + (documentId to run.toMutableList().apply { set(index, numbered) }) }
+            }
         }
     }
 
@@ -266,8 +302,10 @@ class StagingArea(
         return run
     }
 
-    private fun removedFile(documentId: String, page: StagedPage): File =
-        File(File(directory(documentId), REMOVED), page.file.name)
+    private fun findRemoved(documentId: String, page: StagedPage): StagedPage? =
+        File(directory(documentId), REMOVED).listFiles().orEmpty()
+            .mapNotNull(::parseFileName)
+            .firstOrNull { it.key == page.key }
 
     private fun readRemovedPositions(documentId: String): List<Int> =
         File(directory(documentId), REMOVED).listFiles().orEmpty().mapNotNull { parseFileName(it)?.seq }
@@ -283,18 +321,42 @@ class StagingArea(
         private const val REMOVED = "removed"
         private const val SEND_JOURNAL = "sending"
         private val DOCUMENT_ID = Regex("[A-Za-z0-9-]{1,64}")
-        private val FILE_NAME = Regex("""(\d{1,9})_(\d{1,15})\.jpg""")
+        private val FILE_NAME = Regex("""(\d{1,9})_(\d{1,15})(?:_([A-Za-z0-9]{1,16}))?\.jpg""")
+        private val GIVEN_SUFFIX = Regex("""h(\d{1,9})(c?)""")
+        private const val CLEARED_SUFFIX = "n"
         private val PAGE_ORDER = compareBy<StagedPage>({ it.seq }, { it.capturedAt })
 
-        /** `<seq>_<capture time in epoch ms>.jpg`, e.g. `00012_1760293530123.jpg`. */
-        internal fun fileName(seq: Int, capturedAt: Instant): String =
-            String.format(Locale.ROOT, "%05d_%d.jpg", seq, capturedAt.toEpochMilli())
+        /**
+         * `<seq>_<capture time in epoch ms>[_<numbering>].jpg`, e.g. `00012_1760293530123_h32c.jpg`: `h32`
+         * for 32, `c` when the next pages follow on, `n` for a page cleared.
+         */
+        internal fun fileName(
+            seq: Int,
+            capturedAt: Instant,
+            numbering: PageNumbering = PageNumbering.NotGiven,
+        ): String {
+            val suffix = when (numbering) {
+                PageNumbering.NotGiven -> ""
+                is PageNumbering.Given -> "_h${numbering.number}" + if (numbering.nextPagesFollowOn) "c" else ""
+                PageNumbering.Cleared -> "_$CLEARED_SUFFIX"
+            }
+            return String.format(Locale.ROOT, "%05d_%d%s.jpg", seq, capturedAt.toEpochMilli(), suffix)
+        }
 
         /** The page stored in [file], or null if the file is not a staged page. */
         internal fun parseFileName(file: File): StagedPage? {
             val match = FILE_NAME.matchEntire(file.name) ?: return null
             val seq = match.groupValues[1].toInt().takeIf { it >= 1 } ?: return null
-            return StagedPage(file, seq, Instant.ofEpochMilli(match.groupValues[2].toLong()))
+            val capturedAt = Instant.ofEpochMilli(match.groupValues[2].toLong())
+            return StagedPage(file, seq, capturedAt, parseNumbering(match.groupValues[3]))
+        }
+
+        private fun parseNumbering(suffix: String): PageNumbering {
+            if (suffix == CLEARED_SUFFIX) return PageNumbering.Cleared
+            val given = GIVEN_SUFFIX.matchEntire(suffix) ?: return PageNumbering.NotGiven
+            val number = given.groupValues[1].toInt()
+            if (number !in 1..MAX_PAGE_NUMBER) return PageNumbering.NotGiven
+            return PageNumbering.Given(number, nextPagesFollowOn = given.groupValues[2].isNotEmpty())
         }
     }
 }

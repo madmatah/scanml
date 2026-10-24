@@ -1,7 +1,9 @@
 package fr.scanmylib.library
 
+import fr.scanmylib.library.PageNumbering.Cleared
+import fr.scanmylib.library.PageNumbering.Given
+import fr.scanmylib.library.PageNumbering.NotGiven
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Before
 import org.junit.Test
@@ -12,193 +14,127 @@ import org.junit.runners.Parameterized
 @RunWith(Enclosed::class)
 class PageNumberingTest {
     @RunWith(Enclosed::class)
-    class TheConstructor {
-        class WhenTheFirstPageIsZero {
-            private lateinit var numberFromZero: () -> PageNumbering
+    class TheGivenConstructor {
+        class WhenTheNumberIsZero {
+            private lateinit var numberPageZero: () -> PageNumbering
 
             @Before
             fun keepTheNumbering() {
-                numberFromZero = { PageNumbering(firstPage = 0, consecutive = true) }
+                numberPageZero = { Given(0, nextPagesFollowOn = true) }
             }
 
             @Test
             fun `should refuse it, since no page is numbered 0`() {
-                val error = assertThrows(IllegalArgumentException::class.java) { numberFromZero() }
-                assertEquals("invalid first page: 0", error.message)
+                val error = assertThrows(IllegalArgumentException::class.java) { numberPageZero() }
+                assertEquals("invalid page number: 0", error.message)
             }
         }
     }
 
     @RunWith(Enclosed::class)
-    class TheHintForMethod {
-        class WhenNoFirstPageIsGiven {
-            private lateinit var hints: List<Int?>
-
-            @Before
-            fun hintThreePages() {
-                hints = List(3, PageNumbering(firstPage = null, consecutive = true)::hintFor)
-            }
-
-            @Test
-            fun `should hint no page`() {
-                assertEquals(listOf(null, null, null), hints)
-            }
-        }
-
-        class WhenThePagesAreConsecutive {
-            private lateinit var hints: List<Int?>
+    class TheHintPagesFunction {
+        class WhenTheFirstPageIsGivenWithTheNextPages {
+            private lateinit var numbers: List<Int?>
 
             @Before
             fun hintFourPages() {
-                hints = List(4, PageNumbering(firstPage = 13, consecutive = true)::hintFor)
+                val first = Given(13, nextPagesFollowOn = true)
+                val pages = listOf(first) + List(3) { NotGiven }
+                numbers = hintPages(pages).map { it.number }
             }
 
             @Test
-            fun `should number the pages on from the first one`() {
-                assertEquals(listOf(13, 14, 15, 16), hints)
+            fun `should number the next pages on from it`() {
+                assertEquals(listOf(13, 14, 15, 16), numbers)
             }
         }
 
-        class WhenThePagesAreNotConsecutive {
-            private lateinit var hints: List<Int?>
-
-            @Before
-            fun hintThreePages() {
-                hints = List(3, PageNumbering(firstPage = 45, consecutive = false)::hintFor)
-            }
-
-            @Test
-            fun `should hint only the first page`() {
-                assertEquals(listOf(45, null, null), hints)
-            }
-        }
-
-        class WhenTheConsecutivePagesGoPastTheLastPageTheServerAccepts {
-            private lateinit var hints: List<Int?>
-
-            @Before
-            fun hintFourPages() {
-                hints = List(4, PageNumbering(firstPage = 9998, consecutive = true)::hintFor)
-            }
-
-            @Test
-            fun `should hint no page past 9999, which the server refuses for good with HTTP 422`() {
-                assertEquals(listOf(9998, 9999, null, null), hints)
-            }
-        }
-
-        class WhenTheFirstPageIsTheLastPageTheServerAccepts {
-            private lateinit var hints: List<Int?>
-
-            @Before
-            fun hintTwoPages() {
-                hints = List(2, PageNumbering(firstPage = 9999, consecutive = true)::hintFor)
-            }
-
-            @Test
-            fun `should hint only the first page, which the server accepts`() {
-                assertEquals(listOf(9999, null), hints)
-            }
-        }
-    }
-
-    @RunWith(Enclosed::class)
-    class TheLastHintMethod {
         @RunWith(Parameterized::class)
-        class WhenARunHasAHint(
+        class WhenARunIsNumberedPageByPage(
             private val run: String,
-            private val numbering: PageNumbering,
-            private val pageCount: Int,
-            private val expected: Int,
+            private val numberings: List<PageNumbering>,
+            private val expected: List<PageHint>,
         ) {
-            private lateinit var lastHint: PageNumberHint
+            private lateinit var hints: List<PageHint>
 
             @Before
-            fun readTheLastHint() {
-                lastHint = PageNumberHint(numbering.lastHint(pageCount))
+            fun hintThePages() {
+                hints = hintPages(numberings)
             }
 
             @Test
-            fun `should give the highest hint of the run`() {
-                assertEquals(run, expected, lastHint.number)
+            fun `should hint each page as the numbers given and following on say`() {
+                assertEquals(run, expected, hints)
             }
 
             companion object {
                 @JvmStatic
                 @Parameterized.Parameters(name = "{0}")
                 fun runs(): List<Array<Any>> = listOf(
-                    arrayOf("4 consecutive pages from 13 end at 16", PageNumbering(13, consecutive = true), 4, 16),
-                    arrayOf("a single page from 13 ends at 13", PageNumbering(13, consecutive = true), 1, 13),
                     arrayOf(
-                        "pages that are not consecutive end at the first",
-                        PageNumbering(45, consecutive = false),
-                        3,
-                        45,
+                        "with no number given, every page is Auto, for the PC to read",
+                        List(3) { NotGiven },
+                        List(3) { PageHint.Auto },
                     ),
                     arrayOf(
-                        "consecutive pages end at 9999, the last page the server accepts",
-                        PageNumbering(9998, consecutive = true),
-                        4,
-                        9999,
+                        "32 on page 1 with the next pages gives pages 2 to 4 the numbers 33 to 35",
+                        listOf(Given(32, nextPagesFollowOn = true), NotGiven, NotGiven, NotGiven),
+                        listOf(
+                            PageHint.Given(32),
+                            PageHint.FollowingOn(33),
+                            PageHint.FollowingOn(34),
+                            PageHint.FollowingOn(35),
+                        ),
                     ),
-                )
-            }
-        }
-
-        class WhenNoFirstPageIsGiven {
-            private lateinit var lastHint: PageNumberHint
-
-            @Before
-            fun readTheLastHint() {
-                lastHint = PageNumberHint(PageNumbering(null, consecutive = true).lastHint(pageCount = 3))
-            }
-
-            @Test
-            fun `should give no hint`() {
-                assertNull(lastHint.number)
-            }
-        }
-    }
-
-    @RunWith(Enclosed::class)
-    class TheNextFirstPageMethod {
-        class WhenTheRunIsConsecutive {
-            private lateinit var nextFirstPage: PageNumberHint
-
-            @Before
-            fun continueAfterEightPages() {
-                nextFirstPage = PageNumberHint(PageNumbering(13, consecutive = true).nextFirstPage(pageCount = 8))
-            }
-
-            @Test
-            fun `should continue after the last page of the run`() {
-                assertEquals(21, nextFirstPage.number)
-            }
-        }
-
-        @RunWith(Parameterized::class)
-        class WhenTheNextRunCannotBeNumberedOn(private val run: String, private val numbering: PageNumbering) {
-            private lateinit var nextFirstPage: PageNumberHint
-
-            @Before
-            fun continueAfterEightPages() {
-                nextFirstPage = PageNumberHint(numbering.nextFirstPage(pageCount = 8))
-            }
-
-            @Test
-            fun `should give no first page`() {
-                assertNull(run, nextFirstPage.number)
-            }
-
-            companion object {
-                @JvmStatic
-                @Parameterized.Parameters(name = "{0}")
-                fun runs(): List<Array<Any>> = listOf(
-                    arrayOf("pages that are not consecutive", PageNumbering(13, consecutive = false)),
-                    arrayOf("a run without a first page", PageNumbering(null, consecutive = true)),
                     arrayOf(
-                        "a run that ends past 9999, the last page the server accepts",
-                        PageNumbering(9995, consecutive = true),
+                        "then 40 on page 4 changes only page 4",
+                        listOf(
+                            Given(32, nextPagesFollowOn = true),
+                            NotGiven,
+                            NotGiven,
+                            Given(40, nextPagesFollowOn = true),
+                        ),
+                        listOf(
+                            PageHint.Given(32),
+                            PageHint.FollowingOn(33),
+                            PageHint.FollowingOn(34),
+                            PageHint.Given(40),
+                        ),
+                    ),
+                    arrayOf(
+                        "a number given alone leaves the next pages Auto",
+                        listOf(Given(45, nextPagesFollowOn = false), NotGiven, NotGiven),
+                        listOf(PageHint.Given(45), PageHint.Auto, PageHint.Auto),
+                    ),
+                    arrayOf(
+                        "a cleared page stops the number running on",
+                        listOf(Given(32, nextPagesFollowOn = true), NotGiven, Cleared, NotGiven),
+                        listOf(PageHint.Given(32), PageHint.FollowingOn(33), PageHint.Auto, PageHint.Auto),
+                    ),
+                    arrayOf(
+                        "a page given further on takes over",
+                        listOf(
+                            Given(32, nextPagesFollowOn = true),
+                            NotGiven,
+                            Given(40, nextPagesFollowOn = true),
+                            NotGiven,
+                        ),
+                        listOf(
+                            PageHint.Given(32),
+                            PageHint.FollowingOn(33),
+                            PageHint.Given(40),
+                            PageHint.FollowingOn(41),
+                        ),
+                    ),
+                    arrayOf(
+                        "a number running on stops at 9999, past which the server refuses for good with HTTP 422",
+                        listOf(Given(9998, nextPagesFollowOn = true), NotGiven, NotGiven, NotGiven),
+                        listOf(PageHint.Given(9998), PageHint.FollowingOn(9999), PageHint.Auto, PageHint.Auto),
+                    ),
+                    arrayOf(
+                        "the pages before the first number given are Auto",
+                        listOf(NotGiven, Given(12, nextPagesFollowOn = true), NotGiven),
+                        listOf(PageHint.Auto, PageHint.Given(12), PageHint.FollowingOn(13)),
                     ),
                 )
             }
@@ -206,77 +142,206 @@ class PageNumberingTest {
     }
 
     @RunWith(Enclosed::class)
-    class TheFromInputMethod {
+    class TheChooseNumberingFunction {
         @RunWith(Parameterized::class)
-        class WhenTheFirstPageFieldIsValid(
-            private val field: String,
-            private val firstPageInput: String,
-            private val consecutive: Boolean,
+        class WhenTheUserValidatesANumber(
+            private val choice: String,
+            private val numberings: List<PageNumbering>,
+            private val index: Int,
+            private val number: NumberTyped,
+            private val nextPagesFollowOn: Boolean,
             private val expected: PageNumbering,
         ) {
-            private lateinit var reading: FirstPageReading
+            private lateinit var numbering: PageNumbering
 
             @Before
-            fun readTheField() {
-                reading = FirstPageReading(PageNumbering.fromInput(firstPageInput, consecutive))
+            fun chooseTheNumbering() {
+                numbering = chooseNumbering(numberings, index, number.value, nextPagesFollowOn)
             }
 
             @Test
-            fun `should give the numbering it asks for`() {
-                assertEquals(field, expected, reading.numbering)
+            fun `should give the page the numbering that choice means`() {
+                assertEquals(choice, expected, numbering)
             }
 
             companion object {
+                private val UNNUMBERED_RUN = List(4) { NotGiven }
+                private val RUN_FROM_32 = listOf(Given(32, nextPagesFollowOn = true), NotGiven, NotGiven, NotGiven)
+
                 @JvmStatic
                 @Parameterized.Parameters(name = "{0}")
-                fun fields(): List<Array<Any>> = listOf(
-                    arrayOf("a blank field asks for no hint", "  ", true, PageNumbering(null, consecutive = true)),
+                fun choices(): List<Array<Any>> = listOf(
                     arrayOf(
-                        "a number is read without its spaces",
-                        " 12 ",
-                        false,
-                        PageNumbering(12, consecutive = false),
+                        "a number on a page no number reaches, with the next pages",
+                        UNNUMBERED_RUN,
+                        0,
+                        NumberTyped(32),
+                        true,
+                        Given(32, nextPagesFollowOn = true),
                     ),
                     arrayOf(
-                        "9999, the last page the server accepts, is read",
-                        "9999",
+                        "a number on a page no number reaches, alone",
+                        UNNUMBERED_RUN,
+                        0,
+                        NumberTyped(32),
+                        false,
+                        Given(32, nextPagesFollowOn = false),
+                    ),
+                    arrayOf(
+                        "no number where none runs on is no number given",
+                        UNNUMBERED_RUN,
+                        2,
+                        NumberTyped(null),
                         true,
-                        PageNumbering(9999, consecutive = true),
+                        NotGiven,
+                    ),
+                    arrayOf(
+                        "clearing the first page of a run leaves it no number given, so that it goes back to Auto",
+                        RUN_FROM_32,
+                        0,
+                        NumberTyped(null),
+                        true,
+                        NotGiven,
+                    ),
+                    arrayOf(
+                        "no number where one runs on clears the page, so that it goes back to Auto",
+                        RUN_FROM_32,
+                        2,
+                        NumberTyped(null),
+                        true,
+                        Cleared,
+                    ),
+                    arrayOf(
+                        "a page that follows on, validated unchanged, still follows on",
+                        RUN_FROM_32,
+                        1,
+                        NumberTyped(33),
+                        true,
+                        NotGiven,
+                    ),
+                    arrayOf(
+                        "the number running into a page, with the next pages left alone, is given",
+                        RUN_FROM_32,
+                        1,
+                        NumberTyped(33),
+                        false,
+                        Given(33, nextPagesFollowOn = false),
+                    ),
+                    arrayOf(
+                        "a given page that gets the number running into it follows on again",
+                        listOf(Given(32, nextPagesFollowOn = true), Given(40, nextPagesFollowOn = true), NotGiven),
+                        1,
+                        NumberTyped(33),
+                        true,
+                        NotGiven,
+                    ),
+                    arrayOf(
+                        "a cleared page that gets the number running into it follows on again",
+                        listOf(Given(32, nextPagesFollowOn = true), Cleared, NotGiven),
+                        1,
+                        NumberTyped(33),
+                        true,
+                        NotGiven,
+                    ),
+                    arrayOf(
+                        "another number where one runs on is given",
+                        RUN_FROM_32,
+                        1,
+                        NumberTyped(40),
+                        true,
+                        Given(40, nextPagesFollowOn = true),
                     ),
                 )
             }
         }
+    }
 
+    @RunWith(Enclosed::class)
+    class TheFindNextPagesFunction {
         @RunWith(Parameterized::class)
-        class WhenTheFirstPageFieldIsInvalid(private val field: String, private val firstPageInput: String) {
-            private lateinit var reading: FirstPageReading
+        class WhenAPageIsNumbered(
+            private val run: String,
+            private val numberings: List<PageNumbering>,
+            private val index: Int,
+            private val expected: List<Int>,
+        ) {
+            private lateinit var nextPages: List<Int>
 
             @Before
-            fun readTheField() {
-                reading = FirstPageReading(PageNumbering.fromInput(firstPageInput, consecutive = true))
+            fun findTheNextPages() {
+                nextPages = findNextPages(numberings, index).toList()
             }
 
             @Test
-            fun `should refuse it`() {
-                assertNull(field, reading.numbering)
+            fun `should give the pages whose number follows from it`() {
+                assertEquals(run, expected, nextPages)
+            }
+
+            companion object {
+                @JvmStatic
+                @Parameterized.Parameters(name = "{0}")
+                fun runs(): List<Array<Any>> = listOf(
+                    arrayOf(
+                        "down to the end of the run, so that pages added later follow on too",
+                        listOf(Given(32, nextPagesFollowOn = true), NotGiven, NotGiven, NotGiven),
+                        0,
+                        listOf(1, 2, 3),
+                    ),
+                    arrayOf(
+                        "down to the next page given a number",
+                        listOf(NotGiven, NotGiven, Given(40, nextPagesFollowOn = true), NotGiven),
+                        0,
+                        listOf(1),
+                    ),
+                    arrayOf(
+                        "down to the next page cleared",
+                        listOf(NotGiven, NotGiven, Cleared),
+                        0,
+                        listOf(1),
+                    ),
+                    arrayOf("none after the last page", listOf(NotGiven, NotGiven), 1, emptyList<Int>()),
+                )
+            }
+        }
+    }
+
+    @RunWith(Enclosed::class)
+    class TheReadPageNumberFunction {
+        @RunWith(Parameterized::class)
+        class WhenANumberIsTyped(
+            private val field: String,
+            private val text: String,
+            private val expected: PageNumberInput,
+        ) {
+            private lateinit var input: PageNumberInput
+
+            @Before
+            fun readTheField() {
+                input = readPageNumber(text)
+            }
+
+            @Test
+            fun `should read what the field asks for`() {
+                assertEquals(field, expected, input)
             }
 
             companion object {
                 @JvmStatic
                 @Parameterized.Parameters(name = "{0}")
                 fun fields(): List<Array<Any>> = listOf(
-                    arrayOf("0, since no page is numbered 0", "0"),
-                    arrayOf("10000, past the last page the server accepts", "10000"),
-                    arrayOf("a number followed by letters", "12a"),
-                    arrayOf("a negative number", "-3"),
+                    arrayOf("an empty field asks for no number", "", PageNumberInput.Empty),
+                    arrayOf("a blank field asks for no number", "  ", PageNumberInput.Empty),
+                    arrayOf("a number is read", "32", PageNumberInput.Valid(32)),
+                    arrayOf("a number is read without its spaces", " 12 ", PageNumberInput.Valid(12)),
+                    arrayOf("9999, the last page the server accepts, is read", "9999", PageNumberInput.Valid(9999)),
+                    arrayOf("0 is refused, since no page is numbered 0", "0", PageNumberInput.Invalid),
+                    arrayOf("10000 is refused, past the last page the server takes", "10000", PageNumberInput.Invalid),
+                    arrayOf("a number followed by a letter is refused", "3a", PageNumberInput.Invalid),
                 )
             }
         }
     }
 }
 
-/** A hint that may be missing, held in a non-null value so that a test fails when no hook ran. */
-private data class PageNumberHint(val number: Int?)
-
-/** What the first page field gives, null when it is invalid, held as [PageNumberHint] is. */
-private data class FirstPageReading(val numbering: PageNumbering?)
+/** A number typed, or none, held in a non-null value so that a row can carry it. */
+data class NumberTyped(val value: Int?)

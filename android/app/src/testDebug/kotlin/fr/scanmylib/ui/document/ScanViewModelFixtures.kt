@@ -3,12 +3,12 @@ package fr.scanmylib.ui.document
 import android.net.Uri
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.lifecycle.SavedStateHandle
-import fr.scanmylib.library.PageNumbering
 import fr.scanmylib.library.PhotoImportResult
 import fr.scanmylib.library.RunPreparation
 import fr.scanmylib.library.StagedPage
 import fr.scanmylib.library.StagingArea
 import fr.scanmylib.library.StagingInput
+import fr.scanmylib.library.hintPages
 import fr.scanmylib.settings.SettingsRepository
 import java.io.File
 import java.io.IOException
@@ -39,12 +39,13 @@ internal class FakeUploadQueue(
 ) {
     val pages = mutableListOf<QueuedPage>()
 
-    suspend fun send(numbering: PageNumbering): Int = staging.send(DOCUMENT_ID) { run ->
+    suspend fun send(): Int = staging.send(DOCUMENT_ID) { run ->
         gate?.await()
         refusal?.let { throw it }
+        val hints = hintPages(run.map { it.numbering })
         run.forEachIndexed { index, page ->
             if (!page.file.delete()) throw IOException("cannot take ${page.file}")
-            pages += QueuedPage(page.file.name, numbering.hintFor(index))
+            pages += QueuedPage(page.file.name, hints[index].number)
         }
         run.size
     }
@@ -131,7 +132,7 @@ internal fun TestScope.makeViewModel(
     preparation: RunPreparation = RunPreparation(this),
     addScannedPages: suspend (List<Uri>, (Int) -> Unit) -> Unit = { _, _ -> },
     addPhotos: suspend (List<Uri>, (Int) -> Unit) -> PhotoImportResult = { _, _ -> PhotoImportResult(added = 0) },
-    sendRun: suspend (PageNumbering) -> Int = { 0 },
+    sendRun: suspend () -> Int = { 0 },
 ): ScanViewModel {
     val dataStore = PreferenceDataStoreFactory.create(scope = backgroundScope) {
         File(folder.root, "settings.preferences_pb")

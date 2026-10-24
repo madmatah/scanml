@@ -7,6 +7,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import fr.scanmylib.MainDispatcherRule
 import fr.scanmylib.library.CopySource
+import fr.scanmylib.library.PageNumbering
 import fr.scanmylib.library.PhotoImportResult
 import fr.scanmylib.library.PreparationOutcome
 import fr.scanmylib.library.StagedPage
@@ -75,62 +76,104 @@ class ScanViewModelTest {
 
         @RunWith(RobolectricTestRunner::class)
         @Config(sdk = [36])
-        class WhenTheFirstPageIs12AndThePagesAreConsecutive {
+        class WhenTheFirstOfFourPagesGot32WithTheNextPages {
             @get:Rule
             val mainDispatcher = MainDispatcherRule()
 
             @get:Rule
             val folder = TemporaryFolder()
 
-            private lateinit var nextFirstPage: String
+            private lateinit var hints: List<Int?>
 
             @Before
             fun sendThePages() = runTest {
-                val scan = stageThreePages(folder)
-                typeTheFirstPage(scan.viewModel, FIRST_PAGE)
-                scan.viewModel.send()
-                scan.viewModel.scanState.first { it.reviewEnd != null }
-                nextFirstPage = scan.viewModel.scanState.first { !it.sending }.firstPage
+                val run = stagePages(folder, pageCount = 4)
+                giveTheFirstPage32WithTheNextPages(run)
+                hints = sendTheRun(run)
             }
 
             @Test
-            fun `should start the next run after them, at page 15, as a book is scanned in order`() {
-                assertEquals("15", nextFirstPage)
-            }
-
-            companion object {
-                private const val FIRST_PAGE = "12"
+            fun `should send pages 2 to 4 with the numbers 33 to 35`() {
+                assertEquals(listOf(32, 33, 34, 35), hints)
             }
         }
 
         @RunWith(RobolectricTestRunner::class)
         @Config(sdk = [36])
-        class WhenTheFirstPageIsInvalid {
+        class WhenTheFirstOfFourPagesGot32WithTheNextPagesAndTheFourthThenGot40 {
             @get:Rule
             val mainDispatcher = MainDispatcherRule()
 
             @get:Rule
             val folder = TemporaryFolder()
 
-            private lateinit var queuedPages: List<QueuedPage>
+            private lateinit var hints: List<Int?>
 
-            @OptIn(ExperimentalCoroutinesApi::class)
             @Before
             fun sendThePages() = runTest {
-                val scan = stageThreePages(folder)
-                typeTheFirstPage(scan.viewModel, INVALID_FIRST_PAGE)
-                scan.viewModel.send()
-                advanceUntilIdle()
-                queuedPages = scan.queue.pages.toList()
+                val run = stagePages(folder, pageCount = 4)
+                giveTheFirstPage32WithTheNextPages(run)
+                giveTheFourthPage40(run)
+                hints = sendTheRun(run)
             }
 
             @Test
-            fun `should send nothing, so that no page is numbered wrong`() {
-                assertEquals(emptyList<QueuedPage>(), queuedPages)
+            fun `should change only the number of the fourth page`() {
+                assertEquals(listOf(32, 33, 34, 40), hints)
+            }
+        }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36])
+        class WhenTheFirstOfFourPagesGot32WithTheNextPagesAndTheFirstWasThenCleared {
+            @get:Rule
+            val mainDispatcher = MainDispatcherRule()
+
+            @get:Rule
+            val folder = TemporaryFolder()
+
+            private lateinit var hints: List<Int?>
+
+            @Before
+            fun sendThePages() = runTest {
+                val run = stagePages(folder, pageCount = 4)
+                giveTheFirstPage32WithTheNextPages(run)
+                clearTheFirstPage(run)
+                hints = sendTheRun(run)
             }
 
-            companion object {
-                private const val INVALID_FIRST_PAGE = "0"
+            @Test
+            fun `should send every page without a number, for the PC to read the printed ones`() {
+                assertEquals(List(4) { null }, hints)
+            }
+        }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36])
+        class WhenAPageIsNumberedWhileTheRunIsBusy {
+            @get:Rule
+            val mainDispatcher = MainDispatcherRule()
+
+            @get:Rule
+            val folder = TemporaryFolder()
+
+            private lateinit var hints: List<Int?>
+
+            @OptIn(ExperimentalCoroutinesApi::class)
+            @Before
+            fun numberThenSend() = runTest {
+                val run = stageThreePages(folder)
+                val release = holdTheStagingAreaLock(run.staging)
+                run.viewModel.numberPage(run.stagedPages[0], NUMBER_32, nextPagesFollowOn = true)
+                run.viewModel.send()
+                release()
+                advanceUntilIdle()
+                hints = run.queue.pages.map { it.hint }
+            }
+
+            @Test
+            fun `should send the pages with the number, given before the send`() {
+                assertEquals(listOf(32, 33, 34), hints)
             }
         }
 
@@ -930,6 +973,69 @@ class ScanViewModelTest {
     }
 
     @RunWith(Enclosed::class)
+    class TheNumberPageMethod {
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36])
+        class WhenPagesAreBeingSent {
+            @get:Rule
+            val mainDispatcher = MainDispatcherRule()
+
+            @get:Rule
+            val folder = TemporaryFolder()
+
+            private lateinit var filesBefore: List<String>
+            private lateinit var filesAfter: List<String>
+
+            @OptIn(ExperimentalCoroutinesApi::class)
+            @Before
+            fun numberAPage() = runTest {
+                val sendGate = CompletableDeferred<Unit>()
+                val refusalThatKeepsThePagesInTheRun = IOException("database closed")
+                val run = stageThreePages(folder, sendGate, sendRefusal = refusalThatKeepsThePagesInTheRun)
+                filesBefore = listRunFiles(folder)
+                run.viewModel.send()
+                run.viewModel.scanState.first { it.sending }
+                run.viewModel.numberPage(run.stagedPages[0], NUMBER_32, nextPagesFollowOn = true)
+                sendGate.complete(Unit)
+                advanceUntilIdle()
+                filesAfter = listRunFiles(folder)
+            }
+
+            @Test
+            fun `should rename nothing, since the pages are on their way`() {
+                assertEquals(filesBefore, filesAfter)
+            }
+        }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36])
+        class WhenThePageCannotBeRenamed {
+            @get:Rule
+            val mainDispatcher = MainDispatcherRule()
+
+            @get:Rule
+            val folder = TemporaryFolder()
+
+            private lateinit var message: ScanMessage
+
+            @Before
+            fun numberAPage() = runTest {
+                val run = stageThreePages(folder)
+                val page = run.stagedPages[0]
+                val numbered = PageNumbering.Given(NUMBER_32, nextPagesFollowOn = true)
+                File(page.file.parentFile, StagingArea.fileName(page.seq, page.capturedAt, numbered)).writeText("taken")
+                run.viewModel.numberPage(page, NUMBER_32, nextPagesFollowOn = true)
+                message = run.viewModel.messages.first()
+            }
+
+            @Test
+            fun `should say that the number was not saved`() {
+                assertEquals(ScanMessage.NumberNotSaved, message)
+            }
+        }
+    }
+
+    @RunWith(Enclosed::class)
     class TheRemovePageMethod {
         @RunWith(RobolectricTestRunner::class)
         @Config(sdk = [36])
@@ -1020,6 +1126,84 @@ class ScanViewModelTest {
             @Test
             fun `should keep it restorable, as a second tap on Remove changes nothing`() {
                 assertEquals(stagedPages, scan.stagedPages)
+            }
+        }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36])
+        class WhenThePageIsRenumberedMeanwhile {
+            @get:Rule
+            val mainDispatcher = MainDispatcherRule()
+
+            @get:Rule
+            val folder = TemporaryFolder()
+
+            private lateinit var numberedName: String
+            private lateinit var removedFiles: List<String>
+            private lateinit var numberings: List<PageNumbering>
+
+            @OptIn(ExperimentalCoroutinesApi::class)
+            @Before
+            fun removeItByItsEarlierValueThenUndo() = runTest {
+                val run = stageThreePages(folder)
+                val release = holdTheStagingAreaLock(run.staging)
+                run.viewModel.numberPage(run.stagedPages[0], NUMBER_32, nextPagesFollowOn = true)
+                run.viewModel.removePage(run.stagedPages[0])
+                release()
+                advanceUntilIdle()
+                val first = run.stagedPages[0]
+                numberedName = StagingArea.fileName(first.seq, first.capturedAt, NUMBER_32_WITH_THE_NEXT_PAGES)
+                removedFiles = listRemovedFiles(folder)
+                run.viewModel.restorePage(run.stagedPages[0])
+                numberings = run.viewModel.scanState
+                    .first { it.removedPage == null && it.stagedPages.size == PAGE_COUNT }
+                    .stagedPages.map { it.numbering }
+            }
+
+            @Test
+            fun `should remove it under its new name`() {
+                assertEquals(listOf(numberedName), removedFiles)
+            }
+
+            @Test
+            fun `should bring its number back with it once the removal is undone`() {
+                assertEquals(
+                    listOf(NUMBER_32_WITH_THE_NEXT_PAGES, PageNumbering.NotGiven, PageNumbering.NotGiven),
+                    numberings,
+                )
+            }
+        }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36])
+        class WhenTheSamePageIsRemovedTwiceAroundARenumbering {
+            @get:Rule
+            val mainDispatcher = MainDispatcherRule()
+
+            @get:Rule
+            val folder = TemporaryFolder()
+
+            private lateinit var keys: List<String>
+            private lateinit var scan: ScanUiState
+
+            @OptIn(ExperimentalCoroutinesApi::class)
+            @Before
+            fun removeItTwiceThenUndo() = runTest {
+                val run = stagePages(folder, pageCount = 4)
+                giveTheFirstPage32WithTheNextPages(run)
+                val numbered = run.viewModel.scanState.value.stagedPages[0]
+                run.viewModel.removePage(numbered)
+                run.viewModel.scanState.first { numbered !in it.stagedPages }
+                run.viewModel.removePage(run.stagedPages[0])
+                advanceUntilIdle()
+                run.viewModel.restorePage(numbered)
+                keys = run.stagedPages.map { it.key }
+                scan = run.viewModel.scanState.first { it.removedPage == null && it.stagedPages.size == keys.size }
+            }
+
+            @Test
+            fun `should keep it restorable, as its earlier value is the same page`() {
+                assertEquals(keys, scan.stagedPages.map { it.key })
             }
         }
     }
@@ -1282,9 +1466,29 @@ class ScanViewModelTest {
     }
 }
 
-private suspend fun typeTheFirstPage(viewModel: ScanViewModel, firstPage: String) {
-    viewModel.onFirstPageChange(firstPage)
-    viewModel.scanState.first { it.firstPage == firstPage }
+private const val NUMBER_32 = 32
+private const val NUMBER_40 = 40
+private val NUMBER_32_WITH_THE_NEXT_PAGES = PageNumbering.Given(NUMBER_32, nextPagesFollowOn = true)
+
+private suspend fun giveTheFirstPage32WithTheNextPages(run: RunUnderReview) {
+    run.viewModel.numberPage(run.stagedPages[0], NUMBER_32, nextPagesFollowOn = true)
+    run.viewModel.scanState.first { it.stagedPages[0].numbering == NUMBER_32_WITH_THE_NEXT_PAGES }
+}
+
+private suspend fun giveTheFourthPage40(run: RunUnderReview) {
+    run.viewModel.numberPage(run.stagedPages[3], NUMBER_40, nextPagesFollowOn = true)
+    run.viewModel.scanState.first { it.stagedPages[3].numbering is PageNumbering.Given }
+}
+
+private suspend fun clearTheFirstPage(run: RunUnderReview) {
+    run.viewModel.numberPage(run.stagedPages[0], null, nextPagesFollowOn = true)
+    run.viewModel.scanState.first { it.stagedPages[0].numbering == PageNumbering.NotGiven }
+}
+
+private suspend fun sendTheRun(run: RunUnderReview): List<Int?> {
+    run.viewModel.send()
+    run.viewModel.scanState.first { it.reviewEnd != null }
+    return run.queue.pages.map { it.hint }
 }
 
 private const val PAGE_COUNT = 3
@@ -1337,6 +1541,12 @@ private suspend fun TestScope.holdTheStagingAreaLock(staging: StagingArea): () -
     isHeld.await()
     return { gate.complete(Unit) }
 }
+
+private fun listRunFiles(folder: TemporaryFolder): List<String> =
+    File(folder.root, "staging/$DOCUMENT_ID").listFiles().orEmpty().filter { it.isFile }.map { it.name }.sorted()
+
+private fun listRemovedFiles(folder: TemporaryFolder): List<String> =
+    File(folder.root, "staging/$DOCUMENT_ID/removed").listFiles().orEmpty().map { it.name }.sorted()
 
 /** Whether [page]'s image is anywhere in the staging area, in the run or out of it. */
 private fun isOnDisk(folder: TemporaryFolder, page: StagedPage): Boolean =

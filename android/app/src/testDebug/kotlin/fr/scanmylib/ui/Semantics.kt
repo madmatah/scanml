@@ -8,6 +8,7 @@ import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.SemanticsNodeInteractionsProvider
 import androidx.compose.ui.test.isHeading
+import androidx.compose.ui.test.onNodeWithText
 
 internal fun hasRole(role: Role): SemanticsMatcher = SemanticsMatcher.expectValue(SemanticsProperties.Role, role)
 
@@ -19,3 +20,11 @@ internal fun readHeadingsFromTheTop(screen: SemanticsNodeInteractionsProvider): 
 
 internal fun isPoliteLiveRegion(): SemanticsMatcher =
     SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite)
+
+internal fun isShownWholeInItsWindow(screen: SemanticsNodeInteractionsProvider, text: String): Boolean {
+    val node = screen.onNodeWithText(text).fetchSemanticsNode()
+    val root = generateSequence(node) { it.parent }.last().boundsInRoot
+    val bounds = node.boundsInRoot
+    return bounds.height > 0 && root.contains(bounds.topLeft) && bounds.bottom <= root.bottom &&
+        bounds.right <= root.right
+}

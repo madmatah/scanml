@@ -131,9 +131,12 @@ Tailscale…) rather than exposing the port to the Internet.
   **Close** (or Back) keeps the pages on the phone and returns to the document, whose banner then says "N pages to
   send" with **Review**; the library shows them too. **Delete these pages** asks for confirmation, since these pages
   exist nowhere else.
-- **First page number** (optional, in the review): for pages without a printed number that should be numbered. With
-  **Consecutive pages** (on by default), the following pages get the next numbers. Leave it blank for front matter
-  (cover, title page, preface).
+- **Page numbers** (optional, in the review): each page shows its number under it, "Auto" until one is given, for the
+  PC to read the printed number. Tap it (TalkBack: **Change the number**) to give that page a number, for a page whose
+  number is not printed. With **Number the following pages in sequence** (on by default), the next pages follow on from
+  it, down to the next page given a number, as the sheet's live line says ("Pages 2 to 4: 33 to 35"); a page that
+  follows on shows a link before its number. **Clear** gives the page "Auto" again. Leave front matter (cover, title
+  page, preface) on "Auto". The numbers stay with the pages while they wait on the phone, even when the app is closed.
 
 The web UI can also add pages to a document, from the PC or from the phone's browser: import photos, or take a photo.
 
@@ -141,8 +144,8 @@ The web UI can also add pages to a document, from the PC or from the phone's bro
 
 Pages can arrive in any order, in several batches.
 
-- **Number of each page**, by priority: the one typed by hand, else the printed one (read by the OCR), else the "first
-  page number" hint, else a number inferred from the neighboring pages of the same session. Roman numerals come before
+- **Number of each page**, by priority: the one typed by hand, else the printed one (read by the OCR), else the number
+  given on the phone, else a number inferred from the neighboring pages of the same session. Roman numerals come before
   page 1.
 - **Pages without a number** are placed next to their neighbors from the same session. Front matter scanned just before
   page 1 therefore comes before page 1, and a plate scanned between pages 12 and 13 stays between them. An unnumbered

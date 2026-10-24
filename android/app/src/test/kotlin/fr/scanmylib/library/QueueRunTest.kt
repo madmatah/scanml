@@ -43,13 +43,15 @@ class QueueRunTest {
                     "p2" to Instant.parse("2026-10-12T18:16:02Z"),
                     "p3" to Instant.parse("2026-10-12T18:16:40Z"),
                 )
+                staging.numberPage(DOCUMENT, pages[0], FIRST_PAGE, nextPagesFollowOn = true)
+                val numberedPages = staging.pages(DOCUMENT)
                 val journal = staging.sendJournal(DOCUMENT)
-                queueRun(DOCUMENT, pages, PageNumbering(firstPage = 12, consecutive = true), scans, CLOCK, journal) {
+                queueRun(DOCUMENT, numberedPages, scans, CLOCK, journal) {
                     hadTheJournalWhileRecording = journal.isFile
                     queued = it
                 }
                 scanContents = queued.map { page -> page.fileName?.let { scans.file(it).readText() } }
-                pagesLeftInTheRun = pages.filter { it.file.exists() }
+                pagesLeftInTheRun = numberedPages.filter { it.file.exists() }
                 hasTheJournal = journal.exists()
             }
 
@@ -72,7 +74,7 @@ class QueueRunTest {
             }
 
             @Test
-            fun `should hint their page numbers on from the first page`() {
+            fun `should hint their page numbers on from the first page's`() {
                 assertEquals(listOf(12, 13, 14), queued.map { it.pageNumberHint })
             }
 
@@ -136,8 +138,7 @@ class QueueRunTest {
                 )
                 staging.delete(DOCUMENT, shots[1])
                 val scans = ScanFileStore(folder.newFolder("scans"))
-                val numbering = PageNumbering(firstPage = null, consecutive = true)
-                queueRun(DOCUMENT, staging.pages(DOCUMENT), numbering, scans, CLOCK, staging.sendJournal(DOCUMENT)) {
+                queueRun(DOCUMENT, staging.pages(DOCUMENT), scans, CLOCK, staging.sendJournal(DOCUMENT)) {
                     queued = it
                 }
                 scanContents = queued.map { page -> page.fileName?.let { scans.file(it).readText() } }
@@ -149,13 +150,49 @@ class QueueRunTest {
             }
 
             @Test
-            fun `should hint no page number without a first page`() {
+            fun `should hint no page number, since none was given`() {
                 assertEquals(listOf(null, null), queued.map { it.pageNumberHint })
             }
 
             @Test
             fun `should move the images of the pages left`() {
                 assertEquals(listOf("a", "b"), scanContents)
+            }
+        }
+
+        class WhenARunNumberedPageByPageIsSent {
+            @get:Rule
+            val folder = TemporaryFolder()
+
+            private lateinit var queued: List<PendingPageEntity>
+
+            @Before
+            fun sendTheRun() = runTest {
+                val staging = StagingArea(folder.newFolder("staging"))
+                val scans = ScanFileStore(folder.newFolder("scans"))
+                val pages = stageRun(
+                    staging,
+                    "p1" to CLOCK.instant(),
+                    "p2" to CLOCK.instant(),
+                    "p3" to CLOCK.instant(),
+                    "p4" to CLOCK.instant(),
+                )
+                staging.numberPage(DOCUMENT, pages[0], NUMBER_GIVEN_WITH_THE_NEXT_PAGES, nextPagesFollowOn = true)
+                staging.numberPage(DOCUMENT, pages[2], null, nextPagesFollowOn = true)
+                staging.numberPage(DOCUMENT, pages[3], NUMBER_GIVEN_ALONE, nextPagesFollowOn = false)
+                queueRun(DOCUMENT, staging.pages(DOCUMENT), scans, CLOCK, staging.sendJournal(DOCUMENT)) {
+                    queued = it
+                }
+            }
+
+            @Test
+            fun `should hint each page with the number given, following on, or none`() {
+                assertEquals(listOf(32, 33, null, 40), queued.map { it.pageNumberHint })
+            }
+
+            companion object {
+                private const val NUMBER_GIVEN_WITH_THE_NEXT_PAGES = 32
+                private const val NUMBER_GIVEN_ALONE = 40
             }
         }
 
@@ -171,8 +208,7 @@ class QueueRunTest {
                 val scans = ScanFileStore(folder.newFolder("scans"))
                 val pages = stageRun(staging, "p1" to CLOCK.instant(), "p2" to CLOCK.instant())
                 val journal = staging.sendJournal(DOCUMENT)
-                val numbering = PageNumbering(1, consecutive = true)
-                sendTheRun = { queueRun(DOCUMENT, pages, numbering, scans, CLOCK, journal, recordInAClosedDatabase) }
+                sendTheRun = { queueRun(DOCUMENT, pages, scans, CLOCK, journal, recordInAClosedDatabase) }
             }
 
             @Test
@@ -198,9 +234,8 @@ class QueueRunTest {
                 val pages = stageRun(staging, "p1" to CLOCK.instant(), "p2" to CLOCK.instant())
                 val journal = staging.sendJournal(DOCUMENT)
                 runCatching {
-                    val numbering = PageNumbering(1, consecutive = true)
                     val scans = ScanFileStore(scansDirectory)
-                    queueRun(DOCUMENT, pages, numbering, scans, CLOCK, journal, recordInAClosedDatabase)
+                    queueRun(DOCUMENT, pages, scans, CLOCK, journal, recordInAClosedDatabase)
                 }
                 runContents = pages.map { it.file.readText() }
                 scanStoreListing = ScanStoreListing(scansDirectory.listFiles()?.toList())
@@ -270,6 +305,32 @@ class QueueRunTest {
             }
         }
 
+        class WhenTheProcessDiedBeforeNumberedPagesWereRecorded {
+            @get:Rule
+            val folder = TemporaryFolder()
+
+            private lateinit var numberings: List<PageNumbering>
+
+            @Before
+            fun readTheRunInTheNextProcess() = runTest {
+                val root = folder.newFolder("staging")
+                val scans = ScanFileStore(folder.newFolder("scans"))
+                dieWhileSendingNumberedPages(StagingArea(root), scans)
+                val recovered = startANextProcessThatRecoversSends(root, scans) { false }
+                numberings = recovered.pages(DOCUMENT).map { it.numbering }
+            }
+
+            @Test
+            fun `should put them back with their numbers`() {
+                val expected = listOf(
+                    PageNumbering.Given(FIRST_PAGE, nextPagesFollowOn = true),
+                    PageNumbering.NotGiven,
+                    PageNumbering.Cleared,
+                )
+                assertEquals(expected, numberings)
+            }
+        }
+
         class WhenThePagesWereRecordedBeforeTheProcessDied {
             @get:Rule
             val folder = TemporaryFolder()
@@ -333,6 +394,30 @@ class QueueRunTest {
             }
         }
 
+        class WhenTheJournalNamesNumberedPages {
+            @get:Rule
+            val folder = TemporaryFolder()
+
+            private val sentPages = listOf(
+                SentPage("a1b2", "00001_1760293530123_h12c.jpg"),
+                SentPage("c3d4", "00002_1760293532000_n.jpg"),
+            )
+
+            private lateinit var journalPages: List<SentPage>
+
+            @Before
+            fun writeAndReadTheJournal() {
+                val journal = folder.newFile("sending")
+                writeSendJournal(journal, sentPages)
+                journalPages = readSendJournal(journal)
+            }
+
+            @Test
+            fun `should read their names whole, so that a page sent back to the run keeps its number`() {
+                assertEquals(sentPages, journalPages)
+            }
+        }
+
         @RunWith(Parameterized::class)
         class WhenALineNamesAPathOrIsCutShort(private val line: String, private val content: String) {
             @get:Rule
@@ -367,6 +452,7 @@ class QueueRunTest {
 
 private const val DOCUMENT = "6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b"
 private const val DATABASE_CLOSED = "database closed"
+private const val FIRST_PAGE = 12
 private val CLOCK: Clock = Clock.fixed(Instant.parse("2026-10-12T18:30:00Z"), ZoneId.of("+02:00"))
 
 private suspend fun stageRun(staging: StagingArea, vararg shots: Pair<String, Instant>): List<StagedPage> = staging.add(
@@ -381,17 +467,32 @@ private val recordInAClosedDatabase: suspend (List<PendingPageEntity>) -> Unit =
     throw IllegalStateException(DATABASE_CLOSED)
 }
 
+private suspend fun stageThreeShots(staging: StagingArea): List<StagedPage> = stageRun(
+    staging,
+    "p1" to CLOCK.instant(),
+    "p2" to CLOCK.instant().plusSeconds(2),
+    "p3" to CLOCK.instant(),
+)
+
 private suspend fun dieWhileSendingAfterMoving(
     staging: StagingArea,
     scans: ScanFileStore,
     movedCount: Int,
+): List<SentPage> = dieWhileSending(staging, scans, stageThreeShots(staging), movedCount)
+
+private suspend fun dieWhileSendingNumberedPages(staging: StagingArea, scans: ScanFileStore): List<SentPage> {
+    val shots = stageThreeShots(staging)
+    staging.numberPage(DOCUMENT, shots[0], FIRST_PAGE, nextPagesFollowOn = true)
+    staging.numberPage(DOCUMENT, shots[2], null, nextPagesFollowOn = true)
+    return dieWhileSending(staging, scans, staging.pages(DOCUMENT), movedCount = shots.size)
+}
+
+private fun dieWhileSending(
+    staging: StagingArea,
+    scans: ScanFileStore,
+    pages: List<StagedPage>,
+    movedCount: Int,
 ): List<SentPage> {
-    val pages = stageRun(
-        staging,
-        "p1" to CLOCK.instant(),
-        "p2" to CLOCK.instant().plusSeconds(2),
-        "p3" to CLOCK.instant(),
-    )
     val sent = pages.mapIndexed { index, page -> SentPage("page-${index + 1}", page.file.name) }
     writeSendJournal(staging.sendJournal(DOCUMENT), sent)
     pages.zip(sent).take(movedCount).forEach { (page, entry) -> scans.adopt(entry.pageId, page.file) }

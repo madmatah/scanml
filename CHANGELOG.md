@@ -7,6 +7,23 @@ The notable changes of each release of ScanMyLib. The format is based on
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-24
+
+### Added
+
+- App: the pages to send get a screen of their own, which never blocks their document: large thumbnails, the first
+  page number, Add pages, Delete these pages and Send; the document shows a banner with "Review" instead of opening
+  a dialog by itself
+- App: copying scanned pages or imported photos goes on when you leave the screen; pages from the scanner join at
+  once, even while photos are being imported
+- App: a removed page can be put back for 10 seconds
+- App: look at a page to send full screen, with zoom up to 2.5×
+
+### Fixed
+
+- Web UI and app: the same words for the same things on both, in English and in French: page states, pages not
+  scanned yet, curved-page flattening, kinds, pairing and the access token; "OCR" stays only in the engine's badge
+
 ## [0.5.0] - 2026-10-22
 
 ### Added
@@ -94,7 +111,8 @@ The notable changes of each release of ScanMyLib. The format is based on
 
 - OCR: read the whole request body before refusing a request
 
-[unreleased]: https://github.com/madmatah/scanml/compare/v0.5.0...HEAD
+[unreleased]: https://github.com/madmatah/scanml/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/madmatah/scanml/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/madmatah/scanml/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/madmatah/scanml/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/madmatah/scanml/compare/v0.2.3...v0.3.0

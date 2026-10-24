@@ -455,11 +455,11 @@ export default {
   'Build the Android app (the project’s {folder} folder), then reload this page.':
     'Compilez l’application Android (dossier {folder} du projet), puis rechargez cette page.',
   'Install the Android app': 'Installer l’application Android',
-  'Pair the app with this PC': 'Associer l’application à ce PC',
-  'Pairing QR code: address of this PC and access token': 'QR code d’association : adresse de ce PC et jeton d’accès',
+  'Pair the app with this PC': 'Appairer l’application avec ce PC',
+  'Pairing QR code: address of this PC and access token': 'QR code d’appairage : adresse de ce PC et jeton d’accès',
   'Open ScanMyLib on the phone: on the {screen} screen, tap {button}.':
     'Ouvrez ScanMyLib sur le téléphone : à l’écran {screen}, touchez {button}.',
-  'Pair with PC': 'Associer au PC',
+  'Pair with PC': 'Appairer avec le PC',
   'Scan the QR code': 'Scanner le QR code',
   'Point the phone at this QR code: the app saves the PC address and the access token.':
     'Visez ce QR code : l’application enregistre l’adresse du PC et le jeton d’accès.',
@@ -470,10 +470,10 @@ export default {
   'Manual entry': 'Saisie manuelle',
   'Without a QR code reader, copy these two values into the app, then tap {button}.':
     'Sans lecteur de QR code, recopiez ces deux valeurs dans l’application, puis touchez {button}.',
-  'Test and pair': 'Tester et associer',
+  'Test and pair': 'Tester et appairer',
   'PC address': 'Adresse du PC',
   'Address copied.': 'Adresse copiée.',
   'Access token copied.': 'Jeton d’accès copié.',
   'Two steps: install the Android app, then pair it with this PC.':
-    'Deux étapes : installer l’application Android, puis l’associer à ce PC.',
+    'Deux étapes : installer l’application Android, puis l’appairer avec ce PC.',
 };

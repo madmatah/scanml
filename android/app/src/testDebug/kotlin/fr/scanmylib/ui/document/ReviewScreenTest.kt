@@ -824,6 +824,161 @@ class ReviewScreenTest {
         @RunWith(ParameterizedRobolectricTestRunner::class)
         @GraphicsMode(GraphicsMode.Mode.NATIVE)
         @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenTheMenuOfTheSecondPageIsOpened(private val theme: String, private val dark: Boolean) {
+            @get:Rule
+            val compose = createComposeRule()
+
+            @OptIn(ExperimentalRoborazziApi::class)
+            @Before
+            fun openIt() {
+                compose.setContent { ScanMyLibTheme(dark = dark) { ReviewContentOf(FOUR_PAGES) } }
+                openTheMenu(compose, SECOND_PAGE_AUTO)
+                // The whole screen: the menu has a window of its own.
+                captureScreenRoboImage("build/outputs/roborazzi/review-page-menu-$theme.png")
+            }
+
+            @Test
+            fun `should offer to enlarge the page, number it or remove it, as TalkBack does from its tile`() {
+                compose.onNodeWithText(ENLARGE).assertIsDisplayed()
+                compose.onNodeWithText(NUMBER).assertIsDisplayed()
+                compose.onNodeWithText(REMOVE).assertIsDisplayed()
+            }
+
+            companion object {
+                @JvmStatic
+                @ParameterizedRobolectricTestRunner.Parameters(name = "in the {0} theme")
+                fun themes(): List<Array<Any>> = THEMES
+            }
+        }
+
+        @RunWith(ParameterizedRobolectricTestRunner::class)
+        @GraphicsMode(GraphicsMode.Mode.NATIVE)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone, fontScale = 2f)
+        class WhenTheMenuOfTheSecondPageIsOpenedAndTheTextIsTwiceItsSize(
+            private val theme: String,
+            private val dark: Boolean,
+        ) {
+            @get:Rule
+            val compose = createComposeRule()
+
+            @OptIn(ExperimentalRoborazziApi::class)
+            @Before
+            fun openIt() {
+                compose.setContent { ScanMyLibTheme(dark = dark) { ReviewContentOf(NUMBERED_PAGES) } }
+                openTheMenu(compose, SECOND_PAGE_33_IN_SEQUENCE)
+                captureScreenRoboImage("build/outputs/roborazzi/review-page-menu-large-text-$theme.png")
+            }
+
+            @Test
+            fun `should show Remove whole`() {
+                assertTrue(isShownWholeInItsWindow(compose, REMOVE))
+            }
+
+            companion object {
+                @JvmStatic
+                @ParameterizedRobolectricTestRunner.Parameters(name = "in the {0} theme")
+                fun themes(): List<Array<Any>> = THEMES
+            }
+        }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenEnlargeIsChosenInTheMenu {
+            @get:Rule
+            val compose = createComposeRule()
+
+            @Before
+            fun enlargeTheSecondPage() {
+                compose.setContent { ScanMyLibTheme { ReviewContentOf(FOUR_PAGES) } }
+                openTheMenu(compose, SECOND_PAGE_AUTO)
+                compose.onNodeWithText(ENLARGE).performClick()
+            }
+
+            @Test
+            fun `should show that page full screen`() {
+                compose.onNode(hasText(PAGE_2_OF_4) and isHeading()).assertIsDisplayed()
+            }
+        }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenNumberIsChosenInTheMenu {
+            @get:Rule
+            val compose = createComposeRule()
+
+            @Before
+            fun numberTheSecondPage() {
+                compose.setContent { ScanMyLibTheme { ReviewContentOf(FOUR_PAGES) } }
+                openTheMenu(compose, SECOND_PAGE_AUTO)
+                compose.onNodeWithText(NUMBER).performClick()
+            }
+
+            @Test
+            fun `should open the number sheet of that page`() {
+                compose.onNode(hasText(NUMBER_OF_PAGE_2) and isHeading()).assertIsDisplayed()
+            }
+        }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenRemoveIsChosenInTheMenu {
+            @get:Rule
+            val compose = createComposeRule()
+
+            private lateinit var removedPages: MutableList<StagedPage>
+
+            @Before
+            fun removeTheSecondPage() {
+                removedPages = mutableListOf()
+                compose.setContent {
+                    var scan by remember { mutableStateOf(FOUR_PAGES) }
+                    ScanMyLibTheme {
+                        ReviewContentOf(
+                            scan,
+                            onRemovePage = { page ->
+                                removedPages += page
+                                scan = scan.copy(stagedPages = scan.stagedPages - page, removedPage = page)
+                            },
+                        )
+                    }
+                }
+                openTheMenu(compose, SECOND_PAGE_AUTO)
+                compose.onNodeWithText(REMOVE).performClick()
+                compose.waitForIdle()
+            }
+
+            @Test
+            fun `should remove that page`() {
+                assertEquals(listOf(FOUR_PAGES.stagedPages[1]), removedPages)
+            }
+
+            @Test
+            fun `should give the focus to the page that takes its place`() {
+                compose.onNodeWithContentDescription(SECOND_OF_THREE_AUTO).assertIsFocused()
+            }
+        }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenPagesAreBeingSentAndTheMenuOfAPageIsTapped {
+            @get:Rule
+            val compose = createComposeRule()
+
+            @Before
+            fun tapTheMenu() {
+                compose.setContent { ScanMyLibTheme { ReviewContentOf(FOUR_PAGES.copy(sending = true)) } }
+                openTheMenu(compose, SECOND_PAGE_AUTO)
+            }
+
+            @Test
+            fun `should not open it, since the page is being sent`() {
+                assertEquals(0, compose.onAllNodesWithText(NUMBER).fetchSemanticsNodes().size)
+            }
+        }
+
+        @RunWith(ParameterizedRobolectricTestRunner::class)
+        @GraphicsMode(GraphicsMode.Mode.NATIVE)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
         class WhenAPageIsRemoved(private val theme: String, private val dark: Boolean) {
             @get:Rule
             val compose = createComposeRule()
@@ -1450,6 +1605,7 @@ private const val DONE = "Done"
 private const val FIRST_PAGE_NUMBER = 32
 private const val ENLARGE = "Enlarge"
 private const val REMOVE = "Remove"
+private const val NUMBER = "Number…"
 private const val CANCEL = "Cancel"
 private const val OK = "OK"
 private const val TWO_SKIPPED = "2 photos"
@@ -1559,7 +1715,15 @@ private fun tapTheNumberChip(screen: SemanticsNodeInteractionsProvider, page: St
     }
 }
 
-/** What the review asked to number. */
+/** A tap on the menu button, at the end of the strip under the image: a pointer target inside the tile's one node. */
+private fun openTheMenu(compose: ComposeContentTestRule, page: String) {
+    compose.onNodeWithContentDescription(page).performTouchInput {
+        val menuCenterInset = STRIP_HEIGHT.toPx() / 2
+        click(Offset(width - menuCenterInset, height - menuCenterInset))
+    }
+    compose.waitForIdle()
+}
+
 private data class NumberedPage(val page: StagedPage, val number: Int?, val nextPagesFollowOn: Boolean)
 
 private val STRIP_HEIGHT = 48.dp
@@ -1567,6 +1731,15 @@ private val STRIP_HEIGHT = 48.dp
 private fun isShownWhole(screen: SemanticsNodeInteractionsProvider, text: String): Boolean {
     val root = screen.onRoot().fetchSemanticsNode().boundsInRoot
     val bounds = screen.onNodeWithText(text).fetchSemanticsNode().boundsInRoot
+    return bounds.height > 0 && root.contains(bounds.topLeft) && bounds.bottom <= root.bottom &&
+        bounds.right <= root.right
+}
+
+/** Against the root of the text's own window, such as a menu's. */
+private fun isShownWholeInItsWindow(screen: SemanticsNodeInteractionsProvider, text: String): Boolean {
+    val node = screen.onNodeWithText(text).fetchSemanticsNode()
+    val root = generateSequence(node) { it.parent }.last().boundsInRoot
+    val bounds = node.boundsInRoot
     return bounds.height > 0 && root.contains(bounds.topLeft) && bounds.bottom <= root.bottom &&
         bounds.right <= root.right
 }

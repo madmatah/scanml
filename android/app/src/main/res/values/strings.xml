@@ -176,6 +176,7 @@
     <string name="number_sheet_clear">Clear</string>
     <string name="number_sheet_done">Done</string>
     <string name="review_enlarge">Enlarge</string>
+    <string name="review_number_menu">Number…</string>
     <string name="review_remove">Remove</string>
     <string name="review_page_removed">Page removed</string>
     <string name="undo">Undo</string>

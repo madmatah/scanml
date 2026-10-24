@@ -123,7 +123,8 @@ Tailscale…) rather than exposing the port to the Internet.
   a camera or the photo picker returns pages: tap a page to see it full screen, use the last tile to add more
   (**Scan**, **Import**, or **Scan with…** for the other camera), and **Send N pages** to queue them for upload. Full
   screen, swipe to the next or the previous page, pinch to zoom up to 2.5×, or double-tap to zoom to 2× and back
-  (TalkBack: **Zoom in** and **Zoom out**), and **Remove** the page shown; TalkBack also removes a page from its tile.
+  (TalkBack: **Zoom in** and **Zoom out**), and **Remove** the page shown. The ⋮ menu under each page offers **Enlarge**,
+  **Number…** and **Remove** (TalkBack: the actions of the page's tile).
   **Undo** puts a removed page back in its place for 10 seconds, until another page is removed, a camera or the photo
   picker opens, or the review ends.
   While pages are being prepared, their progress shows there, and an import can be canceled; leaving meanwhile loses

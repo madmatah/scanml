@@ -183,13 +183,13 @@ internal fun ReviewContent(
     var isConfirmingDelete by rememberSaveable { mutableStateOf(false) }
     RemovalUndo(scan.removedPage, snackbarHostState, onRestorePage, onDeleteRemovedPage)
     val gridState = rememberLazyGridState()
-    // The tile that takes the focus once a page is removed, or once the pager closes, by file.
+    // The tile that takes the focus once a page is removed, or once the pager closes, by key.
     var pageToFocus by remember { mutableStateOf<String?>(null) }
     var shownPage by rememberSaveable { mutableStateOf<String?>(null) }
-    val shownIndex = scan.stagedPages.indexOfFirst { it.file.path == shownPage }
+    val shownIndex = scan.stagedPages.indexOfFirst { it.key == shownPage }
     LaunchedEffect(pageToFocus) {
         val target = pageToFocus ?: return@LaunchedEffect
-        val index = scan.stagedPages.indexOfFirst { it.file.path == target }
+        val index = scan.stagedPages.indexOfFirst { it.key == target }
         if (index < 0) return@LaunchedEffect
         // Once the grid is laid out: a tile out of sight is brought into it, where it can take the focus.
         withFrameNanos {}
@@ -208,10 +208,10 @@ internal fun ReviewContent(
             firstShownPage = shownIndex,
             canRemove = !scan.sending,
             snackbarHostState = snackbarHostState,
-            onPageShown = { page -> shownPage = page.file.path },
+            onPageShown = { page -> shownPage = page.key },
             onRemove = { page ->
-                val index = scan.stagedPages.indexOf(page)
-                shownPage = (scan.stagedPages.getOrNull(index + 1) ?: scan.stagedPages.getOrNull(index - 1))?.file?.path
+                val index = scan.stagedPages.indexOfFirst { it.key == page.key }
+                shownPage = (scan.stagedPages.getOrNull(index + 1) ?: scan.stagedPages.getOrNull(index - 1))?.key
                 onRemovePage(page)
             },
             onBack = closePager,
@@ -267,9 +267,9 @@ internal fun ReviewContent(
                     }
                 }
             }
-            itemsIndexed(scan.stagedPages, key = { _, page -> page.file.path }) { index, page ->
+            itemsIndexed(scan.stagedPages, key = { _, page -> page.key }) { index, page ->
                 val focusRequester = remember { FocusRequester() }
-                if (page.file.path == pageToFocus) {
+                if (page.key == pageToFocus) {
                     LaunchedEffect(Unit) {
                         // Once the tile is laid out, so that it can take the focus.
                         withFrameNanos {}
@@ -281,10 +281,10 @@ internal fun ReviewContent(
                     position = index + 1,
                     count = count,
                     numberHint = numbering?.hintFor(index),
-                    onEnlarge = { if (!scan.sending) shownPage = page.file.path },
+                    onEnlarge = { if (!scan.sending) shownPage = page.key },
                     onRemove = {
                         val nextPage = scan.stagedPages.getOrNull(index + 1) ?: scan.stagedPages.getOrNull(index - 1)
-                        pageToFocus = nextPage?.file?.path
+                        pageToFocus = nextPage?.key
                         onRemovePage(page)
                     }.takeUnless { scan.sending },
                     modifier = Modifier.focusRequester(focusRequester),

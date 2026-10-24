@@ -27,7 +27,9 @@ import kotlinx.coroutines.withContext
  * @property capturedAt when the page was photographed: the time of the shot, the EXIF time of an
  *   imported photo, or the time of the scanner run.
  */
-data class StagedPage(val file: File, val seq: Int, val capturedAt: Instant)
+data class StagedPage(val file: File, val seq: Int, val capturedAt: Instant) {
+    val key: String get() = "${seq}_${capturedAt.toEpochMilli()}"
+}
 
 /** A complete image written in a [StagingArea.incomingFile], to add to a run. */
 data class StagingInput(val file: File, val capturedAt: Instant)

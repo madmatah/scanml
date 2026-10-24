@@ -148,7 +148,7 @@ class PageNumberingTest {
             private val choice: String,
             private val numberings: List<PageNumbering>,
             private val index: Int,
-            private val number: NumberTyped,
+            private val typed: NumberTyped,
             private val nextPagesFollowOn: Boolean,
             private val expected: PageNumbering,
         ) {
@@ -156,7 +156,7 @@ class PageNumberingTest {
 
             @Before
             fun chooseTheNumbering() {
-                numbering = chooseNumbering(numberings, index, number.value, nextPagesFollowOn)
+                numbering = chooseNumbering(numberings, index, typed.number, nextPagesFollowOn)
             }
 
             @Test
@@ -257,6 +257,31 @@ class PageNumberingTest {
     }
 
     @RunWith(Enclosed::class)
+    class TheRenumberPageFunction {
+        class WhenTheSecondOfFourPagesIsGiven40 {
+            private lateinit var numberings: List<PageNumbering>
+
+            @Before
+            fun renumberIt() {
+                val run = listOf(FROM_32, NotGiven, NotGiven, NotGiven)
+                numberings = renumberPage(run, SECOND_PAGE, GIVEN_NUMBER, nextPagesFollowOn = true)
+            }
+
+            @Test
+            fun `should change that page's numbering only, since the next pages follow from it`() {
+                assertEquals(listOf(FROM_32, FROM_40, NotGiven, NotGiven), numberings)
+            }
+
+            companion object {
+                private val FROM_32 = Given(32, nextPagesFollowOn = true)
+                private const val GIVEN_NUMBER = 40
+                private val FROM_40 = Given(GIVEN_NUMBER, nextPagesFollowOn = true)
+                private const val SECOND_PAGE = 1
+            }
+        }
+    }
+
+    @RunWith(Enclosed::class)
     class TheFindNextPagesFunction {
         @RunWith(Parameterized::class)
         class WhenAPageIsNumbered(
@@ -341,7 +366,100 @@ class PageNumberingTest {
             }
         }
     }
+
+    @RunWith(Enclosed::class)
+    class TheSuggestPageNumberFunction {
+        @RunWith(Parameterized::class)
+        class WhenThePageHasNoNumber(
+            private val situation: String,
+            private val hints: List<PageHint>,
+            private val index: Int,
+            private val scannedPages: List<IntRange>,
+            private val expected: SuggestedNumber,
+        ) {
+            private lateinit var suggestion: SuggestedNumber
+
+            @Before
+            fun suggestANumber() {
+                suggestion = SuggestedNumber(suggestPageNumber(index, hints, scannedPages))
+            }
+
+            @Test
+            fun `should suggest the number the page most likely has`() {
+                assertEquals(situation, expected, suggestion)
+            }
+
+            companion object {
+                private val PAGES_12_TO_31_AND_88_TO_90 = listOf(12..31, 88..90)
+                private val PAGES_1_TO_12 = listOf(1..12)
+
+                @JvmStatic
+                @Parameterized.Parameters(name = "{0}")
+                fun situations(): List<Array<Any>> = listOf(
+                    arrayOf(
+                        "after a page given a number, the next number, before what the PC holds",
+                        listOf(PageHint.Given(40), PageHint.Auto),
+                        1,
+                        PAGES_12_TO_31_AND_88_TO_90,
+                        SuggestedNumber(41),
+                    ),
+                    arrayOf(
+                        "after a page that follows on, the next number",
+                        listOf(PageHint.Given(40), PageHint.FollowingOn(41), PageHint.Auto),
+                        2,
+                        PAGES_12_TO_31_AND_88_TO_90,
+                        SuggestedNumber(42),
+                    ),
+                    arrayOf(
+                        "after a page without a number, the first page missing between the PC's ranges",
+                        listOf(PageHint.Auto, PageHint.Auto),
+                        1,
+                        PAGES_12_TO_31_AND_88_TO_90,
+                        SuggestedNumber(32),
+                    ),
+                    arrayOf(
+                        "on the first page of the run, the first page missing between the PC's ranges",
+                        listOf(PageHint.Auto),
+                        0,
+                        PAGES_12_TO_31_AND_88_TO_90,
+                        SuggestedNumber(32),
+                    ),
+                    arrayOf(
+                        "with no gap between the PC's ranges, the page after its highest",
+                        listOf(PageHint.Auto),
+                        0,
+                        PAGES_1_TO_12,
+                        SuggestedNumber(13),
+                    ),
+                    arrayOf(
+                        "with no page on the PC, none",
+                        listOf(PageHint.Auto),
+                        0,
+                        emptyList<IntRange>(),
+                        SuggestedNumber(null),
+                    ),
+                    arrayOf(
+                        "after page 9999, the last the server takes, what the PC holds",
+                        listOf(PageHint.Given(9999), PageHint.Auto),
+                        1,
+                        PAGES_1_TO_12,
+                        SuggestedNumber(13),
+                    ),
+                    arrayOf(
+                        "after the PC's page 9999, none",
+                        listOf(PageHint.Auto),
+                        0,
+                        listOf(1..9999),
+                        SuggestedNumber(null),
+                    ),
+                )
+            }
+        }
+    }
 }
 
 /** A number typed, or none, held in a non-null value so that a row can carry it. */
-data class NumberTyped(val value: Int?)
+data class NumberTyped(val number: Int?)
+
+/** A number suggested, or none, held in a non-null value so that a row can carry it. */
+data class SuggestedNumber(val number: Int?)

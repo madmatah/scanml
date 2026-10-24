@@ -493,6 +493,31 @@ class ReviewScreenTest {
 
         @RunWith(RobolectricTestRunner::class)
         @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
+        class WhenTheNumberSheetOpensWhileThePcHasPages12To31And88To90 {
+            @get:Rule
+            val compose = createComposeRule()
+
+            @OptIn(ExperimentalTestApi::class)
+            @Before
+            fun openIt() {
+                val scan = FOUR_PAGES.copy(scannedPages = listOf(12..31, 88..90))
+                compose.setContent { ScanMyLibTheme { ReviewContentOf(scan) } }
+                compose.onNodeWithContentDescription(FIRST_PAGE_AUTO)
+                    .performCustomAccessibilityActionWithLabel(CHANGE_THE_NUMBER)
+            }
+
+            @Test
+            fun `should suggest the first page missing between the PC's ranges`() {
+                compose.onNodeWithText(SUGGESTION_32).assertIsDisplayed()
+            }
+
+            companion object {
+                private const val SUGGESTION_32 = "Suggestion: 32"
+            }
+        }
+
+        @RunWith(RobolectricTestRunner::class)
+        @Config(sdk = [36], qualifiers = RobolectricDeviceQualifiers.MediumPhone)
         class WhenANumberIsDone {
             @get:Rule
             val compose = createComposeRule()
@@ -1232,7 +1257,7 @@ class ReviewScreenTest {
             @Before
             fun validateItUnchanged() = runTest {
                 val run = stageThreePages(folder)
-                run.viewModel.numberPage(run.stagedPages[0], NUMBER_32, nextPagesFollowOn = true)
+                run.viewModel.numberPage(run.stagedPages[0], FIRST_PAGE_NUMBER, nextPagesFollowOn = true)
                 run.viewModel.scanState.first { it.stagedPages[0].numbering is PageNumbering.Given }
                 showTheReview(compose, run)
                 fileName = run.viewModel.scanState.value.stagedPages[1].file.name
@@ -1415,13 +1440,14 @@ class ReviewScreenTest {
 
 private const val FOUR_PAGES_TO_SEND = "4 pages to send"
 private const val SEND_FOUR_PAGES = "Send 4 pages"
+private const val FIRST_PAGE_AUTO = "Page 1 of 4, number auto"
 private const val SECOND_PAGE_AUTO = "Page 2 of 4, number auto"
 private const val FIRST_PAGE_32 = "Page 1 of 4, number 32"
 private const val SECOND_PAGE_33_IN_SEQUENCE = "Page 2 of 4, number 33, in sequence"
 private const val CHANGE_THE_NUMBER = "Change the number"
 private const val NUMBER_OF_PAGE_2 = "Number of page 2"
 private const val DONE = "Done"
-private const val NUMBER_32 = 32
+private const val FIRST_PAGE_NUMBER = 32
 private const val ENLARGE = "Enlarge"
 private const val REMOVE = "Remove"
 private const val CANCEL = "Cancel"
@@ -1470,7 +1496,7 @@ private val FOUR_PAGES = ScanUiState(
 private val NUMBERED_PAGES = FOUR_PAGES.copy(
     stagedPages = FOUR_PAGES.stagedPages.zip(
         listOf(
-            PageNumbering.Given(NUMBER_32, nextPagesFollowOn = true),
+            PageNumbering.Given(FIRST_PAGE_NUMBER, nextPagesFollowOn = true),
             PageNumbering.NotGiven,
             PageNumbering.Cleared,
             PageNumbering.NotGiven,
@@ -1519,7 +1545,7 @@ private fun readClickLabel(screen: SemanticsNodeInteractionsProvider, descriptio
         .getOrNull(SemanticsActions.OnClick)?.label
 
 private fun countColumnsOfTheFirstTwoPages(screen: SemanticsNodeInteractionsProvider): Int =
-    countColumns(screen, "Page 1 of 4, number auto", SECOND_PAGE_AUTO)
+    countColumns(screen, FIRST_PAGE_AUTO, SECOND_PAGE_AUTO)
 
 private fun countColumns(screen: SemanticsNodeInteractionsProvider, vararg pages: String): Int = pages.map { page ->
     screen.onNodeWithContentDescription(page).fetchSemanticsNode().positionInRoot.x.roundToInt()

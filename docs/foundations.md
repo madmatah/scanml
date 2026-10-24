@@ -161,7 +161,7 @@ The modules as they are, and the layer each one belongs to, whose directory the 
 | web UI | `router.js`, `session.js`, `status.js`, `uploads.js` | Navigation, session, engine status, uploads | Application |
 | web UI | `api.js`, `lib/i18n.js`, `lib/dom.js`, `lib/clipboard.js`, `lib/errors.js`, `lib/uuid.js`, `views/`, `components/` | Client of the api, translations, the DOM and its views | Adapters |
 | app | `ScanMyLibApplication`, `AppContainer`, `MainActivity` | Entry points and wiring | Composition roots |
-| app | `model/`, `library/PageNumbering`, `library/PageLabel` | Document kinds, scan sources, scanner modes, theme modes, the PC's address; page numbering, and the pages a page's label names | Domain |
+| app | `model/`, `library/PageNumbering`, `library/PageLabel`, `library/PageRanges` | Document kinds, scan sources, scanner modes, theme modes, the PC's address; page numbering, the pages a page's label names, and the page ranges of the PC's coverage label | Domain |
 | app | `library/`, `pairing/`, `sync/`, `update/`, `settings/` | The library and its staging area, pairing, the upload queue, app updates, settings | Application, with their technology parts as adapters |
 | app | `api/`, `db/`, `diagnostics/`, `ui/` | Client of the PC, Room database, crash reports, Compose screens and view models | Adapters |
 | OCR sandbox | `supervisor`, `worker` | The HTTP API on the Unix socket, and the process that runs an engine | Composition roots |

@@ -70,6 +70,7 @@ data class ScanUiState(
     val reviewEnd: ReviewEnd? = null,
     val removedPage: StagedPage? = null,
     val isSourceOpen: Boolean = false,
+    val scannedPages: List<IntRange> = emptyList(),
 ) {
     val hints: List<PageHint> get() = hintPages(stagedPages.map { it.numbering })
 
@@ -134,6 +135,7 @@ class ScanViewModel(
     private val addScannedPages: suspend (pages: List<Uri>, onProgress: (Int) -> Unit) -> Unit,
     private val addPhotos: suspend (photos: List<Uri>, onProgress: (Int) -> Unit) -> PhotoImportResult,
     private val sendRun: suspend () -> Int,
+    private val scannedPages: Flow<List<IntRange>>,
     /** Free bytes on the storage that holds the runs; a binder call, run off the main thread. */
     private val freeStorage: () -> Long,
     private val hasCamera: Boolean,
@@ -183,6 +185,7 @@ class ScanViewModel(
         )
     }.combine(removedPage) { scan, removedPage -> scan.copy(removedPage = removedPage) }
         .combine(isSourceOpen) { scan, isOpen -> scan.copy(isSourceOpen = isOpen) }
+        .combine(scannedPages) { scan, scannedPages -> scan.copy(scannedPages = scannedPages) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ScanUiState())
 
     init {
@@ -465,6 +468,7 @@ class ScanViewModel(
                     },
                     addPhotos = { photos, onProgress -> scanImporter.addPhotos(documentId, photos, onProgress) },
                     sendRun = { scanImporter.send(documentId) },
+                    scannedPages = container.library.observeScannedPages(documentId),
                     freeStorage = container::freeStorage,
                     hasCamera = container.hasCamera,
                     applicationScope = container.applicationScope,

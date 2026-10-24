@@ -78,6 +78,15 @@ fun chooseNumbering(
     }
 }
 
+fun renumberPage(
+    numberings: List<PageNumbering>,
+    index: Int,
+    number: Int?,
+    nextPagesFollowOn: Boolean,
+): List<PageNumbering> = numberings.toMutableList().apply {
+    set(index, chooseNumbering(numberings, index, number, nextPagesFollowOn))
+}
+
 fun findNextPages(numberings: List<PageNumbering>, index: Int): IntRange {
     val end = (index + 1 until numberings.size).firstOrNull { numberings[it] != PageNumbering.NotGiven }
     return index + 1 until (end ?: numberings.size)
@@ -88,6 +97,18 @@ fun readPageNumber(text: String): PageNumberInput {
     if (trimmedText.isEmpty()) return PageNumberInput.Empty
     val number = trimmedText.toIntOrNull()?.takeIf { it in 1..MAX_PAGE_NUMBER } ?: return PageNumberInput.Invalid
     return PageNumberInput.Valid(number)
+}
+
+/**
+ * The PC's pages cannot show those sent but not read yet, so the page before comes first: the
+ * user numbers in reading order. [scannedPages] are the PC's ranges, ascending and apart.
+ */
+fun suggestPageNumber(index: Int, hints: List<PageHint>, scannedPages: List<IntRange>): Int? {
+    val afterThePreviousPage = hints.getOrNull(index - 1)?.number?.plus(1)
+    val firstMissingPage = scannedPages.firstOrNull()?.last?.plus(1)?.takeIf { scannedPages.size > 1 }
+    val afterTheHighestPage = scannedPages.lastOrNull()?.last?.plus(1)
+    return listOfNotNull(afterThePreviousPage, firstMissingPage, afterTheHighestPage)
+        .firstOrNull { it in 1..MAX_PAGE_NUMBER }
 }
 
 private fun findRunningNumber(numberings: List<PageNumbering>, index: Int): Int? =

@@ -16,9 +16,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MenuDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -59,8 +63,9 @@ import fr.scanmylib.ui.theme.PageChipContainer
 import fr.scanmylib.ui.theme.PageChipContent
 
 /**
- * One node for TalkBack and Switch Access, whose actions stand for the number chip and the removal,
- * none while [onNumber] or [onRemove] is null; the chip stays a target of its own for a pointer.
+ * One node for TalkBack and Switch Access, whose actions stand for the number chip and the page's
+ * menu, none while [onNumber] or [onRemove] is null; the chip and the menu stay targets of their
+ * own for a pointer.
  */
 @Composable
 fun StagedPageTile(
@@ -136,20 +141,59 @@ fun StagedPageTile(
                     .defaultMinSize(minWidth = 12.dp),
             )
         }
-        NumberStrip(hint, onNumber)
+        NumberStrip(hint, onEnlarge, onNumber, onRemove)
     }
 }
 
-/** The number the page is sent with, under the image, where the paper's colors cannot hide it. */
+/** The number the page is sent with, under the image, where the paper's colors cannot hide it, then its menu. */
 @Composable
-private fun NumberStrip(hint: PageHint, onNumber: (() -> Unit)?) {
-    Box(
-        contentAlignment = Alignment.CenterStart,
+private fun NumberStrip(hint: PageHint, onEnlarge: () -> Unit, onNumber: (() -> Unit)?, onRemove: (() -> Unit)?) {
+    Row(
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = STRIP_MIN_HEIGHT),
     ) {
-        NumberChip(hint, onNumber)
+        Box(Modifier.weight(1f, fill = false)) { NumberChip(hint, onNumber) }
+        PageMenu(onEnlarge, onNumber, onRemove)
+    }
+}
+
+/** Without a description: the tile's one node reads the same actions out, as custom actions. */
+@Composable
+private fun PageMenu(onEnlarge: () -> Unit, onNumber: (() -> Unit)?, onRemove: (() -> Unit)?) {
+    var isExpanded by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { isExpanded = true }, enabled = onNumber != null || onRemove != null) {
+            Icon(painterResource(R.drawable.ic_more_vert), contentDescription = null)
+        }
+        DropdownMenu(expanded = isExpanded, onDismissRequest = { isExpanded = false }) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.review_enlarge)) },
+                onClick = {
+                    isExpanded = false
+                    onEnlarge()
+                },
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.review_number_menu)) },
+                onClick = {
+                    isExpanded = false
+                    onNumber?.invoke()
+                },
+                enabled = onNumber != null,
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.review_remove)) },
+                onClick = {
+                    isExpanded = false
+                    onRemove?.invoke()
+                },
+                enabled = onRemove != null,
+                colors = MenuDefaults.itemColors(textColor = MaterialTheme.colorScheme.error),
+            )
+        }
     }
 }
 

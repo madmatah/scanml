@@ -178,6 +178,7 @@
     <string name="number_sheet_clear">Effacer</string>
     <string name="number_sheet_done">Valider</string>
     <string name="review_enlarge">Agrandir</string>
+    <string name="review_number_menu">Numéroter…</string>
     <string name="review_remove">Retirer</string>
     <string name="review_page_removed">Page retirée</string>
     <string name="undo">Annuler</string>

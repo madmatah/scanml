@@ -15,7 +15,9 @@
 #   4. installs the OCR sandbox (packages + models) with the `ocr-setup` container, the only OCR
 #      container with network access, which only sees SANDBOX_SETUP_DIR;
 #   5. creates the app's signing key and builds the APK in throwaway containers (unless --no-apk);
-#   6. starts the services and checks that the sandbox is isolated.
+#   6. starts the services, checks that the sandbox is isolated, then that the engine's libraries
+#      import in it (python3 -m scanmylib_ocr.engine_environment, bounded in time, its output
+#      discarded); if that check fails, ocr is stopped and the commands that show why are printed.
 #
 # Usage: scripts/setup.sh [--no-apk]
 set -euo pipefail
@@ -23,7 +25,10 @@ set -euo pipefail
 ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 # shellcheck source=lib/common.sh
 source "$ROOT/scripts/lib/common.sh"
+# shellcheck source=lib/engine_check.sh
+source "$ROOT/scripts/lib/engine_check.sh"
 cd "$ROOT"
+readonly COMPOSE_HINT="scripts/prod.sh compose"
 
 BUILD_APK=1
 case ${1:-} in
@@ -128,7 +133,22 @@ say "Starting the services"
 compose up -d --no-build --wait --wait-timeout 300 api ocr
 
 say "Checking that the sandbox is isolated"
-scripts/verify-sandbox.sh
+ocr_container=$(compose ps -q ocr 2> /dev/null || true)
+scripts/verify-sandbox.sh "$ocr_container"
+
+# After the isolation check, so that no engine code runs in a sandbox that failed it.
+say "Checking the engine's environment"
+[[ -n $ocr_container ]] || die "cannot find the ocr container: see $COMPOSE_HINT ps ocr"
+engine_check_status=0
+check_engine_environment "$ocr_container" || engine_check_status=$?
+# timeout ends only the docker CLI: stopping the service ends the check inside it.
+if ((engine_check_status)); then
+    stop_ocr_service "$COMPOSE_HINT" ocr "whose engine's environment failed its check (exit $engine_check_status)"
+    echo "The engine of the OCR sandbox failed the check of its environment, and ocr was stopped. To see why, in $ROOT:"
+    print_engine_check_steps "$COMPOSE_HINT" ocr
+    echo "Then fix the image or the sandbox, and deploy a release with scripts/deploy.sh."
+    die "the check of the engine's environment failed (python3 -m scanmylib_ocr.engine_environment)"
+fi
 
 token=$(cat "$DATA_DIR/state/token" 2> /dev/null || true)
 say "Ready"

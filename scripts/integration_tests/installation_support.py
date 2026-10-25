@@ -80,6 +80,23 @@ REAL_DOCKER = shutil.which("docker")
 PASSWD_HOME = pwd.getpwuid(os.getuid()).pw_dir
 #: The call of production_containers() (scripts/lib/common.sh) that the stand-in answers.
 PRODUCTION_PS = r"^ps --all --quiet --filter label=com\.docker\.compose\.project=scanmylib$"
+ENGINE_CHECK = "exec ocrid python3 -m scanmylib_ocr.engine_environment"
+ENGINE_CHECK_MODULE = "scanmylib_ocr.engine_environment"
+BOUNDED_ENGINE_CHECK = re.compile(
+    r"\$ timeout --kill-after=10 \d+ docker exec ocrid python3 -m scanmylib_ocr\.engine_environment$", re.MULTILINE
+)
+TIMED_OUT_STATUS = 124
+MISSING_ENGINE_LIBRARY = "ModuleNotFoundError: No module named 'paddleocr'"
+# A terminal reads it as a request to write the clipboard: what the sandbox prints must never reach one.
+CLIPBOARD_SEQUENCE = "\x1b]52;c;"
+LONG_SANDBOX_TEXT = "A" * 65536
+SANDBOX_OUTPUT = f"{MISSING_ENGINE_LIBRARY}\n{CLIPBOARD_SEQUENCE}{LONG_SANDBOX_TEXT}\x07\n"
+SANDBOX_TEXTS = (MISSING_ENGINE_LIBRARY, CLIPBOARD_SEQUENCE, LONG_SANDBOX_TEXT)
+PRODUCTION_ENGINE_CHECK_STEPS = (
+    "scripts/prod.sh compose start ocr",
+    f"scripts/prod.sh compose exec -T ocr python3 -m {ENGINE_CHECK_MODULE} 2>&1 | cat -v",
+    "scripts/prod.sh compose stop ocr",
+)
 TEMPORARY_DIRECTORY = Path(os.path.realpath(tempfile.gettempdir()))
 _READING_COMPOSE_COMMANDS = ("config", "ps")
 _READING_COMMANDS = ("ps", "inspect", "info")

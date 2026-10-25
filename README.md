@@ -44,13 +44,14 @@ for download by the web UI.
 git clone https://github.com/madmatah/scanml.git ~/Dev/scanmylib
 cd ~/Dev/scanmylib
 git checkout "$(git describe --tags --abbrev=0)"   # the latest release
-scripts/setup.sh          # images, OCR sandbox (~17 GB download), app, start, isolation checks
+scripts/setup.sh          # images, OCR sandbox (~17 GB download), app, start, isolation and engine checks
 ```
 
 The scripts treat `~/Dev/scanmylib` as the checkout production runs from (`DEFAULT_CHECKOUT` in
 `scripts/lib/stack.py`). It runs releases only, published on GitHub with their notes (`CHANGELOG.md`).
 `scripts/setup.sh` only performs a first installation; later releases are installed with `scripts/deploy.sh` (see
-"Updating").
+"Updating"). If the engine's libraries do not import in the new sandbox, `scripts/setup.sh` stops `ocr` and prints the
+commands that show why.
 
 `scripts/setup.sh` writes `.env` from `.env.example`. The scripts accept only a strict format: one `KEY=VALUE` per line,
 without spaces, quotes or comments after a value.

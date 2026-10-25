@@ -36,7 +36,9 @@ chooses.
   - the engine's worker imports its libraries in the new `ocr` container
     (`python3 -m scanmylib_ocr.engine_environment`), with the GPU hidden and no model loaded.
 
-  A failed isolation or engine check stops `ocr`, and its images are not tagged `:deployed`.
+  A failed isolation or engine check stops `ocr`, and its images are not tagged `:deployed`. `scripts/setup.sh`, the
+  first installation, runs the last two checks once it starts the services, the sandbox's isolation, then the engine's
+  environment, and a failed engine check stops `ocr`.
 - **Tags and GitHub releases come only from `.github/workflows/release.yml`,** once the release pull request is merged.
   No script and no session tags.
 - **Production runs published releases only, from a clean checkout:** `scripts/deploy.sh`, `scripts/setup.sh` and the

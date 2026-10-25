@@ -22,7 +22,14 @@ from typing import ClassVar, NamedTuple
 
 from docker_shim import LoggedCall, Rule
 from installation_support import (
+    BOUNDED_ENGINE_CHECK,
     COPIED,
+    ENGINE_CHECK,
+    ENGINE_CHECK_MODULE,
+    PRODUCTION_ENGINE_CHECK_STEPS,
+    SANDBOX_OUTPUT,
+    SANDBOX_TEXTS,
+    TIMED_OUT_STATUS,
     VERSION,
     Installation,
     InstallationTestCase,
@@ -53,23 +60,6 @@ RELEASE_TAGS_ALONE = Tags(f"v{VERSION}\n", (f"refs/tags/v{VERSION}", f"refs/tags
 REHEARSAL_PROJECT = "scanmylib-review-test"
 REHEARSAL_ENVIRONMENT = MappingProxyType({"SCANMYLIB_DEPLOY_REHEARSAL": REHEARSAL_PROJECT})
 REHEARSED_APP_VERSION = "0.2.4-dev+g1a2b3c4d5e6f.dirty"
-ENGINE_CHECK = "exec ocrid python3 -m scanmylib_ocr.engine_environment"
-ENGINE_CHECK_MODULE = "scanmylib_ocr.engine_environment"
-BOUNDED_ENGINE_CHECK = re.compile(
-    r"\$ timeout --kill-after=10 \d+ docker exec ocrid python3 -m scanmylib_ocr\.engine_environment$", re.MULTILINE
-)
-TIMED_OUT_STATUS = 124
-MISSING_ENGINE_LIBRARY = "ModuleNotFoundError: No module named 'paddleocr'"
-# A terminal reads it as a request to write the clipboard: what the sandbox prints must never reach one.
-CLIPBOARD_SEQUENCE = "\x1b]52;c;"
-LONG_SANDBOX_TEXT = "A" * 65536
-SANDBOX_OUTPUT = f"{MISSING_ENGINE_LIBRARY}\n{CLIPBOARD_SEQUENCE}{LONG_SANDBOX_TEXT}\x07\n"
-SANDBOX_TEXTS = (MISSING_ENGINE_LIBRARY, CLIPBOARD_SEQUENCE, LONG_SANDBOX_TEXT)
-PRODUCTION_ENGINE_CHECK_STEPS = (
-    "scripts/prod.sh compose start ocr",
-    f"scripts/prod.sh compose exec -T ocr python3 -m {ENGINE_CHECK_MODULE} 2>&1 | cat -v",
-    "scripts/prod.sh compose stop ocr",
-)
 RUNNING_IMAGES_TAGGED_DEPLOYED: list[Rule] = [
     {"match": r"^image inspect --format \{\{\.Id\}\} scanmylib-(api|ocr):deployed$", "stdout": "sha256:good\n"},
     {"match": r"^inspect --format \{\{\.Image\}\} (api|ocr)id$", "stdout": "sha256:good\n"},

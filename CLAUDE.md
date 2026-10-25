@@ -199,7 +199,7 @@ read the file before you do what its line says.
   the api's code that reads the sandbox's results: the sandbox's isolation, containers and the host, and what keeps
   development stacks from production.
 - `releases.md`, for `VERSION`, `CHANGELOG.md`, and the release and deployment scripts and workflow: what a release is,
-  who changes `VERSION`, and what production runs.
+  who changes `VERSION`, what a release is tested on, and what production runs.
 - `tests.md`, for any test, test support or test framework configuration, and before fixing a bug, since the fix starts
   with a test: the structure of a test file, writing a test, levels, test support and each test framework.
 - `documents.md`, for any document or agent guidance, and any reference to a document, tool messages included: present

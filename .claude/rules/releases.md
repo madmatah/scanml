@@ -25,6 +25,9 @@ chooses.
   format.
 - **Nothing else is merged while a release pull request is open,** since a feature, a fix or a breaking change merged in
   between is missing from its notes, and the release workflow then publishes nothing.
+- **A release is tested before its pull request opens:** CI passes on the commit of `main` it releases, and so do the
+  OCR sandbox's unit tests that need an engine's environment, which CI does not have, in the sandbox's image with the
+  machine's sandbox, read-only and without network.
 - **Tags and GitHub releases come only from `.github/workflows/release.yml`,** once the release pull request is merged.
   No script and no session tags.
 - **Production runs published releases only, from a clean checkout:** `scripts/deploy.sh`, `scripts/setup.sh` and the

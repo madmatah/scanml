@@ -295,6 +295,7 @@ class _TheParseMethodWhenTheWorkerSendsAnEndlessResultLine(unittest.TestCase):
         runtime = EngineRuntime(SETTINGS, ScriptSpec(ENDLESS_RESULT_LINE))
         self.addCleanup(runtime.stop)
         runtime.start()
+        self.logged_records = self.enterContext(record_logs("scanmylib_ocr", logging.WARNING))
         reply_timeout_seconds = 30.0
         self.parse_the_page = functools.partial(runtime.parse, JOB_ID, PAGE_PATH, {}, timeout_s=reply_timeout_seconds)
 
@@ -310,10 +311,17 @@ class TheParseMethodWhenTheWorkerSendsAnEndlessResultLineWhenThePageFails(
     def setUp(self) -> None:
         super().setUp()
         self.parse_seconds = measure_seconds(self.parse_the_page, EngineFailure)
+        self.logged_errors = [record.getMessage() for record in self.logged_records]
 
     def test_should_fail_the_page_without_waiting_for_its_timeout(self) -> None:
         long_before_the_timeout_seconds = 10
         self.assertLess(self.parse_seconds, long_before_the_timeout_seconds)
+
+    def test_should_log_that_the_worker_broke_the_protocol(self) -> None:
+        self.assertEqual(
+            self.logged_errors,
+            [f"invalid message from the worker: protocol message larger than {RESULT_LINE_LIMIT_BYTES} bytes"],
+        )
 
 
 class TheStopMethodWhenAHungWorkerHasStartedAProcess(unittest.TestCase):

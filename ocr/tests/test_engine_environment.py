@@ -67,6 +67,18 @@ TERMINAL_CONTROLS = ("\N{ESCAPE}]52;c;", "\t", "\x9b", "\N{RIGHT-TO-LEFT OVERRID
 ESCAPED_TERMINAL_CONTROLS = "\\x1b]52;c;\\x09\\x9b\\u202e\\x5cx1b"
 PRINTING_TERMINAL_CONTROLS = f"print({''.join(TERMINAL_CONTROLS)!r})\n"
 
+ESCAPED_CONTROL = "\\x1b"
+ESCAPE_LENGTH_CHARACTERS = len(ESCAPED_CONTROL)
+LEADING_COUNT_THAT_PUTS_THE_CUT_INSIDE_AN_ESCAPE = (
+    PRINTED_LINE_CHARACTERS - ESCAPE_LENGTH_CHARACTERS // 2
+) % ESCAPE_LENGTH_CHARACTERS
+CUT_LINE_OF_TERMINAL_CONTROLS = "x" * LEADING_COUNT_THAT_PUTS_THE_CUT_INSIDE_AN_ESCAPE + ESCAPED_CONTROL * (
+    (PRINTED_LINE_CHARACTERS - LEADING_COUNT_THAT_PUTS_THE_CUT_INSIDE_AN_ESCAPE) // ESCAPE_LENGTH_CHARACTERS
+)
+PRINTING_A_LONG_LINE_OF_TERMINAL_CONTROLS = (
+    f'print("x" * {LEADING_COUNT_THAT_PUTS_THE_CUT_INSIDE_AN_ESCAPE} + chr(0x1b) * {PRINTED_LINE_CHARACTERS})\n'
+)
+
 LIBRARIES_IMPORT_LINE = "ok: the fake engine's libraries import"
 LIBRARIES_IMPORT = f"print({LIBRARIES_IMPORT_LINE!r})\n"
 
@@ -208,6 +220,14 @@ class TheCheckEngineEnvironmentFunctionWhenTheWorkerPrintsTerminalControls(unitt
 
     def test_should_escape_them_since_the_operator_runs_the_check_in_a_terminal(self) -> None:
         self.assertEqual(self.output, f"{ESCAPED_TERMINAL_CONTROLS}\n")
+
+
+class TheCheckEngineEnvironmentFunctionWhenTheWorkerPrintsALongLineOfTerminalControls(unittest.TestCase):
+    def setUp(self) -> None:
+        self.output = check_engine_environment(SETTINGS, ScriptSpec(PRINTING_A_LONG_LINE_OF_TERMINAL_CONTROLS)).output
+
+    def test_should_cut_it_between_two_escapes_so_that_none_reads_as_other_characters(self) -> None:
+        self.assertEqual(self.output, f"{CUT_LINE_OF_TERMINAL_CONTROLS}\n")
 
 
 class TheMainFunctionWhenTheCheckPasses(unittest.TestCase):

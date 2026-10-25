@@ -25,7 +25,7 @@ from scanmylib_ocr import protocol
 from scanmylib_ocr import runtime as runtime_module
 from scanmylib_ocr.config import Settings
 from scanmylib_ocr.engines.base import EngineSpec, PageEngine
-from scanmylib_ocr.runtime import EngineFailure, EngineRuntime, EngineStartError
+from scanmylib_ocr.runtime import QUOTED_DETAIL_CHARACTERS, EngineFailure, EngineRuntime, EngineStartError
 
 PRELUDE = textwrap.dedent(
     """
@@ -60,6 +60,59 @@ CRASH_WITH_ROOT_CAUSE = PRELUDE + textwrap.dedent(
     print("RuntimeError: Engine core initialization failed. See root cause above.", flush=True)
     sys.exit(1)
     """
+)
+
+TERMINAL_CONTROLS = "\N{ESCAPE}]52;c;\\x1b"
+ESCAPED_TERMINAL_CONTROLS = "\\x1b]52;c;\\x5cx1b"
+PRINTING_TERMINAL_CONTROLS = PRELUDE + textwrap.dedent(
+    f"""
+    print({TERMINAL_CONTROLS!r}, flush=True)
+    channel.send({{"event": "ready"}})
+    channel.receive()
+    """
+)
+
+ERROR_WITH_TERMINAL_CONTROLS = "ValueError: \N{ESCAPE}]52;c;no room"
+ESCAPED_ERROR_WITH_TERMINAL_CONTROLS = "ValueError: \\x1b]52;c;no room"
+CRASH_WITH_TERMINAL_CONTROLS = PRELUDE + f"print({ERROR_WITH_TERMINAL_CONTROLS!r}, flush=True)\nsys.exit(1)\n"
+
+FATAL_REASON_WITH_TERMINAL_CONTROLS = "no GPU\N{ESCAPE}]52;c;"
+ESCAPED_FATAL_REASON_WITH_TERMINAL_CONTROLS = "no GPU\\x1b]52;c;"
+FATAL_WITH_TERMINAL_CONTROLS = (
+    PRELUDE + f'channel.send({{"event": "fatal", "detail": {FATAL_REASON_WITH_TERMINAL_CONTROLS!r}}})\nsys.exit(1)\n'
+)
+
+ROOT_CAUSE = "ValueError: 0.28 GiB KV cache is needed"
+CONTROLS_BEFORE_THE_ROOT_CAUSE = {
+    "a tab, escaped as a byte": "\t",
+    "a right-to-left override, escaped with four hexadecimal digits": "\N{RIGHT-TO-LEFT OVERRIDE}",
+    "a tag character, escaped with eight hexadecimal digits": "\U000e0001",
+}
+
+
+def crash_with_the_root_cause_after(control: str) -> str:
+    return PRELUDE + textwrap.dedent(
+        f"""
+        print("(EngineCore pid=7) ERROR" + {control!r} + {ROOT_CAUSE!r}, flush=True)
+        for line in range(5):
+            print(f'  File "engine.py", line {{line}}, in start', flush=True)
+        print("RuntimeError: Engine core initialization failed. See root cause above.", flush=True)
+        sys.exit(1)
+        """
+    )
+
+
+ESCAPED_CONTROL = "\\x1b"
+ESCAPE_LENGTH_CHARACTERS = len(ESCAPED_CONTROL)
+LEADING_COUNT_THAT_PUTS_THE_CUT_INSIDE_AN_ESCAPE = (
+    QUOTED_DETAIL_CHARACTERS - ESCAPE_LENGTH_CHARACTERS // 2
+) % ESCAPE_LENGTH_CHARACTERS
+CUT_DETAIL_WITH_TERMINAL_CONTROLS = "x" * LEADING_COUNT_THAT_PUTS_THE_CUT_INSIDE_AN_ESCAPE + ESCAPED_CONTROL * (
+    (QUOTED_DETAIL_CHARACTERS - LEADING_COUNT_THAT_PUTS_THE_CUT_INSIDE_AN_ESCAPE) // ESCAPE_LENGTH_CHARACTERS
+)
+CRASH_WITH_A_LONG_LINE_OF_TERMINAL_CONTROLS = PRELUDE + (
+    f'print("x" * {LEADING_COUNT_THAT_PUTS_THE_CUT_INSIDE_AN_ESCAPE} + chr(0x1b) * {QUOTED_DETAIL_CHARACTERS}, '
+    "flush=True)\nsys.exit(1)\n"
 )
 
 SILENT = PRELUDE + 'channel.send({"event": "ready"})\ntime.sleep(60)\n'
@@ -252,6 +305,67 @@ class TheStartMethodWhenTheWorkerExitsAfterPrintingTheRootCause(unittest.TestCas
         )
 
 
+class TheStartMethodWhenTheWorkerExitsAfterPrintingTerminalControlsInItsError(unittest.TestCase):
+    def setUp(self) -> None:
+        runtime = EngineRuntime(SETTINGS, ScriptSpec(CRASH_WITH_TERMINAL_CONTROLS))
+        self.addCleanup(runtime.stop)
+        self.start_the_engine = runtime.start
+
+    def test_should_quote_the_error_escaped_so_that_no_control_sequence_reaches_the_operators_terminal(self) -> None:
+        self.assertRaisesRegex(EngineStartError, re.escape(ESCAPED_ERROR_WITH_TERMINAL_CONTROLS), self.start_the_engine)
+
+
+class TheStartMethodWhenTheWorkerCannotLoadTheEngineWithTerminalControlsInItsReason(unittest.TestCase):
+    def setUp(self) -> None:
+        runtime = EngineRuntime(SETTINGS, ScriptSpec(FATAL_WITH_TERMINAL_CONTROLS))
+        self.addCleanup(runtime.stop)
+        self.start_the_engine = runtime.start
+
+    def test_should_fail_with_the_reason_escaped_so_that_no_control_sequence_reaches_the_operators_terminal(
+        self,
+    ) -> None:
+        self.assertRaisesRegex(
+            EngineStartError,
+            re.escape(f"worker failed to load the engine: {ESCAPED_FATAL_REASON_WITH_TERMINAL_CONTROLS}"),
+            self.start_the_engine,
+        )
+
+
+class TheStartMethodWhenTheWorkerExitsAfterPrintingTheRootCauseAfterAControl(unittest.TestCase):
+    start_errors: ClassVar[dict[str, str]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.start_errors = {}
+        for name, control in CONTROLS_BEFORE_THE_ROOT_CAUSE.items():
+            runtime = EngineRuntime(SETTINGS, ScriptSpec(crash_with_the_root_cause_after(control)))
+            cls.addClassCleanup(runtime.stop)
+            try:
+                runtime.start()
+            except EngineStartError as error:
+                cls.start_errors[name] = str(error)
+
+    def test_should_quote_the_root_cause_from_its_start_even_though_the_control_before_it_is_escaped(self) -> None:
+        self.assertEqual(len(self.start_errors), len(CONTROLS_BEFORE_THE_ROOT_CAUSE))
+        for name, start_error in self.start_errors.items():
+            with self.subTest(name):
+                self.assertRegex(start_error, f"^worker exited with code 1: {re.escape(ROOT_CAUSE)} \\| ")
+
+
+class TheStartMethodWhenTheWorkerExitsAfterPrintingALongLineOfTerminalControls(unittest.TestCase):
+    def setUp(self) -> None:
+        runtime = EngineRuntime(SETTINGS, ScriptSpec(CRASH_WITH_A_LONG_LINE_OF_TERMINAL_CONTROLS))
+        self.addCleanup(runtime.stop)
+        self.start_the_engine = runtime.start
+
+    def test_should_cut_the_quoted_line_between_two_escapes_so_that_none_reads_as_other_characters(self) -> None:
+        self.assertRaisesRegex(
+            EngineStartError,
+            f"worker exited with code 1: {re.escape(CUT_DETAIL_WITH_TERMINAL_CONTROLS)}\\Z",
+            self.start_the_engine,
+        )
+
+
 class _TheStartMethodWhenTheWorkerIsNeverReady(unittest.TestCase):
     def setUp(self) -> None:
         start_timeout_seconds = 1.0
@@ -370,6 +484,22 @@ class WhenTheWorkerPrintsAnEndlessLine(unittest.TestCase):
         oversized_pieces = [size for size in self.piece_sizes_bytes if size > OUTPUT_PIECE_LIMIT_BYTES]
         self.assertNotEqual(self.piece_sizes_bytes, [])
         self.assertEqual(oversized_pieces, [])
+
+
+class WhenTheWorkerPrintsTerminalControls(unittest.TestCase):
+    relayed_lines: ClassVar[list[str]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        with record_logs("worker", logging.INFO) as records:
+            runtime = EngineRuntime(SETTINGS, ScriptSpec(PRINTING_TERMINAL_CONTROLS))
+            cls.addClassCleanup(runtime.stop)
+            runtime.start()
+            wait_until_relayed(records, len(ESCAPED_TERMINAL_CONTROLS))
+            cls.relayed_lines = [record.getMessage() for record in records]
+
+    def test_should_log_them_escaped_so_that_no_control_sequence_reaches_the_operators_terminal(self) -> None:
+        self.assertEqual(self.relayed_lines, [ESCAPED_TERMINAL_CONTROLS])
 
 
 if __name__ == "__main__":

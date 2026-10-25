@@ -13,27 +13,13 @@ from dataclasses import dataclass
 from .config import Settings
 from .engines import get_spec
 from .engines.base import EngineSpec
+from .printable_text import cut_escaped
 from .runtime import ChildProcess
 
 CHECK_TIMEOUT_SECONDS = 300.0
 STOP_GRACE_SECONDS = 5.0
 PRINTED_TAIL_LINES = 50
 PRINTED_LINE_CHARACTERS = 500
-
-
-def _escape_unprintable(line: str) -> str:
-    return "".join(
-        character if character.isprintable() and character != "\\" else _escape(character) for character in line
-    )
-
-
-def _escape(character: str) -> str:
-    code_point = ord(character)
-    if code_point <= 0xFF:
-        return f"\\x{code_point:02x}"
-    if code_point <= 0xFFFF:
-        return f"\\u{code_point:04x}"
-    return f"\\U{code_point:08x}"
 
 
 @dataclass(frozen=True)
@@ -54,8 +40,7 @@ def check_engine_environment(
         exit_status = worker.returncode
     finally:
         worker.stop(STOP_GRACE_SECONDS)
-    # The sandbox's output is untrusted, and an operator runs the check in a terminal: no control sequence reaches it.
-    lines = [_escape_unprintable(line[:PRINTED_LINE_CHARACTERS]) for line in worker.output_tail()[-PRINTED_TAIL_LINES:]]
+    lines = [cut_escaped(line, PRINTED_LINE_CHARACTERS) for line in worker.output_tail()[-PRINTED_TAIL_LINES:]]
     if not has_finished:
         lines.append(f"the worker did not finish within {timeout_seconds:g} s")
     return EnvironmentCheck(has_passed=has_finished and exit_status == 0, output="".join(f"{line}\n" for line in lines))

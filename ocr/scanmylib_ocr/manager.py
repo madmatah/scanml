@@ -23,12 +23,15 @@ from typing import Any, Protocol, assert_never
 
 from .config import Settings
 from .engines.base import EngineSpec
+from .printable_text import cut_escaped, escape_unprintable
 from .protocol import BAD_IMAGE, ENGINE_UNAVAILABLE, PROCESSING_FAILED
 from .runtime import EngineFailure, EngineRuntime
 
 log = logging.getLogger(__name__)
 
 LIVENESS_CHECK_INTERVAL_S = 5.0
+REPLIED_DETAIL_CHARACTERS = 300
+"""The api quotes no more of a detail (server/scanmylib/ocr_client.py): the supervisor cuts it between two escapes."""
 
 
 class State(enum.Enum):
@@ -379,10 +382,14 @@ class EngineManager:
             )  # fmt: skip
             job.finish(Reply(200, body))
         else:
-            code = message.get("error") or PROCESSING_FAILED
-            detail = str(message.get("detail") or "")
-            log.warning("request %s failed: %s: %s", job.request_id, code, detail)
-            job.finish(error_reply(400 if code == BAD_IMAGE else 500, code, detail))
+            received_code = message.get("error") or PROCESSING_FAILED
+            detail = escape_unprintable(str(message.get("detail") or ""))
+            log.warning("request %s failed: %s: %s", job.request_id, escape_unprintable(str(received_code)), detail)
+            replied_detail = cut_escaped(detail, REPLIED_DETAIL_CHARACTERS)
+            if received_code == BAD_IMAGE:
+                job.finish(error_reply(400, BAD_IMAGE, replied_detail))
+            else:
+                job.finish(error_reply(500, PROCESSING_FAILED, replied_detail))
 
     def _close(self) -> None:
         self._stop_engine()

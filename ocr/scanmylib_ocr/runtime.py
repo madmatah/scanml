@@ -2,7 +2,9 @@
 
 Each child runs in its own process group so that stopping it also stops the
 processes it spawned (vLLM's engine core), which is what actually releases the
-GPU memory. Children's output is relayed line by line to the supervisor's log.
+GPU memory. Children's output is relayed line by line to the supervisor's log,
+escaped where it enters the supervisor, so that no control sequence of the
+sandbox reaches an operator's terminal through the log or the error messages.
 """
 
 from __future__ import annotations
@@ -22,6 +24,7 @@ from typing import Any
 
 from .config import Settings
 from .engines.base import EngineSpec
+from .printable_text import cut_escaped, escape_unprintable
 from .protocol import PROTOCOL_FDS_ENV, Channel
 
 log = logging.getLogger(__name__)
@@ -33,7 +36,10 @@ VLLM_SHUTDOWN_GRACE_S = 15.0
 OUTPUT_TAIL_LINES = 200
 MAX_OUTPUT_LINE_BYTES = 64 * 1024
 """Longer output lines are relayed in pieces (never buffered whole)."""
-_EXCEPTION_LINE = re.compile(r"\b([A-Z]\w*(?:Error|Exception|Exit): .*)$")
+QUOTED_DETAIL_CHARACTERS = 400
+_EXCEPTION_LINE = re.compile(
+    r"(?:\b|(?<=\\x[0-9a-f]{2})|(?<=\\u[0-9a-f]{4})|(?<=\\U[0-9a-f]{8}))(?<!\\)([A-Z]\w*(?:Error|Exception|Exit): .*)$"
+)
 
 
 class EngineStartError(RuntimeError):
@@ -69,7 +75,7 @@ class ChildProcess:
             # Bounded reads: a child printing endless data without a newline must
             # not make the supervisor hold all of it in memory.
             for raw in iter(lambda: output.readline(MAX_OUTPUT_LINE_BYTES), b""):
-                line = raw.decode("utf-8", errors="replace").rstrip()
+                line = escape_unprintable(raw.decode("utf-8", errors="replace").rstrip())
                 if line:
                     self._tail.append(line)
                     child_log.info("%s", line)
@@ -79,6 +85,7 @@ class ChildProcess:
         return self._process.poll()
 
     def output_tail(self) -> list[str]:
+        """The lines as they were relayed, escaped, so that a caller may print them to a terminal."""
         return list(self._tail)
 
     def describe_exit(self) -> str:
@@ -95,7 +102,7 @@ class ChildProcess:
             if match and match.group(1) not in exceptions:
                 exceptions.append(match.group(1))
         details = exceptions[-3:] or [line.strip() for line in lines[-3:]]
-        summary = " | ".join(detail[:400] for detail in details)
+        summary = " | ".join(cut_escaped(detail, QUOTED_DETAIL_CHARACTERS) for detail in details)
         status = self._process.poll()
         state = "is still running" if status is None else f"exited with code {status}"
         return f"{self.name} {state}" + (f": {summary}" if summary else "")
@@ -299,7 +306,9 @@ class EngineRuntime:
             self._worker.wait(WORKER_EXIT_WAIT_S)
             raise EngineStartError(self._worker.describe_exit())
         if message.get("event") == "fatal":
-            raise EngineStartError(f"worker failed to load the engine: {message.get('detail')}")
+            raise EngineStartError(
+                f"worker failed to load the engine: {escape_unprintable(str(message.get('detail')))}"
+            )
         if message.get("event") == "ready":
             return True
         log.warning("ignoring an unexpected worker message during startup: %.200s", message)

@@ -26,8 +26,8 @@ from scanmylib_ocr.client import request_json
 from scanmylib_ocr.config import Settings
 from scanmylib_ocr.engines import get_spec
 from scanmylib_ocr.gpu import GpuMonitor
-from scanmylib_ocr.manager import EngineManager
-from scanmylib_ocr.protocol import BAD_IMAGE
+from scanmylib_ocr.manager import REPLIED_DETAIL_CHARACTERS, EngineManager
+from scanmylib_ocr.protocol import BAD_IMAGE, PROCESSING_FAILED
 from scanmylib_ocr.runtime import EngineFailure, EngineStartError
 from scanmylib_ocr.supervisor import MAX_BODY_BYTES, Supervisor, UnixHTTPServer, read_manifest
 
@@ -41,6 +41,21 @@ SHUTDOWN_TIMEOUT_SECONDS = 5.0
 # An upper bound for a test's signal or a state of the engine: reaching it means the test is broken, not slow.
 SIGNAL_TIMEOUT_SECONDS = 10.0
 START_ERROR = "vllm exited with code 1: CUDA out of memory"
+ERROR_CODE_WITH_TERMINAL_CONTROLS = "failed\N{ESCAPE}]52;c;"
+ESCAPED_ERROR_CODE_WITH_TERMINAL_CONTROLS = "failed\\x1b]52;c;"
+DETAIL_WITH_TERMINAL_CONTROLS = "bad\N{ESCAPE}]52;c;"
+ESCAPED_DETAIL_WITH_TERMINAL_CONTROLS = "bad\\x1b]52;c;"
+ESCAPED_CONTROL = "\\x1b"
+ESCAPE_LENGTH_CHARACTERS = len(ESCAPED_CONTROL)
+LEADING_COUNT_THAT_PUTS_THE_CUT_INSIDE_AN_ESCAPE = (
+    REPLIED_DETAIL_CHARACTERS - ESCAPE_LENGTH_CHARACTERS // 2
+) % ESCAPE_LENGTH_CHARACTERS
+LONG_DETAIL_OF_TERMINAL_CONTROLS = "x" * LEADING_COUNT_THAT_PUTS_THE_CUT_INSIDE_AN_ESCAPE + "\N{ESCAPE}" * (
+    REPLIED_DETAIL_CHARACTERS
+)
+CUT_DETAIL_OF_TERMINAL_CONTROLS = "x" * LEADING_COUNT_THAT_PUTS_THE_CUT_INSIDE_AN_ESCAPE + ESCAPED_CONTROL * (
+    (REPLIED_DETAIL_CHARACTERS - LEADING_COUNT_THAT_PUTS_THE_CUT_INSIDE_AN_ESCAPE) // ESCAPE_LENGTH_CHARACTERS
+)
 
 
 class Signals:
@@ -96,6 +111,15 @@ class FakeRuntime:
             raise EngineFailure("worker stopped while processing the page")
         if tag == "garbage":
             return {"id": job_id, "ok": False, "error": BAD_IMAGE, "detail": "cannot decode"}
+        if tag == "controls":
+            return {
+                "id": job_id,
+                "ok": False,
+                "error": ERROR_CODE_WITH_TERMINAL_CONTROLS,
+                "detail": DETAIL_WITH_TERMINAL_CONTROLS,
+            }
+        if tag == "longctrl":
+            return {"id": job_id, "ok": False, "error": PROCESSING_FAILED, "detail": LONG_DETAIL_OF_TERMINAL_CONTROLS}
         result = {
             "width": 100,
             "height": 200,
@@ -450,6 +474,52 @@ class TheParseRouteWhenTheEngineCannotDecodeTheImage(unittest.TestCase):
 
     def test_should_log_why_the_engine_refused_the_page(self) -> None:
         self.assertEqual(self.logged_warnings, ["request garbage failed: bad_image: cannot decode"])
+
+
+class TheParseRouteWhenTheEngineFailsWithTerminalControlsInItsErrorAndItsDetail(unittest.TestCase):
+    logged_warnings: ClassVar[list[str]]
+    refusal: ClassVar[tuple[int, str]]
+    replied_detail: ClassVar[str]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        supervisor = start_supervisor(cls.addClassCleanup)
+        with record_logs("scanmylib_ocr.manager", logging.WARNING) as records:
+            status, body = send_page(supervisor.socket_path, "controls")
+        cls.logged_warnings = [record.getMessage() for record in records]
+        cls.refusal = (status, body["error"])
+        cls.replied_detail = body["detail"]
+
+    def test_should_log_the_workers_error_and_detail_escaped_so_that_no_control_sequence_reaches_a_terminal(
+        self,
+    ) -> None:
+        self.assertEqual(
+            self.logged_warnings,
+            [
+                f"request controls failed: {ESCAPED_ERROR_CODE_WITH_TERMINAL_CONTROLS}: "
+                f"{ESCAPED_DETAIL_WITH_TERMINAL_CONTROLS}"
+            ],
+        )
+
+    def test_should_reply_with_the_detail_escaped_since_the_api_logs_it_too(self) -> None:
+        self.assertEqual(self.replied_detail, ESCAPED_DETAIL_WITH_TERMINAL_CONTROLS)
+
+    def test_should_fail_the_page_with_a_code_of_the_api_since_the_api_quotes_the_code_too(self) -> None:
+        self.assertEqual(self.refusal, (500, PROCESSING_FAILED))
+
+
+class TheParseRouteWhenTheEngineFailsWithALongDetailOfTerminalControls(unittest.TestCase):
+    replied_detail: ClassVar[str]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        supervisor = start_supervisor(cls.addClassCleanup)
+        with record_logs("scanmylib_ocr.manager", logging.WARNING):
+            _, body = send_page(supervisor.socket_path, "longctrl")
+        cls.replied_detail = body["detail"]
+
+    def test_should_cut_the_replied_detail_between_two_escapes_so_that_the_api_quotes_it_whole(self) -> None:
+        self.assertEqual(self.replied_detail, CUT_DETAIL_OF_TERMINAL_CONTROLS)
 
 
 def setUpModule() -> None:

@@ -155,6 +155,17 @@ supervisor (python3, stdlib)          HTTP on the Unix socket, FIFO queue, lifec
       one JSON object per line; stdout/stderr are only logs (relayed to `docker logs`)
 ```
 
+- **The children's output**: the supervisor relays the stdout and stderr of
+  vLLM and of the worker line by line to the `ocr` container's log, each
+  character that is not printable, and each backslash, written as an escape
+  such as `\x1b`. The error messages that quote this output (`last_error` in
+  `GET /health`, the error replies) quote it escaped too, each line cut
+  between two escapes. The worker's `fatal` detail, which these messages also
+  quote, and the supervisor's log line for a page the worker failed are
+  escaped, whole. The error reply for that page carries `bad_image` or else
+  `processing_failed`, whatever code the worker sent, and its `detail`
+  escaped and cut between two escapes to 300 characters, the most the api
+  quotes.
 - **Stopping the engine** sends the worker a `shutdown` message, then
   SIGTERM/SIGKILL to each whole process group: the GPU memory goes back to its
   baseline (measured: < 50 MiB difference).
@@ -179,15 +190,14 @@ supervisor (python3, stdlib)          HTTP on the Unix socket, FIFO queue, lifec
   `python3 -m scanmylib_ocr.engine_environment` runs the worker command with
   `--check`, with the GPU hidden (`CUDA_VISIBLE_DEVICES=""`) and no model. It
   stops the worker's whole process group after 300 s, prints the last 50 lines
-  of its output, each character that is not printable, and the backslash, as
-  an escape such as `\x1b`, and exits 0 once the worker has imported the
-  engine's libraries, which `GET /health` never needs while the engine is
-  idle. It covers the worker's environment (`venv-paddle`), not vLLM's
-  (`venv-vllm`), the models or a page. `scripts/deploy.sh`, and
-  `scripts/setup.sh` at the first installation, run it in the new `ocr`
-  container, once the container has passed `scripts/verify-sandbox.sh`,
-  bounded in time, and keep only its exit status: nothing the sandbox prints
-  reaches the terminal or a log.
+  of its output, escaped by the relay, each line cut between two escapes,
+  and exits 0 once the worker has imported the engine's libraries, which
+  `GET /health` never needs while the engine is idle. It covers the worker's
+  environment (`venv-paddle`), not vLLM's (`venv-vllm`), the models or a page.
+  `scripts/deploy.sh`, and `scripts/setup.sh` at the first installation, run it
+  in the new `ocr` container, once the container has passed
+  `scripts/verify-sandbox.sh`, bounded in time, and keep only its exit status:
+  nothing the sandbox prints reaches the terminal or a log.
 
 ## Engines
 

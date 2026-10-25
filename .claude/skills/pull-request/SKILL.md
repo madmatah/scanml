@@ -8,11 +8,11 @@ description: Takes a change to ScanMyLib from a new branch to a merged pull requ
 `CLAUDE.md` > Workflow holds the rules this procedure applies. Below, `<base>` is `origin/main`, or the unmerged branch
 the work is stacked on, and `<worktree>` the branch's worktree, `~/Dev/scanmylib/.claude/worktrees/<topic>`. Every
 command of the branch below starts with `cd <worktree> &&`, as `.claude/rules/configuration.md` > Claude Code
-automation, "An agent given a worktree works only there" says. Write each file that this
-procedure names, such as a plan, the findings of a round or a commit message, with the Write tool, never through a
-shell: in a heredoc, or in `git commit -m "…"`, the backquoted text that findings, plans and messages quote runs as
-commands. Give git a
-message from a file in a directory that `mktemp -d` creates outside the worktree, with `git commit -F <file>`.
+automation, "An agent given a worktree works only there" says. Write each file whose text you write, such as a plan, the
+findings of a round or a commit message, with the Write tool, never through a shell: in a heredoc, or in
+`git commit -m "…"`, the backquoted text that findings, plans and messages quote runs as commands. A command's output
+goes to its file by redirection. Give git a message from a file in a directory that `mktemp -d` creates outside the
+worktree, with `git commit -F <file>`.
 
 ## Start a branch
 
@@ -165,9 +165,36 @@ what it does without building it.
    staged changes with it, and remove the directory. Neither `-m` nor `-F` combines with these forms.
 2. Run `cd <worktree> && GIT_SEQUENCE_EDITOR=: git rebase -i --autosquash <base>`. Git before 2.44 ignores
    `--autosquash` without `-i`, and the `-i` form works with every version.
-3. Check that `cd <worktree> && git log --format=%s <base>..HEAD` lists no `fixup!`, `amend!` or `squash!` commit, or
-   else drop it, commit its fix again as above and fold again, then check the commits again, as [Shape the
-   history](#shape-the-history) does.
+3. Check that `cd <worktree> && git log --format='%h %s' <base>..HEAD` lists no `fixup!`, `amend!` or `squash!`
+   commit. One that is left names, by its first line, no whole header of `<base>..HEAD`: find the commit it fixes by
+   meaning, in that list or, on a stacked branch, in `cd <worktree> && git log --format='%h %s' origin/main..<base>`.
+   Take the leftovers one at a time, each from a fresh listing and with its own directory that `mktemp -d` creates
+   outside the worktree, since each drop rewrites the commits after it. `<leftover>`, and `<that commit>` below, the
+   commit it fixes, are each the abbreviated hash that its listing prints, and nothing else of its line, since the rest
+   is a commit's message. For each `<leftover>`:
+   - **save it:** its change with `cd <worktree> && git diff --binary <leftover>^ <leftover> > "<dir>/fix.patch"`, and
+     the message of an `amend!` or `squash!` commit with
+     `cd <worktree> && git log -1 --format=%B <leftover> > "<dir>/message"`;
+   - **drop it:** `cd <worktree> && git rebase --onto <leftover>^ <leftover>`;
+   - **when it fixes a commit of `<base>..HEAD`,** commit the fix again:
+     `cd <worktree> && git apply --3way "<dir>/fix.patch"`, skipped when the patch is empty, as a reworded message
+     leaves it, then `cd <worktree> && git commit --fixup=<that commit>`, or, for an `amend!` commit, the `amend!` form
+     above, from the saved message under a corrected first line, and for a `squash!` commit the same form, from the
+     message of that commit, `cd <worktree> && git log -1 --format=%B <that commit>`, followed by the saved message
+     without its first line; fold again, and remove `<dir>`;
+   - **on a conflict,** stop: when the drop conflicts, `cd <worktree> && git rebase --abort`, which keeps the leftover;
+     when `git apply --3way` does, `cd <worktree> && git reset --merge`, the fix then living only in `<dir>`; when
+     folding again does, `cd <worktree> && git rebase --abort`, which keeps the fix as a commit. Keep `<dir>`, and tell
+     the user the leftover, the conflict and the paths of what you saved;
+   - **when it fixes a commit of the branch this one is stacked on,** the fix belongs to that branch: its owner commits
+     it there as above and folds it, then this branch moves, as [Stack on an unmerged
+     branch](#stack-on-an-unmerged-branch) says. When another session owns that branch, keep `<dir>`, put the finding
+     and the paths of `fix.patch`, and of `message` when one was saved, in your final report, for the coordinating
+     session to pass on to that owner, and name the finding in the pull request. A check of this branch that fails for
+     want of that fix waits for the move.
+
+   Repeat this check until it lists none, then check the commits again, as [Shape the history](#shape-the-history)
+   does.
 4. Push with `cd <worktree> && git push --force-with-lease`, then keep the body true: update every section the fixes
    changed.
 

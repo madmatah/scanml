@@ -16,9 +16,9 @@ development stack. Your review keeps each of them in its place.
 ## Scope
 
 Changes to files matching the `paths` of `.claude/rules/sandbox.md` (the OCR sandbox, `compose.yaml`, the Dockerfiles,
-`.env.example`, the scripts, the api's code that reads the sandbox's results, the fake OCR and the app's manifest), and
-to `.claude/skills/running-tests/SKILL.md`, which runs the sandbox's image by hand. If none of these changed, reply: "No
-isolation surface in this diff; review not applicable."
+`.env.example`, the scripts, the `running-tests` skill, which runs the sandbox's image by hand, the api's code that
+reads the sandbox's results, the fake OCR and the app's manifest). If none of these changed, reply: "No isolation
+surface in this diff; review not applicable."
 
 Read first: `.claude/rules/sandbox.md`, `.claude/rules/configuration.md` > Dependencies and > Checks,
 `.claude/rules/releases.md`, `.claude/rules/bash.md`, and `CLAUDE.md` > Production. `docs/SECURITY.md` and
@@ -29,7 +29,10 @@ Read first: `.claude/rules/sandbox.md`, `.claude/rules/configuration.md` > Depen
 - **The sandbox's isolation** (`.claude/rules/sandbox.md` > The OCR sandbox): a setting of the `ocr` service that gives
   it a network, a writable root filesystem, a capability, privileges, another user, or a host mount besides the
   read-only `SANDBOX_DIR`, the socket directory and its cache directory; a change that `scripts/verify-sandbox.sh` would
-  no longer check.
+  no longer check; a container of the sandbox's image that a script or a procedure starts, `ocr-setup` apart, that
+  lacks any of `--network none`, a read-only root filesystem, `--cap-drop ALL`, `no-new-privileges` and a non-root user,
+  or that has a host mount other than the read-only `SANDBOX_DIR`, the read-only code it runs and a working directory
+  of its own, or a mount of the library or of production's state.
 - **Downloads into the sandbox** (`.claude/rules/sandbox.md` > The OCR sandbox): a package or a model fetched elsewhere
   than by `ocr-setup`, unpinned, or by code that runs Paddle with network access; a container other than `ocr-setup`
   that mounts the sandbox writable, or a `.env` other than production's that sets `SANDBOX_SETUP_DIR`.

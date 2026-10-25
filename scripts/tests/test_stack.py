@@ -1392,6 +1392,9 @@ class TheComposeCommandProblemsFunctionWhenProductionOperatesItsContainers(unitt
         ("restart",),
         ("stop", "api", "ocr"),
         ("down",),
+        ("start", "ocr"),
+        ("exec", "-T", "ocr", "python3", "-m", "scanmylib_ocr.engine_environment"),
+        ("stop", "ocr"),
     )
 
     def setUp(self) -> None:

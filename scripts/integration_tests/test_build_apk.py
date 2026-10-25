@@ -34,6 +34,7 @@ from installation_support import (
     ScriptRun,
     UncleanCheckout,
     make_installation,
+    read_gradle_tasks,
     read_text_if_present,
 )
 
@@ -192,6 +193,7 @@ class WhenAWorktreeBuilds(InstallationTestCase):
     development_data: ClassVar[Path]
     build_apk_run: ClassVar[ScriptRun]
     docker_runs: ClassVar[list[str]]
+    gradle_tasks: ClassVar[list[str]]
 
     @classmethod
     def setUpClass(cls) -> None:
@@ -207,6 +209,7 @@ class WhenAWorktreeBuilds(InstallationTestCase):
         }
         cls.build_apk_run = installation.run_script(installation.worktree, "build-apk.sh", environment=release_settings)
         cls.docker_runs = list_docker_runs(installation)
+        cls.gradle_tasks = read_gradle_tasks(installation.read_docker_calls())
 
     def read_version_name(self) -> str:
         return read_environment_value(self.docker_runs[0], "SCANMYLIB_DEV_VERSION_NAME")
@@ -222,6 +225,9 @@ class WhenAWorktreeBuilds(InstallationTestCase):
 
     def test_should_build_the_dev_app_whatever_the_caller_s_environment_says(self) -> None:
         self.assertIn("assembleDev", self.docker_runs[0])
+
+    def test_should_run_the_tests_and_lint_of_the_dev_app_with_its_build(self) -> None:
+        self.assertEqual(self.gradle_tasks, ["test", "assembleDev", "lint"])
 
     def test_should_build_with_the_android_sdk_of_the_stack(self) -> None:
         self.assertIn(f"{self.development_data}/android/sdk:/opt/android-sdk", self.docker_runs[0])
@@ -353,6 +359,7 @@ class WhenProductionsCheckoutBuildsThePublishedRelease(InstallationTestCase):
     production_data: ClassVar[Path]
     build_apk_run: ClassVar[ScriptRun]
     docker_runs: ClassVar[list[str]]
+    gradle_tasks: ClassVar[list[str]]
 
     @classmethod
     def setUpClass(cls) -> None:
@@ -360,6 +367,7 @@ class WhenProductionsCheckoutBuildsThePublishedRelease(InstallationTestCase):
         cls.production_data = installation.production_data
         cls.build_apk_run = installation.run_script(installation.production_checkout, "build-apk.sh")
         cls.docker_runs = list_docker_runs(installation)
+        cls.gradle_tasks = read_gradle_tasks(installation.read_docker_calls())
 
     def test_should_succeed(self) -> None:
         self.assertEqual(self.build_apk_run.returncode, 0, self.build_apk_run.output)
@@ -367,8 +375,8 @@ class WhenProductionsCheckoutBuildsThePublishedRelease(InstallationTestCase):
     def test_should_run_a_build_then_a_signing_container(self) -> None:
         self.assertEqual(len(self.docker_runs), 2)
 
-    def test_should_build_the_release_app(self) -> None:
-        self.assertIn("assembleRelease", self.docker_runs[0])
+    def test_should_only_assemble_the_release_app_since_ci_ran_its_tests_and_lint_on_the_release(self) -> None:
+        self.assertEqual(self.gradle_tasks, ["assembleRelease"])
 
     def test_should_take_the_version_of_the_release_which_the_build_reads_itself(self) -> None:
         self.assertNotIn("SCANMYLIB_DEV_VERSION", self.docker_runs[0])
@@ -515,6 +523,7 @@ class WhenCiBuildsWithoutEnv(InstallationTestCase):
     ci_data: ClassVar[Path]
     build_apk_run: ClassVar[ScriptRun]
     docker_runs: ClassVar[list[str]]
+    gradle_tasks: ClassVar[list[str]]
 
     @classmethod
     def setUpClass(cls) -> None:
@@ -523,6 +532,7 @@ class WhenCiBuildsWithoutEnv(InstallationTestCase):
         settings = {"DATA_DIR": str(cls.ci_data), "CI": "true"}
         cls.build_apk_run = installation.run_script(installation.worktree, "build-apk.sh", environment=settings)
         cls.docker_runs = list_docker_runs(installation)
+        cls.gradle_tasks = read_gradle_tasks(installation.read_docker_calls())
 
     def test_should_succeed(self) -> None:
         self.assertEqual(self.build_apk_run.returncode, 0, self.build_apk_run.output)
@@ -535,6 +545,27 @@ class WhenCiBuildsWithoutEnv(InstallationTestCase):
 
     def test_should_build_with_the_android_sdk_of_its_data_dir(self) -> None:
         self.assertIn(f"{self.ci_data}/android/sdk:/opt/android-sdk", self.docker_runs[0])
+
+    def test_should_run_the_tests_and_lint_of_the_app_since_no_published_release_guards_its_build(self) -> None:
+        self.assertEqual(self.gradle_tasks, ["test", "assembleDev", "lint"])
+
+
+class WhenCiBuildsTheReleaseVariantWithoutEnv(InstallationTestCase):
+    build_apk_run: ClassVar[ScriptRun]
+    gradle_tasks: ClassVar[list[str]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        installation = make_installation(cls)
+        settings = {"DATA_DIR": str(installation.directory / "ci"), "CI": "true", "APP_VARIANT": "release"}
+        cls.build_apk_run = installation.run_script(installation.worktree, "build-apk.sh", environment=settings)
+        cls.gradle_tasks = read_gradle_tasks(installation.read_docker_calls())
+
+    def test_should_succeed(self) -> None:
+        self.assertEqual(self.build_apk_run.returncode, 0, self.build_apk_run.output)
+
+    def test_should_run_the_tests_and_lint_since_no_published_release_guards_that_build(self) -> None:
+        self.assertEqual(self.gradle_tasks, ["test", "assembleRelease", "lint"])
 
 
 class WhenCiBuildsWithoutEnvOnProductionsDirectories(InstallationTestCase):

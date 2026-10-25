@@ -10,6 +10,7 @@ from __future__ import annotations
 import fcntl
 import json
 import os
+import re
 import sqlite3
 import unittest
 from collections.abc import Callable, Mapping
@@ -31,6 +32,7 @@ from installation_support import (
     find_free_port,
     list_writing_calls,
     make_installation,
+    read_gradle_tasks,
     read_text_if_present,
     start_fake_api,
 )
@@ -51,6 +53,23 @@ RELEASE_TAGS_ALONE = Tags(f"v{VERSION}\n", (f"refs/tags/v{VERSION}", f"refs/tags
 REHEARSAL_PROJECT = "scanmylib-review-test"
 REHEARSAL_ENVIRONMENT = MappingProxyType({"SCANMYLIB_DEPLOY_REHEARSAL": REHEARSAL_PROJECT})
 REHEARSED_APP_VERSION = "0.2.4-dev+g1a2b3c4d5e6f.dirty"
+ENGINE_CHECK = "exec ocrid python3 -m scanmylib_ocr.engine_environment"
+ENGINE_CHECK_MODULE = "scanmylib_ocr.engine_environment"
+BOUNDED_ENGINE_CHECK = re.compile(
+    r"\$ timeout --kill-after=10 \d+ docker exec ocrid python3 -m scanmylib_ocr\.engine_environment$", re.MULTILINE
+)
+TIMED_OUT_STATUS = 124
+MISSING_ENGINE_LIBRARY = "ModuleNotFoundError: No module named 'paddleocr'"
+# A terminal reads it as a request to write the clipboard: what the sandbox prints must never reach one.
+CLIPBOARD_SEQUENCE = "\x1b]52;c;"
+LONG_SANDBOX_TEXT = "A" * 65536
+SANDBOX_OUTPUT = f"{MISSING_ENGINE_LIBRARY}\n{CLIPBOARD_SEQUENCE}{LONG_SANDBOX_TEXT}\x07\n"
+SANDBOX_TEXTS = (MISSING_ENGINE_LIBRARY, CLIPBOARD_SEQUENCE, LONG_SANDBOX_TEXT)
+PRODUCTION_ENGINE_CHECK_STEPS = (
+    "scripts/prod.sh compose start ocr",
+    f"scripts/prod.sh compose exec -T ocr python3 -m {ENGINE_CHECK_MODULE} 2>&1 | cat -v",
+    "scripts/prod.sh compose stop ocr",
+)
 RUNNING_IMAGES_TAGGED_DEPLOYED: list[Rule] = [
     {"match": r"^image inspect --format \{\{\.Id\}\} scanmylib-(api|ocr):deployed$", "stdout": "sha256:good\n"},
     {"match": r"^inspect --format \{\{\.Image\}\} (api|ocr)id$", "stdout": "sha256:good\n"},
@@ -205,6 +224,10 @@ def empty_the_env(installation: Installation) -> None:
     (installation.production_checkout / ".env").write_text("# nothing\n")
 
 
+def remove_the_sandbox_manifest(installation: Installation) -> None:
+    (installation.production_data / "sandbox" / "MANIFEST.json").unlink()
+
+
 class WhenItIsADryRun(InstallationTestCase):
     production_checkout: ClassVar[Path]
     deploy_run: ClassVar[ScriptRun]
@@ -244,6 +267,15 @@ class WhenItIsADryRun(InstallationTestCase):
     def test_should_say_which_images_it_would_tag_deployed(self) -> None:
         self.assertIn("would run: docker tag sha256:oldapi scanmylib-api:deployed", self.deploy_run.stdout)
 
+    def test_should_say_that_it_would_check_the_engine_s_environment_bounded_in_time_and_without_its_output(
+        self,
+    ) -> None:
+        self.assertRegex(
+            self.deploy_run.stdout,
+            rf"would run: timeout --kill-after=10 \d+ docker exec <the ocr container> python3 -m "
+            rf"{re.escape(ENGINE_CHECK_MODULE)}, its output discarded",
+        )
+
     def test_should_only_read_from_docker(self) -> None:
         self.assertEqual(self.writing_calls, [])
 
@@ -266,6 +298,7 @@ class WhenTheReleaseIsDeployedWithTheApp(InstallationTestCase):
     production_data: ClassVar[Path]
     deploy_run: ClassVar[ScriptRun]
     commands: ClassVar[list[str]]
+    gradle_tasks: ClassVar[list[str]]
     temporary_entries: ClassVar[list[str]]
     built_files: ClassVar[list[str]]
     backups: ClassVar[list[str]]
@@ -286,6 +319,7 @@ class WhenTheReleaseIsDeployedWithTheApp(InstallationTestCase):
             installation, "--apk", rules=[{"match": r"^compose .* build api ocr$", "snapshot": str(export_copy)}]
         )
         cls.commands = installation.read_docker_commands()
+        cls.gradle_tasks = read_gradle_tasks(installation.read_docker_calls())
         cls.temporary_entries = sorted(path.name for path in installation.directory.iterdir())
         built_paths = [path for path in export_copy.rglob("*") if path.is_file()]
         cls.built_files = sorted(str(path.relative_to(export_copy)) for path in built_paths)
@@ -304,6 +338,13 @@ class WhenTheReleaseIsDeployedWithTheApp(InstallationTestCase):
 
     def find_command_index(self, fragment: str) -> int:
         return self.commands.index(find_command(self.commands, fragment))
+
+    def find_isolation_check_indexes(self) -> list[int]:
+        return [
+            index
+            for index, command in enumerate(self.commands)
+            if command.startswith("exec ") and command != ENGINE_CHECK
+        ]
 
     def test_should_succeed(self) -> None:
         self.assertEqual(self.deploy_run.returncode, 0, self.deploy_run.output)
@@ -327,9 +368,16 @@ class WhenTheReleaseIsDeployedWithTheApp(InstallationTestCase):
     def test_should_build_an_api_that_reports_the_version_of_the_release(self) -> None:
         self.assertNotIn("DEV_VERSION", self.find_build())
 
-    def test_should_run_the_tests_on_the_new_images(self) -> None:
-        build_index = self.commands.index(self.find_build())
-        self.assertLess(build_index, self.find_command_index("scanmylib-deploy-pytest"))
+    def test_should_run_no_test_suite_since_the_release_was_tested_before_it_was_published(self) -> None:
+        before_the_restart = self.commands[: self.find_command_index(" up -d --no-build --wait")]
+        containers_and_image_builds = [
+            command for command in before_the_restart if command.startswith(("run ", "build "))
+        ]
+        self.assertIn(self.find_build(), before_the_restart)
+        self.assertEqual(containers_and_image_builds, [])
+
+    def test_should_build_the_release_app_without_its_tests_and_lint_since_ci_ran_them_on_the_release(self) -> None:
+        self.assertEqual(self.gradle_tasks, ["assembleRelease"])
 
     def test_should_start_production_from_its_checkout_with_the_compose_yaml_of_the_commit(self) -> None:
         up = find_command(self.commands, " up -d --no-build --wait")
@@ -383,9 +431,25 @@ class WhenTheReleaseIsDeployedWithTheApp(InstallationTestCase):
         self.assertEqual(self.commands.count("tag scanmylib-api:latest scanmylib-api:deployed"), 1)
 
     def test_should_tag_the_new_images_deployed_once_they_pass_the_isolation_check(self) -> None:
-        last_check_index = max(index for index, command in enumerate(self.commands) if command.startswith("exec "))
+        last_check_index = max(self.find_isolation_check_indexes())
         tag_index = self.commands.index("tag scanmylib-api:latest scanmylib-api:deployed")
         self.assertGreater(tag_index, last_check_index)
+
+    def test_should_check_the_engine_s_environment_in_the_new_sandbox(self) -> None:
+        self.assertIn(ENGINE_CHECK, self.commands)
+
+    def test_should_show_that_it_bounds_the_check_of_the_engine_s_environment_in_time(self) -> None:
+        self.assertRegex(self.deploy_run.stdout, BOUNDED_ENGINE_CHECK)
+
+    def test_should_check_the_engine_only_once_the_sandbox_passed_the_isolation_check(self) -> None:
+        self.assertGreater(self.commands.index(ENGINE_CHECK), max(self.find_isolation_check_indexes()))
+
+    def test_should_tag_the_new_images_deployed_once_the_engine_s_environment_passed(self) -> None:
+        tag_indexes = [
+            self.commands.index(f"tag scanmylib-{service}:latest scanmylib-{service}:deployed")
+            for service in ("api", "ocr")
+        ]
+        self.assertGreater(min(tag_indexes), self.commands.index(ENGINE_CHECK))
 
     def test_should_tag_the_new_images_deployed_before_the_app_is_built(self) -> None:
         app_build_index = min(
@@ -427,7 +491,7 @@ class WhenLatestWasRebuiltSinceTheContainersStarted(InstallationTestCase):
         self.assertIn("would run: docker tag sha256:oldapi scanmylib-api:deployed", self.deploy_run.stdout)
 
 
-class WhenTheTestsFail(InstallationTestCase):
+class WhenTheBuildFails(InstallationTestCase):
     deploy_run: ClassVar[ScriptRun]
     commands: ClassVar[list[str]]
     backups: ClassVar[list[str]]
@@ -436,13 +500,13 @@ class WhenTheTestsFail(InstallationTestCase):
     def setUpClass(cls) -> None:
         installation = make_installation(cls)
         start_fake_api(cls, installation.production_api_port)
-        cls.deploy_run = deploy(installation, rules=[{"match": "scanmylib-deploy-pytest", "exit": 1}])
+        cls.deploy_run = deploy(installation, rules=[{"match": r"^compose .* build api ocr$", "exit": 1}])
         cls.commands = installation.read_docker_commands()
         cls.backups = list_backups(installation)
 
-    def test_should_fail_at_the_tests(self) -> None:
+    def test_should_fail_at_the_images(self) -> None:
         self.assertNotEqual(self.deploy_run.returncode, 0)
-        self.assertIn('DEPLOY FAILED during the step "tests"', self.deploy_run.stdout)
+        self.assertIn('DEPLOY FAILED during the step "images"', self.deploy_run.stdout)
 
     def test_should_say_that_production_is_unchanged(self) -> None:
         self.assertIn("Production is unchanged", self.deploy_run.stdout)
@@ -455,6 +519,39 @@ class WhenTheTestsFail(InstallationTestCase):
         self.assertEqual([command for command in self.commands if " up " in command], [])
 
     def test_should_back_up_nothing(self) -> None:
+        self.assertEqual(self.backups, [])
+
+
+class WhenTheBackupFails(InstallationTestCase):
+    deploy_run: ClassVar[ScriptRun]
+    commands: ClassVar[list[str]]
+    backups: ClassVar[list[str]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        installation = make_installation(cls)
+        start_fake_api(cls, installation.production_api_port)
+        not_a_database = b"not a database\n" * 100
+        (installation.production_data / "state" / "scanmylib.db").write_bytes(not_a_database)
+        cls.deploy_run = deploy(installation)
+        cls.commands = installation.read_docker_commands()
+        cls.backups = list_backups(installation)
+
+    def test_should_fail_at_the_backup(self) -> None:
+        self.assertNotEqual(self.deploy_run.returncode, 0)
+        self.assertIn('DEPLOY FAILED during the step "backup"', self.deploy_run.stdout)
+
+    def test_should_say_that_production_is_unchanged(self) -> None:
+        self.assertIn("Production is unchanged", self.deploy_run.stdout)
+
+    def test_should_tag_latest_the_images_that_production_runs_again(self) -> None:
+        self.assertIn("tag scanmylib-api:deployed scanmylib-api:latest", self.commands)
+        self.assertIn("tag scanmylib-ocr:deployed scanmylib-ocr:latest", self.commands)
+
+    def test_should_start_nothing(self) -> None:
+        self.assertEqual([command for command in self.commands if " up " in command], [])
+
+    def test_should_leave_no_backup_and_no_partial_one(self) -> None:
         self.assertEqual(self.backups, [])
 
 
@@ -575,14 +672,14 @@ class WhenDeployedLagsBehindWhatRuns(InstallationTestCase):
                 "match": r"^image inspect --format \{\{\.Id\}\} scanmylib-(api|ocr):deployed$",
                 "stdout": "sha256:older\n",
             },
-            {"match": "scanmylib-deploy-pytest", "exit": 1},
+            {"match": r"^compose .* build api ocr$", "exit": 1},
         ]
         cls.deploy_run = deploy(installation, rules=lagging)
         cls.commands = installation.read_docker_commands()
 
-    def test_should_fail_at_the_tests(self) -> None:
+    def test_should_fail_at_the_images(self) -> None:
         self.assertNotEqual(self.deploy_run.returncode, 0)
-        self.assertIn('DEPLOY FAILED during the step "tests"', self.deploy_run.stdout)
+        self.assertIn('DEPLOY FAILED during the step "images"', self.deploy_run.stdout)
 
     def test_should_warn_that_deployed_is_not_what_runs(self) -> None:
         self.assertIn(
@@ -691,6 +788,92 @@ class WhenTheSandboxIsNotIsolated(InstallationTestCase):
     def test_should_never_tag_the_release(self) -> None:
         self.assertEqual(self.tags, RELEASE_TAGS_ALONE)
 
+    def test_should_not_check_the_engine_of_a_sandbox_that_is_not_isolated(self) -> None:
+        self.assertEqual([command for command in self.commands if ENGINE_CHECK_MODULE in command], [])
+
+
+class WhenTheEngineEnvironmentIsBroken(InstallationTestCase):
+    deploy_run: ClassVar[ScriptRun]
+    commands: ClassVar[list[str]]
+    logs: ClassVar[list[str]]
+    tags: ClassVar[Tags]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        installation = make_installation(cls)
+        start_fake_api(cls, installation.production_api_port)
+        broken_engine: list[Rule] = [
+            {"match": rf"^{re.escape(ENGINE_CHECK)}$", "exit": 1, "stdout": SANDBOX_OUTPUT, "stderr": SANDBOX_OUTPUT}
+        ]
+        cls.deploy_run = deploy(installation, rules=broken_engine)
+        cls.commands = installation.read_docker_commands()
+        cls.logs = read_logs(installation)
+        cls.tags = read_tags(installation)
+
+    def test_should_fail_at_the_engine_s_environment(self) -> None:
+        self.assertNotEqual(self.deploy_run.returncode, 0)
+        self.assertIn('DEPLOY FAILED during the step "engine"', self.deploy_run.stdout)
+
+    def test_should_show_the_command_it_ran(self) -> None:
+        self.assertRegex(self.deploy_run.stdout, BOUNDED_ENGINE_CHECK)
+
+    def test_should_show_nothing_the_sandbox_printed_since_it_is_untrusted(self) -> None:
+        self.assertEqual([text[:40] for text in SANDBOX_TEXTS if text in self.deploy_run.output], [])
+
+    def test_should_log_nothing_the_sandbox_printed(self) -> None:
+        self.assertEqual(len(self.logs), 1)
+        self.assertEqual([text[:40] for text in SANDBOX_TEXTS if text in self.logs[0]], [])
+
+    def test_should_say_how_to_see_why_the_check_failed(self) -> None:
+        self.assertEqual([step for step in PRODUCTION_ENGINE_CHECK_STEPS if step not in self.deploy_run.stdout], [])
+
+    def test_should_stop_the_ocr_service(self) -> None:
+        compose_commands = [command for command in self.commands if command.startswith("compose")]
+        self.assertTrue(any(command.endswith(" stop ocr") for command in compose_commands), compose_commands)
+
+    def test_should_never_tag_the_new_images_deployed(self) -> None:
+        self.assertNotIn("tag scanmylib-api:latest scanmylib-api:deployed", self.commands)
+        self.assertNotIn("tag scanmylib-ocr:latest scanmylib-ocr:deployed", self.commands)
+
+    def test_should_say_how_to_tag_latest_the_images_that_production_ran(self) -> None:
+        self.assertIn("docker tag scanmylib-api:deployed scanmylib-api:latest", self.deploy_run.stdout)
+
+    def test_should_never_tag_the_release(self) -> None:
+        self.assertEqual(self.tags, RELEASE_TAGS_ALONE)
+
+
+class WhenTheCheckOfTheEngineEnvironmentDoesNotFinishInTime(InstallationTestCase):
+    deploy_run: ClassVar[ScriptRun]
+    commands: ClassVar[list[str]]
+    tags: ClassVar[Tags]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        installation = make_installation(cls)
+        start_fake_api(cls, installation.production_api_port)
+        timed_out: list[Rule] = [{"match": rf"^{re.escape(ENGINE_CHECK)}$", "exit": TIMED_OUT_STATUS}]
+        cls.deploy_run = deploy(installation, rules=timed_out)
+        cls.commands = installation.read_docker_commands()
+        cls.tags = read_tags(installation)
+
+    def test_should_fail_at_the_engine_s_environment(self) -> None:
+        self.assertNotEqual(self.deploy_run.returncode, 0)
+        self.assertIn('DEPLOY FAILED during the step "engine"', self.deploy_run.stdout)
+
+    def test_should_say_how_to_see_why_the_check_failed(self) -> None:
+        self.assertEqual([step for step in PRODUCTION_ENGINE_CHECK_STEPS if step not in self.deploy_run.stdout], [])
+
+    def test_should_stop_the_ocr_service(self) -> None:
+        compose_commands = [command for command in self.commands if command.startswith("compose")]
+        self.assertTrue(any(command.endswith(" stop ocr") for command in compose_commands), compose_commands)
+
+    def test_should_never_tag_the_new_images_deployed(self) -> None:
+        self.assertNotIn("tag scanmylib-api:latest scanmylib-api:deployed", self.commands)
+        self.assertNotIn("tag scanmylib-ocr:latest scanmylib-ocr:deployed", self.commands)
+
+    def test_should_never_tag_the_release(self) -> None:
+        self.assertEqual(self.tags, RELEASE_TAGS_ALONE)
+
 
 class WhenOlderBackupsPileUp(InstallationTestCase):
     deploy_run: ClassVar[ScriptRun]
@@ -738,6 +921,7 @@ class WhenAPreconditionDoesNotHold(InstallationTestCase):
             ),
             "a development .env": BrokenPrecondition(write_a_development_env, "not production's"),
             "an empty .env": BrokenPrecondition(empty_the_env, "not production's"),
+            "no OCR sandbox": BrokenPrecondition(remove_the_sandbox_manifest, "no OCR sandbox in SANDBOX_DIR"),
         }
     )
     deploy_runs: ClassVar[dict[str, ScriptRun]]
@@ -826,7 +1010,7 @@ class WhenTheRunningApiReportsNoRelease(InstallationTestCase):
         installation = make_installation(cls)
         api = start_fake_api(cls, installation.production_api_port)
         api.version = "unknown"
-        cls.deploy_run = deploy(installation, "--skip-tests")
+        cls.deploy_run = deploy(installation)
 
     def test_should_say_that_the_api_reports_no_release(self) -> None:
         self.assertIn("reports 'unknown', not a release", self.deploy_run.stdout)
@@ -841,7 +1025,7 @@ class WhenTheRunningApiCannotBeRead(InstallationTestCase):
     @classmethod
     def setUpClass(cls) -> None:
         installation = make_installation(cls)
-        cls.deploy_run = deploy(installation, "--skip-tests")
+        cls.deploy_run = deploy(installation)
 
     def test_should_say_that_it_cannot_read_the_version(self) -> None:
         self.assertIn("cannot read the version of the running api", self.deploy_run.stdout)
@@ -859,7 +1043,7 @@ class WhenProductionRunsANewerReleaseAndADowngradeIsWanted(InstallationTestCase)
         installation = make_installation(cls)
         api = start_fake_api(cls, installation.production_api_port)
         api.version = "99.0.0"
-        cls.deploy_run = deploy(installation, "--allow-downgrade", "--skip-tests")
+        cls.deploy_run = deploy(installation, "--allow-downgrade")
 
     def test_should_say_that_production_runs_a_newer_release(self) -> None:
         self.assertIn("production runs 99.0.0, newer than", self.deploy_run.stdout)
@@ -896,7 +1080,7 @@ class WhenItIsAFirstInstallWithoutDatabase(InstallationTestCase):
         installation = make_installation(cls)
         start_fake_api(cls, installation.production_api_port)
         remove_the_database(installation)
-        cls.deploy_run = deploy(installation, "--first-install", "--skip-tests")
+        cls.deploy_run = deploy(installation, "--first-install")
 
     def test_should_succeed(self) -> None:
         self.assertEqual(self.deploy_run.returncode, 0, self.deploy_run.output)
@@ -919,6 +1103,24 @@ class WhenAnotherDeployIsRunning(InstallationTestCase):
     def test_should_refuse_since_another_deploy_runs(self) -> None:
         self.assertNotEqual(self.deploy_run.returncode, 0)
         self.assertIn("another deploy is running", self.deploy_run.stderr)
+
+    def test_should_call_docker_for_nothing(self) -> None:
+        self.assertEqual(self.docker_calls, [])
+
+
+class WhenGivenTheRemovedSkipTestsOption(InstallationTestCase):
+    deploy_run: ClassVar[ScriptRun]
+    docker_calls: ClassVar[list[LoggedCall]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        installation = make_installation(cls)
+        cls.deploy_run = deploy(installation, "--skip-tests")
+        cls.docker_calls = installation.read_docker_calls()
+
+    def test_should_stop_with_its_usage(self) -> None:
+        self.assertEqual(self.deploy_run.returncode, 2)
+        self.assertIn("Usage: scripts/deploy.sh", self.deploy_run.stderr)
 
     def test_should_call_docker_for_nothing(self) -> None:
         self.assertEqual(self.docker_calls, [])
@@ -1008,6 +1210,7 @@ class WhenRehearsedOnAThrowawayStack(InstallationTestCase):
     built_files: ClassVar[list[str]]
     tags: ClassVar[Tags]
     commands: ClassVar[list[str]]
+    gradle_tasks: ClassVar[list[str]]
 
     @classmethod
     def setUpClass(cls) -> None:
@@ -1022,9 +1225,13 @@ class WhenRehearsedOnAThrowawayStack(InstallationTestCase):
         cls.built_files = sorted(str(path.relative_to(export_copy)) for path in export_copy.rglob("*"))
         cls.tags = read_tags(installation)
         cls.commands = installation.read_docker_commands()
+        cls.gradle_tasks = read_gradle_tasks(installation.read_docker_calls())
 
     def test_should_succeed(self) -> None:
         self.assertEqual(self.rehearsal.returncode, 0, self.rehearsal.output)
+
+    def test_should_build_the_dev_app_with_its_tests_and_lint_as_every_development_build(self) -> None:
+        self.assertEqual(self.gradle_tasks, ["test", "assembleDev", "lint"])
 
     def test_should_check_that_the_api_offers_the_app_it_published(self) -> None:
         self.assertIn(f"the api offers the APK {REHEARSED_APP_VERSION} to the phones", self.rehearsal.stdout)
@@ -1056,6 +1263,27 @@ class WhenRehearsedOnAThrowawayStack(InstallationTestCase):
 
     def test_should_print_its_commands_as_those_of_dev_sh(self) -> None:
         self.assertIn("$ scripts/dev.sh compose up -d --no-build", self.rehearsal.stdout)
+
+    def test_should_skip_the_engine_s_environment_since_the_fake_ocr_runs_no_engine(self) -> None:
+        self.assertEqual([command for command in self.commands if ENGINE_CHECK_MODULE in command], [])
+        self.assertIn("skipped (the fake OCR runs no engine)", self.rehearsal.stdout)
+
+
+class WhenRehearsedOnTheFakeOcrWithoutASandbox(InstallationTestCase):
+    rehearsal: ClassVar[ScriptRun]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        installation = make_installation(cls)
+        write_rehearsal_env(installation, installation.directory / "rehearsal", find_free_port())
+        remove_the_sandbox_manifest(installation)
+        cls.rehearsal = rehearse(installation, "--dry-run")
+
+    def test_should_succeed(self) -> None:
+        self.assertEqual(self.rehearsal.returncode, 0, self.rehearsal.output)
+
+    def test_should_not_ask_for_an_ocr_sandbox(self) -> None:
+        self.assertNotIn("no OCR sandbox", self.rehearsal.output)
 
 
 class WhenRehearsedWithAnEnvThatPointsAtProduction(InstallationTestCase):

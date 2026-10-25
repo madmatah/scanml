@@ -267,14 +267,16 @@ scripts/deploy.sh --apk        # deploys, and publishes the new app
 a release published on GitHub (the commit of its tag on `origin`), on a release older than the one production runs
 (unless `--allow-downgrade`), or when `.env` is not production's. It then:
 
-1. builds the images from the commit (`git archive HEAD`) and runs the unit tests on them; if they fail, production is
-   unchanged;
+1. builds the images from the commit (`git archive HEAD`); if the build fails, production is unchanged;
 2. copies the state into `DATA_DIR/backups/state-<date>-v<version>/` (a consistent copy of the database; the last 10
    are kept);
-3. restarts `api` and `ocr`, checks their health and the sandbox's isolation (the sandbox is stopped if that check
-   fails), and tags the images that now run `:deployed`, the rollback target;
+3. restarts `api` and `ocr`, checks their health, the sandbox's isolation, and that the engine's libraries import in
+   the new sandbox (the sandbox is stopped if the isolation check or the engine check fails), and tags the images that
+   now run `:deployed`, the rollback target;
 4. with `--apk`, builds and publishes the new app, which the phones then offer to install (without it, phones keep
    their app).
+
+It runs no tests: a release is tested before it is published, and the deployment checks the installation, not the code.
 
 If a step fails, it says what state production is in and prints the commands to roll back to the `:deployed` images and
 the backup of the state. A closed terminal does not interrupt it, and each run is logged in

@@ -409,6 +409,14 @@ def read_text_if_present(path: Path) -> str | None:
     return path.read_text() if path.exists() else None
 
 
+def read_gradle_tasks(calls: list[LoggedCall]) -> list[str]:
+    for call in calls:
+        argv = call["argv"]
+        if argv[0] == "run" and "build_main" in argv:
+            return argv[argv.index("build_main") + 1 :]
+    return []
+
+
 def list_writing_calls(calls: list[LoggedCall]) -> list[list[str]]:
     return [call["argv"] for call in calls if not _is_reading(call["argv"])]
 

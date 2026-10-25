@@ -363,6 +363,21 @@ same place in every file; `.claude/rules/tests.md` says how tests are written.
   production after a deployment, outside the gate.
 - **The benchmarks need the real engine and the GPU,** so they run by hand, outside the gate.
 
+### Releases and deployments
+
+`.claude/rules/releases.md` says which tests a release passes before its pull request opens, and what a deployment
+checks. The reasons:
+
+- **A test validates a commit,** and a published release is a commit that CI and the release procedure have tested,
+  including the sandbox's tests that need the engine's environment, which CI lacks. Testing it again at each deployment
+  would test the same commit again, slow each deployment, and build an image of the api's tests on the machine that runs
+  production.
+- **A deployment can still get the installation wrong, where no test of the commit looks:** it builds the images that
+  day, from base images pinned by tag and, for the sandbox, the Debian packages of the day, runs them with production's
+  `.env`, and starts the engine's environment that the machine's sandbox holds. So its checks look at what it
+  installed, not at the code. They stop short of loading a model, which would take the shared GPU for a check: a model
+  that fails to load, or a page the engine cannot read, shows at the first page, in the engine's state.
+
 ### Budgets
 
 No budget is set yet. The first one comes with the benchmark that measures it. The measures of `README.md` > OCR engine

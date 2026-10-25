@@ -3,7 +3,8 @@
 # Builds the ScanMyLib Android app in throwaway containers: nothing is installed on the host.
 #
 # Usage: scripts/build-apk.sh [--create-signing-key] [gradle arguments...]
-#        (default gradle arguments: test assemble<Variant> lint)
+#        (default gradle arguments: assembleRelease for the release app in production's checkout (a
+#        published release, whose tests and lint CI ran); test assemble<Variant> lint otherwise)
 #
 # Settings come from the checkout's .env, in the strict format of scripts/lib/stack.py; when a
 # .env exists, the environment is ignored:
@@ -376,6 +377,7 @@ main() {
         shift
     fi
     local env_file=$ROOT/.env data_dir android_dir keystore_dir variant project containers signs=1
+    local default_gradle_args=()
     if [[ -f $env_file ]]; then
         load_env "$env_file" STACK
         project=${STACK[COMPOSE_PROJECT_NAME]:-}
@@ -389,7 +391,10 @@ main() {
             [[ $project == "$PRODUCTION_PROJECT" ]] && variant=release
         fi
         case $variant in
-            release) assert_production_release "$project" ;;
+            release)
+                assert_production_release "$project"
+                default_gradle_args=(assembleRelease)
+                ;;
             dev)
                 [[ $project != "$PRODUCTION_PROJECT" ]] \
                     || die "APP_VARIANT=dev in production's .env: production publishes the release app"
@@ -423,7 +428,8 @@ main() {
     [[ $variant == dev ]] && expected_package=$APPLICATION_ID.dev
 
     local gradle_args=("$@")
-    ((${#gradle_args[@]})) || gradle_args=(test "assemble${variant^}" lint)
+    ((${#default_gradle_args[@]})) || default_gradle_args=(test "assemble${variant^}" lint)
+    ((${#gradle_args[@]})) || gradle_args=("${default_gradle_args[@]}")
     local assembles=0 publication="not published (no assemble${variant^})"
     assembles_variant "$variant" "${gradle_args[@]}" && assembles=1
     if ((assembles && ! signs)); then

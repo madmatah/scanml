@@ -117,10 +117,10 @@ domain, or the closest one when no expert owns it yet.
 **A round of fixes picks by finding, not by path.** It picks the experts whose findings the fixes answer, as the
 `--fixes` file names them, `correctness-reviewer` always, since a fix can bring a bug into the code it fixes, and, among
 the experts its paths pick, those whose concern the fixes newly touch by what they hold: a new import across layers for
-architecture, a changed citation of a document for documentation, a new or changed test for tests, a new name or
-comment for conventions. `security-reviewer` and `sandbox-reviewer` run on every fix of a file in their scope, since a
-fix can weaken a guard as well as add one. An expert picked only to confirm its own findings runs one `effort` level
-below its definition's, through the Agent tool's `effort`, never below `medium`.
+architecture, a changed citation of a document or an added file for documentation, a new or changed test for tests, a
+new name or comment for conventions. `security-reviewer` and `sandbox-reviewer` run on every fix of a file in their
+scope, since a fix can weaken a guard as well as add one. An expert picked only to confirm its own findings runs one
+`effort` level below its definition's, through the Agent tool's `effort`, never below `medium`.
 
 **A small diff of the current branch needs no subagent.** Under about 100 changed lines of the default target, review it
 yourself: apply the checks of each picked expert in turn, following the contract, and credit each finding to the expert

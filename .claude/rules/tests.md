@@ -126,7 +126,7 @@ The section of each test framework below gives its own words for them, and how i
 - **Unit tests of the api:** `server/tests/`, with pytest, in the api's test image, without network and on a read-only
   filesystem. The HTTP API runs through FastAPI's test client, against the fake OCR sandbox on a real Unix socket.
 - **Unit tests of the web UI:** `server/scanmylib/web/tests/`, with `node --test`, on what needs no DOM: the modules of
-  the UI that hold none, its translation catalog and its icons.
+  the UI that hold none, the constants of the others, its translation catalog and its icons.
 - **Unit tests of the OCR sandbox:** `ocr/tests/`, with `unittest`, in the sandbox's image, without network or models;
   the tests that need an engine's environment skip without it.
 - **Unit tests of the app:** `android/app/src/test/`, with JUnit on the JVM: view models, the upload queue and the

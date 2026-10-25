@@ -43,6 +43,7 @@ COPIED = (
     ".gitignore",
     "VERSION",
     "scripts/lib/common.sh",
+    "scripts/lib/engine_check.sh",
     "scripts/lib/commit_areas.py",
     "scripts/lib/formatting.py",
     "scripts/lib/parallel_tests.py",

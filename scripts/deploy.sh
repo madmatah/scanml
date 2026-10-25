@@ -62,6 +62,8 @@ set -euo pipefail
 ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 # shellcheck source=lib/common.sh
 source "$ROOT/scripts/lib/common.sh"
+# shellcheck source=lib/engine_check.sh
+source "$ROOT/scripts/lib/engine_check.sh"
 
 usage() {
     sed -n '/^# Usage:/,/^#   *the database as/{s/^# \{0,1\}//;p}' "${BASH_SOURCE[0]}" >&2
@@ -81,10 +83,6 @@ done
 REHEARSAL=${SCANMYLIB_DEPLOY_REHEARSAL:-}
 ENV_FILE=$ROOT/.env
 readonly KEEP_BACKUPS=10
-# Above the bound that the check sets itself (CHECK_TIMEOUT_SECONDS in
-# ocr/scanmylib_ocr/engine_environment.py, and the time to stop its worker), so that docker exec ends
-# even when the container no longer answers: the two change together.
-readonly ENGINE_CHECK_BOUND_SECONDS=330
 cd "$ROOT"
 
 # One deploy at a time from this checkout: the lock comes before any check.
@@ -344,18 +342,9 @@ run() {
     ((DRY_RUN)) || "$@"
 }
 
-# As run(), but nothing the command prints reaches the terminal or the log: what the sandbox prints is
-# untrusted, and a terminal interprets its control sequences.
-run_without_output() {
-    print_command "$@"
-    ((DRY_RUN)) || "$@" > /dev/null 2>&1
-}
-
-# Stops the OCR service that failed a check: no page reaches it.
 stop_ocr_and_die() {
     local reason=$1 failure=$2
-    echo "  stopping $OCR_SERVICE, $reason"
-    compose stop "$OCR_SERVICE" || echo "  could not stop it: $COMPOSE_HINT stop $OCR_SERVICE"
+    stop_ocr_service "$COMPOSE_HINT" "$OCR_SERVICE" "$reason"
     die "$failure"
 }
 
@@ -412,9 +401,7 @@ on_exit() {
             engine)
                 echo "$WHO runs $VERSION, but the engine of its OCR service failed the check of its environment in"
                 echo "the new image, and the OCR service was stopped: pages wait in the queue. To see why, in $ROOT:"
-                echo "  $COMPOSE_HINT start $OCR_SERVICE"
-                echo "  $COMPOSE_HINT exec -T $OCR_SERVICE python3 -m scanmylib_ocr.engine_environment 2>&1 | cat -v"
-                echo "  $COMPOSE_HINT stop $OCR_SERVICE"
+                print_engine_check_steps "$COMPOSE_HINT" "$OCR_SERVICE"
                 echo "Then fix the image or the sandbox and deploy again, or roll back."
                 rollback_help
                 ;;
@@ -583,8 +570,7 @@ elif ((DRY_RUN)); then
 scanmylib_ocr.engine_environment, its output discarded (and stop it if it fails)"
 else
     engine_check_status=0
-    run_without_output timeout --kill-after=10 "$ENGINE_CHECK_BOUND_SECONDS" \
-        docker exec "$ocr_container" python3 -m scanmylib_ocr.engine_environment || engine_check_status=$?
+    check_engine_environment "$ocr_container" || engine_check_status=$?
     # timeout ends only the docker CLI: stopping the service ends the check inside it.
     if ((engine_check_status)); then
         stop_ocr_and_die "whose engine's environment failed its check (exit $engine_check_status)" \

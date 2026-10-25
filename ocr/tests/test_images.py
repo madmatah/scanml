@@ -1,7 +1,7 @@
 """The image helpers of the worker's engines (ocr/scanmylib_ocr/engines/images.py).
 
-They need Pillow, which only the worker's environment holds: the gate skips them, and `CLAUDE.md` > Commands runs them
-with the engine's environment.
+They need Pillow, which only the worker's environment holds: the gate skips them, and
+`.claude/skills/running-tests/SKILL.md` > A change under `ocr/` runs them with the engine's environment.
 """
 
 from __future__ import annotations

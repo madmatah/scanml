@@ -130,14 +130,18 @@ The section of each test framework below gives its own words for them, and how i
 - **Unit tests of the OCR sandbox:** `ocr/tests/`, with `unittest`, in the sandbox's image, without network or models;
   the tests that need an engine's environment skip without it.
 - **Unit tests of the app:** `android/app/src/test/`, with JUnit on the JVM: view models, the upload queue and the
-  client of the PC, against fakes and a mock web server.
+  client of the PC, against fakes and a mock web server, where Android's framework only answers with defaults
+  (`unitTests.isReturnDefaultValues` in `android/app/build.gradle.kts`).
 - **Screenshot tests of the app:** `android/app/src/testDebug/`, with JUnit, Robolectric and Roborazzi on the JVM, on
   the debug variant: each draws a screen from its state, with invented data, in the light or the dark theme, or one of
   their high-contrast variants, records it as a PNG under `android/app/build/outputs/roborazzi/`, and asserts what the
-  screen shows. A change to a screen draws that screen in one. A test that needs Android's framework to compose, such as
-  the theme's choice of colors or what a tap on a screen does, lives there too, without a picture. The pictures stay out
-  of the code's history: they show the screens to whoever checks a change, and a pull request publishes those of a
-  visible change (`.claude/skills/pull-request/SKILL.md` > Show a visible change).
+  screen shows. A change to a screen draws that screen in one. A test that needs Android's framework lives there too,
+  without a picture: to compose, such as the theme's choice of colors or what a tap on a screen does, or to run its
+  acts, such as those of a view model that takes an `android.net.Uri`, which has no public constructor and which the JVM
+  tests of `android/app/src/test/` cannot build. Such a component keeps its tests in one file there, under Robolectric,
+  rather than in two of one name, which clash since both directories compile into the debug variant's tests. The
+  pictures stay out of the code's history: they show the screens to whoever checks a change, and a pull request
+  publishes those of a visible change (`.claude/skills/pull-request/SKILL.md` > Show a visible change).
 - **Unit tests of the scripts:** `scripts/tests/`, with `unittest` and the host's `python3`, on the modules of
   `scripts/lib/`, on `scripts/release.py` and on the workflows of `.github/workflows/`, against throwaway repositories
   where git is needed.

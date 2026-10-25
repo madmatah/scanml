@@ -7,6 +7,32 @@ The notable changes of each release of ScanMyLib. The format is based on
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-25
+
+### Added
+
+- App: give each page to send a number of its own
+- App: suggest a number for a page to send
+- App: reach a page's actions from its menu in the review
+- App: delete the pages to send from the review's menu
+- Web UI: show the app's mark as the web UI's icon
+- Web UI: draw the mark in the page in the theme's accent
+- OCR: check that the engine's environment imports its libraries
+- Scripts: check the engine's environment at the first installation
+
+### Changed
+
+- **Breaking:** Scripts: deploy a published release without testing it again. `scripts/deploy.sh` no longer accepts
+  `--skip-tests` and stops with its usage: drop the option from the command. A release is tested before it is
+  published, and the deploy checks the installation instead: the api's health and version, the sandbox's isolation, and
+  the engine's environment in the new `ocr` container. The `scanmylib-api:test` image that earlier deploys built is no
+  longer used: `docker rmi scanmylib-api:test` removes it.
+
+### Fixed
+
+- Scripts: stop a sandbox that fails isolation at the first installation
+- OCR: escape the sandbox's output in the ocr container's log
+
 ## [0.6.0] - 2026-10-24
 
 ### Added
@@ -111,7 +137,8 @@ The notable changes of each release of ScanMyLib. The format is based on
 
 - OCR: read the whole request body before refusing a request
 
-[unreleased]: https://github.com/madmatah/scanml/compare/v0.6.0...HEAD
+[unreleased]: https://github.com/madmatah/scanml/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/madmatah/scanml/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/madmatah/scanml/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/madmatah/scanml/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/madmatah/scanml/compare/v0.3.0...v0.4.0

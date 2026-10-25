@@ -1,5 +1,6 @@
 /** Sign-in screen: exchanges the access token for the session cookie. */
 import { ApiError } from '../api.js';
+import { createBrandMark } from '../components/brand-mark.js';
 import { icon } from '../components/icons.js';
 import { h } from '../lib/dom.js';
 import { errorMessage } from '../lib/errors.js';
@@ -44,7 +45,7 @@ export function mountLogin(root, { setTitle, onSignedIn, message }) {
     h(
       'div',
       { class: 'login-brand' },
-      h('img', { src: '/static/icons/icon.svg', alt: '', width: 48, height: 48 }),
+      createBrandMark(48),
       h('div', {}, h('h1', { tabindex: '-1' }, 'ScanMyLib'), h('p', { class: 'muted' }, t('Your digitized library'))),
     ),
     // Lets password managers store the token under a recognizable name.

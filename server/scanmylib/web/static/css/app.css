@@ -251,8 +251,10 @@ legend {
   color: var(--text);
 }
 
-.brand img {
+.brand-mark {
   display: block;
+  flex: none;
+  color: var(--accent);
 }
 
 .app-nav {

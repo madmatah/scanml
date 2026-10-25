@@ -17,7 +17,8 @@
 #   5. creates the app's signing key and builds the APK in throwaway containers (unless --no-apk);
 #   6. starts the services, checks that the sandbox is isolated, then that the engine's libraries
 #      import in it (python3 -m scanmylib_ocr.engine_environment, bounded in time, its output
-#      discarded); if that check fails, ocr is stopped and the commands that show why are printed.
+#      discarded); a failed isolation or engine check stops ocr, and a failed engine check prints
+#      the commands that show why.
 #
 # Usage: scripts/setup.sh [--no-apk]
 set -euo pipefail
@@ -134,11 +135,17 @@ compose up -d --no-build --wait --wait-timeout 300 api ocr
 
 say "Checking that the sandbox is isolated"
 ocr_container=$(compose ps -q ocr 2> /dev/null || true)
-scripts/verify-sandbox.sh "$ocr_container"
+[[ -n $ocr_container ]] || {
+    stop_ocr_service "$COMPOSE_HINT" ocr "whose container cannot be found"
+    die "cannot find the ocr container: see $COMPOSE_HINT ps ocr"
+}
+scripts/verify-sandbox.sh "$ocr_container" || {
+    stop_ocr_service "$COMPOSE_HINT" ocr "which failed the isolation check"
+    die "scripts/verify-sandbox.sh failed"
+}
 
 # After the isolation check, so that no engine code runs in a sandbox that failed it.
 say "Checking the engine's environment"
-[[ -n $ocr_container ]] || die "cannot find the ocr container: see $COMPOSE_HINT ps ocr"
 engine_check_status=0
 check_engine_environment "$ocr_container" || engine_check_status=$?
 # timeout ends only the docker CLI: stopping the service ends the check inside it.

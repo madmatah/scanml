@@ -348,6 +348,7 @@ cd ~/Dev/scanmylib
 git fetch --prune --tags origin
 git worktree add --detach .claude/worktrees/release-next origin/main
 cd .claude/worktrees/release-next
+scripts/dev-env.sh            # the development stack's .env, for the sandbox's tests below
 scripts/release.py            # the next version, why, and the draft of its section of CHANGELOG.md
 git switch -c release/v0.4.0  # the branch of the version it proposes, 0.4.0 here, and its worktree:
 git -C ~/Dev/scanmylib worktree move .claude/worktrees/release-next .claude/worktrees/release-v0.4.0
@@ -356,6 +357,10 @@ scripts/release.py --commit   # writes VERSION and that section, and commits the
 scripts/release.py --description   # the pull request's description: what merging does, then the notes
 git push --set-upstream origin release/v0.4.0
 ```
+
+Before `scripts/release.py`, the OCR sandbox's unit tests that need its engine's environment, which CI does not have,
+run in that worktree, with the command of `.claude/skills/running-tests/SKILL.md` > A change under `ocr/`: a release
+whose tests fail goes no further.
 
 `scripts/release.py` reads the Conventional Commits since the last release: a major release for breaking changes (a
 minor one before 1.0), else a minor release for features, a patch otherwise (`--bump` chooses another). The section of

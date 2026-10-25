@@ -37,12 +37,40 @@ not be merged while its pull request is open. A worktree `.claude/worktrees/rele
 `release/…`, local or on `origin`, is a previous release's that was not removed after its merge: tell the user, and
 remove it with their agreement (a branch `release` also stands in the way of any `release/…` one).
 
-## Propose the version
+## Test the sandbox with its engine
 
-From the primary checkout, a worktree on `main` as on `origin`, without a branch until the version is known:
+CI passes on `main` without the OCR sandbox's unit tests that need an engine's environment, which skip there, since CI
+has no sandbox. They run here, on the commit the release is made from, before the user sees its draft
+(`.claude/rules/releases.md`). The release's own commit changes only `VERSION` and `CHANGELOG.md`, so testing
+`origin/main` tests the release.
+
+From the primary checkout, a worktree on `main` as on `origin`, without a branch until the version is known, with the
+`.env` of the development stack, which names the machine's sandbox:
 
 ```bash
 cd ~/Dev/scanmylib && git worktree add --detach .claude/worktrees/release-next origin/main
+cd ~/Dev/scanmylib/.claude/worktrees/release-next && scripts/dev-env.sh
+```
+
+Then run the block of `.claude/skills/running-tests/SKILL.md` > A change under `ocr/`, with
+`~/Dev/scanmylib/.claude/worktrees/release-next` as `<worktree>`. Nothing may fail. It builds the development slot's
+`scanmylib-dev-ocr:latest` from this commit: a session that runs the development stack with the real OCR builds its
+own image again first, with `scripts/dev.sh build ocr` or `scripts/dev.sh up --real-ocr`.
+
+If a test fails, the release does not go on: tell the user what failed, and remove the worktree, whose `.env` is
+ignored and goes with it:
+
+```bash
+cd ~/Dev/scanmylib && git worktree remove .claude/worktrees/release-next
+```
+
+Once the fix is merged, start again from [Check that a release can start](#check-that-a-release-can-start).
+
+## Propose the version
+
+In the worktree the tests ran in:
+
+```bash
 cd ~/Dev/scanmylib/.claude/worktrees/release-next && scripts/release.py      # or: scripts/release.py --bump LEVEL
 ```
 
@@ -119,8 +147,8 @@ other than edits of its notes, belong to the next release.
 
 ## Rules
 
-- This procedure applies `.claude/rules/releases.md`: what changes `VERSION`, what is merged while a release pull
-  request is open, and what tags.
-- It never merges, deploys, or touches production.
+- This procedure applies `.claude/rules/releases.md`: what a release is tested on, what changes `VERSION`, what is
+  merged while a release pull request is open, and what tags.
+- It never merges, deploys, or changes production.
 - An urgent fix follows the same path: its own pull request, then a release. A patch, unless `main` already holds
   unreleased features, which ship with it.

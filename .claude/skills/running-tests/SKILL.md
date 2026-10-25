@@ -7,8 +7,9 @@ description: Picks and runs the tests that a change to ScanMyLib needs, the gate
 
 `CLAUDE.md` > Workflow, "Commits" says which checks each commit passes, and `.claude/rules/tests.md` > Levels where each
 level of tests lives. This skill picks the tests a change needs and runs them, from the branch's worktree, `<worktree>`
-below: every command starts with `cd <worktree> &&`, since the shell may be back in the main checkout, production's
-(`CLAUDE.md` > Production).
+below: every command starts with `cd <worktree> &&`, as `.claude/rules/configuration.md` > Claude Code automation, "An
+agent given a worktree works only there" says, so that no command runs on production's `.env` (`CLAUDE.md` >
+Production).
 
 ## The gate
 

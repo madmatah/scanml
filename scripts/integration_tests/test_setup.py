@@ -222,16 +222,15 @@ class WhenTheCheckOfTheEngineEnvironmentDoesNotFinishInTime(InstallationTestCase
         self.assertEqual([step for step in PRODUCTION_ENGINE_CHECK_STEPS if step not in self.setup_run.stdout], [])
 
 
-class WhenTheOcrContainerCannotBeFoundForTheCheckOfTheEngineEnvironment(InstallationTestCase):
+class WhenTheOcrContainerCannotBeFound(InstallationTestCase):
     setup_run: ClassVar[ScriptRun]
     commands: ClassVar[list[str]]
 
     @classmethod
     def setUpClass(cls) -> None:
         installation = make_installation(cls)
-        # Only setup's own lookup finds nothing: scripts/verify-sandbox.sh, given no container, finds it again.
-        not_found_once: list[Rule] = [{"match": r" ps -q ocr$", "stdout": "", "max_calls": 1}]
-        cls.setup_run = install_for_the_first_time(installation, not_found_once)
+        not_found: list[Rule] = [{"match": r" ps -q ocr$", "stdout": ""}]
+        cls.setup_run = install_for_the_first_time(installation, not_found)
         cls.commands = installation.read_docker_commands()
 
     def test_should_fail_since_it_cannot_find_the_ocr_container(self) -> None:
@@ -240,6 +239,10 @@ class WhenTheOcrContainerCannotBeFoundForTheCheckOfTheEngineEnvironment(Installa
 
     def test_should_not_run_the_check_of_the_engine_s_environment(self) -> None:
         self.assertEqual([command for command in self.commands if ENGINE_CHECK_MODULE in command], [])
+
+    def test_should_stop_the_ocr_service_since_its_engine_was_never_checked(self) -> None:
+        self.assertNotEqual(list_ocr_stops(self.commands), [])
+        self.assertIn("stopping ocr, whose container cannot be found", self.setup_run.stdout)
 
 
 class WhenTheSandboxIsNotIsolated(InstallationTestCase):
@@ -254,9 +257,18 @@ class WhenTheSandboxIsNotIsolated(InstallationTestCase):
         cls.setup_run = install_for_the_first_time(installation, on_a_network)
         cls.commands = installation.read_docker_commands()
 
-    def test_should_fail(self) -> None:
+    def test_should_fail_at_the_isolation_check(self) -> None:
         self.assertNotEqual(self.setup_run.returncode, 0)
+        self.assertIn("scripts/verify-sandbox.sh failed", self.setup_run.stderr)
+
+    def test_should_not_say_that_production_is_ready(self) -> None:
         self.assertNotIn("==> Ready", self.setup_run.stdout)
+
+    def test_should_stop_the_ocr_service(self) -> None:
+        self.assertNotEqual(list_ocr_stops(self.commands), [])
+
+    def test_should_say_that_it_stopped_the_ocr_service_since_it_failed_the_isolation_check(self) -> None:
+        self.assertIn("stopping ocr, which failed the isolation check", self.setup_run.stdout)
 
     def test_should_not_check_the_engine_of_a_sandbox_that_is_not_isolated(self) -> None:
         self.assertEqual([command for command in self.commands if ENGINE_CHECK_MODULE in command], [])

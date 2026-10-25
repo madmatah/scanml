@@ -1,8 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="12 12 84 84" color="#1d6a5d">
   <title>ScanMyLib</title>
-  <rect width="64" height="64" rx="14" fill="#0f6e6e"/>
-  <path d="M11 19.5c6.6-2.4 13.2-2.1 19.5 1.8v26.4c-6.3-3.6-12.9-3.9-19.5-1.6z" fill="#ffffff"/>
-  <path d="M53 19.5c-6.6-2.4-13.2-2.1-19.5 1.8v26.4c6.3-3.6 12.9-3.9 19.5-1.6z" fill="#ffffff"/>
-  <path d="M15 26.5c3.6-.9 7.2-.6 11 .9M15 31.5c3.6-.9 7.2-.6 11 .9M38 27.4c3.8-1.5 7.4-1.8 11-.9M38 32.4c3.8-1.5 7.4-1.8 11-.9" fill="none" stroke="#9cc9c6" stroke-width="1.6" stroke-linecap="round"/>
-  <rect x="6" y="36" width="52" height="3.2" rx="1.6" fill="#6ee7d8"/>
+  <!-- The paths of android/app/src/main/res/drawable/ic_launcher_foreground.xml, on its canvas: a change of the
+       mark changes both units. -->
+  <rect x="12" y="12" width="84" height="84" rx="18.5" fill="#fbf8f1"/>
+  <g id="mark">
+    <path d="M33 43V33h10 M65 33h10v10 M75 65v10H65 M43 75H33V65" fill="none" stroke="currentColor" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M52.5 47.5C48 45 43 44.5 39.5 45.5v19C43 63.5 48 64 52.5 66.5Z" fill="currentColor"/>
+    <path d="M55.5 47.5C60 45 65 44.5 68.5 45.5v19C65 63.5 60 64 55.5 66.5Z" fill="currentColor"/>
+  </g>
 </svg>

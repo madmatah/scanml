@@ -5,22 +5,24 @@ Usage: docker_shim.py CONFIG [docker arguments...], through a `docker` wrapper t
 first in PATH. CONFIG is a JSON file:
 
     {"log": "...", "real_docker": "/usr/bin/docker",
-     "rules": [{"match": "<regex>", "stdout": "...", "stderr": "...", "exit": 0, "snapshot": "<dir>",
-                "no_image_id": true, "files": {"<path in the container>": "<text>"},
+     "rules": [{"match": "<regex>", "max_calls": 1, "stdout": "...", "stderr": "...", "exit": 0,
+                "snapshot": "<dir>", "no_image_id": true, "files": {"<path in the container>": "<text>"},
                 "links": {"<path in the container>": "<target>"}, "host_files": {"<path>": "<text>"}}, ...]}
 
 Every call is appended to the log (one JSON line: the arguments, the environment variables that could change what docker
 compose does, and the files of a build context read from stdin, which `docker build ... -` reads in full, as docker
 does, and refuses without the Dockerfile its --file names). The first rule whose regular expression matches the
-arguments joined with spaces answers the call; with "snapshot", a `docker compose` call first copies its
---project-directory there (what a build would see); with "files" or "links", a `docker run` call writes a file or makes
-a link (in place of a file or a directory) where its -v mounts put that path of the container, as the tool would, and
-fails as docker does: on a read-only mount, on a mount point, or through a link that leaves the mount; with
-"host_files", it writes files of the host, as a person editing them meanwhile would. A `docker run` whose -v mount lies
-in a read-only one without its mount point fails, as docker cannot create it. Without a matching rule, `docker compose
-... config ...` runs the real docker compose, which only resolves the configuration (DOCKER_HOST points to a socket that
-does not exist: no daemon is ever reached), and anything else succeeds without output. A `docker build --iidfile FILE
-...` that succeeds writes a made-up image id there, unless its rule says "no_image_id".
+arguments joined with spaces answers the call; with "max_calls", a rule answers only as long as the log holds at most
+that many calls that it matches, this one included, and later calls go on to the next rule; with "snapshot", a `docker
+compose` call first copies its --project-directory there (what a build would see); with "files" or "links", a `docker
+run` call writes a file or makes a link (in place of a file or a directory) where its -v mounts put that path of the
+container, as the tool would, and fails as docker does: on a read-only mount, on a mount point, or through a link that
+leaves the mount; with "host_files", it writes files of the host, as a person editing them meanwhile would. A `docker
+run` whose -v mount lies in a read-only one without its mount point fails, as docker cannot create it. Without a
+matching rule, `docker compose ... config ...` runs the real docker compose, which only resolves the configuration
+(DOCKER_HOST points to a socket that does not exist: no daemon is ever reached), and anything else succeeds without
+output. A `docker build --iidfile FILE ...` that succeeds writes a made-up image id there, unless its rule says
+"no_image_id".
 """
 
 from __future__ import annotations
@@ -67,6 +69,7 @@ _WATCHED = (
 
 class Rule(TypedDict, total=False):
     match: Required[str]
+    max_calls: int
     stdout: str
     stderr: str
     exit: int
@@ -185,6 +188,11 @@ def edit_host_files(rule: Rule) -> None:
             file.write(text)
 
 
+def count_logged_calls(log_path: str, pattern: str) -> int:
+    with open(log_path, encoding="utf-8") as log:
+        return sum(1 for line in log if re.search(pattern, " ".join(json.loads(line)["argv"])))
+
+
 def write_image_id(argv: list[str]) -> None:
     if argv[:1] == ["build"] and "--iidfile" in argv:
         with open(argv[argv.index("--iidfile") + 1], "w", encoding="utf-8") as file:
@@ -216,6 +224,8 @@ def main() -> int:
     joined = " ".join(argv)
     for rule in config.get("rules", []):
         if re.search(rule["match"], joined):
+            if "max_calls" in rule and count_logged_calls(config["log"], rule["match"]) > rule["max_calls"]:
+                continue
             if rule.get("snapshot") and "--project-directory" in argv:
                 project = argv[argv.index("--project-directory") + 1]
                 shutil.copytree(project, rule["snapshot"], symlinks=True, dirs_exist_ok=True)

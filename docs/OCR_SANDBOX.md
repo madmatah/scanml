@@ -183,10 +183,11 @@ supervisor (python3, stdlib)          HTTP on the Unix socket, FIFO queue, lifec
   an escape such as `\x1b`, and exits 0 once the worker has imported the
   engine's libraries, which `GET /health` never needs while the engine is
   idle. It covers the worker's environment (`venv-paddle`), not vLLM's
-  (`venv-vllm`), the models or a page. `scripts/deploy.sh` runs it in the new
-  `ocr` container, once the container has passed `scripts/verify-sandbox.sh`,
-  bounded in time, and keeps only its exit status: nothing the sandbox prints
-  reaches the deploy's terminal or its log.
+  (`venv-vllm`), the models or a page. `scripts/deploy.sh`, and
+  `scripts/setup.sh` at the first installation, run it in the new `ocr`
+  container, once the container has passed `scripts/verify-sandbox.sh`,
+  bounded in time, and keep only its exit status: nothing the sandbox prints
+  reaches the terminal or a log.
 
 ## Engines
 

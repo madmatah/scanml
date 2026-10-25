@@ -120,6 +120,7 @@ class RunningSupervisor:
 class CrashSequence:
     failure: tuple[int, str]
     health_after_the_crash: dict[str, Any]
+    logged_errors_after_the_crash: list[str]
     next_page_status: int
     events_after_the_next_page: list[str]
 
@@ -434,25 +435,34 @@ class TheParseRouteWhenTheBodyIsLargerThanItsLimit(unittest.TestCase):
 
 class TheParseRouteWhenTheEngineCannotDecodeTheImage(unittest.TestCase):
     refusal: ClassVar[tuple[int, str]]
+    logged_warnings: ClassVar[list[str]]
 
     @classmethod
     def setUpClass(cls) -> None:
         supervisor = start_supervisor(cls.addClassCleanup)
-        status, body = send_page(supervisor.socket_path, "garbage")
+        with record_logs("scanmylib_ocr", logging.WARNING) as records:
+            status, body = send_page(supervisor.socket_path, "garbage")
         cls.refusal = (status, body["error"])
+        cls.logged_warnings = [record.getMessage() for record in records]
 
     def test_should_refuse_the_page_as_a_bad_image(self) -> None:
         self.assertEqual(self.refusal, (400, "bad_image"))
 
+    def test_should_log_why_the_engine_refused_the_page(self) -> None:
+        self.assertEqual(self.logged_warnings, ["request garbage failed: bad_image: cannot decode"])
+
 
 def setUpModule() -> None:
     supervisor = start_supervisor(unittest.addModuleCleanup)
-    status, body = send_page(supervisor.socket_path, "crash")
+    with record_logs("scanmylib_ocr", logging.WARNING) as records:
+        status, body = send_page(supervisor.socket_path, "crash")
+    logged_errors_after_the_crash = [record.getMessage() for record in records]
     health_after_the_crash = wait_for_health(supervisor.socket_path, is_engine_idle)
     next_page_status, _ = send_page(supervisor.socket_path, "after")
     _TheParseRouteWhenTheEngineCrashesDuringAPage.crash_sequence = CrashSequence(
         failure=(status, body.get("error")),
         health_after_the_crash=health_after_the_crash,
+        logged_errors_after_the_crash=logged_errors_after_the_crash,
         next_page_status=next_page_status,
         events_after_the_next_page=list(supervisor.events),
     )
@@ -472,6 +482,12 @@ class TheParseRouteWhenTheEngineCrashesDuringAPage(_TheParseRouteWhenTheEngineCr
     def test_should_report_the_crash_as_the_last_error_of_the_engine(self) -> None:
         self.assertIn("worker stopped", self.crash_sequence.health_after_the_crash["engine"]["last_error"])
 
+    def test_should_log_the_failure_of_the_page(self) -> None:
+        self.assertEqual(
+            self.crash_sequence.logged_errors_after_the_crash,
+            ["request crash failed: worker stopped while processing the page"],
+        )
+
 
 class TheParseRouteWhenTheEngineCrashesDuringAPageWhenTheNextPageArrives(_TheParseRouteWhenTheEngineCrashesDuringAPage):
     def test_should_read_it(self) -> None:
@@ -488,23 +504,32 @@ class TheParseRouteWhenTheEngineFailsToStart(unittest.TestCase):
     replies: ClassVar[list[tuple[int, Any]]]
     events: ClassVar[list[str]]
     health: ClassVar[dict[str, Any]]
+    logged_errors: ClassVar[list[str]]
 
     @classmethod
     def setUpClass(cls) -> None:
         supervisor = start_supervisor(cls.addClassCleanup, start_error=START_ERROR)
         supervisor.signals.allow_start.clear()
         replies: list[tuple[int, Any]] = []
-        first_page_request = threading.Thread(target=lambda: replies.append(send_page(supervisor.socket_path, "a")))
-        first_page_request.start()
-        wait_until_the_health_shows(
-            supervisor.socket_path, lambda health: health["engine"]["state"] == "starting", "the start of the engine"
-        )
-        second_page_request = threading.Thread(target=lambda: replies.append(send_page(supervisor.socket_path, "b")))
-        second_page_request.start()
-        cls.health_with_a_page_waiting = wait_for_health(supervisor.socket_path, lambda health: health["queue"] == 1)
-        supervisor.signals.allow_start.set()
-        first_page_request.join()
-        second_page_request.join()
+        with record_logs("scanmylib_ocr", logging.WARNING) as records:
+            first_page_request = threading.Thread(target=lambda: replies.append(send_page(supervisor.socket_path, "a")))
+            first_page_request.start()
+            wait_until_the_health_shows(
+                supervisor.socket_path,
+                lambda health: health["engine"]["state"] == "starting",
+                "the start of the engine",
+            )
+            second_page_request = threading.Thread(
+                target=lambda: replies.append(send_page(supervisor.socket_path, "b"))
+            )
+            second_page_request.start()
+            cls.health_with_a_page_waiting = wait_for_health(
+                supervisor.socket_path, lambda health: health["queue"] == 1
+            )
+            supervisor.signals.allow_start.set()
+            first_page_request.join()
+            second_page_request.join()
+        cls.logged_errors = [record.getMessage() for record in records]
         cls.replies = list(replies)
         cls.events = list(supervisor.events)
         cls.health = read_health(supervisor.socket_path)
@@ -534,6 +559,9 @@ class TheParseRouteWhenTheEngineFailsToStart(unittest.TestCase):
 
     def test_should_report_the_failure_as_the_last_error_of_the_engine(self) -> None:
         self.assertIn("CUDA out of memory", self.health["engine"]["last_error"])
+
+    def test_should_log_the_failure_once_however_many_pages_wait(self) -> None:
+        self.assertEqual(self.logged_errors, [f"engine failed to start: {START_ERROR}"])
 
 
 class TheHealthRouteWhenNoPageWasSentYet(unittest.TestCase):

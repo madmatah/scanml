@@ -86,11 +86,15 @@ the revised plan and the commits so far: the one that stopped carries a context 
    development stack; of the app in its screenshot tests, with `cd <worktree> && scripts/build-apk.sh
    testDebugUnitTest`, then a look at the pictures under `android/app/build/outputs/roborazzi/`. Run the tests that the
    gate skips and the change calls for, as the `running-tests` skill says.
-2. Run `/expert-review` on the branch, or `/expert-review <base>...HEAD` when it is stacked. While it reads the
-   worktree, run nothing that moves the worktree between commits, such as `git rebase --exec`: the experts would read
-   another revision than the one under review. Claude Code loads the skills and agents of the session's directory, not
-   the branch's: when the branch changes the skills or agents that review or fix it, review it from a session started
-   in its worktree, or say in the pull request which definitions reviewed it.
+2. Run `/expert-review` on the branch, or `/expert-review <base>...HEAD` when it is stacked. Run one review at a time in
+   a session: one started while another runs waits in the foreground, where it can hand back before its agents answer.
+   The review runs in the background, and its report reaches you as a message; under `claude -p`, it runs in the
+   foreground, and its report is the result of the call. Wait for it before you settle anything. A report that says its
+   triage or an expert still runs was handed back too soon, as "A review that hands back too soon" below says. While it
+   reads the worktree, run nothing that moves the worktree between commits, such as `git rebase --exec`: the experts
+   would read another revision than the one under review. Claude Code loads the skills and agents of the session's
+   directory, not the branch's: when the branch changes the skills or agents that review or fix it, review it from a
+   session started in its worktree, or say in the pull request which definitions reviewed it.
 3. Settle each finding as `CLAUDE.md` > Workflow, "Review before pushing" says. Give the findings to fix to a new
    `fixer` agent, with its brief: the worktree and its base, the purpose of the branch, each verified finding, and the
    commit each fix belongs to. It commits each fix as a `fixup!` commit, or as an `amend!` commit for a commit message,
@@ -98,18 +102,22 @@ the revised plan and the commits so far: the one that stopped carries a context 
    findings they answer: write those findings, as the review reported them, with the Write tool, to a file in a
    directory that `mktemp -d` creates outside the worktree, and run
    `/expert-review <the commit before the first fix of the round>...HEAD --fixes <file>`. Remove the directory once the
-   round's report arrives. A finding that needs a change of design, or that a fix brought into the code it fixed, ends
-   the round instead: revise the plan of the branch with all the findings of the round, as [Plan the
-   work](#plan-the-work) says, give the change to a new agent, as [Write the code](#write-the-code) says, shape the
-   history again, as [Shape the history](#shape-the-history) says, and review the whole branch again, as the first round
-   does. Keep the cost of each round, from its report, for the decision that `CLAUDE.md` > Workflow, "Rounds of review
-   converge, or the user decides" leaves to the user. Go on round by round as `CLAUDE.md` > Workflow, "Review before
-   pushing" and "Rounds of review converge, or the user decides" say, then fold the fixes.
-4. If an answer of its triage or of an expert reaches you rather than the review, the review handed back its report
-   too soon: set that report aside, send the answer to the review with SendMessage, addressed to the agent ID that its
-   invocation returned, or else to the name it runs under, such as `expert-review`, and act only on the report it hands
-   back next. When no agent of the review is left to receive it, which `ListAgents` shows, run the review again, once
-   at most: if the second run hands back too soon as well, tell the user what remains unreviewed.
+   review of the fixes has handed back its report and you have settled each of its findings: given to a fixer, answered
+   in the pull request, or carried into a revised plan. A finding that needs a change of design, or that a fix brought
+   into the code it fixed, ends the round instead: revise the plan of the branch with all the findings of the round, as
+   [Plan the work](#plan-the-work) says, give the change to a new agent, as [Write the code](#write-the-code) says,
+   shape the history again, as [Shape the history](#shape-the-history) says, and review the whole branch again, as the
+   first round does. Keep the cost of each round, from its report, for the decision that `CLAUDE.md` > Workflow,
+   "Rounds of review converge, or the user decides" leaves to the user. Go on round by round as `CLAUDE.md` > Workflow,
+   "Review before pushing" and "Rounds of review converge, or the user decides" say, then fold the fixes.
+4. **A review that hands back too soon:** if the review hands back a report that says its triage or an expert still
+   runs, or an answer of its triage or of an expert reaches you rather than the review, the review handed back too
+   soon: set its report aside and act on none of it. Stop, and tell the user, or, when the user does not follow the
+   work, say in your final report: the answers that reached you, what you already started from that report, such as a
+   fixer and its commits, in a round of fixes the path of its `--fixes` file, and the detached worktrees outside the
+   repository that `cd <worktree> && git worktree list` shows, which this review or another one still running may use.
+   Remove none of them and run no review again: the review's agents may still be running, and only the user decides
+   what happens next.
 
 ## Push and open the pull request
 

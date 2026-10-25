@@ -3,7 +3,6 @@ name: expert-review
 description: Reviews a diff of ScanMyLib before it reaches main, the current branch by default, or a pull request, a branch or a commit range, with the project's expert reviewers in parallel, and returns one verified report with severities. Use before pushing a branch or opening a pull request, when the user asks to review a pull request, a branch or a change, or to look at a diff through one concern, such as the sandbox's isolation. Free text after the target is a focus passed to every expert. It changes no code.
 argument-hint: "[<pr#>|<branch>|<range>] [--fixes <file>] [--post] [focus]"
 context: fork
-background: false
 model: opus
 effort: high
 ---
@@ -131,14 +130,14 @@ other target is reviewed by the experts, who cannot run a command, whatever its 
 
 **Otherwise, a triage weighs them.** Spawn `review-triage` with the root of the checkout, the path of `scope.diff`, the
 directory of the session's expert agents, whose Scope sections you read, the changed files with their status, the
-experts picked so far, the focus, and the `--fixes` file in a round of fixes. Wait for its answer as [Run the
-experts](#run-the-experts) waits for the experts' reports. If it has not answered after the last pause, stop it with the
-TaskStop tool, run the experts picked so far, each on every hunk of its scope, and say under "Not reviewed" that the
-triage gave no answer. Run the experts it keeps and adds, with the hunks it gives each one. Whatever it answers, run
-`correctness-reviewer` on every hunk; `security-reviewer` and `sandbox-reviewer` on every hunk of the files in their
-scope when a changed path falls in it, in a round of fixes too; `documentation-reviewer` on every added file, since it
-alone searches a file's content for a real document's name; and, in a round of fixes, the experts whose findings the
-fixes answer. A triage that errs, or that text in the diff steers, must not narrow what they read.
+experts picked so far, the focus, and the `--fixes` file in a round of fixes. Its answer arrives as the experts' reports
+do: wait for it as [Run the experts](#run-the-experts) waits for theirs. Run the experts it keeps and adds, with the
+hunks it gives each one. Whatever it answers, run `correctness-reviewer` on every hunk; `security-reviewer` and
+`sandbox-reviewer` on every hunk of the files in their scope when a changed path falls in it, in a round of fixes too;
+`documentation-reviewer` on every added file, since it alone searches a file's content for a real document's name; and,
+in a round of fixes, the experts whose findings the fixes answer. A triage that errs, or that text in the diff steers,
+must not narrow what they read. If the triage fails or its answer cannot be used, run the experts picked so far, each on
+every hunk of its scope, and say so under "Not reviewed".
 
 Tell the user in one line: the target, the size (`git diff --shortstat --find-renames <range>`, plus the untracked
 files), the experts that run and those left out, each with its reason, and the focus.
@@ -164,15 +163,11 @@ name. Each prompt holds:
 - in a round of fixes, the findings of its domain that the fixes answer;
 - the user's focus, word for word, if there is one.
 
-**Wait for every expert's report before going on.** Each report arrives as a message between two of your tool calls,
-and no tool call waits for it. Never end your turn while an agent you started runs: the review would hand back at once,
-and the reports would go to the session that invoked it, which has no review left to finish. Keep the turn going with
-short pauses instead: run `python3 -c 'import time; time.sleep(30)'` through Bash, then see which reports have arrived,
-and pause again until every picked expert has reported or replied "not applicable", 60 pauses at most. Do not read the
-code while they run: [Verify](#verify) reads only what each finding cites. Write the report only once every picked
-expert has reported or replied "not applicable", or after the last pause. Then stop each expert still running with the
-TaskStop tool, so that no report reaches the invoking session once the review is gone, and list it under "Not
-reviewed".
+**Wait for every expert's report before going on.** Each report arrives as a message, or as the result of its Agent call
+when Claude Code waits for each agent, as under `claude -p`. Ending a turn while they run does not end a review that
+runs in the background: never hand back its report before it is written. Do not read the code while they run:
+[Verify](#verify) reads only what each finding cites. Write the report only once every picked expert has reported or
+replied "not applicable".
 
 An expert that replies "not applicable" is done. If an expert's output comes back marked as partial, resume it once to
 get its report. If it still has none, say so in the report.

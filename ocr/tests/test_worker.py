@@ -6,22 +6,32 @@ Standard library only, in the sandbox's image: `scripts/check.sh ocr`.
 from __future__ import annotations
 
 import contextlib
+import functools
+import io
 import logging
 import os
 import unittest
 from collections.abc import Iterator
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from unittest import mock
 
 from scanmylib_ocr import protocol, worker
-from scanmylib_ocr.engines.base import PageEngine, PageOptions, PageResult
+from scanmylib_ocr.engines.base import EngineSpec, PageEngine, PageOptions, PageResult
 from scanmylib_ocr.protocol import Channel
+
+if TYPE_CHECKING:
+    from scanmylib_ocr.config import Settings
 
 JOB_ID = "job-1"
 LIMIT_BYTES = 1024
+ENGINE_NAME = "recording-engine"
+MISSING_LIBRARY_MESSAGE = "libGL.so.1: cannot open shared object file"
 
 
 class HugeResultEngine(PageEngine):
+    def import_libraries(self) -> None:
+        pass
+
     def load(self) -> None:
         pass
 
@@ -36,6 +46,49 @@ class HugeResultEngine(PageEngine):
             "page_continuation": None,
             "preprocess": {},
         }
+
+
+class RecordingEngine(PageEngine):
+    def __init__(self, import_error: ImportError | None = None) -> None:
+        self.calls: list[str] = []
+        self._import_error = import_error
+
+    def import_libraries(self) -> None:
+        self.calls.append("import_libraries")
+        if self._import_error is not None:
+            raise self._import_error
+
+    def load(self) -> None:
+        self.calls.append("load")
+
+    def parse(self, image_path: str, options: PageOptions) -> PageResult:
+        raise NotImplementedError
+
+
+class RecordingSpec(EngineSpec):
+    name = ENGINE_NAME
+    model = "recording-model"
+
+    def __init__(self, engine: RecordingEngine) -> None:
+        self.engine = engine
+
+    def worker_command(self, settings: Settings) -> list[str]:
+        raise NotImplementedError
+
+    def describe(self, settings: Settings) -> dict[str, Any]:
+        return {"name": self.name}
+
+    def create_engine(self, settings: Settings) -> PageEngine:
+        return self.engine
+
+
+def use_engine(test: unittest.TestCase, engine: RecordingEngine) -> None:
+    environment_patcher = mock.patch.dict(os.environ, {"OCR_ENGINE": ENGINE_NAME})
+    environment_patcher.start()
+    test.addCleanup(environment_patcher.stop)
+    spec_patcher = mock.patch.object(worker, "get_spec", return_value=RecordingSpec(engine))
+    spec_patcher.start()
+    test.addCleanup(spec_patcher.stop)
 
 
 class LogRecorder(logging.Handler):
@@ -99,6 +152,35 @@ class TheServeFunctionWhenAResultIsLargerThanTheProtocolLimit(unittest.TestCase)
 
     def test_should_log_that_it_cannot_send_the_result(self) -> None:
         self.assertIn(f"cannot send the result of page {JOB_ID}", self.error_messages)
+
+
+class TheMainFunctionWhenAskedToCheckTheEnvironment(unittest.TestCase):
+    def setUp(self) -> None:
+        engine = RecordingEngine()
+        use_engine(self, engine)
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            self.exit_status = worker.main(["--check"])
+        self.output = output.getvalue()
+        self.calls = list(engine.calls)
+
+    def test_should_succeed(self) -> None:
+        self.assertEqual(self.exit_status, 0)
+
+    def test_should_import_the_engine_s_libraries_without_loading_its_models(self) -> None:
+        self.assertEqual(self.calls, ["import_libraries"])
+
+    def test_should_say_which_engine_it_checked(self) -> None:
+        self.assertEqual(self.output, f"ok: the {ENGINE_NAME} engine's libraries import\n")
+
+
+class TheMainFunctionWhenALibraryOfTheEngineDoesNotImport(unittest.TestCase):
+    def setUp(self) -> None:
+        use_engine(self, RecordingEngine(import_error=ImportError(MISSING_LIBRARY_MESSAGE)))
+        self.act = functools.partial(worker.main, ["--check"])
+
+    def test_should_fail_with_the_error_that_names_the_library(self) -> None:
+        self.assertRaisesRegex(ImportError, "libGL", self.act)
 
 
 if __name__ == "__main__":

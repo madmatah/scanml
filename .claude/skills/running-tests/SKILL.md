@@ -37,12 +37,20 @@ cd <worktree> && scripts/dev.sh build ocr && SANDBOX_DIR=$(sed -n 's/^SANDBOX_DI
     /opt/sandbox/venv-paddle/bin/python -m unittest discover -s /app/tests
 ```
 
+A change to an engine's libraries or to its worker also passes the check of the engine's environment, in the real
+sandbox of the development stack, started as [A change to the `ocr` service](#a-change-to-the-ocr-service) says:
+`cd <worktree> && scripts/dev.sh compose exec -T ocr python3 -m scanmylib_ocr.engine_environment 2>&1 | cat -v`,
+which prints `ok: …` and exits 0. Its output is the sandbox's, untrusted: without a terminal (`-T`) and through
+`cat -v`, no control sequence of it reaches the session's terminal.
+
 ### A change to the `ocr` service
 
 A change to its isolation, its container in `compose.yaml` or its `Dockerfile` passes
-`cd <worktree> && scripts/verify-sandbox.sh` against the running service. Start the real sandbox first, with
-`cd <worktree> && scripts/dev.sh up --real-ocr`: the fake that `scripts/dev.sh up` runs skips the checks of the
-sandbox's own directories. Stop it when you are done, as `CLAUDE.md` > Workflow, "The development stack" says.
+`cd <worktree> && scripts/verify-sandbox.sh` against the running service, then the check of the engine's environment
+in its new image, as [A change under `ocr/`](#a-change-under-ocr) runs it. Start the real sandbox first, with
+`cd <worktree> && scripts/dev.sh up --real-ocr`, which builds its image: the fake that `scripts/dev.sh up` runs skips
+the checks of the sandbox's own directories and runs no engine. Stop it when you are done, as `CLAUDE.md` > Workflow,
+"The development stack" says.
 
 ### A change to the flow from the phone to the library
 

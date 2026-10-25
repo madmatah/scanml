@@ -5,14 +5,19 @@ Started by the supervisor with the engine's venv interpreter, e.g.
 requests and sends results only through the protocol pipes named in
 ``$SCANMYLIB_OCR_PROTOCOL_FDS`` (see ``protocol.py``); its stdout and stderr
 are plain logs, so library output can never corrupt a message.
+
+``--check`` opens no protocol pipe: ``engine_environment.py`` runs it without a
+supervisor.
 """
 
 from __future__ import annotations
 
+import argparse
 import logging
 import os
 import sys
 import time
+from collections.abc import Sequence
 from typing import Any
 
 from .config import Settings
@@ -66,7 +71,24 @@ def serve(channel: Channel, engine: PageEngine) -> None:
             channel.send({"id": reply.get("id"), "ok": False, "error": PROCESSING_FAILED, "detail": describe(exc)})
 
 
-def main() -> int:
+def _parse_arguments(argv: Sequence[str] | None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(prog="python -m scanmylib_ocr.worker")
+    parser.add_argument(
+        "--check", action="store_true", help="import the engine's libraries without loading a model, then exit"
+    )
+    return parser.parse_args(argv)
+
+
+def _check_libraries() -> int:
+    settings = Settings.from_env()
+    get_spec(settings.engine).create_engine(settings).import_libraries()
+    print(f"ok: the {settings.engine} engine's libraries import")
+    return 0
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    if _parse_arguments(argv).check:
+        return _check_libraries()
     read_fd, write_fd = _protocol_fds()
     # Whatever libraries print on stdout (from Python or C) joins the log stream.
     os.dup2(sys.stderr.fileno(), sys.stdout.fileno())

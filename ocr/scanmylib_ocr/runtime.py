@@ -78,6 +78,9 @@ class ChildProcess:
     def returncode(self) -> int | None:
         return self._process.poll()
 
+    def output_tail(self) -> list[str]:
+        return list(self._tail)
+
     def describe_exit(self) -> str:
         """Exit status and the exceptions found at the end of the output, for error messages.
 
@@ -85,7 +88,7 @@ class ChildProcess:
         failed. See root cause above": the root cause is an earlier exception
         line of the engine core, hence the search over the recent output.
         """
-        lines = list(self._tail)
+        lines = self.output_tail()
         exceptions: list[str] = []
         for line in lines:
             match = _EXCEPTION_LINE.search(line)

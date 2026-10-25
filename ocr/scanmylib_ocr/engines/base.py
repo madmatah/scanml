@@ -73,6 +73,11 @@ class PageEngine(abc.ABC):
     """Worker-side engine. One instance per worker process, used for one page at a time."""
 
     @abc.abstractmethod
+    def import_libraries(self) -> None:
+        """Import what ``load()`` and ``parse()`` need, but load no model: a deployment checks a new image with it,
+        before any page and without the GPU, which ``load()`` would take."""
+
+    @abc.abstractmethod
     def load(self) -> None:
         """Load models (the vLLM server, if any, may still be starting)."""
 
@@ -96,7 +101,11 @@ class EngineSpec(abc.ABC):
 
     @abc.abstractmethod
     def worker_command(self, settings: Settings) -> list[str]:
-        """Command starting the worker, normally ``<venv python> -m scanmylib_ocr.worker``."""
+        """Command starting the worker, normally ``<venv python> -m scanmylib_ocr.worker``.
+
+        With ``--check`` appended, it must exit 0 once the engine's libraries import, without loading a model or
+        opening the protocol's pipes: ``engine_environment`` checks a new image so, with no supervisor and no GPU.
+        """
 
     def vllm_serve_args(self, settings: Settings) -> list[str] | None:
         """Model-specific ``vllm serve`` arguments, or ``None`` when no server is needed.

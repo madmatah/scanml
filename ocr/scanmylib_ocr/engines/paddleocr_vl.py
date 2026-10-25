@@ -12,8 +12,10 @@ this module is also imported by the stdlib-only supervisor for ``SPEC``.
 
 from __future__ import annotations
 
+import importlib
 import logging
 import re
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 from .base import EngineSpec, PageBlock, PageEngine, PageOptions, PageResult
@@ -48,6 +50,13 @@ def _model_dir(settings: Settings) -> str:
 
 def _paddlex_model_dir(settings: Settings, name: str) -> str:
     return f"{settings.sandbox_dir}/paddlex/official_models/{name}"
+
+
+def _import_pipeline_class() -> Callable[..., Any]:
+    from paddleocr import PaddleOCRVL
+
+    pipeline_class: Callable[..., Any] = PaddleOCRVL
+    return pipeline_class
 
 
 class PaddleOCRVLSpec(EngineSpec):
@@ -101,9 +110,15 @@ class PaddleOCRVLEngine(PageEngine):
         self._settings = settings
         self._pipeline: Any = None
 
-    def load(self) -> None:
-        from paddleocr import PaddleOCRVL
+    def import_libraries(self) -> None:
+        _import_pipeline_class()
+        # PaddleOCR imports Paddle, and its native libraries, only once it builds a pipeline.
+        importlib.import_module("paddle")
+        importlib.import_module("numpy")
+        importlib.import_module(f"{__package__}.images")
 
+    def load(self) -> None:
+        pipeline_class = _import_pipeline_class()
         settings = self._settings
         options: dict[str, Any] = {
             "pipeline_version": PIPELINE_VERSION,
@@ -132,7 +147,7 @@ class PaddleOCRVLEngine(PageEngine):
                 vl_rec_model_name=PADDLEX_MODEL_NAME,
                 vl_rec_model_dir=_model_dir(settings),
             )
-        self._pipeline = PaddleOCRVL(**options)
+        self._pipeline = pipeline_class(**options)
         self._warm_up()
 
     def _warm_up(self) -> None:

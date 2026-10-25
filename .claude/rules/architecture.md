@@ -37,9 +37,10 @@ are tools: their logic lives in `scripts/lib/`, and they follow the rules of SOL
   the library's files, the OCR sandbox, the HTTP API of the PC, the camera, the clock.
 - **Only composition roots wire.** The entry points of each unit (the api's `scanmylib.__main__` and the application
   factory it calls, the app's `ScanMyLibApplication`, `AppContainer` and `MainActivity`, the web UI's `main.js`, the
-  sandbox's supervisor and worker) and the tests choose and connect the concrete adapters, by hand: written by hand, the
-  graph stays in one place and checked by the types, where a DI container would resolve it at run time, by tokens. No DI
-  container, no service locator, no singleton, and no module-level mutable state shared between callers.
+  sandbox's `supervisor`, `worker` and `engine_environment`) and the tests choose and connect the concrete adapters, by
+  hand: written by hand, the graph stays in one place and checked by the types, where a DI container would resolve it at
+  run time, by tokens. No DI container, no service locator, no singleton, and no module-level mutable state shared
+  between callers.
 - **Plain data crosses boundaries:** values whose types belong to the inner side. No framework or platform type crosses
   a port: no FastAPI request, no `sqlite3.Row`, no Android `Uri` or `Context`.
 - **A module's public API is its single entry point.** Everything else is internal, and nothing reaches inside another

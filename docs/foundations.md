@@ -165,7 +165,7 @@ The modules as they are, and the layer each one belongs to, whose directory the 
 | app | `model/`, `library/PageNumbering`, `library/PageLabel`, `library/PageRanges` | Document kinds, scan sources, scanner modes, theme modes, the PC's address; page numbering, the pages a page's label names, and the page ranges of the PC's coverage label | Domain |
 | app | `library/`, `pairing/`, `sync/`, `update/`, `settings/` | The library and its staging area, pairing, the upload queue, app updates, settings | Application, with their technology parts as adapters |
 | app | `api/`, `db/`, `diagnostics/`, `ui/` | Client of the PC, Room database, crash reports, Compose screens and view models | Adapters |
-| OCR sandbox | `supervisor`, `worker` | The HTTP API on the Unix socket, and the process that runs an engine | Composition roots |
+| OCR sandbox | `supervisor`, `worker`, `engine_environment` | The HTTP API on the Unix socket, the process that runs an engine, and the check that an engine's environment imports its libraries | Composition roots |
 | OCR sandbox | `protocol`, `engines/base` | Messages between supervisor and worker, the interface of an engine | Application |
 | OCR sandbox | `manager`, `runtime`, `config`, `gpu`, `client` | Engine lifecycle and page queue, engine processes, settings, GPU readings, a client of the socket | Application and adapters |
 | OCR sandbox | `engines/paddleocr_vl`, `engines/images` | PaddleOCR-VL-1.6, and its image handling | Adapters |

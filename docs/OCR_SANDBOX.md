@@ -175,16 +175,28 @@ supervisor (python3, stdlib)          HTTP on the Unix socket, FIFO queue, lifec
 - **Worker warm-up**: the worker runs its CNN models once on a blank page while
   vLLM starts. The first page after a start still takes ~8 s (mostly vLLM's first
   multimodal requests), then ~2 s.
+- **The check of the engine's environment**:
+  `python3 -m scanmylib_ocr.engine_environment` runs the worker command with
+  `--check`, with the GPU hidden (`CUDA_VISIBLE_DEVICES=""`) and no model. It
+  stops the worker's whole process group after 300 s, prints the last 50 lines
+  of its output, each character that is not printable, and the backslash, as
+  an escape such as `\x1b`, and exits 0 once the worker has imported the
+  engine's libraries, which `GET /health` never needs while the engine is
+  idle. It covers the worker's environment (`venv-paddle`), not vLLM's
+  (`venv-vllm`), the models or a page.
 
 ## Engines
 
 An engine is a module of `ocr/scanmylib_ocr/engines/` registered in its
 `__init__.py`. It provides an `EngineSpec` (stdlib only, read by the
 supervisor: worker command, model-specific `vllm serve` arguments, the
-`engine` object of results) and a `PageEngine` (worker side: `load()`,
-`parse(image_path, options)` returning the response fields above). Another
-vLLM-served OCR model is added by writing such a module, installing its
-weights with `ocr/setup/install.sh`, and selecting it with `OCR_ENGINE`.
+`engine` object of results) and a `PageEngine` (worker side:
+`import_libraries()`, `load()`, `parse(image_path, options)` returning the
+response fields above). Its worker command accepts `--check`: it then imports
+the engine's libraries with `import_libraries()`, without loading a model or
+opening the protocol's pipes, and exits 0. Another vLLM-served OCR model is
+added by writing such a module, installing its weights with
+`ocr/setup/install.sh`, and selecting it with `OCR_ENGINE`.
 
 ## Measurements (RTX 3090, 2026-10-12)
 

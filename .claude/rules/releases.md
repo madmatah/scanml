@@ -25,9 +25,18 @@ chooses.
   format.
 - **Nothing else is merged while a release pull request is open,** since a feature, a fix or a breaking change merged in
   between is missing from its notes, and the release workflow then publishes nothing.
-- **A release is tested before its pull request opens:** CI passes on the commit of `main` it releases, and so do the
-  OCR sandbox's unit tests that need an engine's environment, which CI does not have, in the sandbox's image with the
-  machine's sandbox, read-only and without network.
+- **A release is tested before it is published, and a deployment only checks the installation:** before its pull
+  request opens, CI passes on the commit of `main` it releases, the app's tests and lint included, and so do the OCR
+  sandbox's unit tests that need an engine's environment, which CI does not have, in the sandbox's image with the
+  machine's sandbox, read-only and without network. `scripts/deploy.sh` runs no test suite, and the release build of
+  `scripts/build-apk.sh` only assembles, signs and publishes the app, whose tests and lint every development build runs.
+  After its restart, `scripts/deploy.sh` checks the installation, not the code:
+  - the api is healthy and reports the release's version;
+  - `ocr` passes `scripts/verify-sandbox.sh`;
+  - the engine's worker imports its libraries in the new `ocr` container
+    (`python3 -m scanmylib_ocr.engine_environment`), with the GPU hidden and no model loaded.
+
+  A failed isolation or engine check stops `ocr`, and its images are not tagged `:deployed`.
 - **Tags and GitHub releases come only from `.github/workflows/release.yml`,** once the release pull request is merged.
   No script and no session tags.
 - **Production runs published releases only, from a clean checkout:** `scripts/deploy.sh`, `scripts/setup.sh` and the

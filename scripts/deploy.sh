@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 # Deploys a published release to production: the only way production changes (see CLAUDE.md).
 #
-# Usage: scripts/deploy.sh [--dry-run] [--skip-tests] [--apk] [--first-install] [--allow-downgrade]
+# Usage: scripts/deploy.sh [--dry-run] [--apk] [--first-install] [--allow-downgrade]
 #   --dry-run        check the preconditions and print every step without doing it
-#   --skip-tests     skip the server, web UI and OCR unit tests
 #   --apk            also build and publish the release APK (scripts/build-apk.sh)
 #   --first-install  production has no database yet (DATA_DIR/state/scanmylib.db)
 #   --allow-downgrade  deploy a release older than the one production runs, whose api must read
@@ -32,19 +31,23 @@
 #      containers get it whenever it names another, e.g. on the first run, or after a deploy that
 #      failed once the containers were recreated): rebuilding moves :latest, and docker then
 #      forgets the previous image unless a tag still names it
-#   2. unit tests of the new code and images: server (pytest in the api test image), web UI (node
-#      --test), OCR (unittest in the new ocr image). If anything fails before the restart, :latest
-#      goes back to :deployed: production is unchanged
-#   3. backup of DATA_DIR/state (without its thumbnail cache) into
+#   2. backup of DATA_DIR/state (without its thumbnail cache) into
 #      DATA_DIR/backups/state-<time>-v<version>/, the database copied with SQLite's online backup
 #      (consistent while the api runs) and checked, right before the restart (what changes in the
-#      seconds between the two is not in it); the 10 most recent backups are kept
-#   4. restart: docker compose up -d api ocr, waiting until both are healthy and the api reports
+#      seconds between the two is not in it); the 10 most recent backups are kept. If anything
+#      fails before the restart, :latest goes back to :deployed: production is unchanged
+#   3. restart: docker compose up -d api ocr, waiting until both are healthy and the api reports
 #      VERSION
-#   5. scripts/verify-sandbox.sh; if it fails, the OCR service is stopped. Once it passes, the new
-#      images become :deployed: production runs them
-#   6. with --apk: scripts/build-apk.sh (tests, release build, lint, signing, publication), then a check
-#      that /api/health offers the published APK
+#   4. scripts/verify-sandbox.sh; if it fails, the OCR service is stopped
+#   5. with the OCR sandbox (OCR_SERVICE=ocr): python3 -m scanmylib_ocr.engine_environment in the new
+#      ocr container, which imports the engine's libraries with the GPU hidden and no model loaded,
+#      bounded in time, its output discarded: only its exit status counts. If it fails, the OCR
+#      service is stopped. Once it passes (once step 4 passes on the fake OCR, which skips it), the
+#      new images become :deployed: production runs them
+#   6. with --apk: scripts/build-apk.sh (the release build, signing, publication), then a check that
+#      /api/health offers the published APK
+# It runs no test suite: the code of a release was tested before it was published
+# (.claude/rules/releases.md).
 # A real run ignores SIGHUP (a lost terminal does not stop it halfway) and is also logged to
 # DATA_DIR/logs/deploy-<time>.log. On failure, it says what state production is in after the
 # step that failed, and how to roll back (the :deployed images, the backup of the state).
@@ -65,11 +68,10 @@ usage() {
     exit 2
 }
 
-DRY_RUN=0 SKIP_TESTS=0 BUILD_APK=0 FIRST_INSTALL=0 ALLOW_DOWNGRADE=0
+DRY_RUN=0 BUILD_APK=0 FIRST_INSTALL=0 ALLOW_DOWNGRADE=0
 for arg in "$@"; do
     case $arg in
         --dry-run) DRY_RUN=1 ;;
-        --skip-tests) SKIP_TESTS=1 ;;
         --apk) BUILD_APK=1 ;;
         --first-install) FIRST_INSTALL=1 ;;
         --allow-downgrade) ALLOW_DOWNGRADE=1 ;;
@@ -79,6 +81,10 @@ done
 REHEARSAL=${SCANMYLIB_DEPLOY_REHEARSAL:-}
 ENV_FILE=$ROOT/.env
 readonly KEEP_BACKUPS=10
+# Above the bound that the check sets itself (CHECK_TIMEOUT_SECONDS in
+# ocr/scanmylib_ocr/engine_environment.py, and the time to stop its worker), so that docker exec ends
+# even when the container no longer answers: the two change together.
+readonly ENGINE_CHECK_BOUND_SECONDS=330
 cd "$ROOT"
 
 # One deploy at a time from this checkout: the lock comes before any check.
@@ -164,7 +170,6 @@ LIBRARY_DIR=${STACK[LIBRARY_DIR]:-}
 SANDBOX_DIR=${STACK[SANDBOX_DIR]:-}
 API_PORT=${STACK[API_PORT]:-8765}
 OCR_SERVICE=${STACK[OCR_SERVICE]:-ocr}
-UID_GID="${STACK[SCANMYLIB_UID]:-$(id -u)}:${STACK[SCANMYLIB_GID]:-$(id -g)}"
 
 # The stack's identity and paths, once .env could be read.
 if ((env_read)); then
@@ -217,8 +222,7 @@ if ((env_read)); then
     else
         fail "LIBRARY_DIR $LIBRARY_DIR is not a directory"
     fi
-    # The sandbox runs the OCR, and its venv runs the OCR unit tests.
-    if [[ $OCR_SERVICE == ocr ]] || ! ((SKIP_TESTS)); then
+    if [[ $OCR_SERVICE == ocr ]]; then
         if [[ -f $SANDBOX_DIR/MANIFEST.json ]]; then
             pass "OCR sandbox installed in $SANDBOX_DIR"
         else
@@ -323,8 +327,7 @@ if ! ((DRY_RUN)); then
     echo "Deploying $PROJECT $VERSION (${head_commit:0:12}) at $STAMP; log: $LOG"
 fi
 
-# Runs a command, or only prints it in a dry run.
-run() {
+print_command() {
     local shown=("$@") hint
     if [[ $1 == compose ]]; then
         read -ra hint <<< "$COMPOSE_HINT"
@@ -333,7 +336,27 @@ run() {
     printf '  %s' "$( ((DRY_RUN)) && echo 'would run:' || echo '$')"
     printf ' %q' "${shown[@]}"
     printf '\n'
+}
+
+# Runs a command, or only prints it in a dry run.
+run() {
+    print_command "$@"
     ((DRY_RUN)) || "$@"
+}
+
+# As run(), but nothing the command prints reaches the terminal or the log: what the sandbox prints is
+# untrusted, and a terminal interprets its control sequences.
+run_without_output() {
+    print_command "$@"
+    ((DRY_RUN)) || "$@" > /dev/null 2>&1
+}
+
+# Stops the OCR service that failed a check: no page reaches it.
+stop_ocr_and_die() {
+    local reason=$1 failure=$2
+    echo "  stopping $OCR_SERVICE, $reason"
+    compose stop "$OCR_SERVICE" || echo "  could not stop it: $COMPOSE_HINT stop $OCR_SERVICE"
+    die "$failure"
 }
 
 # Puts :latest back on the images of the last successful deploy.
@@ -371,7 +394,7 @@ on_exit() {
         printf '\nDEPLOY FAILED during the step "%s" (exit %s).\n' "$STEP" "$status"
         case $STEP in
             preconditions) ;;
-            images | tests | backup)
+            images | backup)
                 restore_deployed_images
                 echo "$WHO is unchanged: the previous containers still run, and the image tags point to the"
                 echo "previous images again. Fix the problem, then deploy again."
@@ -384,6 +407,15 @@ on_exit() {
             isolation)
                 echo "$WHO runs $VERSION, but its OCR service failed the isolation check (above) and was stopped:"
                 echo "pages wait in the queue. Fix the isolation and deploy again, or roll back."
+                rollback_help
+                ;;
+            engine)
+                echo "$WHO runs $VERSION, but the engine of its OCR service failed the check of its environment in"
+                echo "the new image, and the OCR service was stopped: pages wait in the queue. To see why, in $ROOT:"
+                echo "  $COMPOSE_HINT start $OCR_SERVICE"
+                echo "  $COMPOSE_HINT exec -T $OCR_SERVICE python3 -m scanmylib_ocr.engine_environment 2>&1 | cat -v"
+                echo "  $COMPOSE_HINT stop $OCR_SERVICE"
+                echo "Then fix the image or the sandbox and deploy again, or roll back."
                 rollback_help
                 ;;
             apk)
@@ -432,25 +464,8 @@ done
 echo "  the commit ${head_commit:0:12}, exported to $EXPORT"
 COMPOSE_ROOT=$EXPORT run compose build api ocr
 
-STEP=tests
-say "2. Unit tests of the new code and images"
-if ((SKIP_TESTS)); then
-    echo "  skipped (--skip-tests)"
-else
-    run docker build --target test -t "$IMAGE_PREFIX-api:test" "$EXPORT/server"
-    run docker run --rm --name "$IMAGE_PREFIX-deploy-pytest-$$" --network none --read-only --tmpfs /tmp \
-        "$IMAGE_PREFIX-api:test"
-    run docker run --rm --pull never --name "$IMAGE_PREFIX-deploy-webtest-$$" --network none --read-only \
-        --user "$(id -u):$(id -g)" -v "$EXPORT/server/scanmylib/web:/web:ro" \
-        node:22-bookworm-slim node --test '/web/tests/*.test.js'
-    run docker run --rm --pull never --name "$IMAGE_PREFIX-deploy-ocrtest-$$" --init --network none --read-only \
-        --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges:true --user "$UID_GID" \
-        -v "$EXPORT/ocr:/app:ro" -v "$SANDBOX_DIR:/opt/sandbox:ro" \
-        "$IMAGE_PREFIX-ocr:latest" /opt/sandbox/venv-paddle/bin/python -m unittest discover -s /app/tests
-fi
-
 STEP=backup
-say "3. Backup of the state"
+say "2. Backup of the state"
 BACKUP_NAME=state-$(date +%Y%m%d-%H%M%S.%N)-v$VERSION
 backup_state() {
     local state=$DATA_DIR/state backups=$DATA_DIR/backups
@@ -521,7 +536,7 @@ else
 fi
 
 STEP=restart
-say "4. Restart"
+say "3. Restart"
 if ((DRY_RUN)); then
     echo "  would read the version of the running api (http://127.0.0.1:$API_PORT/api/health)"
 else
@@ -548,13 +563,33 @@ else
 fi
 
 STEP=isolation
-say "5. Sandbox isolation"
+say "4. Sandbox isolation"
+ocr_container=
 if ((DRY_RUN)); then
     echo "  would run: scripts/verify-sandbox.sh on the $OCR_SERVICE container (and stop it if it fails)"
-elif ! scripts/verify-sandbox.sh "$(compose ps -q "$OCR_SERVICE" 2> /dev/null || true)"; then
-    echo "  stopping $OCR_SERVICE, which failed the isolation check"
-    compose stop "$OCR_SERVICE" || echo "  could not stop it: $COMPOSE_HINT stop $OCR_SERVICE"
-    die "scripts/verify-sandbox.sh failed"
+else
+    ocr_container=$(compose ps -q "$OCR_SERVICE" 2> /dev/null || true)
+    scripts/verify-sandbox.sh "$ocr_container" \
+        || stop_ocr_and_die "which failed the isolation check" "scripts/verify-sandbox.sh failed"
+fi
+
+# After the isolation check, so that no engine code runs in a sandbox that failed it.
+STEP=engine
+say "5. Engine's environment"
+if [[ $OCR_SERVICE != ocr ]]; then
+    echo "  skipped (the fake OCR runs no engine)"
+elif ((DRY_RUN)); then
+    echo "  would run: timeout --kill-after=10 $ENGINE_CHECK_BOUND_SECONDS docker exec <the ocr container> python3 -m \
+scanmylib_ocr.engine_environment, its output discarded (and stop it if it fails)"
+else
+    engine_check_status=0
+    run_without_output timeout --kill-after=10 "$ENGINE_CHECK_BOUND_SECONDS" \
+        docker exec "$ocr_container" python3 -m scanmylib_ocr.engine_environment || engine_check_status=$?
+    # timeout ends only the docker CLI: stopping the service ends the check inside it.
+    if ((engine_check_status)); then
+        stop_ocr_and_die "whose engine's environment failed its check (exit $engine_check_status)" \
+            "the check of the engine's environment failed (python3 -m scanmylib_ocr.engine_environment)"
+    fi
 fi
 # Production runs the new images: they are now the ones to put back.
 for service in api ocr; do

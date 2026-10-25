@@ -193,8 +193,9 @@ read the file before you do what its line says.
   responsibilities, stored and shared data, SOLID and organization.
 - `configuration.md`, for a build file, a lock, a Dockerfile, `compose.yaml`, CI, the configuration of a formatter,
   linter or type checker, Claude Code settings, skills or agents, before adding or upgrading a dependency, even with a
-  command that edits no file you read, and before giving a task to an agent: the units, dependencies and what pins them,
-  continuous integration, checks and Claude Code automation, the model and the effort of each agent included.
+  command that edits no file you read, and before giving a task to an agent or making a web request: the units,
+  dependencies and what pins them, continuous integration, checks and Claude Code automation, the model and the effort
+  of each agent, its worktree and its web requests included.
 - `sandbox.md`, for the OCR sandbox, `compose.yaml`, a Dockerfile, `.env.example`, the scripts, the `running-tests`
   skill, the app's manifest, and the api's code that reads the sandbox's results: the sandbox's isolation, wherever its
   image runs, containers and the host, and what keeps development stacks from production.

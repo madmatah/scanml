@@ -6,9 +6,9 @@ description: Takes a change to ScanMyLib from a new branch to a merged pull requ
 # Pull request
 
 `CLAUDE.md` > Workflow holds the rules this procedure applies. Below, `<base>` is `origin/main`, or the unmerged branch
-the work is stacked on, and `<worktree>` the branch's worktree, `~/Dev/scanmylib/.claude/worktrees/<topic>`. The shell
-may be back in the main checkout between two calls, where a rebase or a commit would move production's release
-(`CLAUDE.md` > Production): every command of the branch below starts with `cd <worktree> &&`. Write each file that this
+the work is stacked on, and `<worktree>` the branch's worktree, `~/Dev/scanmylib/.claude/worktrees/<topic>`. Every
+command of the branch below starts with `cd <worktree> &&`, as `.claude/rules/configuration.md` > Claude Code
+automation, "An agent given a worktree works only there" says. Write each file that this
 procedure names, such as a plan, the findings of a round or a commit message, with the Write tool, never through a
 shell: in a heredoc, or in `git commit -m "…"`, the backquoted text that findings, plans and messages quote runs as
 commands. Give git a
@@ -51,13 +51,12 @@ or a review shows it wrong:
 ## Write the code
 
 Write the code from the plan, or give it to an agent on Opus at `high`, as `.claude/rules/configuration.md` > Claude
-Code automation says, with the worktree, its base and the path of the plan, and this constraint: it works only in that
-worktree, apart from reading the plan and writing its commit messages where this skill says, and every command it runs
-starts with `cd <worktree> &&`, since its shell may be back in the main checkout,
-production's, between two calls (`CLAUDE.md` > Production). When the plan proves wrong, stop, and revise it as [Plan
-the work](#plan-the-work) says. If an agent was writing the code, commit or drop its work in progress, as
-the revised plan says, then give the rest to a new agent, with the revised plan and the commits so far: the one that
-stopped carries a context that only grows.
+Code automation says, with the worktree, its base and the path of the plan, and the bound that
+`.claude/rules/configuration.md` > Claude Code automation, "An agent given a worktree works only there" sets, which it
+reads before its first command, as the `fixer` agent does: it reads the plan, and writes each commit message where this
+skill says. When the plan proves wrong, stop, and revise it as [Plan the work](#plan-the-work) says. If an agent was
+writing the code, commit or drop its work in progress, as the revised plan says, then give the rest to a new agent, with
+the revised plan and the commits so far: the one that stopped carries a context that only grows.
 
 ## Stack on an unmerged branch
 

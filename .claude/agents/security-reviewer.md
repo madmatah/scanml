@@ -59,8 +59,10 @@ sandbox, `.claude/rules/documents.md` > Expert reviewers, and `CLAUDE.md` > Prod
   rules file changing with it and a stated reason.
 - **Claude Code automation** (`.claude/rules/configuration.md` > Claude Code automation, and
   `.claude/rules/documents.md` > Expert reviewers for the tools of an expert): a hook, a setting, a skill or an agent
-  that runs commands unsafely, gives a reviewing agent a shell, or widens permissions; and a skill or an agent whose
-  commands could run in the main checkout, production's, rather than in a worktree (`CLAUDE.md` > Production).
+  that runs commands unsafely, gives a reviewing agent a shell, or widens permissions; a skill or an agent whose
+  commands could run in the main checkout, production's, rather than in a worktree ("An agent given a worktree works
+  only there", and `CLAUDE.md` > Production); and an agent with WebFetch or WebSearch that "A web request carries only
+  public names" does not bind.
 
 Leave the isolation of the sandbox and of the development stacks to the sandbox expert, and the wording of documents to
 the documentation expert.

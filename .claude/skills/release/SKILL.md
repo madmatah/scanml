@@ -16,8 +16,9 @@ asks. Its worktree is removed after the merge, as any other.
 If the user gave an increment (`$ARGUMENTS`: `major`, `minor` or `patch`), use it instead of the one the commits give
 (`--bump`).
 
-Each block of commands below runs as one command: the shell may be back in the primary checkout, production's, between
-two calls, so each block starts by going where it works.
+Each block of commands below runs as one command, and each block starts by going where it works: a block in a worktree
+starts with `cd` to it, as `.claude/rules/configuration.md` > Claude Code automation, "An agent given a worktree works
+only there" says, and a block in the primary checkout with `cd ~/Dev/scanmylib`.
 
 ## Check that a release can start
 
@@ -106,7 +107,8 @@ cd ~/Dev/scanmylib/.claude/worktrees/release-vX.Y.Z && scripts/release.py --comm
 
 It writes `VERSION` and the section (dated today, UTC) and commits them as `chore(release): X.Y.Z` with the commit the
 notes were written on (trailer `Release-Base`). Apply the changes the user asked for to `CHANGELOG.md`, then
-`git add CHANGELOG.md && git commit --amend --no-edit`: the release stays one commit, with its trailer. Then:
+`cd ~/Dev/scanmylib/.claude/worktrees/release-vX.Y.Z && git add CHANGELOG.md && git commit --amend --no-edit`: the
+release stays one commit, with its trailer. Then:
 
 ```bash
 cd ~/Dev/scanmylib/.claude/worktrees/release-vX.Y.Z \
@@ -120,8 +122,9 @@ cd ~/Dev/scanmylib/.claude/worktrees/release-vX.Y.Z \
 The description is what merging does, then the notes exactly as they will be published, from the section as committed.
 Nothing else goes in it: the commits left out and the review are for the chat. Give the user the link.
 
-Later changes to the notes are made the same way, then `git push --force-with-lease`, and the description is regenerated
-so that it shows them:
+Later changes to the notes are made the same way, then
+`cd ~/Dev/scanmylib/.claude/worktrees/release-vX.Y.Z && git push --force-with-lease`, and the description is
+regenerated so that it shows them:
 
 ```bash
 cd ~/Dev/scanmylib/.claude/worktrees/release-vX.Y.Z \
@@ -136,7 +139,7 @@ breaking change merged in between is missing from the notes, and the workflow th
 ## Once the user says it is merged
 
 ```bash
-gh run list --workflow release.yml --limit 1
+cd ~/Dev/scanmylib && gh run list --workflow release.yml --limit 1
 gh release view vX.Y.Z
 ```
 

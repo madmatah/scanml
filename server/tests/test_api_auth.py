@@ -6,17 +6,23 @@ import contextlib
 import dataclasses
 import errno
 import functools
+import json
 import os
-from collections.abc import Callable
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any, Never, Self
 
 import pytest
+from fastapi.routing import APIRoute, iter_route_contexts
+from fastapi.testclient import TestClient
 from starlette.datastructures import FormData
 from starlette.formparsers import MultiPartParser
+from starlette.routing import BaseRoute, Mount
 
 from scanmylib import __version__
+from scanmylib.app import create_app
 from scanmylib.auth import load_or_create_token
 from scanmylib.images import MAX_UPLOAD_BYTES
 from scanmylib.middleware import CONTENT_SECURITY_POLICY
@@ -158,6 +164,66 @@ class OversizedUpload:
 class AnswersToUnencodableInput:
     login: Answer
     field_statuses: dict[str, int]
+
+
+@dataclass(frozen=True)
+class RouteRequest:
+    route: str
+    method: str
+    url: str
+
+
+@dataclass(frozen=True)
+class RouteRequests:
+    protected: tuple[RouteRequest, ...]
+    public: tuple[RouteRequest, ...]
+    unchecked_routes: tuple[str, ...]
+    route_count: int
+
+
+@dataclass(frozen=True)
+class RouteAnswers:
+    protected: dict[str, Answer]
+    public: dict[str, int]
+    unchecked_routes: list[str]
+    route_count: int
+
+
+def plan_route_requests(
+    routes: Sequence[BaseRoute],
+    public_routes: frozenset[str],
+    samples: Mapping[str, str],
+    mounted_file_name: str,
+) -> RouteRequests:
+    requests: list[RouteRequest] = []
+    unchecked_routes: list[str] = []
+    # FastAPI keeps each included router as one entry of app.routes: iter_route_contexts lists the routes it serves,
+    # as FastAPI's own OpenAPI schema reads them.
+    served_routes = list(iter_route_contexts(routes))
+    for route in served_routes:
+        if isinstance(route.original_route, APIRoute):
+            parameters = {name: samples[name] for name in route.param_convertors}
+            url = str(route.url_path_for(route.name, **parameters))
+            requests.extend(
+                RouteRequest(f"{method} {route.path}", method, url) for method in sorted(route.methods or ())
+            )
+        elif isinstance(route.original_route, Mount):
+            requests.append(RouteRequest(f"GET {route.path}/{{path:path}}", "GET", f"{route.path}/{mounted_file_name}"))
+        else:
+            unchecked_routes.append(repr(route.original_route))
+    return RouteRequests(
+        protected=tuple(request for request in requests if request.route not in public_routes),
+        public=tuple(request for request in requests if request.route in public_routes),
+        unchecked_routes=tuple(unchecked_routes),
+        route_count=len(served_routes),
+    )
+
+
+def read_json_or_none(body: str) -> object:
+    try:
+        return json.loads(body)
+    except json.JSONDecodeError:
+        return None
 
 
 @pytest.fixture(scope="module")
@@ -336,6 +402,79 @@ class TestTheAuthentication:
             ]
             assert len(answers) == 16
             assert unexplained_routes == []
+
+    class TestWhenAnyRouteIsRequestedWithoutACredential:
+        #: The routes that answer without a credential, as docs/SECURITY.md > On the local network lists them.
+        PUBLIC_ROUTES = frozenset(
+            {
+                "GET /",
+                "GET /api/health",
+                "POST /api/session",
+                "DELETE /api/session",
+                "GET /download/scanmylib.apk",
+                "GET /static/{path:path}",
+            }
+        )
+        PATH_PARAMETER_SAMPLES = MappingProxyType(
+            {"document_id": DOCUMENT_ID, "page_id": PAGE_ID, "path": "document.md"}
+        )
+        MOUNTED_FILE_NAME = "app.js"
+
+        @pytest.fixture(scope="class")
+        @classmethod
+        def answers(cls, tmp_path_factory: pytest.TempPathFactory) -> RouteAnswers:
+            with (
+                preparing_settings(tmp_path_factory.mktemp("api")) as settings,
+                serving_fake_ocr(settings.ocr_socket),
+            ):
+                static = settings.web_dir / "static"
+                static.mkdir(parents=True)
+                (static / cls.MOUNTED_FILE_NAME).write_text("console.log('ok')")
+                app = create_app(settings)
+                requests = plan_route_requests(
+                    app.routes, cls.PUBLIC_ROUTES, cls.PATH_PARAMETER_SAMPLES, cls.MOUNTED_FILE_NAME
+                )
+                with TestClient(app) as client:
+                    protected = {
+                        request.route: client.request(request.method, request.url) for request in requests.protected
+                    }
+                    public = {request.route: client.request(request.method, request.url) for request in requests.public}
+                return RouteAnswers(
+                    protected={
+                        route: Answer(response.status_code, response.text) for route, response in protected.items()
+                    },
+                    public={route: response.status_code for route, response in public.items()},
+                    unchecked_routes=list(requests.unchecked_routes),
+                    route_count=requests.route_count,
+                )
+
+        def test_should_refuse_every_route_but_the_public_ones(self, answers: RouteAnswers) -> None:
+            granted_routes = [route for route, answer in answers.protected.items() if answer.status != 401]
+            assert len(answers.protected) == 23
+            assert granted_routes == []
+
+        def test_should_say_that_the_request_is_unauthorized(self, answers: RouteAnswers) -> None:
+            unexplained_routes = [
+                route
+                for route, answer in answers.protected.items()
+                if read_json_or_none(answer.body) != {"detail": "unauthorized"}
+            ]
+            assert len(answers.protected) == 23
+            assert unexplained_routes == []
+
+        def test_should_find_each_public_route_among_the_routes_of_the_api(self, answers: RouteAnswers) -> None:
+            assert sorted(answers.public) == sorted(self.PUBLIC_ROUTES)
+
+        def test_should_not_refuse_the_public_routes_for_want_of_a_credential(self, answers: RouteAnswers) -> None:
+            refused_routes = [route for route, status in answers.public.items() if status == 401]
+            assert len(answers.public) == 6
+            assert refused_routes == []
+
+        def test_should_know_the_kind_of_every_route_so_that_none_escapes_the_check(
+            self, answers: RouteAnswers
+        ) -> None:
+            assert answers.unchecked_routes == []
+            assert answers.route_count == 29
 
     class TestWhenARequestCarriesTheBearerToken:
         @pytest.fixture(scope="class")

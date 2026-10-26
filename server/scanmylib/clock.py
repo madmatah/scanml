@@ -1,4 +1,4 @@
-"""Timestamps: ISO-8601 with offset in the API, in the server's local time zone (TZ)."""
+"""The wall clock, in the server's local time zone (TZ), and the times that clients send."""
 
 from __future__ import annotations
 
@@ -7,10 +7,6 @@ from datetime import datetime
 
 def now() -> datetime:
     return datetime.now().astimezone()
-
-
-def iso(moment: datetime) -> str:
-    return moment.isoformat(timespec="seconds")
 
 
 def parse_client_time(text: str) -> datetime:
@@ -24,8 +20,3 @@ def parse_client_time(text: str) -> datetime:
     if not 2000 <= moment.year <= 2200:
         raise ValueError("year out of range")
     return moment
-
-
-def compact(moment: datetime) -> str:
-    """``YYYYMMDD-HHMMSS`` in the moment's own offset (page keys, trash folders)."""
-    return moment.strftime("%Y%m%d-%H%M%S")

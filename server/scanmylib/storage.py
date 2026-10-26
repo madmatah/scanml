@@ -16,6 +16,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 
 from . import clock
+from .domain import timestamps
 
 TRASH_DIR = ".trash"
 DOCUMENT_MARKDOWN = "document.md"
@@ -114,7 +115,7 @@ class LibraryFiles:
         """
         previous = self._page_outputs(slug, key)
         if previous:
-            self._move_to_trash(slug, previous, f"{slug}-{clock.compact(clock.now())}-ocr-{key}")
+            self._move_to_trash(slug, previous, f"{slug}-{timestamps.compact(clock.now())}-ocr-{key}")
         folder = self.document_dir(slug)
         for filename, data in images:
             atomic_write(folder / "images" / filename, data)
@@ -129,7 +130,7 @@ class LibraryFiles:
             files.append(scan)
         if not files:
             return None
-        return self._move_to_trash(slug, files, f"{slug}-{clock.compact(clock.now())}-page-{key}")
+        return self._move_to_trash(slug, files, f"{slug}-{timestamps.compact(clock.now())}-page-{key}")
 
     # -- documents ---------------------------------------------------------
 
@@ -138,7 +139,7 @@ class LibraryFiles:
         folder = self.document_dir(slug)
         if not folder.exists():
             return None
-        target = self._unique_trash_dir(f"{slug}-{clock.compact(clock.now())}")
+        target = self._unique_trash_dir(f"{slug}-{timestamps.compact(clock.now())}")
         os.rename(folder, target)
         return target
 

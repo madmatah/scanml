@@ -17,6 +17,7 @@ Everything runs in Docker; nothing is installed on the host.
 | `domain/ordering.py` | page numbers (arabic, roman, spreads), inference, duplicates, placement and reading order, positions for a manual order, coverage |
 | `domain/assemble.py`, `publisher.py` | `document.md`, `document.json`, `INDEX.md`, `library.json` |
 | `domain/text.py` | user-entered text, slugs, collation |
+| `domain/timestamps.py` | moments written as text, in the API and in the names of keys and folders |
 | `storage.py` | library folder: atomic writes, `.trash/`, safe file resolution |
 | `sanitize.py`, `preview.py` | untrusted OCR Markdown → safe Markdown; Markdown → allowlisted HTML |
 | `images.py` | Pillow: upload checks, thumbnails, image sent to the sandbox, re-encoded illustrations |

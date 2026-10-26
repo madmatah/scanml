@@ -1,4 +1,5 @@
-"""The rows of the SQLite database, read into the records of documents and pages."""
+"""The rows of the SQLite database, read into the records of documents and pages, and the summary of a document's layout
+written into them."""
 
 from __future__ import annotations
 
@@ -6,6 +7,7 @@ import json
 import sqlite3
 from collections.abc import Mapping
 
+from ...domain.documents import LayoutSummary
 from ...domain.ordering import Coverage, PageNumber
 from ...domain.records import DocumentRecord, DocumentStats, PageClaim, PageRecord
 
@@ -19,6 +21,25 @@ def build_document_stats(stats: Mapping[str, int]) -> DocumentStats:
         error_count=stats.get("error", 0),
         excluded_count=stats.get("excluded", 0),
         duplicate_count=stats.get("duplicates", 0),
+    )
+
+
+def encode_layout_summary(summary: LayoutSummary) -> str:
+    return json.dumps(
+        {
+            "stats": {
+                "pages": summary.stats.page_count,
+                "done": summary.stats.done_count,
+                "queued": summary.stats.queued_count,
+                "processing": summary.stats.processing_count,
+                "error": summary.stats.error_count,
+                "excluded": summary.stats.excluded_count,
+                "duplicates": summary.stats.duplicate_count,
+            },
+            "coverage": summary.coverage.to_json(),
+            "cover_page_id": summary.cover_page_id,
+            "pages_in_document": summary.pages_in_document,
+        }
     )
 
 

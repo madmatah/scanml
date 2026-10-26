@@ -22,10 +22,11 @@ from pathlib import Path
 
 from . import clock, images
 from .adapters.sqlite.database import Database
-from .adapters.sqlite.rows import build_document_record, build_page_claim, build_page_record
+from .adapters.sqlite.rows import build_document_record, build_page_claim, build_page_record, encode_layout_summary
 from .config import Settings
 from .debounce import DebouncedBatch
 from .domain import ordering, timestamps
+from .domain.documents import summarize_layout
 from .domain.records import (
     DEFAULT_KIND,
     UNCHANGED,
@@ -589,8 +590,8 @@ class LibraryService:
     def _refresh_layout(self, document_id: str) -> None:
         """Recompute numbering/order/coverage of a document and store it (in a transaction)."""
         rows = self._db.all("SELECT * FROM pages WHERE document_id = ?", (document_id,))
-        pages = [build_page_record(row) for row in rows]
-        layout = ordering.compute_layout([page.ordering_input for page in pages])
+        inputs = [build_page_record(row).ordering_input for row in rows]
+        layout = ordering.compute_layout(inputs)
         for row in rows:
             placement = layout.placements[row["id"]]
             number = placement.number
@@ -611,19 +612,8 @@ class LibraryService:
                     f"UPDATE pages SET {assignments} WHERE id = ?",  # noqa: S608 (column names from the code, values as ? parameters)
                     (*values, row["id"]),
                 )
-        stats = {
-            "pages": len(pages),
-            **{status: sum(p.status == status for p in pages) for status in ("done", "queued", "processing", "error")},
-            "excluded": sum(p.excluded for p in pages),
-            "duplicates": sum(placement.duplicate_of is not None for placement in layout.placements.values()),
-        }
-        summary = {
-            "stats": stats,
-            "coverage": layout.coverage.to_json(),
-            "cover_page_id": layout.order[0] if layout.order else None,
-            "pages_in_document": len(layout.reading_order),
-        }
-        self._db.execute("UPDATE documents SET layout = ? WHERE id = ?", (json.dumps(summary), document_id))
+        summary = encode_layout_summary(summarize_layout(inputs, layout))
+        self._db.execute("UPDATE documents SET layout = ? WHERE id = ?", (summary, document_id))
 
     async def _assemble(self, document_ids: set[str], index: bool) -> None:
         for document_id in sorted(document_ids):

@@ -1,4 +1,4 @@
-"""Image handling (images.py): uploads, thumbnails, OCR input, sandbox illustrations."""
+"""The Pillow images (adapters/pillow_images.py): uploads, thumbnails, OCR input, sandbox illustrations."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from typing import NamedTuple, cast
 import pytest
 from PIL import Image
 
-from scanmylib import images
+from scanmylib.adapters import pillow_images
 from scanmylib.application.scan_images import ImageRejected, ImageTooLarge, ScanInfo
 from support import BROKEN_EXIF, CORRUPT_PNGS, encoded, jpeg, mpo, png
 
@@ -45,7 +45,7 @@ def truncate(image_bytes: bytes) -> bytes:
 
 
 def ingest(image_bytes: bytes) -> IngestedScan:
-    scan_info, thumbnail = images.ingest_scan(image_bytes)
+    scan_info, thumbnail = pillow_images.ingest_scan(image_bytes)
     return IngestedScan(scan_info=scan_info, thumbnail=open_image(thumbnail))
 
 
@@ -55,7 +55,7 @@ def write_scan(folder: Path, scan: ScanFile) -> Path:
     return path
 
 
-class TestTheImages:
+class TestThePillowImages:
     class TestTheIngestScanFunction:
         class TestWhenTheScanIsALargeJpeg:
             @pytest.fixture
@@ -72,7 +72,7 @@ class TestTheImages:
             def test_should_bring_the_longest_side_of_the_thumbnail_down_to_its_limit(
                 self, ingested_scan: IngestedScan
             ) -> None:
-                assert max(ingested_scan.thumbnail.size) == images.THUMB_MAX_SIDE
+                assert max(ingested_scan.thumbnail.size) == pillow_images.THUMB_MAX_SIDE
 
         class TestWhenTheExifOrientationOfTheScanTurnsItAQuarterTurn:
             @pytest.fixture
@@ -141,7 +141,7 @@ class TestTheImages:
                 assert (scan_info.ext, scan_info.width, scan_info.height) == ("jpg", 640, 480)
 
             def test_should_be_served_as_a_jpeg(self, ingested_scan: IngestedScan) -> None:
-                assert images.SCAN_MEDIA_TYPES[ingested_scan.scan_info.ext] == "image/jpeg"
+                assert pillow_images.SCAN_MEDIA_TYPES[ingested_scan.scan_info.ext] == "image/jpeg"
 
             def test_should_make_a_thumbnail_of_its_first_picture(self, ingested_scan: IngestedScan) -> None:
                 assert ingested_scan.thumbnail.size == (480, 360)
@@ -181,7 +181,7 @@ class TestTheImages:
             )
             def ingest_the_file(self, request: pytest.FixtureRequest) -> Callable[[], object]:
                 image_bytes: bytes = request.param
-                return lambda: images.ingest_scan(image_bytes)
+                return lambda: pillow_images.ingest_scan(image_bytes)
 
             def test_should_reject_it(self, ingest_the_file: Callable[[], object]) -> None:
                 with pytest.raises(ImageRejected, match=NOT_A_JPEG_PNG_OR_WEBP_IMAGE):
@@ -194,7 +194,7 @@ class TestTheImages:
             )
             def ingest_the_file(self, request: pytest.FixtureRequest) -> Callable[[], object]:
                 image_bytes: bytes = request.param
-                return lambda: images.ingest_scan(image_bytes)
+                return lambda: pillow_images.ingest_scan(image_bytes)
 
             def test_should_reject_it(self, ingest_the_file: Callable[[], object]) -> None:
                 with pytest.raises(ImageRejected, match=CORRUPT_IMAGE):
@@ -204,7 +204,7 @@ class TestTheImages:
             @pytest.fixture
             def ingest_the_file(self) -> Callable[[], object]:
                 bomb_of_121_million_pixels_in_a_few_kilobytes = png(11_000, 11_000, mode="1")
-                return lambda: images.ingest_scan(bomb_of_121_million_pixels_in_a_few_kilobytes)
+                return lambda: pillow_images.ingest_scan(bomb_of_121_million_pixels_in_a_few_kilobytes)
 
             def test_should_reject_it_before_decoding_it(self, ingest_the_file: Callable[[], object]) -> None:
                 with pytest.raises(ImageTooLarge, match="image too large"):
@@ -230,7 +230,7 @@ class TestTheImages:
             @pytest.fixture
             def thumbnail(self, tmp_path: Path) -> Image.Image:
                 scan = write_scan(tmp_path, ScanFile(jpeg(1000, 500), "jpg"))
-                return open_image(images.make_thumbnail(scan, 270))
+                return open_image(pillow_images.make_thumbnail(scan, 270))
 
             def test_should_turn_the_thumbnail_too(self, thumbnail: Image.Image) -> None:
                 assert thumbnail.size == (240, 480)
@@ -240,7 +240,7 @@ class TestTheImages:
                 params=list(SCANS_WITH_AN_UNREADABLE_EXIF_BLOCK.values()), ids=list(SCANS_WITH_AN_UNREADABLE_EXIF_BLOCK)
             )
             def thumbnail(self, request: pytest.FixtureRequest, tmp_path: Path) -> Image.Image:
-                return open_image(images.make_thumbnail(write_scan(tmp_path, request.param), 90))
+                return open_image(pillow_images.make_thumbnail(write_scan(tmp_path, request.param), 90))
 
             def test_should_turn_its_pixels_as_the_user_asked(self, thumbnail: Image.Image) -> None:
                 assert thumbnail.size == (200, 300)
@@ -259,7 +259,7 @@ class TestTheImages:
                     source, "JPEG", quality=100, exif=exif.tobytes(), comment=b"secret", icc_profile=b"x" * 64
                 )
                 scan = write_scan(tmp_path, ScanFile(with_metadata, "jpg"))
-                return open_image(images.prepare_for_ocr(scan, 90, max_side=4096))
+                return open_image(pillow_images.prepare_for_ocr(scan, 90, max_side=4096))
 
             def test_should_turn_its_size(self, prepared_image: Image.Image) -> None:
                 assert prepared_image.size == (200, 300)
@@ -278,7 +278,7 @@ class TestTheImages:
             @pytest.fixture
             def prepared_image(self, tmp_path: Path) -> Image.Image:
                 scan = write_scan(tmp_path, ScanFile(jpeg(5000, 3000), "jpg"))
-                return open_image(images.prepare_for_ocr(scan, 0, max_side=1000))
+                return open_image(pillow_images.prepare_for_ocr(scan, 0, max_side=1000))
 
             def test_should_scale_it_down_to_the_limit(self, prepared_image: Image.Image) -> None:
                 assert prepared_image.size == (1000, 600)
@@ -287,7 +287,7 @@ class TestTheImages:
             @pytest.fixture
             def prepared_image(self, tmp_path: Path) -> Image.Image:
                 scan = write_scan(tmp_path, ScanFile(mpo(640, 480), "jpg"))
-                return open_image(images.prepare_for_ocr(scan, 0, max_side=4096))
+                return open_image(pillow_images.prepare_for_ocr(scan, 0, max_side=4096))
 
             def test_should_send_its_first_picture(self, prepared_image: Image.Image) -> None:
                 assert prepared_image.size == (640, 480)
@@ -297,7 +297,7 @@ class TestTheImages:
                 params=list(SCANS_WITH_AN_UNREADABLE_EXIF_BLOCK.values()), ids=list(SCANS_WITH_AN_UNREADABLE_EXIF_BLOCK)
             )
             def prepared_image(self, request: pytest.FixtureRequest, tmp_path: Path) -> Image.Image:
-                return open_image(images.prepare_for_ocr(write_scan(tmp_path, request.param), 0, max_side=4096))
+                return open_image(pillow_images.prepare_for_ocr(write_scan(tmp_path, request.param), 0, max_side=4096))
 
             def test_should_send_its_pixels_as_they_are(self, prepared_image: Image.Image) -> None:
                 assert prepared_image.size == (300, 200)
@@ -307,7 +307,7 @@ class TestTheImages:
             @pytest.fixture
             def illustration(self) -> Image.Image:
                 return open_image(
-                    images.reencode_ocr_image(encoded(Image.new("RGBA", (64, 48), (10, 20, 30, 128)), "PNG"))
+                    pillow_images.reencode_ocr_image(encoded(Image.new("RGBA", (64, 48), (10, 20, 30, 128)), "PNG"))
                 )
 
             def test_should_reencode_it_as_a_plain_red_green_blue_jpeg(self, illustration: Image.Image) -> None:
@@ -323,7 +323,7 @@ class TestTheImages:
             )
             def reencode_the_illustration(self, request: pytest.FixtureRequest) -> Callable[[], object]:
                 image_bytes: bytes = request.param
-                return lambda: images.reencode_ocr_image(image_bytes)
+                return lambda: pillow_images.reencode_ocr_image(image_bytes)
 
             def test_should_reject_it(self, reencode_the_illustration: Callable[[], object]) -> None:
                 with pytest.raises(ImageTooLarge, match="image too large"):
@@ -332,8 +332,8 @@ class TestTheImages:
         class TestWhenTheIllustrationIsLargerThanTwentyMebibytes:
             @pytest.fixture
             def reencode_the_illustration(self) -> Callable[[], object]:
-                oversized = b"x" * (images.MAX_OCR_IMAGE_BYTES + 1)
-                return lambda: images.reencode_ocr_image(oversized)
+                oversized = b"x" * (pillow_images.MAX_OCR_IMAGE_BYTES + 1)
+                return lambda: pillow_images.reencode_ocr_image(oversized)
 
             def test_should_reject_it_before_reading_it(self, reencode_the_illustration: Callable[[], object]) -> None:
                 with pytest.raises(ImageTooLarge, match="illustration larger than 20 MiB"):
@@ -346,7 +346,7 @@ class TestTheImages:
             )
             def reencode_the_illustration(self, request: pytest.FixtureRequest) -> Callable[[], object]:
                 image_bytes: bytes = request.param
-                return lambda: images.reencode_ocr_image(image_bytes)
+                return lambda: pillow_images.reencode_ocr_image(image_bytes)
 
             def test_should_reject_it(self, reencode_the_illustration: Callable[[], object]) -> None:
                 with pytest.raises(ImageRejected, match=NOT_A_JPEG_PNG_OR_WEBP_IMAGE):
@@ -356,7 +356,7 @@ class TestTheImages:
             @pytest.fixture(params=list(CORRUPT_PNGS.values()), ids=[f"a png with {name}" for name in CORRUPT_PNGS])
             def reencode_the_illustration(self, request: pytest.FixtureRequest) -> Callable[[], object]:
                 image_bytes: bytes = request.param
-                return lambda: images.reencode_ocr_image(image_bytes)
+                return lambda: pillow_images.reencode_ocr_image(image_bytes)
 
             def test_should_reject_it(self, reencode_the_illustration: Callable[[], object]) -> None:
                 with pytest.raises(ImageRejected, match=CORRUPT_IMAGE):

@@ -50,8 +50,9 @@ Read first: `.claude/rules/architecture.md` and `.claude/rules/configuration.md`
 - **Nothing hard-deleted** (`.claude/rules/architecture.md` > Responsibilities): a deletion from the library that does
   not move the document or the page to `LIBRARY_DIR/.trash/`.
 - **Code written before the layers** (`.claude/rules/architecture.md` > Layers, "The code written before these layers
-  keeps its layout until it is restructured"): a new module outside the layers, or a change to an older module that adds
-  a coupling the layers forbid. The layout of an older module is no finding by itself.
+  keeps its layout until it is restructured"): a new module outside the layers, a module in a layer's directory that
+  imports one still outside them, or a change to an older module that adds a coupling the layers forbid. The layout of
+  an older module is no finding by itself.
 
 ## SOLID
 

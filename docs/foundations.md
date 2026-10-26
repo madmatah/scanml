@@ -159,8 +159,8 @@ The modules as they are, and the layer each one belongs to, whose directory the 
 | api | `adapters/sqlite/database`, `adapters/sqlite/rows` | SQLite state, its rows read into records, and the summary of a document's layout written as JSON | Adapters |
 | api | `storage`, `export` | The library's files, atomic writes and trash; zip archives | Adapters |
 | api | `ocr_client`, `ocr_result` | Client of the sandbox protocol, and validation of its untrusted results | Adapters |
-| api | `images`, `sanitize`, `qr`, `clock`, `published_apk` | Pillow, the Markdown sanitizer, QR codes, the wall clock and the times clients send, the published APK's metadata | Adapters |
-| api | `api/`, `auth`, `middleware` | HTTP routes, authentication, security headers and body limits | Adapters |
+| api | `images`, `sanitize`, `qr`, `clock`, `published_apk` | Pillow, the Markdown sanitizer, QR codes, the wall clock, the published APK's metadata | Adapters |
+| api | `api/`, `auth`, `middleware` | HTTP routes, the times that clients send, authentication, security headers and body limits | Adapters |
 | api | `devtools/fake_ocr` | The fake OCR sandbox of the development stack and the tests | Test support |
 | web UI | `main.js` | Entry point | Composition root |
 | web UI | `lib/order.js`, `lib/reading.js`, `lib/math.js`, `lib/format.js`, `lib/labels.js` | Ordering, reading view, formulas, formatting and labels | Domain |

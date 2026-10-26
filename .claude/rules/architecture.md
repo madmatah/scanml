@@ -22,9 +22,10 @@ are tools: their logic lives in `scripts/lib/`, and they follow the rules of SOL
   depends only on the domain, the application on the domain, the adapters on the application and the domain, and the
   composition roots on every layer. A library of plain values that does no I/O and reads no clock may serve any layer.
 - **No dependency cycle,** between modules of the same layer included.
-- **The api reaches the OCR engine only through the sandbox protocol** (`docs/OCR_SANDBOX.md`): its OCR port, which the
-  sandbox implements in its own process, and the fake OCR in the development stack. The api never depends on a
-  particular engine or model, so that another one can be plugged in by implementing a new worker.
+- **The api reaches the OCR engine only through the sandbox protocol** (`docs/OCR_SANDBOX.md`), behind the application's
+  OCR port: the sandbox implements the protocol in its own process, and so does the fake OCR in the development stack.
+  The api never depends on a particular engine or model, so that another one can be plugged in by implementing a new
+  worker.
 - **The code written before these layers keeps its layout until it is restructured,** which is planned for the api, the
   app and the web UI, not yet for the OCR sandbox. Until then, a new module follows the layers, and a change to an older
   one adds no coupling that they forbid: no technology reached from code that holds a rule, no rule in an adapter, no
@@ -84,9 +85,9 @@ are tools: their logic lives in `scripts/lib/`, and they follow the rules of SOL
   the responsibilities are mixed.
 - **Open for extension.** A new case is added as data, or beside the existing cases, without rewriting the code that
   handles them.
-- **Substitutable implementations.** Every implementation of a port, the fakes of the tests and the fake OCR included,
-  honors its whole contract: units, ordering, errors, missing values. The application behaves the same on a fake and on
-  the real adapter.
+- **Substitutable implementations.** Every implementation of a port, the fakes of the tests included, and of the sandbox
+  protocol, the fake OCR included, honors its whole contract: units, ordering, errors, missing values. The application
+  behaves the same on a fake and on the real adapter.
 - **Narrow ports.** A port offers only what its client uses, in the client's vocabulary, and nothing depends on methods
   it does not call.
 - **Dependency inversion.** Policy depends on the abstractions it owns, the ports of the inner layers, never on a

@@ -13,9 +13,8 @@ import binascii
 import logging
 import math
 import re
-from dataclasses import dataclass
-from typing import TypedDict
 
+from ...application.ocr_engine import Block, OcrResultError, OutputImage, PageOcrOutput, RawOcrResult, RejectedImage
 from ...application.scan_images import ImageRejected
 from ..pillow_images import MAX_OCR_IMAGE_BYTES, reencode_ocr_image
 from .sanitize import MarkdownTooLarge, is_safe_image_name, sanitize_markdown
@@ -34,65 +33,6 @@ _SHORT_TEXT = re.compile(r"[^\x20-\x7e\u00a0-\u024f]")
 _NOT_IDENTIFIER = re.compile(r"[^A-Za-z0-9 ._+-]")
 _LEADING_NUMBER = re.compile(r"\s*([0-9]{1,4})\b")
 _TRAILING_NUMBER = re.compile(r"\b([0-9]{1,4})\s*$")
-
-
-class OcrResultError(ValueError):
-    """The sandbox response is not acceptable."""
-
-
-class _Block(TypedDict):
-    label: str
-    content: str
-    bbox: list[float] | None
-    order: int | None
-
-
-class _ImageFile(TypedDict):
-    name: str
-    file: str
-
-
-class _RejectedImage(TypedDict):
-    name: str | None
-    reason: str
-
-
-class _Preprocessing(TypedDict):
-    angle: float | None
-    unwarped: bool
-
-
-class RawOcrResult(TypedDict):
-    key: str
-    request_id: str | None
-    width: int | None
-    height: int | None
-    engine: dict[str, str | None]
-    timings: dict[str, float | None]
-    preprocess: _Preprocessing | None
-    page_continuation: dict[str, bool] | None
-    page_numbers: list[str]
-    images: list[_ImageFile]
-    rejected_images: list[_RejectedImage]
-    blocks: list[_Block]
-
-
-@dataclass(frozen=True)
-class OutputImage:
-    filename: str  # "<key>_<n>.jpg", stored under images/
-    data: bytes
-
-
-@dataclass(frozen=True)
-class PageOcrOutput:
-    """Everything to write for one page, already validated and sanitized."""
-
-    markdown: str  # image references: ../images/<key>_<n>.jpg
-    images: tuple[OutputImage, ...]
-    detected_numbers: tuple[str, ...]
-    engine: str  # e.g. "PaddleOCR-VL-1.6"
-    duration_s: float | None
-    raw: RawOcrResult  # content of ocr/<key>.json
 
 
 def _valid_text(value: str) -> str:
@@ -127,12 +67,12 @@ def _dimension(value: object) -> int | None:
     return value if isinstance(value, int) and not isinstance(value, bool) and 0 < value <= 100_000 else None
 
 
-def _blocks(value: object) -> list[_Block]:
+def _blocks(value: object) -> list[Block]:
     if value is None:
         return []
     if not isinstance(value, list) or len(value) > MAX_BLOCKS:
         raise OcrResultError("invalid blocks")
-    blocks: list[_Block] = []
+    blocks: list[Block] = []
     text_length = 0
     for item in value:
         if not isinstance(item, dict):
@@ -159,7 +99,7 @@ def _blocks(value: object) -> list[_Block]:
     return blocks
 
 
-def _page_number_strings(response: dict[str, object], blocks: list[_Block]) -> list[str]:
+def _page_number_strings(response: dict[str, object], blocks: list[Block]) -> list[str]:
     """Contents of page-number blocks, falling back to numbers starting or ending a header/footer."""
     reported = response.get("page_numbers")
     if isinstance(reported, list):
@@ -176,7 +116,7 @@ def _page_number_strings(response: dict[str, object], blocks: list[_Block]) -> l
     return numbers[:MAX_NUMBER_STRINGS]
 
 
-def _decode_images(value: object, key: str) -> tuple[list[OutputImage], dict[str, str], list[_RejectedImage]]:
+def _decode_images(value: object, key: str) -> tuple[list[OutputImage], dict[str, str], list[RejectedImage]]:
     """Re-encode the illustrations; return them, the name → file mapping and the rejects."""
     if value is None:
         value = []
@@ -186,7 +126,7 @@ def _decode_images(value: object, key: str) -> tuple[list[OutputImage], dict[str
         raise OcrResultError(f"more than {MAX_IMAGES} images")
     outputs: list[OutputImage] = []
     files: dict[str, str] = {}
-    rejected: list[_RejectedImage] = []
+    rejected: list[RejectedImage] = []
     for item in value:
         name = item.get("name") if isinstance(item, dict) else None
         if not isinstance(name, str) or not is_safe_image_name(name) or name in files:

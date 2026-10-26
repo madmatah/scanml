@@ -9,7 +9,7 @@ from urllib.parse import quote
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
 from .. import API_LEVEL, __version__
-from ..adapters.ocr_sandbox.client import OcrUnavailable
+from ..application.ocr_engine import OcrUnavailable
 from ..auth import SESSION_COOKIE, SESSION_MAX_AGE_S
 from ..domain.text import single_line
 from ..published_apk import APK_DOWNLOAD_PATH, published_apk

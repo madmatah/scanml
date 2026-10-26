@@ -8,7 +8,8 @@ from typing import Any
 
 import pytest
 
-from scanmylib.adapters.ocr_sandbox.client import OcrClient, OcrUnavailable
+from scanmylib.adapters.ocr_sandbox.client import OcrClient
+from scanmylib.application.ocr_engine import OcrUnavailable
 from scanmylib.devtools.fake_ocr import FakeOcrServer
 
 

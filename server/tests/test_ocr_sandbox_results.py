@@ -14,10 +14,9 @@ from scanmylib.adapters.ocr_sandbox.results import (
     MAX_BLOCK_CONTENT,
     MAX_BLOCKS_TEXT,
     MAX_IMAGES,
-    OcrResultError,
-    PageOcrOutput,
     build_page_output,
 )
+from scanmylib.application.ocr_engine import OcrResultError, PageOcrOutput
 from scanmylib.devtools.fake_ocr import ParseResponse, canned_page, evil_page
 from support import CORRUPT_PNGS
 

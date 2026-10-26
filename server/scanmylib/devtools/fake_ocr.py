@@ -24,8 +24,8 @@ production stack (SCANMYLIB_PROJECT=scanmylib, set by compose.yaml): production'
 library must only ever get the real OCR's results.
 
 Tests use `FakeOcrServer` in-process and adjust its attributes (`delay`,
-`unavailable`, `evil`, `status_body`, `fail_next`) and read `requests` /
-`load_requests`.
+`unavailable`, `evil`, `status_body`, `fail_next`, `parses_released`) and read
+`requests` / `load_requests`.
 """
 
 from __future__ import annotations
@@ -229,6 +229,9 @@ class FakeOcrServer:
         #: Raw body of every /health and /v1/load answer when set (hostile sandbox tests).
         self.status_body: bytes | None = None
         self.requests: list[ParseRequest] = []  # one entry per /v1/parse call
+        #: Lets a test change a page while the sandbox reads it, without waiting on time.
+        self.parses_released = threading.Event()
+        self.parses_released.set()
         self.load_requests = 0
         self._failures: list[int] = []
         self._state = "idle"
@@ -245,7 +248,6 @@ class FakeOcrServer:
     # -- knobs ---------------------------------------------------------------
 
     def fail_next(self, status: int, count: int = 1) -> None:
-        """Answer the next `count` parse requests with `status` (500 or 503)."""
         with self._state_lock:
             self._failures += [status] * count
 
@@ -311,6 +313,7 @@ class FakeOcrServer:
                     self._busy = True
                     failure = self._failures.pop(0) if self._failures else None
                     self.requests.append({"width": size[0], "height": size[1], "params": params})
+                self.parses_released.wait()
                 if self.unavailable or failure == 503:
                     return 503, {"error": "engine_unavailable", "detail": "fake engine disabled"}
                 if failure is not None:

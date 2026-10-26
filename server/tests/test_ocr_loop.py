@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import threading
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -9,10 +11,13 @@ import pytest
 from fastapi.testclient import TestClient
 
 from scanmylib.library import MAX_OCR_RETRIES
+from scanmylib.storage import LibraryFiles
 from support import (
     AUTH,
+    RunningApi,
     build_client,
     create_document,
+    jpeg,
     page_image,
     preparing_settings,
     read_until,
@@ -24,11 +29,33 @@ from support import (
 )
 
 QUEUED_PAGE_NUMBER = 8
+TURNED_PAGE_NUMBER = 204
+TURNED_SCAN_SIZE_PIXELS = (1500, 1000 + TURNED_PAGE_NUMBER)
+SIDEWAYS_SCAN_SIZE_PIXELS = (TURNED_SCAN_SIZE_PIXELS[1], TURNED_SCAN_SIZE_PIXELS[0])
+QUARTER_TURN_DEGREES = 90
+REPROCESSED_PAGE_NUMBER = 7
+REPROCESSED_SCAN_SIZE_PIXELS = (1200, 1000 + REPROCESSED_PAGE_NUMBER)
+REFUSAL_STATUS = 400
 
 
 def read_page(client: TestClient, page_id: str) -> dict[str, Any]:
     page: dict[str, Any] = client.get(f"/api/pages/{page_id}", headers=AUTH).json()
     return page
+
+
+@dataclass(frozen=True)
+class PageChangedDuringItsOcr:
+    page: dict[str, Any]
+    request_sizes_pixels: list[tuple[int, int]]
+    trashed_names: list[str]
+
+
+def capture_page_changed_during_its_ocr(api: RunningApi, page_id: str) -> PageChangedDuringItsOcr:
+    return PageChangedDuringItsOcr(
+        page=read_page(api.client, page_id),
+        request_sizes_pixels=[(request["width"], request["height"]) for request in api.fake_ocr.requests],
+        trashed_names=sorted(path.name for path in LibraryFiles(api.settings.library_dir).trash.iterdir()),
+    )
 
 
 @dataclass(frozen=True)
@@ -214,3 +241,126 @@ class TestTheOcrLoop:
             self, engine_loads: EngineLoads
         ) -> None:
             assert (engine_loads.before_work, engine_loads.once_work_is_queued) == (0, 1)
+
+    class TestWhenAPageIsRotatedWhileTheSandboxReadsIt:
+        @pytest.fixture(scope="class")
+        @classmethod
+        def rotated_page(cls, tmp_path_factory: pytest.TempPathFactory) -> PageChangedDuringItsOcr:
+            with running_api(tmp_path_factory.mktemp("api")) as api:
+                document_id = create_document(api.client)
+                api.fake_ocr.parses_released.clear()
+                try:
+                    page = upload(api.client, document_id, jpeg(*SIDEWAYS_SCAN_SIZE_PIXELS)).json()
+                    wait_for(lambda: api.fake_ocr.requests)
+                    api.client.patch(f"/api/pages/{page['id']}", json={"rotation": QUARTER_TURN_DEGREES}, headers=AUTH)
+                finally:
+                    api.fake_ocr.parses_released.set()
+                wait_until_processed(api.client, document_id)
+                return capture_page_changed_during_its_ocr(api, page["id"])
+
+        def test_should_drop_the_late_result_before_storing_any_of_it(
+            self, rotated_page: PageChangedDuringItsOcr
+        ) -> None:
+            assert rotated_page.trashed_names == []
+
+        def test_should_read_the_page_again_once_turned(self, rotated_page: PageChangedDuringItsOcr) -> None:
+            assert (rotated_page.page["status"], rotated_page.page["number"]) == ("done", TURNED_PAGE_NUMBER)
+
+        def test_should_send_it_again_turned(self, rotated_page: PageChangedDuringItsOcr) -> None:
+            assert rotated_page.request_sizes_pixels == [SIDEWAYS_SCAN_SIZE_PIXELS, TURNED_SCAN_SIZE_PIXELS]
+
+    class TestWhenAPageIsReprocessedWhileTheSandboxReadsIt:
+        @pytest.fixture(scope="class")
+        @classmethod
+        def reprocessed_page(cls, tmp_path_factory: pytest.TempPathFactory) -> PageChangedDuringItsOcr:
+            with running_api(tmp_path_factory.mktemp("api")) as api:
+                document_id = create_document(api.client)
+                api.fake_ocr.parses_released.clear()
+                try:
+                    page = upload(api.client, document_id, page_image(REPROCESSED_PAGE_NUMBER)).json()
+                    wait_for(lambda: api.fake_ocr.requests)
+                    api.client.post(f"/api/pages/{page['id']}/reprocess", headers=AUTH)
+                finally:
+                    api.fake_ocr.parses_released.set()
+                wait_until_processed(api.client, document_id)
+                return capture_page_changed_during_its_ocr(api, page["id"])
+
+        def test_should_drop_the_late_result_before_storing_any_of_it(
+            self, reprocessed_page: PageChangedDuringItsOcr
+        ) -> None:
+            assert reprocessed_page.trashed_names == []
+
+        def test_should_send_it_again(self, reprocessed_page: PageChangedDuringItsOcr) -> None:
+            assert reprocessed_page.request_sizes_pixels == [REPROCESSED_SCAN_SIZE_PIXELS, REPROCESSED_SCAN_SIZE_PIXELS]
+
+        def test_should_end_up_read_with_its_number(self, reprocessed_page: PageChangedDuringItsOcr) -> None:
+            assert (reprocessed_page.page["status"], reprocessed_page.page["number"]) == (
+                "done",
+                REPROCESSED_PAGE_NUMBER,
+            )
+
+    class TestWhenAPageIsRotatedWhileItsResultIsStored:
+        @pytest.fixture(scope="class")
+        @classmethod
+        def rotated_page(cls, tmp_path_factory: pytest.TempPathFactory) -> PageChangedDuringItsOcr:
+            writes: list[str] = []
+            writes_released = threading.Event()
+            write_page_outputs = LibraryFiles.write_page_outputs
+
+            def held_write_page_outputs(
+                self: LibraryFiles,
+                slug: str,
+                key: str,
+                markdown: str,
+                images: Sequence[tuple[str, bytes]],
+                raw: Mapping[str, object],
+            ) -> None:
+                writes.append(key)
+                writes_released.wait()
+                write_page_outputs(self, slug, key, markdown, images, raw)
+
+            with pytest.MonkeyPatch.context() as patch, running_api(tmp_path_factory.mktemp("api")) as api:
+                patch.setattr(LibraryFiles, "write_page_outputs", held_write_page_outputs)
+                document_id = create_document(api.client)
+                try:
+                    page = upload(api.client, document_id, jpeg(*SIDEWAYS_SCAN_SIZE_PIXELS)).json()
+                    wait_for(lambda: writes)
+                    api.client.patch(f"/api/pages/{page['id']}", json={"rotation": QUARTER_TURN_DEGREES}, headers=AUTH)
+                finally:
+                    writes_released.set()
+                wait_until_processed(api.client, document_id)
+                return capture_page_changed_during_its_ocr(api, page["id"])
+
+        def test_should_read_the_page_again_once_turned_instead_of_keeping_the_late_result(
+            self, rotated_page: PageChangedDuringItsOcr
+        ) -> None:
+            assert (rotated_page.page["status"], rotated_page.page["number"]) == ("done", TURNED_PAGE_NUMBER)
+
+        def test_should_send_it_again_turned(self, rotated_page: PageChangedDuringItsOcr) -> None:
+            assert rotated_page.request_sizes_pixels == [SIDEWAYS_SCAN_SIZE_PIXELS, TURNED_SCAN_SIZE_PIXELS]
+
+    class TestWhenAPageIsRotatedWhileTheSandboxRefusesIt:
+        @pytest.fixture(scope="class")
+        @classmethod
+        def rotated_page(cls, tmp_path_factory: pytest.TempPathFactory) -> PageChangedDuringItsOcr:
+            with running_api(tmp_path_factory.mktemp("api")) as api:
+                document_id = create_document(api.client)
+                api.fake_ocr.fail_next(REFUSAL_STATUS)
+                api.fake_ocr.parses_released.clear()
+                try:
+                    page = upload(api.client, document_id, jpeg(*SIDEWAYS_SCAN_SIZE_PIXELS)).json()
+                    wait_for(lambda: api.fake_ocr.requests)
+                    api.client.patch(f"/api/pages/{page['id']}", json={"rotation": QUARTER_TURN_DEGREES}, headers=AUTH)
+                finally:
+                    api.fake_ocr.parses_released.set()
+                wait_until_processed(api.client, document_id)
+                return capture_page_changed_during_its_ocr(api, page["id"])
+
+        def test_should_read_the_page_again_once_turned_instead_of_leaving_it_in_error(
+            self, rotated_page: PageChangedDuringItsOcr
+        ) -> None:
+            page = rotated_page.page
+            assert (page["status"], page["error"], page["number"]) == ("done", None, TURNED_PAGE_NUMBER)
+
+        def test_should_send_it_again_turned(self, rotated_page: PageChangedDuringItsOcr) -> None:
+            assert rotated_page.request_sizes_pixels == [SIDEWAYS_SCAN_SIZE_PIXELS, TURNED_SCAN_SIZE_PIXELS]

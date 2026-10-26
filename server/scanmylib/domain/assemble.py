@@ -281,7 +281,7 @@ def render_document_metadata(
     pages_scanned: int,
     coverage: Coverage,
 ) -> DocumentMetadata:
-    """Content of document.json. `pages`: every page, in the API's page order."""
+    """Content of document.json. `pages`: every page, in the order of the document's page list (reading order first)."""
     return {
         "id": meta.id,
         "slug": meta.slug,

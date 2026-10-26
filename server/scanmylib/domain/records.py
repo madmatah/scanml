@@ -17,11 +17,11 @@ class NotFound(LookupError):
 
 
 class Conflict(Exception):
-    """The request contradicts existing state (e.g. a page id used by another document)."""
+    """The change contradicts the library's state (e.g. a page id used by another document)."""
 
 
 class InvalidRequest(ValueError):
-    """Semantically invalid input that the request schema cannot express."""
+    """An operation's input that breaks a rule its types cannot express."""
 
 
 @dataclass(frozen=True)
@@ -73,7 +73,7 @@ class PageRecord:
     manual_number: int | None
     detected_numbers: tuple[str, ...]
     ocr: OcrSummary | None
-    #: Place on the number line chosen by the user (PUT /api/documents/{id}/order).
+    #: Place on the number line chosen by the user, when they reorder the pages of the document.
     position: float | None
     number: PageNumber | None
     number_source: str | None
@@ -122,7 +122,7 @@ class _Unchanged(enum.Enum):
     TOKEN = 0
 
 
-#: Marks a nullable field that the request did not mention.
+#: Marks a nullable field that the operation leaves as it is.
 UNCHANGED = _Unchanged.TOKEN
 
 

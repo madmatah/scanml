@@ -17,7 +17,7 @@ were scanned in any order, over any number of sessions:
   given only to the pages that moved;
 * reading order and coverage (ranges of numbers present, gaps in between).
 
-Everything here is pure: the library feeds page rows in and stores the result.
+Everything here is pure: it takes the pages as plain values and returns their layout, which its caller keeps.
 """
 
 from __future__ import annotations

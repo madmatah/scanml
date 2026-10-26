@@ -149,12 +149,13 @@ The modules as they are, and the layer each one belongs to, whose directory the 
 |---|---|---|---|
 | api | `__main__`, `app`, `config` | Entry point, wiring of the services and routes, settings from the environment | Composition root |
 | api | `domain/ordering` | Page numbering, reading order, duplicates and coverage of a document | Domain |
+| api | `domain/documents` | A document's rules: the summary of its layout | Domain |
 | api | `domain/records`, `domain/text` | Typed records and the inputs of library operations; slugs and collation | Domain |
 | api | `domain/timestamps` | Moments written as text, in the API and in the names of keys and folders | Domain |
 | api | `library`, `ocr_loop`, `publisher`, `debounce` | Documents and pages kept in sync with the library; the single OCR loop; publication of the library files | Application |
 | api | `domain/assemble` | Rendering of the library files | Domain |
 | api | `preview` | Rendering of the HTML previews | Adapters |
-| api | `adapters/sqlite/database`, `adapters/sqlite/rows` | SQLite state, and its rows read into records | Adapters |
+| api | `adapters/sqlite/database`, `adapters/sqlite/rows` | SQLite state, its rows read into records, and the summary of a document's layout written as JSON | Adapters |
 | api | `storage`, `export` | The library's files, atomic writes and trash; zip archives | Adapters |
 | api | `ocr_client`, `ocr_result` | Client of the sandbox protocol, and validation of its untrusted results | Adapters |
 | api | `images`, `sanitize`, `qr`, `clock`, `published_apk` | Pillow, the Markdown sanitizer, QR codes, the wall clock and the times clients send, the published APK's metadata | Adapters |

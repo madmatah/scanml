@@ -5,7 +5,6 @@ from __future__ import annotations
 from ..domain.records import DocumentRecord, PageRecord
 from ..library import LibraryService
 
-_STATS = ("pages", "done", "queued", "processing", "error", "excluded", "duplicates")
 _OCR_FIELDS = ("engine", "duration_s", "at", "images", "chars")
 
 
@@ -20,7 +19,15 @@ def document_json(document: DocumentRecord, library: LibraryService) -> dict[str
         "unwarp": document.unwarp,
         "created_at": document.created_at,
         "updated_at": document.updated_at,
-        "stats": {name: document.stats.get(name, 0) for name in _STATS},
+        "stats": {
+            "pages": document.stats.page_count,
+            "done": document.stats.done_count,
+            "queued": document.stats.queued_count,
+            "processing": document.stats.processing_count,
+            "error": document.stats.error_count,
+            "excluded": document.stats.excluded_count,
+            "duplicates": document.stats.duplicate_count,
+        },
         "coverage": document.coverage.to_json(),
         "cover_thumb_url": f"/api/pages/{document.cover_page_id}/thumb" if document.cover_page_id else None,
         "folder": library.folder(document),

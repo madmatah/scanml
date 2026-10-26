@@ -25,6 +25,17 @@ class InvalidRequest(ValueError):
 
 
 @dataclass(frozen=True)
+class DocumentStats:
+    page_count: int
+    done_count: int
+    queued_count: int
+    processing_count: int
+    error_count: int
+    excluded_count: int
+    duplicate_count: int
+
+
+@dataclass(frozen=True)
 class DocumentRecord:
     id: str
     slug: str
@@ -35,7 +46,7 @@ class DocumentRecord:
     unwarp: bool
     created_at: str
     updated_at: str
-    stats: dict[str, int]
+    stats: DocumentStats
     coverage: Coverage
     cover_page_id: str | None
     pages_in_document: int

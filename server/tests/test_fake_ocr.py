@@ -6,6 +6,7 @@ import contextlib
 import io
 import socket
 import sys
+import threading
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -17,10 +18,13 @@ from PIL import Image
 
 from scanmylib.devtools.fake_ocr import FakeOcrServer, ParseResponse, canned_page, check_health, image_size
 from scanmylib.devtools.fake_ocr import main as fake_ocr_main
-from support import jpeg, locate_socket, serving_fake_ocr, temporary_socket_directory
+from support import jpeg, locate_socket, serving_fake_ocr, temporary_socket_directory, wait_for
 
 IMAGE_SIZE = (321, 123)
 REQUEST_ID = "abc"
+FAILURE_STATUS = 400
+#: Above the bound of `wait_for`, so that a held parse never outlasts its client.
+HELD_PARSE_TIMEOUT_SECONDS = 60.0
 
 
 def encode_image(image_format: str, **options: object) -> bytes:
@@ -52,6 +56,12 @@ class ProtocolSession:
     unsupported_type_status: int
     undecodable_image_answer: dict[str, Any]
     unload_answer: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class HeldParse:
+    answers_while_held: list[int]
+    status_once_released: int
 
 
 @dataclass(frozen=True)
@@ -93,6 +103,26 @@ def protocol_session() -> ProtocolSession:
         undecodable_image_answer=undecodable_image.json(),
         unload_answer=unload_answer,
     )
+
+
+def hold_a_parse(fake_ocr: FakeOcrServer) -> HeldParse:
+    answer_statuses: list[int] = []
+    transport = httpx.HTTPTransport(uds=str(fake_ocr.socket_path))
+    with httpx.Client(transport=transport, base_url="http://ocr", timeout=HELD_PARSE_TIMEOUT_SECONDS) as sandbox:
+        fake_ocr.parses_released.clear()
+        poster = threading.Thread(
+            target=lambda: answer_statuses.append(
+                sandbox.post("/v1/parse", content=jpeg(*IMAGE_SIZE), headers={"Content-Type": "image/jpeg"}).status_code
+            )
+        )
+        poster.start()
+        try:
+            wait_for(lambda: fake_ocr.requests)
+            answers_while_held = list(answer_statuses)
+        finally:
+            fake_ocr.parses_released.set()
+            poster.join()
+    return HeldParse(answers_while_held, answer_statuses[0])
 
 
 @pytest.fixture(scope="module")
@@ -207,6 +237,39 @@ class TestTheFakeOcrSandbox:
         class TestWhenTheImageCannotBeDecoded:
             def test_should_answer_that_it_is_a_bad_image(self, protocol_session: ProtocolSession) -> None:
                 assert protocol_session.undecodable_image_answer["error"] == "bad_image"
+
+        class TestWhenTheParsesAreHeld:
+            @pytest.fixture(scope="class")
+            @classmethod
+            def held_parse(cls) -> HeldParse:
+                with (
+                    temporary_socket_directory() as socket_directory,
+                    serving_fake_ocr(locate_socket(socket_directory)) as fake_ocr,
+                ):
+                    return hold_a_parse(fake_ocr)
+
+            def test_should_answer_none_until_they_are_released(self, held_parse: HeldParse) -> None:
+                assert held_parse.answers_while_held == []
+
+            def test_should_answer_the_page_once_released(self, held_parse: HeldParse) -> None:
+                assert held_parse.status_once_released == 200
+
+        class TestWhenTheParsesAreHeldAndTheNextOneFails:
+            @pytest.fixture(scope="class")
+            @classmethod
+            def held_parse(cls) -> HeldParse:
+                with (
+                    temporary_socket_directory() as socket_directory,
+                    serving_fake_ocr(locate_socket(socket_directory)) as fake_ocr,
+                ):
+                    fake_ocr.fail_next(FAILURE_STATUS)
+                    return hold_a_parse(fake_ocr)
+
+            def test_should_hold_the_failure_too(self, held_parse: HeldParse) -> None:
+                assert held_parse.answers_while_held == []
+
+            def test_should_answer_the_failure_with_its_status_once_released(self, held_parse: HeldParse) -> None:
+                assert held_parse.status_once_released == FAILURE_STATUS
 
     class TestTheUnloadRoute:
         class TestWhenTheEngineIsLoaded:

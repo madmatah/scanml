@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from ..domain.records import DocumentRecord, PageRecord
 from ..library import LibraryService
-from ..records import DocumentRecord, PageRecord
 
 _STATS = ("pages", "done", "queued", "processing", "error", "excluded", "duplicates")
 _OCR_FIELDS = ("engine", "duration_s", "at", "images", "chars")

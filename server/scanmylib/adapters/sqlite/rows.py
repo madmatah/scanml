@@ -6,7 +6,7 @@ import json
 import sqlite3
 
 from ...domain.ordering import Coverage, PageNumber
-from ...records import DocumentRecord, PageClaim, PageRecord
+from ...domain.records import DocumentRecord, PageClaim, PageRecord
 
 
 def build_document_record(row: sqlite3.Row) -> DocumentRecord:

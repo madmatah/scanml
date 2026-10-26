@@ -16,10 +16,10 @@ import logging
 import time
 
 from . import images
+from .domain.records import PageClaim
 from .library import LibraryService
 from .ocr_client import OcrClient, OcrPageFailed, OcrPageRejected, OcrUnavailable
 from .ocr_result import OcrResultError, build_page_output
-from .records import PageClaim
 
 log = logging.getLogger(__name__)
 

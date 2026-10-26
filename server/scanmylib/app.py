@@ -19,12 +19,12 @@ from .api import documents, pages, system, web
 from .api.deps import Services
 from .auth import Authenticator, load_or_create_token
 from .config import Settings
+from .domain.records import Conflict, InvalidRequest, NotFound
 from .images import MAX_UPLOAD_BYTES, ImageRejected, ImageTooLarge
 from .library import LibraryService
 from .middleware import BodySizeLimitMiddleware, SecurityHeadersMiddleware, body_limit
 from .ocr_client import OcrClient
 from .ocr_loop import OcrLoop
-from .records import Conflict, InvalidRequest, NotFound
 from .storage import LibraryFiles
 
 log = logging.getLogger(__name__)

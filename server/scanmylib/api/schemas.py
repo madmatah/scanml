@@ -6,8 +6,8 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from ..domain.records import UNCHANGED, DocumentChanges, PageChanges
 from ..domain.text import multi_line, single_line
-from ..records import UNCHANGED, DocumentChanges, PageChanges
 from .deps import UUID_PATTERN
 
 

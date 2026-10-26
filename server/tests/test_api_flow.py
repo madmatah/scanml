@@ -20,9 +20,9 @@ from markdown_it import MarkdownIt
 from PIL import Image
 
 from scanmylib.devtools.fake_ocr import ParseRequest
+from scanmylib.domain.records import DocumentRecord, PageRecord
 from scanmylib.library import LibraryService
 from scanmylib.publisher import Publisher
-from scanmylib.records import DocumentRecord, PageRecord
 from scanmylib.storage import LibraryFiles
 from support import (
     AUTH,

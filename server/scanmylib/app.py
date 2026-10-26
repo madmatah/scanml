@@ -80,7 +80,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         library.add_work_listener(ocr_loop.notify)
         requeued = library.start()
         ocr_loop.start()
-        app.state.services = Services(settings=settings, library=library, auth=auth, ocr=ocr_client)
+        app.state.services = Services(settings=settings, library=library, auth=auth, ocr=ocr_engine)
         log.info(
             "ScanMyLib %s: library %s, OCR socket %s, %d interrupted page(s) re-queued",
             __version__,

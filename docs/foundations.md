@@ -104,7 +104,7 @@ web UI's comes with its move to TypeScript and React; none is planned yet for th
   resolve it at run time, by tokens.
 - **What is stored or shared is plain data,** so it saves, travels and replays as it is.
 - **SOLID applies to modules, functions and types,** so a new case is added beside the others, without rewriting them.
-- **The pipeline is engine-agnostic.** The api knows the engine only through the sandbox protocol, behind its OCR port,
+- **The pipeline is engine-agnostic.** The api knows the engine only through the sandbox protocol, behind its OCR ports,
   so a better engine replaces the current one by implementing a new worker, and no code compensates for one model's
   mistakes: what one model needs, another would break.
 - **The library is the product.** Each document is a folder with `document.md` (its pages in reading order), a Markdown
@@ -162,7 +162,7 @@ The modules as they are, and the layer each one belongs to, whose directory the 
 | api | `adapters/system_clock` | The wall clock, in the server's time zone | Adapters |
 | api | `adapters/pillow_images` | Pillow: the checks of an upload, thumbnails, the image sent to the OCR, re-encoded illustrations | Adapters |
 | api | `storage`, `export` | The library's files, atomic writes and trash; zip archives | Adapters |
-| api | `adapters/ocr_sandbox/client`, `adapters/ocr_sandbox/results`, `adapters/ocr_sandbox/sanitize`, `adapters/ocr_sandbox/engine` | The OCR sandbox: the client of its protocol, the validation of its untrusted results, the sanitizer of their Markdown, and the OCR engine over them, which times the reading of a page | Adapters |
+| api | `adapters/ocr_sandbox/client`, `adapters/ocr_sandbox/results`, `adapters/ocr_sandbox/sanitize`, `adapters/ocr_sandbox/engine` | The OCR sandbox: the client of its protocol, the validation of its untrusted results, the sanitizer of their Markdown, and the OCR engine over them, which times the reading of a page and validates the untrusted status of the sandbox | Adapters |
 | api | `qr`, `published_apk` | QR codes, the published APK's metadata | Adapters |
 | api | `api/`, `auth`, `middleware` | HTTP routes, the times that clients send, authentication, security headers and body limits | Adapters |
 | api | `devtools/fake_ocr` | The fake OCR sandbox of the development stack and the tests | Test support |

@@ -1,5 +1,7 @@
 """A page image is a JPEG. A page's output is already validated and sanitized, and its illustrations are JPEGs named
-after the page's key. A reading's elapsed time runs from the request to the engine's answer.
+after the page's key. A reading's elapsed time runs from the request to the engine's answer. A status relays only typed
+and bounded fields of the engine's own report, and an engine that does not answer is "unreachable", with the reason as
+its last error.
 """
 
 from __future__ import annotations
@@ -85,9 +87,29 @@ class PageReading:
     elapsed_seconds: float
 
 
+@dataclass(frozen=True)
+class GpuStatus:
+    name: str | None
+    memory_used_mebibytes: int | float | None
+    memory_total_mebibytes: int | float | None
+
+
+@dataclass(frozen=True)
+class EngineStatus:
+    is_reachable: bool
+    state: str | None
+    backend: str | None
+    last_error: str | None
+    gpu: GpuStatus | None
+
+
 class OcrEngine(Protocol):
     async def warm_up(self) -> None: ...
 
     async def read_page(
         self, page_image: bytes, *, page_id: str, page_key: str, should_unwarp: bool, should_detect_orientation: bool
     ) -> PageReading: ...
+
+
+class OcrEngineMonitor(Protocol):
+    async def read_status(self) -> EngineStatus: ...

@@ -23,6 +23,7 @@ from pathlib import Path
 from .adapters.sqlite.database import Database
 from .adapters.sqlite.rows import build_document_record, build_page_claim, build_page_record, encode_layout_summary
 from .application.clock import Clock
+from .application.ocr_engine import PageOcrOutput
 from .application.scan_images import ImageRejected, ScanImages
 from .config import Settings
 from .debounce import DebouncedBatch
@@ -46,7 +47,6 @@ from .domain.records import (
     PageRecord,
     PageUpload,
 )
-from .ocr_result import PageOcrOutput
 from .publisher import Publisher
 from .storage import DOCUMENT_MARKDOWN, LibraryFiles, atomic_write
 

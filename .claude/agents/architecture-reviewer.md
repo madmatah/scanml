@@ -44,7 +44,8 @@ Read first: `.claude/rules/architecture.md` and `.claude/rules/configuration.md`
 - **Stored and shared data** (`.claude/rules/architecture.md` > Stored and shared data): what is stored, sent, or
   crosses a thread or a process holds behavior, a handle or a closure.
 - **The engine stays behind the sandbox protocol** (`.claude/rules/architecture.md` > Layers): code of the api that
-  depends on a particular engine or model, or reaches the sandbox other than through the protocol's client.
+  depends on a particular engine or model, reaches the engine other than through the application's OCR ports, or
+  reaches the sandbox other than through the protocol's client.
 - **OCR output as the engine produced it** (`.claude/rules/architecture.md` > Responsibilities): code that rewrites the
   output to compensate for one model's mistakes, or changes raw LaTeX, where the display should be fixed generically.
 - **Nothing hard-deleted** (`.claude/rules/architecture.md` > Responsibilities): a deletion from the library that does

@@ -8,10 +8,10 @@ from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request
 
+from ..application.ocr_engine import OcrEngineMonitor
 from ..auth import Authenticator
 from ..config import Settings
 from ..library import LibraryService
-from ..ocr_client import OcrClient
 
 UUID_PATTERN = r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
 _UUID = re.compile(UUID_PATTERN)
@@ -22,7 +22,7 @@ class Services:
     settings: Settings
     library: LibraryService
     auth: Authenticator
-    ocr: OcrClient
+    ocr: OcrEngineMonitor
 
 
 # Dependencies are coroutines so that they run on the event loop thread, the

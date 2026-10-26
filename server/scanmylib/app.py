@@ -14,6 +14,8 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import __version__
+from .adapters.ocr_sandbox.client import OcrClient
+from .adapters.ocr_sandbox.engine import SandboxOcrEngine
 from .adapters.pillow_images import MAX_UPLOAD_BYTES, PillowImages
 from .adapters.sqlite.database import Database
 from .adapters.system_clock import SystemClock
@@ -25,7 +27,6 @@ from .config import Settings
 from .domain.records import Conflict, InvalidRequest, NotFound
 from .library import LibraryService
 from .middleware import BodySizeLimitMiddleware, SecurityHeadersMiddleware, body_limit
-from .ocr_client import OcrClient
 from .ocr_loop import OcrLoop
 from .storage import LibraryFiles
 
@@ -71,12 +72,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         images = PillowImages()
         library = LibraryService(settings, db, LibraryFiles(settings.library_dir, clock), clock, images)
         auth = Authenticator(load_or_create_token(settings.token_path, settings.token), db, clock)
-        ocr = OcrClient(settings.ocr_socket, settings.ocr_timeout_s)
-        ocr_loop = OcrLoop(library, ocr, images, max_side=settings.ocr_max_side, retry_max_s=settings.ocr_retry_max_s)
+        ocr_client = OcrClient(settings.ocr_socket, settings.ocr_timeout_s)
+        ocr_engine = SandboxOcrEngine(ocr_client)
+        ocr_loop = OcrLoop(
+            library, ocr_engine, images, max_side=settings.ocr_max_side, retry_max_s=settings.ocr_retry_max_s
+        )
         library.add_work_listener(ocr_loop.notify)
         requeued = library.start()
         ocr_loop.start()
-        app.state.services = Services(settings=settings, library=library, auth=auth, ocr=ocr)
+        app.state.services = Services(settings=settings, library=library, auth=auth, ocr=ocr_engine)
         log.info(
             "ScanMyLib %s: library %s, OCR socket %s, %d interrupted page(s) re-queued",
             __version__,
@@ -89,7 +93,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         finally:
             await ocr_loop.aclose()
             await library.aclose()
-            await ocr.aclose()
+            await ocr_client.aclose()
             db.close()
 
     app = FastAPI(

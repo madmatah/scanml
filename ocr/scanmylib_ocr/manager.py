@@ -31,7 +31,8 @@ log = logging.getLogger(__name__)
 
 LIVENESS_CHECK_INTERVAL_S = 5.0
 REPLIED_DETAIL_CHARACTERS = 300
-"""The api quotes no more of a detail (server/scanmylib/ocr_client.py): the supervisor cuts it between two escapes."""
+"""The api quotes no more of a detail (server/scanmylib/adapters/ocr_sandbox/client.py): the supervisor cuts it
+between two escapes."""
 
 
 class State(enum.Enum):

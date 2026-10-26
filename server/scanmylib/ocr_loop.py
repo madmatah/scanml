@@ -13,14 +13,12 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
-import time
 
+from .application.ocr_engine import OcrEngine, OcrPageFailed, OcrPageRejected, OcrResultError, OcrUnavailable
 from .application.scan_images import ImageRejected, OcrImages
 from .domain.pages import should_detect_orientation
 from .domain.records import PageClaim
 from .library import LibraryService
-from .ocr_client import OcrClient, OcrPageFailed, OcrPageRejected, OcrUnavailable
-from .ocr_result import OcrResultError, build_page_output
 
 log = logging.getLogger(__name__)
 
@@ -30,10 +28,10 @@ _PREWARM_INTERVAL_S = 60.0
 
 class OcrLoop:
     def __init__(
-        self, library: LibraryService, client: OcrClient, ocr_images: OcrImages, *, max_side: int, retry_max_s: float
+        self, library: LibraryService, engine: OcrEngine, ocr_images: OcrImages, *, max_side: int, retry_max_s: float
     ) -> None:
         self._library = library
-        self._client = client
+        self._engine = engine
         self._ocr_images = ocr_images
         self._max_side = max_side
         self._retry_max_s = retry_max_s
@@ -64,7 +62,7 @@ class OcrLoop:
 
     async def _prewarm(self) -> None:
         try:
-            await self._client.load()
+            await self._engine.warm_up()
         except OcrUnavailable as exc:
             log.info("OCR pre-warm skipped: %s", exc)
 
@@ -102,7 +100,7 @@ class OcrLoop:
             self._busy = False
 
     async def _process(self, claim: PageClaim) -> bool:
-        """OCR one page. Returns False when the sandbox is unavailable (page re-queued)."""
+        """OCR one page. Returns False when the engine is unavailable (page re-queued)."""
         scan = self._library.locate_claimed_scan(claim)
         try:
             image = await asyncio.to_thread(self._ocr_images.prepare_for_ocr, scan, claim.rotation, self._max_side)
@@ -110,13 +108,13 @@ class OcrLoop:
             self._library.fail_page(claim, f"Unreadable scan: {exc}", retry=False)
             return True
 
-        started = time.monotonic()
         try:
-            response = await self._client.parse(
+            reading = await self._engine.read_page(
                 image,
-                request_id=claim.page_id,
-                unwarp=claim.unwarp,
-                orientation=should_detect_orientation(claim.rotation),
+                page_id=claim.page_id,
+                page_key=claim.key,
+                should_unwarp=claim.unwarp,
+                should_detect_orientation=should_detect_orientation(claim.rotation),
             )
         except OcrUnavailable as exc:
             log.warning("OCR sandbox unavailable (%s); page %s stays queued", exc, claim.key)
@@ -129,16 +127,13 @@ class OcrLoop:
             retried = self._library.fail_page(claim, f"OCR failed: {exc}", retry=True)
             log.warning("page %s: OCR failed (%s)%s", claim.key, exc, ", will retry" if retried else "")
             return True
-        elapsed = time.monotonic() - started
-
-        try:
-            output = await asyncio.to_thread(build_page_output, response, claim.key)
         except OcrResultError as exc:
             log.warning("page %s: invalid OCR result: %s", claim.key, exc)
             self._library.fail_page(claim, f"Invalid OCR result: {exc}", retry=False)
             return True
-        if await self._library.complete_page(claim, output, output.duration_s or elapsed):
-            log.info("page %s done in %.1f s (%d images)", claim.key, elapsed, len(output.images))
+        output = reading.output
+        if await self._library.complete_page(claim, output, output.duration_s or reading.elapsed_seconds):
+            log.info("page %s done in %.1f s (%d images)", claim.key, reading.elapsed_seconds, len(output.images))
         else:
             log.info("page %s changed during OCR, result dropped", claim.key)
         return True

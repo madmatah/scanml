@@ -2,16 +2,14 @@
 
 from __future__ import annotations
 
-import math
 from typing import TypedDict
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
 from .. import API_LEVEL, __version__
+from ..application.ocr_engine import EngineStatus, GpuStatus
 from ..auth import SESSION_COOKIE, SESSION_MAX_AGE_S
-from ..domain.text import single_line
-from ..ocr_client import OcrUnavailable
 from ..published_apk import APK_DOWNLOAD_PATH, published_apk
 from ..qr import qr_svg
 from .deps import Services, ServicesDep, public_url, require_auth
@@ -69,49 +67,31 @@ async def close_session(request: Request, services: ServicesDep) -> Response:
     return response
 
 
-def _sandbox_text(value: object, limit: int) -> str | None:
-    """A string of the sandbox's /health (untrusted): one printable line, bounded."""
-    if not isinstance(value, str):
-        return None
-    return single_line(value.encode("utf-8", "replace").decode("utf-8"))[:limit] or None
-
-
-def _sandbox_number(value: object) -> int | float | None:
-    if isinstance(value, bool) or not isinstance(value, int | float):
-        return None
-    return value if math.isfinite(value) else None
-
-
-def _sandbox_gpu(value: object) -> dict[str, object] | None:
-    if not isinstance(value, dict):
+def _build_gpu_status_json(gpu: GpuStatus | None) -> dict[str, object] | None:
+    if gpu is None:
         return None
     return {
-        "name": _sandbox_text(value.get("name"), 128),
-        "memory_used_mb": _sandbox_number(value.get("memory_used_mb")),
-        "memory_total_mb": _sandbox_number(value.get("memory_total_mb")),
+        "name": gpu.name,
+        "memory_used_mb": gpu.memory_used_mebibytes,
+        "memory_total_mb": gpu.memory_total_mebibytes,
+    }
+
+
+def _build_engine_status_json(engine_status: EngineStatus) -> dict[str, object]:
+    return {
+        "reachable": engine_status.is_reachable,
+        "state": engine_status.state,
+        "backend": engine_status.backend,
+        "last_error": engine_status.last_error,
+        "gpu": _build_gpu_status_json(engine_status.gpu),
     }
 
 
 @protected.get("/api/status")
 async def status(services: ServicesDep) -> dict[str, object]:
-    try:
-        health = await services.ocr.health()
-    except OcrUnavailable as exc:
-        ocr = {"reachable": False, "state": "unreachable", "backend": None, "last_error": str(exc), "gpu": None}
-    else:
-        # Relayed to the web UI and the phone: only the documented fields, typed and bounded.
-        engine_value = health.get("engine")
-        engine = engine_value if isinstance(engine_value, dict) else {}
-        ocr = {
-            "reachable": True,
-            "state": _sandbox_text(engine.get("state"), 32),
-            "backend": _sandbox_text(engine.get("backend"), 32),
-            "last_error": _sandbox_text(engine.get("last_error"), 1000),
-            "gpu": _sandbox_gpu(health.get("gpu")),
-        }
     return {
         "version": __version__,
-        "ocr": ocr,
+        "ocr": _build_engine_status_json(await services.ocr.read_status()),
         "queue": services.library.queue_counts(),
         "library_dir": services.settings.library_host_path,
     }

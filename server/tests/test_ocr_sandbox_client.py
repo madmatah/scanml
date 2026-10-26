@@ -1,4 +1,4 @@
-"""The client of the OCR sandbox (scanmylib/ocr_client.py), against the fake sandbox on a real Unix socket."""
+"""The client of the OCR sandbox (adapters/ocr_sandbox/client.py), against the fake sandbox on a real Unix socket."""
 
 from __future__ import annotations
 
@@ -8,11 +8,12 @@ from typing import Any
 
 import pytest
 
+from scanmylib.adapters.ocr_sandbox.client import OcrClient
+from scanmylib.application.ocr_engine import OcrUnavailable
 from scanmylib.devtools.fake_ocr import FakeOcrServer
-from scanmylib.ocr_client import OcrClient, OcrUnavailable
 
 
-class TestTheOcrClient:
+class TestTheOcrSandboxClient:
     class TestTheLoadMethod:
         class TestWhenTheSandboxAnswersWithAnOversizedBody:
             PARSE_TIMEOUT_SECONDS = 10

@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 import threading
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
 
+from scanmylib.devtools import fake_ocr
+from scanmylib.devtools.fake_ocr import ParseResponse, canned_page
 from scanmylib.domain.pages import MAX_OCR_RETRIES
 from scanmylib.storage import TRASH_DIR, LibraryFiles
 from support import (
@@ -36,11 +38,36 @@ QUARTER_TURN_DEGREES = 90
 REPROCESSED_PAGE_NUMBER = 7
 REPROCESSED_SCAN_SIZE_PIXELS = (1200, 1000 + REPROCESSED_PAGE_NUMBER)
 REFUSAL_STATUS = 400
+READ_PAGE_NUMBER = 3
 
 
 def read_page(client: TestClient, page_id: str) -> dict[str, Any]:
     page: dict[str, Any] = client.get(f"/api/pages/{page_id}", headers=AUTH).json()
     return page
+
+
+def build_page_without_markdown(width: int, height: int, request_id: str | None) -> ParseResponse:
+    page = canned_page(width, height, request_id)
+    del page["markdown"]
+    return page
+
+
+def build_page_without_timings(width: int, height: int, request_id: str | None) -> ParseResponse:
+    return {**canned_page(width, height, request_id), "timings": None}
+
+
+def build_page_inferred_in(inference_seconds: float) -> Callable[[int, int, str | None], ParseResponse]:
+    def build_page(width: int, height: int, request_id: str | None) -> ParseResponse:
+        return {**canned_page(width, height, request_id), "timings": {"infer_s": inference_seconds}}
+
+    return build_page
+
+
+def process_one_page(api: RunningApi) -> dict[str, Any]:
+    document_id = create_document(api.client)
+    page = upload(api.client, document_id, page_image(READ_PAGE_NUMBER)).json()
+    wait_until_processed(api.client, document_id)
+    return read_page(api.client, page["id"])
 
 
 @dataclass(frozen=True)
@@ -75,6 +102,12 @@ class FailingPage:
 @dataclass(frozen=True)
 class RetriedPage:
     status: str
+    parse_request_count: int
+
+
+@dataclass(frozen=True)
+class PageFailedWithoutRetry:
+    page: dict[str, Any]
     parse_request_count: int
 
 
@@ -187,6 +220,77 @@ class TestTheOcrLoop:
 
         def test_should_retry_it_after_each_failure(self, retried_page: RetriedPage) -> None:
             assert retried_page.parse_request_count == 3
+
+    class TestWhenTheSandboxRefusesThePage:
+        @pytest.fixture(scope="class")
+        @classmethod
+        def refused_page(cls, tmp_path_factory: pytest.TempPathFactory) -> PageFailedWithoutRetry:
+            with running_api(tmp_path_factory.mktemp("api")) as api:
+                api.fake_ocr.fail_next(REFUSAL_STATUS)
+                page = process_one_page(api)
+                return PageFailedWithoutRetry(page, len(api.fake_ocr.requests))
+
+        def test_should_report_the_page_in_error_with_the_reason_of_the_sandbox(
+            self, refused_page: PageFailedWithoutRetry
+        ) -> None:
+            assert (refused_page.page["status"], refused_page.page["error"]) == (
+                "error",
+                f"Image refused by the OCR: HTTP {REFUSAL_STATUS} (processing_failed: simulated failure)",
+            )
+
+        def test_should_send_it_only_once_since_retrying_cannot_help(
+            self, refused_page: PageFailedWithoutRetry
+        ) -> None:
+            assert refused_page.parse_request_count == 1
+
+    class TestWhenTheSandboxAnswersWithAnUnusableResult:
+        @pytest.fixture(scope="class")
+        @classmethod
+        def page_with_unusable_result(cls, tmp_path_factory: pytest.TempPathFactory) -> PageFailedWithoutRetry:
+            with pytest.MonkeyPatch.context() as patch, running_api(tmp_path_factory.mktemp("api")) as api:
+                patch.setattr(fake_ocr, "canned_page", build_page_without_markdown)
+                page = process_one_page(api)
+                return PageFailedWithoutRetry(page, len(api.fake_ocr.requests))
+
+        def test_should_report_the_page_in_error_with_what_is_wrong_in_the_result(
+            self, page_with_unusable_result: PageFailedWithoutRetry
+        ) -> None:
+            page = page_with_unusable_result.page
+            assert (page["status"], page["error"]) == ("error", "Invalid OCR result: markdown missing")
+
+        def test_should_send_it_only_once_since_reading_it_again_would_give_the_same_answer(
+            self, page_with_unusable_result: PageFailedWithoutRetry
+        ) -> None:
+            assert page_with_unusable_result.parse_request_count == 1
+
+    class TestWhenTheSandboxReportsTheTimeOfItsInference:
+        REPORTED_INFERENCE_SECONDS = 1.25
+
+        @pytest.fixture(scope="class")
+        @classmethod
+        def recorded_duration_seconds(cls, tmp_path_factory: pytest.TempPathFactory) -> float:
+            with pytest.MonkeyPatch.context() as patch, running_api(tmp_path_factory.mktemp("api")) as api:
+                patch.setattr(fake_ocr, "canned_page", build_page_inferred_in(cls.REPORTED_INFERENCE_SECONDS))
+                page = process_one_page(api)
+                return float(page["ocr"]["duration_s"])
+
+        def test_should_record_that_time_as_the_duration_of_the_page(self, recorded_duration_seconds: float) -> None:
+            assert recorded_duration_seconds == pytest.approx(self.REPORTED_INFERENCE_SECONDS)
+
+    class TestWhenTheSandboxReportsNoTimeOfItsInference:
+        PARSE_DELAY_SECONDS = 0.2
+
+        @pytest.fixture(scope="class")
+        @classmethod
+        def recorded_duration_seconds(cls, tmp_path_factory: pytest.TempPathFactory) -> float:
+            with pytest.MonkeyPatch.context() as patch, running_api(tmp_path_factory.mktemp("api")) as api:
+                patch.setattr(fake_ocr, "canned_page", build_page_without_timings)
+                api.fake_ocr.delay = cls.PARSE_DELAY_SECONDS
+                page = process_one_page(api)
+                return float(page["ocr"]["duration_s"])
+
+        def test_should_record_the_time_the_api_waited_for_its_answer(self, recorded_duration_seconds: float) -> None:
+            assert recorded_duration_seconds >= self.PARSE_DELAY_SECONDS
 
     class TestWhenSeveralPagesAreQueued:
         UPLOADED_NUMBERS = (30, 10, 20)

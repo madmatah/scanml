@@ -10,10 +10,10 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
 from .. import API_LEVEL, __version__
 from ..auth import SESSION_COOKIE, SESSION_MAX_AGE_S
+from ..domain.text import single_line
 from ..ocr_client import OcrUnavailable
 from ..published_apk import APK_DOWNLOAD_PATH, published_apk
 from ..qr import qr_svg
-from ..text import single_line
 from .deps import Services, ServicesDep, public_url, require_auth
 from .schemas import SessionBody
 

@@ -8,7 +8,8 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from . import assemble, clock, preview
+from . import clock, preview
+from .domain import assemble
 from .records import DocumentRecord, PageRecord
 from .storage import LibraryFiles
 

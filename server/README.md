@@ -14,8 +14,9 @@ Everything runs in Docker; nothing is installed on the host.
 | `config.py` | `SCANMYLIB_*` environment variables |
 | `db.py`, `records.py` | SQLite state (`/state/scanmylib.db`, WAL) and typed rows; an older schema is upgraded in place at start, after a copy is saved as `scanmylib.db.v<N>.bak` |
 | `library.py` | all mutations: documents, pages, OCR results; keeps DB and files in sync |
-| `ordering.py` | page numbers (arabic, roman, spreads), inference, duplicates, placement and reading order, positions for a manual order, coverage |
-| `assemble.py`, `publisher.py` | `document.md`, `document.json`, `INDEX.md`, `library.json` |
+| `domain/ordering.py` | page numbers (arabic, roman, spreads), inference, duplicates, placement and reading order, positions for a manual order, coverage |
+| `domain/assemble.py`, `publisher.py` | `document.md`, `document.json`, `INDEX.md`, `library.json` |
+| `domain/text.py` | user-entered text, slugs, collation |
 | `storage.py` | library folder: atomic writes, `.trash/`, safe file resolution |
 | `sanitize.py`, `preview.py` | untrusted OCR Markdown → safe Markdown; Markdown → allowlisted HTML |
 | `images.py` | Pillow: upload checks, thumbnails, image sent to the sandbox, re-encoded illustrations |

@@ -10,8 +10,8 @@ from typing import NamedTuple
 
 import pytest
 
-from scanmylib import ordering
-from scanmylib.ordering import (
+from scanmylib.domain import ordering
+from scanmylib.domain.ordering import (
     SESSION_STEP,
     Coverage,
     CoverageJson,

@@ -10,7 +10,7 @@ import httpx2
 import pytest
 from fastapi.testclient import TestClient
 
-from scanmylib.ordering import int_to_roman
+from scanmylib.domain.ordering import int_to_roman
 from support import (
     AUTH,
     NO_NUMBER,

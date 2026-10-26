@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from scanmylib.assemble import (
+from scanmylib.domain.assemble import (
     DocumentMeta,
     DocumentMetadata,
     GapSection,
@@ -25,7 +25,7 @@ from scanmylib.assemble import (
     render_index_metadata,
     source_label,
 )
-from scanmylib.ordering import Coverage, PageNumber
+from scanmylib.domain.ordering import Coverage, PageNumber
 
 META = DocumentMeta(
     id="6f1c0000-0000-4000-8000-000000000001",

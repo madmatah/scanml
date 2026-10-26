@@ -20,10 +20,12 @@ from collections.abc import Callable, Iterable, Sequence
 from datetime import datetime
 from pathlib import Path
 
-from . import clock, images, ordering
+from . import clock, images
 from .config import Settings
 from .db import Database
 from .debounce import DebouncedBatch
+from .domain import ordering
+from .domain.text import slugify
 from .ocr_result import PageOcrOutput
 from .publisher import Publisher
 from .records import (
@@ -41,7 +43,6 @@ from .records import (
     PageUpload,
 )
 from .storage import DOCUMENT_MARKDOWN, LibraryFiles, atomic_write
-from .text import slugify
 
 log = logging.getLogger(__name__)
 

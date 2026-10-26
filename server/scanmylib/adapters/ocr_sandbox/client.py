@@ -8,23 +8,13 @@ from typing import Any
 
 import httpx
 
+from ...application.ocr_engine import OcrPageFailed, OcrPageRejected, OcrUnavailable
+
 #: Upper bound of a /v1/parse response (64 images of ≤ 20 MiB, base64-encoded,
 #: would be more, but no real page comes close; anything bigger is refused).
 MAX_RESPONSE_BYTES = 128 * 1024 * 1024
 #: Error bodies, /health and /v1/load answers: small JSON documents.
 _MAX_ERROR_BYTES = 64 * 1024
-
-
-class OcrUnavailable(Exception):
-    """The sandbox cannot take work right now (socket absent, engine failed to start...)."""
-
-
-class OcrPageFailed(Exception):
-    """The sandbox failed on this page; it may succeed on a retry."""
-
-
-class OcrPageRejected(Exception):
-    """The sandbox refuses this page (bad image, too large...); retrying is pointless."""
 
 
 async def _read_limited(response: httpx.Response, limit: int, error: type[Exception] = OcrPageFailed) -> bytes:

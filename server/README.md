@@ -24,7 +24,7 @@ Everything runs in Docker; nothing is installed on the host.
 | `storage.py` | library folder: atomic writes, `.trash/`, safe file resolution |
 | `preview.py` | Markdown → allowlisted HTML |
 | `adapters/pillow_images.py`, `application/scan_images.py` | Pillow: upload checks, thumbnails, image sent to the sandbox, re-encoded illustrations; the ports through which the application handles them, and their errors |
-| `adapters/ocr_sandbox/client.py`, `adapters/ocr_sandbox/results.py`, `adapters/ocr_sandbox/sanitize.py` | the OCR sandbox: its client, the validation of its responses, untrusted OCR Markdown → safe Markdown |
+| `application/ocr_engine.py`, `adapters/ocr_sandbox/` | the OCR port, with a page's output and its errors; the sandbox behind it: its client, the validation of its responses, untrusted OCR Markdown → safe Markdown, and the engine that times a page's reading |
 | `ocr_loop.py` | the single OCR loop |
 | `auth.py`, `middleware.py` | token / cookie session / CSRF header, security headers, body limits |
 | `api/` | HTTP routes |

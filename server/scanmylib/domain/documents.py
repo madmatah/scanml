@@ -1,12 +1,50 @@
-"""A document's rules: the summary of its layout."""
+"""A document's rules: what a new one takes, the slug of its folder, the summary of its layout."""
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+import itertools
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 
 from .ordering import Coverage, Layout, PageInput
-from .records import DocumentStats
+from .records import DocumentChanges, DocumentStats, InvalidRequest
+from .text import slugify
+
+DEFAULT_KIND = "document"
+
+
+@dataclass(frozen=True)
+class NewDocument:
+    title: str
+    author: str
+    kind: str
+    notes: str
+    unwarp: bool
+
+
+def prepare_new_document(changes: DocumentChanges) -> NewDocument:
+    if not changes.title:
+        raise InvalidRequest("title is required to create a document")
+    kind = changes.kind or DEFAULT_KIND
+    return NewDocument(
+        title=changes.title,
+        author=changes.author or "",
+        kind=kind,
+        notes=changes.notes or "",
+        unwarp=changes.unwarp if changes.unwarp is not None else kind == "book",
+    )
+
+
+def check_document_changes(changes: DocumentChanges) -> None:
+    if changes.title is not None and not changes.title:
+        raise InvalidRequest("title cannot be empty")
+
+
+def propose_slugs(title: str) -> Iterator[str]:
+    base = slugify(title)
+    yield base
+    for suffix in itertools.count(2):
+        yield f"{base}-{suffix}"
 
 
 @dataclass(frozen=True)

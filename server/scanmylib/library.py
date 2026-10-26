@@ -26,14 +26,12 @@ from .adapters.sqlite.rows import build_document_record, build_page_claim, build
 from .config import Settings
 from .debounce import DebouncedBatch
 from .domain import ordering, timestamps
-from .domain.documents import summarize_layout
+from .domain.documents import check_document_changes, prepare_new_document, propose_slugs, summarize_layout
 from .domain.records import (
-    DEFAULT_KIND,
     UNCHANGED,
     Conflict,
     DocumentChanges,
     DocumentRecord,
-    InvalidRequest,
     NotFound,
     OcrSummary,
     PageChanges,
@@ -41,7 +39,6 @@ from .domain.records import (
     PageRecord,
     PageUpload,
 )
-from .domain.text import slugify
 from .ocr_result import PageOcrOutput
 from .publisher import Publisher
 from .storage import DOCUMENT_MARKDOWN, LibraryFiles, atomic_write
@@ -209,25 +206,21 @@ class LibraryService:
         async with self._lock(document_id):
             if self.get_document(document_id) is not None:  # checked under the lock: retries race
                 return self.update_document(document_id, changes), False
-            if not changes.title:
-                raise InvalidRequest("title is required to create a document")
+            new_document = prepare_new_document(changes)
             moment = clock.now()
-            kind = changes.kind or DEFAULT_KIND
-            # Bound books default to unwarping curved pages; flat documents do not.
-            unwarp = changes.unwarp if changes.unwarp is not None else kind == "book"
             with self._db.transaction():
-                slug = self._free_slug(changes.title)
+                slug = self._free_slug(new_document.title)
                 self._db.execute(
                     "INSERT INTO documents (id, slug, title, author, kind, notes, unwarp,"
                     " created_at, updated_at, updated_ts) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         document_id,
                         slug,
-                        changes.title,
-                        changes.author or "",
-                        kind,
-                        changes.notes or "",
-                        int(unwarp),
+                        new_document.title,
+                        new_document.author,
+                        new_document.kind,
+                        new_document.notes,
+                        int(new_document.unwarp),
                         timestamps.iso(moment),
                         timestamps.iso(moment),
                         moment.timestamp(),
@@ -240,6 +233,7 @@ class LibraryService:
 
     def update_document(self, document_id: str, changes: DocumentChanges) -> DocumentRecord:
         self.require_document(document_id)
+        check_document_changes(changes)
         values: dict[str, object] = {
             name: value
             for name, value in (
@@ -251,8 +245,6 @@ class LibraryService:
             )
             if value is not None
         }
-        if "title" in values and not values["title"]:
-            raise InvalidRequest("title cannot be empty")
         if values:
             with self._db.transaction():
                 assignments = ", ".join(f"{name} = ?" for name in values)
@@ -280,14 +272,12 @@ class LibraryService:
         return True
 
     def _free_slug(self, title: str) -> str:
-        base = slugify(title)
-        candidate, suffix = base, 2
-        while self._db.one(
-            "SELECT 1 FROM documents WHERE slug = ?", (candidate,)
-        ) is not None or self._files.folder_exists(candidate):
-            candidate = f"{base}-{suffix}"
-            suffix += 1
-        return candidate
+        return next(
+            slug
+            for slug in propose_slugs(title)
+            if self._db.one("SELECT 1 FROM documents WHERE slug = ?", (slug,)) is None
+            and not self._files.folder_exists(slug)
+        )
 
     def _touch(self, document_id: str) -> None:
         moment = clock.now()

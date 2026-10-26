@@ -9,8 +9,6 @@ from typing import TypedDict
 
 from .ordering import Coverage, PageInput, PageNumber
 
-DEFAULT_KIND = "document"
-
 
 class NotFound(LookupError):
     """No such document or page."""

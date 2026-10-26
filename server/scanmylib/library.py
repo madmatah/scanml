@@ -22,6 +22,7 @@ from pathlib import Path
 
 from . import clock, images
 from .adapters.sqlite.database import Database
+from .adapters.sqlite.rows import build_document_record, build_page_claim, build_page_record
 from .config import Settings
 from .debounce import DebouncedBatch
 from .domain import ordering, timestamps
@@ -115,11 +116,11 @@ class LibraryService:
 
     def list_documents(self) -> list[DocumentRecord]:
         rows = self._db.all("SELECT * FROM documents ORDER BY updated_ts DESC, id")
-        return [DocumentRecord.from_row(row) for row in rows]
+        return [build_document_record(row) for row in rows]
 
     def get_document(self, document_id: str) -> DocumentRecord | None:
         row = self._db.one("SELECT * FROM documents WHERE id = ?", (document_id,))
-        return DocumentRecord.from_row(row) if row else None
+        return build_document_record(row) if row else None
 
     def require_document(self, document_id: str) -> DocumentRecord:
         document = self.get_document(document_id)
@@ -133,11 +134,11 @@ class LibraryService:
             "SELECT * FROM pages WHERE document_id = ? ORDER BY rank, captured_ts, id",
             (document_id,),
         )
-        return [PageRecord.from_row(row) for row in rows]
+        return [build_page_record(row) for row in rows]
 
     def get_page(self, page_id: str) -> PageRecord | None:
         row = self._db.one("SELECT * FROM pages WHERE id = ?", (page_id,))
-        return PageRecord.from_row(row) if row else None
+        return build_page_record(row) if row else None
 
     def require_page(self, page_id: str) -> PageRecord:
         page = self.get_page(page_id)
@@ -507,17 +508,7 @@ class LibraryService:
                 return None
             self._db.execute("UPDATE pages SET status = 'processing' WHERE id = ?", (row["id"],))
             self._refresh_layout(row["document_id"])
-        return PageClaim(
-            page_id=row["id"],
-            document_id=row["document_id"],
-            generation=row["generation"],
-            attempts=row["attempts"],
-            key=row["key"],
-            slug=row["slug"],
-            scan_ext=row["scan_ext"],
-            rotation=row["rotation"],
-            unwarp=bool(row["unwarp"]),
-        )
+        return build_page_claim(row)
 
     def locate_claimed_scan(self, claim: PageClaim) -> Path:
         return self._files.scan_path(claim.slug, claim.key, claim.scan_ext)
@@ -593,12 +584,12 @@ class LibraryService:
 
     def _pages(self, document_id: str) -> list[PageRecord]:
         rows = self._db.all("SELECT * FROM pages WHERE document_id = ?", (document_id,))
-        return [PageRecord.from_row(row) for row in rows]
+        return [build_page_record(row) for row in rows]
 
     def _refresh_layout(self, document_id: str) -> None:
         """Recompute numbering/order/coverage of a document and store it (in a transaction)."""
         rows = self._db.all("SELECT * FROM pages WHERE document_id = ?", (document_id,))
-        pages = [PageRecord.from_row(row) for row in rows]
+        pages = [build_page_record(row) for row in rows]
         layout = ordering.compute_layout([page.ordering_input for page in pages])
         for row in rows:
             placement = layout.placements[row["id"]]

@@ -154,7 +154,7 @@ The modules as they are, and the layer each one belongs to, whose directory the 
 | api | `library`, `ocr_loop`, `publisher`, `debounce` | Documents and pages kept in sync with the library; the single OCR loop; publication of the library files | Application |
 | api | `domain/assemble` | Rendering of the library files | Domain |
 | api | `preview` | Rendering of the HTML previews | Adapters |
-| api | `adapters/sqlite/database` | SQLite state | Adapters |
+| api | `adapters/sqlite/database`, `adapters/sqlite/rows` | SQLite state, and its rows read into records | Adapters |
 | api | `storage`, `export` | The library's files, atomic writes and trash; zip archives | Adapters |
 | api | `ocr_client`, `ocr_result` | Client of the sandbox protocol, and validation of its untrusted results | Adapters |
 | api | `images`, `sanitize`, `qr`, `clock`, `published_apk` | Pillow, the Markdown sanitizer, QR codes, the wall clock and the times clients send, the published APK's metadata | Adapters |

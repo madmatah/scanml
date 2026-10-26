@@ -20,9 +20,10 @@ from collections.abc import Callable, Iterable, Sequence
 from datetime import datetime
 from pathlib import Path
 
-from . import clock, images
+from . import images
 from .adapters.sqlite.database import Database
 from .adapters.sqlite.rows import build_document_record, build_page_claim, build_page_record, encode_layout_summary
+from .application.clock import Clock
 from .config import Settings
 from .debounce import DebouncedBatch
 from .domain import ordering, timestamps
@@ -65,11 +66,12 @@ _LAYOUT_COLUMNS = (
 
 
 class LibraryService:
-    def __init__(self, settings: Settings, db: Database, files: LibraryFiles) -> None:
+    def __init__(self, settings: Settings, db: Database, files: LibraryFiles, clock: Clock) -> None:
         self._settings = settings
         self._db = db
         self._files = files
-        self._publisher = Publisher(files)
+        self._clock = clock
+        self._publisher = Publisher(files, clock)
         self._locks: dict[str, asyncio.Lock] = {}
         #: Ids of the pages whose upload is being stored (their row does not exist yet).
         self._storing: set[str] = set()
@@ -210,7 +212,7 @@ class LibraryService:
             if self.get_document(document_id) is not None:  # checked under the lock: retries race
                 return self.update_document(document_id, changes), False
             new_document = prepare_new_document(changes)
-            moment = clock.now()
+            moment = self._clock.now()
             with self._db.transaction():
                 slug = self._free_slug(new_document.title)
                 self._db.execute(
@@ -283,7 +285,7 @@ class LibraryService:
         )
 
     def _touch(self, document_id: str) -> None:
-        moment = clock.now()
+        moment = self._clock.now()
         self._db.execute(
             "UPDATE documents SET updated_at = ?, updated_ts = ? WHERE id = ?",
             (timestamps.iso(moment), moment.timestamp(), document_id),
@@ -303,7 +305,7 @@ class LibraryService:
         if existing is not None:
             return self._same_document(existing, document_id), False
         info, thumbnail = await asyncio.to_thread(images.ingest_scan, upload.data)
-        captured = upload.captured_at or clock.now()
+        captured = upload.captured_at or self._clock.now()
         async with self._lock(document_id):
             document = self.require_document(document_id)
             existing = self.get_page(upload.page_id)
@@ -319,7 +321,7 @@ class LibraryService:
                 await asyncio.to_thread(
                     self._store_scan, document.slug, key, info.ext, upload.data, upload.page_id, thumbnail
                 )
-                uploaded = clock.now()
+                uploaded = self._clock.now()
                 with self._db.transaction():
                     self._db.execute(
                         "INSERT INTO pages (id, document_id, key, scan_ext, session_id, seq,"
@@ -547,7 +549,7 @@ class LibraryService:
                 markdown=output.markdown,
                 image_count=len(output.images),
                 duration_seconds=duration_s,
-                finished_at=clock.now(),
+                finished_at=self._clock.now(),
             )
             with self._db.transaction():
                 updated = self._db.execute(

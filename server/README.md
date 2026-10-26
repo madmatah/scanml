@@ -20,6 +20,7 @@ Everything runs in Docker; nothing is installed on the host.
 | `domain/assemble.py`, `publisher.py` | `document.md`, `document.json`, `INDEX.md`, `library.json` |
 | `domain/text.py` | user-entered text, slugs, collation |
 | `domain/timestamps.py` | moments written as text, in the API and in the names of keys and folders |
+| `application/clock.py`, `adapters/system_clock.py` | the clock the application reads, and the wall clock behind it, in the container's `TZ` |
 | `storage.py` | library folder: atomic writes, `.trash/`, safe file resolution |
 | `sanitize.py`, `preview.py` | untrusted OCR Markdown → safe Markdown; Markdown → allowlisted HTML |
 | `images.py` | Pillow: upload checks, thumbnails, image sent to the sandbox, re-encoded illustrations |

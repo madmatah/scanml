@@ -11,7 +11,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from scanmylib.domain.pages import MAX_OCR_RETRIES
-from scanmylib.storage import LibraryFiles
+from scanmylib.storage import TRASH_DIR, LibraryFiles
 from support import (
     AUTH,
     RunningApi,
@@ -54,7 +54,7 @@ def capture_page_changed_during_its_ocr(api: RunningApi, page_id: str) -> PageCh
     return PageChangedDuringItsOcr(
         page=read_page(api.client, page_id),
         request_sizes_pixels=[(request["width"], request["height"]) for request in api.fake_ocr.requests],
-        trashed_names=sorted(path.name for path in LibraryFiles(api.settings.library_dir).trash.iterdir()),
+        trashed_names=sorted(path.name for path in (api.settings.library_dir / TRASH_DIR).iterdir()),
     )
 
 

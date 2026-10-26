@@ -3,17 +3,20 @@
 from __future__ import annotations
 
 import os
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import NamedTuple
 
 import pytest
 
 from scanmylib.storage import TRASH_DIR, LibraryFiles, atomic_write
+from support import FixedClock
 
 SLUG = "book"
 KEY = "20261012-201530_1a2b3c4d"
 SCAN = b"scan"
 ILLUSTRATION = b"img"
+TRASHED_AT = datetime(2026, 10, 12, 20, 15, 30, tzinfo=timezone(timedelta(hours=2)))
 
 
 class RefusedPath(NamedTuple):
@@ -46,7 +49,7 @@ def write_a_page_and_its_document(files: LibraryFiles) -> None:
 class TestTheStorage:
     @pytest.fixture
     def files(self, tmp_path: Path) -> LibraryFiles:
-        library = LibraryFiles(tmp_path / "library")
+        library = LibraryFiles(tmp_path / "library", FixedClock(TRASHED_AT))
         library.ensure_root()
         library.ensure_document_dir(SLUG)
         return library

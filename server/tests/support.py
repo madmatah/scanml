@@ -1,4 +1,4 @@
-"""Helpers shared by the tests: images, uploads, the api on a fake OCR sandbox, waiting for the OCR loop."""
+"""Test helpers: images, uploads, a fixed clock, the api on a fake OCR sandbox, waiting for the OCR loop."""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ import zlib
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
+from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any
@@ -111,6 +112,18 @@ class PageNumberVariant(Enum):
 def page_image(number: int, variant: PageNumberVariant = PageNumberVariant.ARABIC) -> bytes:
     """Scan that the fake OCR reads as page `number` (variant: see fake_ocr)."""
     return jpeg(1200 + variant.value, 1000 + number)
+
+
+@dataclass(frozen=True)
+class FixedClock:
+    moment: datetime
+
+    def __post_init__(self) -> None:
+        if self.moment.utcoffset() is None:
+            raise ValueError("a fixed clock needs a moment with its offset")
+
+    def now(self) -> datetime:
+        return self.moment
 
 
 @dataclass(frozen=True)

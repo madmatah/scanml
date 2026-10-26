@@ -8,7 +8,8 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from . import clock, preview
+from . import preview
+from .application.clock import Clock
 from .domain import assemble, timestamps
 from .domain.records import DocumentRecord, PageRecord
 from .storage import LibraryFiles
@@ -59,8 +60,9 @@ def _reading_order(pages: Sequence[PageRecord]) -> list[assemble.PageEntry]:
 
 
 class Publisher:
-    def __init__(self, files: LibraryFiles) -> None:
+    def __init__(self, files: LibraryFiles, clock: Clock) -> None:
         self._files = files
+        self._clock = clock
 
     def write_document(self, document: DocumentRecord, pages: Sequence[PageRecord]) -> None:
         """Rewrite document.md and document.json (`pages` in the API order, by rank)."""
@@ -91,7 +93,7 @@ class Publisher:
             assemble.IndexEntry(_meta(document), document.pages_in_document, document.coverage)
             for document in documents
         ]
-        generated_at = timestamps.iso(clock.now())
+        generated_at = timestamps.iso(self._clock.now())
         self._files.write_index(
             assemble.render_index_markdown(entries, generated_at),
             assemble.render_index_metadata(entries, generated_at),

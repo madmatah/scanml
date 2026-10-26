@@ -15,13 +15,12 @@ import hmac
 import os
 import secrets
 import tempfile
-import time
 from pathlib import Path
 
 from fastapi import HTTPException, Request, status
 
-from . import clock
 from .adapters.sqlite.database import Database
+from .application.clock import Clock
 from .domain import timestamps
 
 SESSION_COOKIE = "scanmylib_session"
@@ -65,16 +64,17 @@ def _digest(value: str) -> str:
 
 
 class Authenticator:
-    def __init__(self, token: str, db: Database) -> None:
+    def __init__(self, token: str, db: Database, clock: Clock) -> None:
         if not token:
             raise ValueError("empty API token")  # it would match an empty login
         self.token = token
         self._db = db
         self._token_fingerprint = _digest("scanmylib-token:" + token)
+        self._clock = clock
         with db.transaction():
             db.execute(
                 "DELETE FROM sessions WHERE expires_ts < ? OR token_fingerprint != ?",
-                (time.time(), self._token_fingerprint),
+                (self._clock.now().timestamp(), self._token_fingerprint),
             )
 
     def token_matches(self, candidate: str) -> bool:
@@ -89,8 +89,8 @@ class Authenticator:
                 (
                     _digest(session_id),
                     self._token_fingerprint,
-                    timestamps.iso(clock.now()),
-                    time.time() + SESSION_MAX_AGE_S,
+                    timestamps.iso(self._clock.now()),
+                    self._clock.now().timestamp() + SESSION_MAX_AGE_S,
                 ),
             )
         return session_id
@@ -102,7 +102,7 @@ class Authenticator:
     def session_valid(self, session_id: str) -> bool:
         row = self._db.one(
             "SELECT 1 FROM sessions WHERE id_hash = ? AND token_fingerprint = ? AND expires_ts > ?",
-            (_digest(session_id), self._token_fingerprint, time.time()),
+            (_digest(session_id), self._token_fingerprint, self._clock.now().timestamp()),
         )
         return row is not None
 

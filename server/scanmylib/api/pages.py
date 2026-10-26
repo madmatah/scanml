@@ -9,7 +9,6 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import FileResponse
 from starlette.datastructures import FormData, UploadFile
 
-from .. import clock
 from ..domain.records import PageUpload
 from ..images import MAX_UPLOAD_BYTES, SCAN_MEDIA_TYPES, ImageRejected
 from .deps import ServicesDep, is_uuid, require_auth, require_uuid
@@ -39,6 +38,19 @@ def _optional_int(value: str | None, field: str, low: int, high: int) -> int | N
     return number
 
 
+def _parse_client_time(text: str) -> datetime:
+    """Parse an ISO-8601 time sent by a client; without offset it is server-local.
+
+    Raises ValueError for anything that is not a plausible capture time.
+    """
+    moment = datetime.fromisoformat(text.strip())
+    if moment.tzinfo is None:
+        moment = moment.astimezone()
+    if not 2000 <= moment.year <= 2200:
+        raise ValueError("year out of range")
+    return moment
+
+
 def _upload_fields(
     page_id: str,
     session_id: str | None,
@@ -52,7 +64,7 @@ def _upload_fields(
     captured = None
     if captured_at and captured_at.strip():
         try:
-            captured = clock.parse_client_time(captured_at)
+            captured = _parse_client_time(captured_at)
         except ValueError:
             raise HTTPException(422, "captured_at must be an ISO-8601 time") from None
     return {

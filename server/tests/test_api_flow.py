@@ -93,6 +93,7 @@ class InvalidDocumentRequests:
     creation_statuses: dict[str, int]
     empty_title_status: int
     unknown_document_status: int
+    unknown_document_with_an_empty_title_status: int
 
 
 @dataclass(frozen=True)
@@ -367,6 +368,9 @@ def invalid_document_requests(tmp_path_factory: pytest.TempPathFactory) -> Inval
             ).status_code,
             unknown_document_status=client.patch(
                 f"/api/documents/{new_id()}", json={"title": "x"}, headers=AUTH
+            ).status_code,
+            unknown_document_with_an_empty_title_status=client.patch(
+                f"/api/documents/{new_id()}", json={"title": ""}, headers=AUTH
             ).status_code,
         )
 
@@ -658,6 +662,11 @@ class TestADocument:
     class TestWhenAnUnknownOneIsPatched:
         def test_should_answer_not_found(self, invalid_document_requests: InvalidDocumentRequests) -> None:
             assert invalid_document_requests.unknown_document_status == 404
+
+        def test_should_answer_not_found_even_with_an_empty_title(
+            self, invalid_document_requests: InvalidDocumentRequests
+        ) -> None:
+            assert invalid_document_requests.unknown_document_with_an_empty_title_status == 404
 
     class TestWhenABookIsCreatedWithoutSayingWhetherToUnwarpIt:
         def test_should_unwarp_its_pages(self, new_documents: NewDocuments) -> None:

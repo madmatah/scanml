@@ -39,6 +39,7 @@ COMPOSITION_ROOTS = frozenset(
     {PACKAGE_NAME, f"{PACKAGE_NAME}.__main__", f"{PACKAGE_NAME}.app", f"{PACKAGE_NAME}.config"}
 )
 LAYERS = frozenset({Layer.DOMAIN, Layer.APPLICATION, Layer.ADAPTERS})
+INNER_LAYERS_OF_THE_APPLICATION = frozenset({Layer.DOMAIN, Layer.APPLICATION})
 OUTER_LAYERS_OF_THE_ADAPTERS = frozenset({Layer.COMPOSITION_ROOT, Layer.TEST_SUPPORT})
 #: The libraries of plain values that do no I/O and read no clock, which .claude/rules/architecture.md > Layers lets the
 #: domain use.
@@ -59,6 +60,17 @@ DOMAIN_ALLOWLIST = frozenset(
         "unicodedata",
     }
 )
+#: What the application may import besides the inner layers: the libraries of plain values (contextlib, hashlib, hmac);
+#: Python's runtime, which .claude/rules/architecture.md > Ports and wiring lets the api's application use without a
+#: port (asyncio, logging, and secrets, which no test replaces); and a location that cannot open its file
+#: (pathlib.PurePath, .claude/rules/python.md, "Plain data is a frozen dataclass").
+APPLICATION_ALLOWLIST = DOMAIN_ALLOWLIST | frozenset(
+    {"asyncio", "contextlib", "hashlib", "hmac", "logging", "secrets", "pathlib.PurePath"}
+)
+#: pathlib holds both PurePath, which the application may import, and Path, which it may not, so its names are checked
+#: one by one.
+MODULES_CHECKED_BY_NAME = frozenset({"pathlib"})
+WALL_CLOCK_CLASSES = frozenset({"datetime", "date"})
 WALL_CLOCK_ATTRIBUTES = frozenset({"now", "today", "utcnow"})
 BUILTIN_INPUT_OUTPUT_FUNCTIONS = frozenset({"open", "print", "input", "exec", "eval", "compile", "__import__"})
 ASYNCIO_INPUT_OUTPUT_FUNCTIONS = frozenset(
@@ -69,6 +81,31 @@ ASYNCIO_INPUT_OUTPUT_FUNCTIONS = frozenset(
         "start_unix_server",
         "create_subprocess_exec",
         "create_subprocess_shell",
+        "create_connection",
+        "create_datagram_endpoint",
+        "create_server",
+        "create_unix_connection",
+        "create_unix_server",
+        "connect_accepted_socket",
+        "connect_read_pipe",
+        "connect_write_pipe",
+        "subprocess_exec",
+        "subprocess_shell",
+        "sock_accept",
+        "sock_connect",
+        "sock_recv",
+        "sock_recv_into",
+        "sock_recvfrom",
+        "sock_recvfrom_into",
+        "sock_sendall",
+        "sock_sendfile",
+        "sock_sendto",
+        "getaddrinfo",
+        "getnameinfo",
+        "start_tls",
+        "sendfile",
+        "add_reader",
+        "add_writer",
     }
 )
 
@@ -85,10 +122,14 @@ class LayerFindings:
     imports_outside_the_domain: list[str]
     wall_clock_reads: list[str]
     input_output_calls: list[str]
+    imports_outside_the_application: list[str]
+    application_wall_clock_reads: list[str]
+    application_input_output_calls: list[str]
     outer_imports_of_the_adapters: list[str]
     imports_of_unrestructured_modules: list[str]
     modules_on_an_import_cycle: list[str]
     domain_module_count: int
+    application_module_count: int
     adapter_module_count: int
     layered_module_count: int
     package_module_count: int
@@ -98,6 +139,7 @@ class LayerFindings:
 class PackageLayers:
     findings: LayerFindings
     domain_file_count: int
+    application_file_count: int
     adapter_file_count: int
     layered_file_count: int
     package_file_count: int
@@ -169,6 +211,22 @@ def list_imported_modules(module: SourceModule, package_modules: Collection[str]
     return list(dict.fromkeys(imported_modules))
 
 
+def resolve_import_by_name(
+    statement: ast.Import | ast.ImportFrom, module: SourceModule, package_modules: Collection[str]
+) -> list[str]:
+    if isinstance(statement, ast.ImportFrom) and statement.level == 0 and statement.module in MODULES_CHECKED_BY_NAME:
+        return [f"{statement.module}.{alias.name}" for alias in statement.names]
+    return resolve_import(statement, module, package_modules)
+
+
+def list_imported_names(module: SourceModule, package_modules: Collection[str]) -> list[str]:
+    statements = [node for node in walk_in_source_order(module.tree) if isinstance(node, ast.Import | ast.ImportFrom)]
+    imported_names = (
+        name for statement in statements for name in resolve_import_by_name(statement, module, package_modules)
+    )
+    return list(dict.fromkeys(imported_names))
+
+
 def select_modules(package: Mapping[str, SourceModule], layers: Collection[Layer]) -> list[SourceModule]:
     return [package[name] for name in sorted(package) if find_layer(name) in layers]
 
@@ -190,6 +248,21 @@ def find_imports_outside_the_domain(package: Mapping[str, SourceModule]) -> list
     ]
 
 
+def is_allowed_in_the_application(imported: str, package: Mapping[str, SourceModule]) -> bool:
+    return imported in APPLICATION_ALLOWLIST or (
+        imported in package and find_layer(imported) in INNER_LAYERS_OF_THE_APPLICATION
+    )
+
+
+def find_imports_outside_the_application(package: Mapping[str, SourceModule]) -> list[str]:
+    return [
+        f"{module.name} imports {imported}"
+        for module in select_modules(package, {Layer.APPLICATION})
+        for imported in list_imported_names(module, package.keys())
+        if not is_allowed_in_the_application(imported, package)
+    ]
+
+
 def find_wall_clock_reads(package: Mapping[str, SourceModule]) -> list[str]:
     return [
         f"{module.name} reads {node.attr}"
@@ -199,19 +272,61 @@ def find_wall_clock_reads(package: Mapping[str, SourceModule]) -> list[str]:
     ]
 
 
+def list_wall_clock_class_names(module: SourceModule) -> frozenset[str]:
+    aliases = (
+        alias.asname or alias.name
+        for node in walk_in_source_order(module.tree)
+        if isinstance(node, ast.ImportFrom) and node.level == 0 and node.module == "datetime"
+        for alias in node.names
+        if alias.name in WALL_CLOCK_CLASSES
+    )
+    return WALL_CLOCK_CLASSES | frozenset(aliases)
+
+
+def name_wall_clock_read_through_its_class(node: ast.stmt | ast.expr, class_names: Collection[str]) -> str | None:
+    match node:
+        case ast.Attribute(value=ast.Name(id=class_name), attr=attribute) if (
+            class_name in class_names and attribute in WALL_CLOCK_ATTRIBUTES
+        ):
+            return f"{class_name}.{attribute}"
+        case ast.Attribute(value=ast.Attribute(attr=class_name), attr=attribute) if (
+            class_name in WALL_CLOCK_CLASSES and attribute in WALL_CLOCK_ATTRIBUTES
+        ):
+            return f"{class_name}.{attribute}"
+    return None
+
+
+def find_wall_clock_reads_through_their_classes(package: Mapping[str, SourceModule]) -> list[str]:
+    reads: list[str] = []
+    for module in select_modules(package, {Layer.APPLICATION}):
+        class_names = list_wall_clock_class_names(module)
+        reads.extend(
+            f"{module.name} reads {read}"
+            for node in walk_in_source_order(module.tree)
+            if (read := name_wall_clock_read_through_its_class(node, class_names)) is not None
+        )
+    return reads
+
+
 def name_input_output_function(call: ast.Call) -> str | None:
     match call.func:
         case ast.Name(id=name) if name in BUILTIN_INPUT_OUTPUT_FUNCTIONS | ASYNCIO_INPUT_OUTPUT_FUNCTIONS:
             return name
         case ast.Attribute(attr=name) if name in ASYNCIO_INPUT_OUTPUT_FUNCTIONS:
             return name
-    return None
+    arguments = [*call.args, *(keyword.value for keyword in call.keywords)]
+    passed_functions = (
+        argument.id
+        for argument in arguments
+        if isinstance(argument, ast.Name) and argument.id in BUILTIN_INPUT_OUTPUT_FUNCTIONS
+    )
+    return next(passed_functions, None)
 
 
-def find_input_output_calls(package: Mapping[str, SourceModule]) -> list[str]:
+def find_input_output_calls(package: Mapping[str, SourceModule], layer: Layer) -> list[str]:
     return [
         f"{module.name} calls {function}"
-        for module in select_modules(package, {Layer.DOMAIN})
+        for module in select_modules(package, {layer})
         for node in walk_in_source_order(module.tree)
         if isinstance(node, ast.Call) and (function := name_input_output_function(node)) is not None
     ]
@@ -260,11 +375,15 @@ def check_layers(package: Mapping[str, SourceModule]) -> LayerFindings:
     return LayerFindings(
         imports_outside_the_domain=find_imports_outside_the_domain(package),
         wall_clock_reads=find_wall_clock_reads(package),
-        input_output_calls=find_input_output_calls(package),
+        input_output_calls=find_input_output_calls(package, Layer.DOMAIN),
+        imports_outside_the_application=find_imports_outside_the_application(package),
+        application_wall_clock_reads=find_wall_clock_reads_through_their_classes(package),
+        application_input_output_calls=find_input_output_calls(package, Layer.APPLICATION),
         outer_imports_of_the_adapters=find_outer_imports_of_the_adapters(package),
         imports_of_unrestructured_modules=find_imports_of_unrestructured_modules(package),
         modules_on_an_import_cycle=find_modules_on_an_import_cycle(package),
         domain_module_count=len(select_modules(package, {Layer.DOMAIN})),
+        application_module_count=len(select_modules(package, {Layer.APPLICATION})),
         adapter_module_count=len(select_modules(package, {Layer.ADAPTERS})),
         layered_module_count=len(select_modules(package, LAYERS)),
         package_module_count=len(package),
@@ -508,6 +627,64 @@ class TestTheLayersOfTheApi:
                         False,
                         "import re\nfrom dataclasses import dataclass\n\nfrom .pages import PAGE\n",
                     ),
+                    "scanmylib.application": (True, ""),
+                    "scanmylib.application.clock": (
+                        False,
+                        "from datetime import datetime\n"
+                        "from typing import Protocol\n"
+                        "\n"
+                        "\n"
+                        "class Clock(Protocol):\n"
+                        "    def now(self) -> datetime: ...\n",
+                    ),
+                    "scanmylib.application.sessions": (
+                        False,
+                        "import asyncio\n"
+                        "import hashlib\n"
+                        "import hmac\n"
+                        "import logging\n"
+                        "import secrets\n"
+                        "from contextlib import suppress\n"
+                        "from pathlib import PurePath as Location\n"
+                        "\n"
+                        "from ..domain.titles import TITLE\n"
+                        "from .clock import Clock\n"
+                        "\n"
+                        "\n"
+                        "def read_the_moment(clock: Clock) -> float:\n"
+                        "    return clock.now().timestamp()\n"
+                        "\n"
+                        "\n"
+                        "def read_the_loop_time() -> float:\n"
+                        "    return asyncio.get_running_loop().time()\n",
+                    ),
+                    "scanmylib.application.impure": (
+                        False,
+                        "import asyncio\n"
+                        "import datetime as moments\n"
+                        "import pathlib\n"
+                        "import sqlite3\n"
+                        "import time\n"
+                        "from datetime import date, datetime\n"
+                        "from datetime import datetime as Moment\n"
+                        "from pathlib import *\n"
+                        "from pathlib import Path, PurePath\n"
+                        "\n"
+                        "from ..adapters.sqlite import database\n"
+                        "\n"
+                        "MOMENT = datetime.now()\n"
+                        "TODAY = date.today\n"
+                        "ALIASED_MOMENT = Moment.now()\n"
+                        "UNIVERSAL_MOMENT = moments.datetime.utcnow()\n"
+                        "SCAN = open('scan.jpg')\n"
+                        "SERVER = asyncio.start_unix_server(None, 'ocr.sock')\n"
+                        "PROCESS = asyncio.get_running_loop().subprocess_exec(None, 'ocr')\n"
+                        "STARTED = time.time()\n"
+                        "THREADED_SCAN = asyncio.to_thread(open, 'scan.jpg')\n"
+                        "PRINTED = asyncio.get_running_loop().run_in_executor(None, print, 'scan')\n"
+                        "ADDRESSES = asyncio.get_running_loop().getaddrinfo('example.invalid', 80)\n"
+                        "CALLBACK = asyncio.get_running_loop().call_soon(callback=print)\n",
+                    ),
                     "scanmylib.adapters": (True, ""),
                     "scanmylib.adapters.sqlite": (True, ""),
                     "scanmylib.adapters.sqlite.rows": (
@@ -552,6 +729,39 @@ class TestTheLayersOfTheApi:
                     "scanmylib.domain.impure calls open_connection",
                 ]
 
+            def test_should_name_each_import_of_the_application_that_is_neither_an_inner_layer_nor_its_allowlist(
+                self, findings: LayerFindings
+            ) -> None:
+                assert findings.imports_outside_the_application == [
+                    "scanmylib.application.impure imports pathlib",
+                    "scanmylib.application.impure imports sqlite3",
+                    "scanmylib.application.impure imports time",
+                    "scanmylib.application.impure imports pathlib.*",
+                    "scanmylib.application.impure imports pathlib.Path",
+                    "scanmylib.application.impure imports scanmylib.adapters.sqlite.database",
+                ]
+
+            def test_should_name_each_wall_clock_read_through_its_classes_in_the_application_but_not_through_its_port(
+                self, findings: LayerFindings
+            ) -> None:
+                assert findings.application_wall_clock_reads == [
+                    "scanmylib.application.impure reads datetime.now",
+                    "scanmylib.application.impure reads date.today",
+                    "scanmylib.application.impure reads Moment.now",
+                    "scanmylib.application.impure reads datetime.utcnow",
+                ]
+
+            def test_should_name_each_input_or_output_call_in_the_application(self, findings: LayerFindings) -> None:
+                assert findings.application_input_output_calls == [
+                    "scanmylib.application.impure calls open",
+                    "scanmylib.application.impure calls start_unix_server",
+                    "scanmylib.application.impure calls subprocess_exec",
+                    "scanmylib.application.impure calls open",
+                    "scanmylib.application.impure calls print",
+                    "scanmylib.application.impure calls getaddrinfo",
+                    "scanmylib.application.impure calls print",
+                ]
+
             def test_should_name_each_composition_root_and_test_support_that_an_adapter_imports(
                 self, findings: LayerFindings
             ) -> None:
@@ -585,6 +795,7 @@ class TestTheLayersOfTheApi:
             return PackageLayers(
                 findings=check_layers(read_package(PACKAGE_DIRECTORY)),
                 domain_file_count=count_python_files(PACKAGE_DIRECTORY / "domain"),
+                application_file_count=count_python_files(PACKAGE_DIRECTORY / "application"),
                 adapter_file_count=count_python_files(PACKAGE_DIRECTORY / "adapters"),
                 layered_file_count=sum(count_python_files(directory) for directory in layered_directories),
                 package_file_count=count_python_files(PACKAGE_DIRECTORY)
@@ -605,6 +816,25 @@ class TestTheLayersOfTheApi:
             assert layers.domain_file_count > 0
             assert layers.findings.domain_module_count == layers.domain_file_count
             assert layers.findings.input_output_calls == []
+
+        def test_should_import_only_the_inner_layers_and_its_allowlist_from_the_application(
+            self, layers: PackageLayers
+        ) -> None:
+            assert layers.application_file_count > 0
+            assert layers.findings.application_module_count == layers.application_file_count
+            assert layers.findings.imports_outside_the_application == []
+
+        def test_should_read_the_wall_clock_only_through_its_port_in_the_application(
+            self, layers: PackageLayers
+        ) -> None:
+            assert layers.application_file_count > 0
+            assert layers.findings.application_module_count == layers.application_file_count
+            assert layers.findings.application_wall_clock_reads == []
+
+        def test_should_call_no_input_or_output_function_in_the_application(self, layers: PackageLayers) -> None:
+            assert layers.application_file_count > 0
+            assert layers.findings.application_module_count == layers.application_file_count
+            assert layers.findings.application_input_output_calls == []
 
         def test_should_import_no_composition_root_and_no_test_support_from_the_adapters(
             self, layers: PackageLayers

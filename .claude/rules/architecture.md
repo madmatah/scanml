@@ -36,6 +36,11 @@ are tools: their logic lives in `scripts/lib/`, and they follow the rules of SOL
 - **Inner layers own their ports.** When the application needs the outside world, it declares an interface in its own
   vocabulary, and an adapter implements it. The application reaches a technology only through that port: the database,
   the library's files, the OCR sandbox, the HTTP API of the PC, the camera, the clock.
+- **In the api, the application runs on Python's runtime without a port:** asyncio's event loop and what schedules the
+  application's own code on it (its tasks, locks, events and sleeps, the loop's own time, which orders and never dates,
+  and `to_thread` for a blocking port), since no data enters or leaves the program through them; `logging`, whose
+  records no rule reads and whose handlers the composition root sets; and `secrets`, the secure random source, on which
+  no rule depends. asyncio's servers, connections and subprocesses stay behind ports, like every other technology.
 - **Only composition roots wire.** The entry points of each unit (the api's `scanmylib.__main__` and the application
   factory it calls, the app's `ScanMyLibApplication`, `AppContainer` and `MainActivity`, the web UI's `main.js`, the
   sandbox's `supervisor`, `worker` and `engine_environment`) and the tests choose and connect the concrete adapters, by

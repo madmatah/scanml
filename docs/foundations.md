@@ -98,7 +98,8 @@ web UI's comes with its move to TypeScript and React; none is planned yet for th
 - **The domain is pure,** so it runs anywhere the language runs, and its tests need no I/O, no network and no framework.
   The rules of page numbering and of the reading order are its heart.
 - **The application reaches the outside world only through its ports,** declared in its own vocabulary, so its tests run
-  it on fakes, and each technology stays one implementation among possible others.
+  it on fakes, and each technology stays one implementation among possible others. Only the runtime it runs on goes
+  without one in the api, since nothing that a rule reads enters or leaves the program through it.
 - **Composition roots wire by hand,** so the whole graph sits in one place and the types check it. A DI container would
   resolve it at run time, by tokens.
 - **What is stored or shared is plain data,** so it saves, travels and replays as it is.
@@ -248,7 +249,7 @@ Each row names a rule, the rules file that states it, and what enforces it.
 | Part of the rules of the web UI's tests: assertions in tests only, no test focused or skipped by its name, no hook twice in a group, five levels at most (`.claude/rules/tests.md` > node:test) | Biome, in `scripts/check.sh lint` |
 | Part of the rules of continuous integration: actions pinned to commits, the jobs' permissions and credentials, no template injection (`.claude/rules/configuration.md` > Continuous integration) | zizmor, in `scripts/check.sh lint`; the unit tests of the workflows, in `scripts/check.sh scripts`, for the actions they may use, their permissions, their secrets, `pull_request_target` and what the release workflow runs |
 | A commit footer holds only what tools read (`CLAUDE.md` > Workflow) | `attribution` in `.claude/settings.json`, which keeps Claude Code's own commit trailers and pull request line out |
-| Part of the layers of the api: the domain imports only the domain and libraries of plain values, reads no wall clock and calls no input or output function; the adapters import no composition root and no test support; a module in a layer imports none still outside the layers; no import cycle (`.claude/rules/architecture.md` > Layers and > Responsibilities, `.claude/rules/tests.md` > Test support) | `server/tests/test_layers.py`, in `scripts/check.sh server` |
+| Part of the layers of the api: the domain imports only the domain and libraries of plain values, reads no wall clock and calls no input or output function; the application imports only the inner layers, libraries of plain values, Python's runtime and `PurePath`, reads the wall clock only through its port and calls no input or output function itself; the adapters import no composition root and no test support; a module in a layer imports none still outside the layers; no import cycle (`.claude/rules/architecture.md` > Layers, > Ports and wiring and > Responsibilities, `.claude/rules/python.md`, "Plain data is a frozen dataclass", `.claude/rules/tests.md` > Test support) | `server/tests/test_layers.py`, in `scripts/check.sh server` |
 | Every rule no tool can check: architecture, conventions, tests as specification… | `/expert-review` ([Code review](#code-review)), before every pull request |
 
 ## Conventions

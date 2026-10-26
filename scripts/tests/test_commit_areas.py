@@ -121,7 +121,7 @@ class TheListAreasTouchedFunctionWhenAShellScriptLiesWhereNoAreaReads(unittest.T
 
 class TheListAreasTouchedFunctionWhenPathsReachSeveralAreas(unittest.TestCase):
     def setUp(self) -> None:
-        changed_paths = ["server/scanmylib/app.py", "scripts/release.py", "server/tests/test_db.py"]
+        changed_paths = ["server/scanmylib/app.py", "scripts/release.py", "server/tests/test_sqlite_database.py"]
         self.areas = commit_areas.list_areas_touched(changed_paths)
 
     def test_should_list_each_area_once_in_the_gate_s_order(self) -> None:

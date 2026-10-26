@@ -14,11 +14,11 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import __version__
+from .adapters.sqlite.database import Database
 from .api import documents, pages, system, web
 from .api.deps import Services
 from .auth import Authenticator, load_or_create_token
 from .config import Settings
-from .db import Database
 from .images import MAX_UPLOAD_BYTES, ImageRejected, ImageTooLarge
 from .library import LibraryService
 from .middleware import BodySizeLimitMiddleware, SecurityHeadersMiddleware, body_limit

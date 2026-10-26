@@ -28,7 +28,8 @@ are tools: their logic lives in `scripts/lib/`, and they follow the rules of SOL
 - **The code written before these layers keeps its layout until it is restructured,** which is planned for the api, the
   app and the web UI, not yet for the OCR sandbox. Until then, a new module follows the layers, and a change to an older
   one adds no coupling that they forbid: no technology reached from code that holds a rule, no rule in an adapter, no
-  framework type across a port.
+  framework type across a port. A module in a layer's directory, moved or new, imports none that is still outside the
+  layers, which would bring it that module's couplings.
 
 ## Ports and wiring
 

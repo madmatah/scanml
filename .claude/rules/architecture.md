@@ -43,6 +43,8 @@ are tools: their logic lives in `scripts/lib/`, and they follow the rules of SOL
   between callers.
 - **Plain data crosses boundaries:** values whose types belong to the inner side. No framework or platform type crosses
   a port: no FastAPI request, no `sqlite3.Row`, no Android `Uri` or `Context`.
+- **A location crosses a port as a value that names its file and cannot open it,** so that an inner layer does no I/O
+  that its types or its review would not show; only an adapter that reads or writes that file opens it.
 - **A module's public API is its single entry point.** Everything else is internal, and nothing reaches inside another
   module.
 

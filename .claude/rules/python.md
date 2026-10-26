@@ -19,7 +19,10 @@ Software Foundation's style guide (PEP 8) and its typing PEPs. These rules come 
   that a type may name a class defined further down. No `Any`, except where untyped data enters, such as parsed JSON,
   which becomes typed values at once.
 - **Plain data is a frozen dataclass** (`@dataclass(frozen=True)`), and a closed set of values an `enum.Enum`. A dict
-  crosses no module boundary, except at the edge where it becomes JSON.
+  crosses no module boundary, except at the edge where it becomes JSON. A location that crosses a port is a
+  `pathlib.PurePath`, which has none of `Path`'s file-system methods, so mypy refuses a call such as `read_bytes()` or
+  `is_file()` on it; an adapter's own `Path` passes as one; an adapter that calls `Path`'s methods on a location it
+  receives makes a `Path` of it first, and a library that takes any path-like takes it as it is.
 - **Errors say what went wrong.** An exception is named after it and derives from the nearest built-in one
   (`NotFound(LookupError)`, `ImageRejected(ValueError)`). `raise … from error` keeps the cause, and `from None` replaces
   it on purpose. Catch the narrowest exception. `except Exception` only at a boundary that must keep running, such as

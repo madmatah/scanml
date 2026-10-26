@@ -10,7 +10,7 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from scanmylib.library import MAX_OCR_RETRIES
+from scanmylib.domain.pages import MAX_OCR_RETRIES
 from scanmylib.storage import LibraryFiles
 from support import (
     AUTH,

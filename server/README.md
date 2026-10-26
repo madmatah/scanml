@@ -16,6 +16,7 @@ Everything runs in Docker; nothing is installed on the host.
 | `library.py` | all mutations: documents, pages, OCR results; keeps DB and files in sync |
 | `domain/ordering.py` | page numbers (arabic, roman, spreads), inference, duplicates, placement and reading order, positions for a manual order, coverage |
 | `domain/documents.py` | a document's rules: what a new one takes, the slug of its folder, the summary of its layout |
+| `domain/pages.py` | a page's rules: its key, its OCR attempts and the summary of its OCR, the orientation the sandbox detects |
 | `domain/assemble.py`, `publisher.py` | `document.md`, `document.json`, `INDEX.md`, `library.json` |
 | `domain/text.py` | user-entered text, slugs, collation |
 | `domain/timestamps.py` | moments written as text, in the API and in the names of keys and folders |

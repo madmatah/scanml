@@ -16,6 +16,7 @@ import logging
 import time
 
 from . import images
+from .domain.pages import should_detect_orientation
 from .domain.records import PageClaim
 from .library import LibraryService
 from .ocr_client import OcrClient, OcrPageFailed, OcrPageRejected, OcrUnavailable
@@ -112,8 +113,7 @@ class OcrLoop:
                 image,
                 request_id=claim.page_id,
                 unwarp=claim.unwarp,
-                # A rotation chosen by the user must not be undone by auto-orientation.
-                orientation=claim.rotation == 0,
+                orientation=should_detect_orientation(claim.rotation),
             )
         except OcrUnavailable as exc:
             log.warning("OCR sandbox unavailable (%s); page %s stays queued", exc, claim.key)

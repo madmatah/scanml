@@ -27,13 +27,19 @@ from .config import Settings
 from .debounce import DebouncedBatch
 from .domain import ordering, timestamps
 from .domain.documents import check_document_changes, prepare_new_document, propose_slugs, summarize_layout
+from .domain.pages import (
+    AttemptOutcome,
+    conclude_failed_attempt,
+    conclude_released_attempt,
+    propose_page_keys,
+    summarize_ocr,
+)
 from .domain.records import (
     UNCHANGED,
     Conflict,
     DocumentChanges,
     DocumentRecord,
     NotFound,
-    OcrSummary,
     PageChanges,
     PageClaim,
     PageRecord,
@@ -44,9 +50,6 @@ from .publisher import Publisher
 from .storage import DOCUMENT_MARKDOWN, LibraryFiles, atomic_write
 
 log = logging.getLogger(__name__)
-
-#: A page whose processing fails (sandbox error 500) is retried this many times.
-MAX_OCR_RETRIES = 3
 
 _LAYOUT_COLUMNS = (
     "number",
@@ -353,10 +356,7 @@ class LibraryService:
         return page
 
     def _free_key(self, document_id: str, captured: datetime, page_id: str) -> str:
-        """``<capture time>_<page id prefix>``, longer prefix in the unlikely case of a clash."""
-        hex_id = page_id.replace("-", "")
-        for length in (8, 12, 16, 32):
-            key = f"{timestamps.compact(captured)}_{hex_id[:length]}"
+        for key in propose_page_keys(captured, page_id):
             clash = self._db.one("SELECT 1 FROM pages WHERE document_id = ? AND key = ?", (document_id, key))
             if clash is None:
                 return key
@@ -505,34 +505,27 @@ class LibraryService:
         return self._files.scan_path(claim.slug, claim.key, claim.scan_ext)
 
     def release_page(self, claim: PageClaim) -> None:
-        """Put a page back in the queue without counting an attempt (sandbox unavailable)."""
-        self._end_attempt(claim, status="queued", attempts=claim.attempts, error=None)
+        self._end_attempt(claim, conclude_released_attempt(claim.attempts))
 
     def fail_page(self, claim: PageClaim, message: str, *, retry: bool) -> bool:
         """Record a failed attempt; returns True if the page will be retried."""
-        attempts = claim.attempts + 1
-        retried = retry and attempts <= MAX_OCR_RETRIES
-        self._end_attempt(
-            claim,
-            status="queued" if retried else "error",
-            attempts=attempts,
-            error=None if retried else message,
-        )
-        return retried
+        outcome = conclude_failed_attempt(claim.attempts, message, is_retryable=retry)
+        self._end_attempt(claim, outcome)
+        return outcome.status == "queued"
 
-    def _end_attempt(self, claim: PageClaim, *, status: str, attempts: int, error: str | None) -> None:
+    def _end_attempt(self, claim: PageClaim, outcome: AttemptOutcome) -> None:
         with self._db.transaction():
             updated = self._db.execute(
                 "UPDATE pages SET status = ?, attempts = ?, error = ?"
                 " WHERE id = ? AND generation = ? AND status = 'processing'",
-                (status, attempts, error, claim.page_id, claim.generation),
+                (outcome.status, outcome.attempt_count, outcome.error, claim.page_id, claim.generation),
             ).rowcount
             if not updated:
                 return
-            if status == "error":
+            if outcome.status == "error":
                 self._touch(claim.document_id)
             self._refresh_layout(claim.document_id)
-        if status == "error":
+        if outcome.status == "error":
             self._assembly.schedule(claim.document_id)
 
     async def complete_page(self, claim: PageClaim, output: PageOcrOutput, duration_s: float) -> bool:
@@ -549,14 +542,13 @@ class LibraryService:
                 [(image.filename, image.data) for image in output.images],
                 output.raw,
             )
-            ocr: OcrSummary = {
-                "engine": output.engine.lower(),
-                "model": output.engine,
-                "duration_s": round(duration_s, 2),
-                "at": timestamps.iso(clock.now()),
-                "images": len(output.images),
-                "chars": len(output.markdown),
-            }
+            ocr = summarize_ocr(
+                engine=output.engine,
+                markdown=output.markdown,
+                image_count=len(output.images),
+                duration_seconds=duration_s,
+                finished_at=clock.now(),
+            )
             with self._db.transaction():
                 updated = self._db.execute(
                     "UPDATE pages SET status = 'done', error = NULL, attempts = 0,"

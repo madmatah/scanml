@@ -15,6 +15,7 @@ from fastapi.staticfiles import StaticFiles
 
 from . import __version__
 from .adapters.sqlite.database import Database
+from .adapters.system_clock import SystemClock
 from .api import documents, pages, system, web
 from .api.deps import Services
 from .auth import Authenticator, load_or_create_token
@@ -65,8 +66,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         db = Database(settings.db_path)
-        library = LibraryService(settings, db, LibraryFiles(settings.library_dir))
-        auth = Authenticator(load_or_create_token(settings.token_path, settings.token), db)
+        clock = SystemClock()
+        library = LibraryService(settings, db, LibraryFiles(settings.library_dir, clock), clock)
+        auth = Authenticator(load_or_create_token(settings.token_path, settings.token), db, clock)
         ocr = OcrClient(settings.ocr_socket, settings.ocr_timeout_s)
         ocr_loop = OcrLoop(library, ocr, max_side=settings.ocr_max_side, retry_max_s=settings.ocr_retry_max_s)
         library.add_work_listener(ocr_loop.notify)

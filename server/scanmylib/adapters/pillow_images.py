@@ -13,7 +13,7 @@ from pathlib import PurePath
 
 from PIL import Image, UnidentifiedImageError
 
-from .application.scan_images import ImageRejected, ImageTooLarge, ScanInfo
+from ..application.scan_images import ImageRejected, ImageTooLarge, ScanInfo
 
 MAX_UPLOAD_BYTES = 40 * 1024 * 1024
 MAX_UPLOAD_PIXELS = 120_000_000

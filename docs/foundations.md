@@ -159,9 +159,10 @@ The modules as they are, and the layer each one belongs to, whose directory the 
 | api | `preview` | Rendering of the HTML previews | Adapters |
 | api | `adapters/sqlite/database`, `adapters/sqlite/rows` | SQLite state, its rows read into records, and the summary of a document's layout written as JSON | Adapters |
 | api | `adapters/system_clock` | The wall clock, in the server's time zone | Adapters |
+| api | `adapters/pillow_images` | Pillow: the checks of an upload, thumbnails, the image sent to the OCR, re-encoded illustrations | Adapters |
 | api | `storage`, `export` | The library's files, atomic writes and trash; zip archives | Adapters |
 | api | `ocr_client`, `ocr_result` | Client of the sandbox protocol, and validation of its untrusted results | Adapters |
-| api | `images`, `sanitize`, `qr`, `published_apk` | Pillow, the Markdown sanitizer, QR codes, the published APK's metadata | Adapters |
+| api | `sanitize`, `qr`, `published_apk` | The Markdown sanitizer, QR codes, the published APK's metadata | Adapters |
 | api | `api/`, `auth`, `middleware` | HTTP routes, the times that clients send, authentication, security headers and body limits | Adapters |
 | api | `devtools/fake_ocr` | The fake OCR sandbox of the development stack and the tests | Test support |
 | web UI | `main.js` | Entry point | Composition root |

@@ -7,7 +7,7 @@ paths:
   - "scripts/**"
   - ".claude/skills/running-tests/SKILL.md"
   - "server/scanmylib/ocr_*.py"
-  - "server/scanmylib/images.py"
+  - "server/scanmylib/adapters/pillow_images.py"
   - "server/scanmylib/sanitize.py"
   - "server/scanmylib/preview.py"
   - "server/scanmylib/domain/assemble.py"

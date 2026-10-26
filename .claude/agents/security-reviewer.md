@@ -14,10 +14,10 @@ gives, and follow it.
 
 Changes to code that reads input from outside the program or passes data to a parser of markup, queries or commands
 (`server/scanmylib/api/**`, `server/scanmylib/adapters/**`, `server/scanmylib/auth.py`,
-`server/scanmylib/middleware.py`, `server/scanmylib/images.py`, `server/scanmylib/sanitize.py`,
-`server/scanmylib/preview.py`, `server/scanmylib/ocr_client.py`, `server/scanmylib/ocr_result.py`,
-`server/scanmylib/config.py`, `server/scanmylib/web/static/js/**`, the app's `api/`,
-`pairing/`, `update/`, `library/`, `ui/components/TextFromPc.kt` and the screens that show text from the PC
+`server/scanmylib/middleware.py`, `server/scanmylib/sanitize.py`, `server/scanmylib/preview.py`,
+`server/scanmylib/ocr_client.py`, `server/scanmylib/ocr_result.py`, `server/scanmylib/config.py`,
+`server/scanmylib/web/static/js/**`, the app's `api/`, `pairing/`, `update/`, `library/`,
+`ui/components/TextFromPc.kt` and the screens that show text from the PC
 (`ui/components/`, `ui/document/`, `ui/library/`, `ui/pairing/`, `ui/settings/` and `ui/share/`),
 `android/app/src/main/AndroidManifest.xml`, `ocr/scanmylib_ocr/**` and `scripts/**`), and changes to files matching the
 `paths` of `.claude/rules/configuration.md`. If none of these

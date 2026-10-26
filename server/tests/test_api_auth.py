@@ -22,9 +22,9 @@ from starlette.formparsers import MultiPartParser
 from starlette.routing import BaseRoute, Mount
 
 from scanmylib import __version__
+from scanmylib.adapters.pillow_images import MAX_UPLOAD_BYTES
 from scanmylib.app import create_app
 from scanmylib.auth import load_or_create_token
-from scanmylib.images import MAX_UPLOAD_BYTES
 from scanmylib.middleware import CONTENT_SECURITY_POLICY
 from support import (
     AUTH,

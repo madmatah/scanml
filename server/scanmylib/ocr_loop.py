@@ -15,7 +15,7 @@ import contextlib
 import logging
 import time
 
-from . import images
+from .application.scan_images import ImageRejected, OcrImages
 from .domain.pages import should_detect_orientation
 from .domain.records import PageClaim
 from .library import LibraryService
@@ -29,9 +29,12 @@ _PREWARM_INTERVAL_S = 60.0
 
 
 class OcrLoop:
-    def __init__(self, library: LibraryService, client: OcrClient, *, max_side: int, retry_max_s: float) -> None:
+    def __init__(
+        self, library: LibraryService, client: OcrClient, ocr_images: OcrImages, *, max_side: int, retry_max_s: float
+    ) -> None:
         self._library = library
         self._client = client
+        self._ocr_images = ocr_images
         self._max_side = max_side
         self._retry_max_s = retry_max_s
         self._wake = asyncio.Event()
@@ -102,8 +105,8 @@ class OcrLoop:
         """OCR one page. Returns False when the sandbox is unavailable (page re-queued)."""
         scan = self._library.locate_claimed_scan(claim)
         try:
-            image = await asyncio.to_thread(images.prepare_for_ocr, scan, claim.rotation, self._max_side)
-        except (OSError, images.ImageRejected) as exc:
+            image = await asyncio.to_thread(self._ocr_images.prepare_for_ocr, scan, claim.rotation, self._max_side)
+        except (OSError, ImageRejected) as exc:
             self._library.fail_page(claim, f"Unreadable scan: {exc}", retry=False)
             return True
 

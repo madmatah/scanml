@@ -23,7 +23,7 @@ Everything runs in Docker; nothing is installed on the host.
 | `application/clock.py`, `adapters/system_clock.py` | the clock the application reads, and the wall clock behind it, in the container's `TZ` |
 | `storage.py` | library folder: atomic writes, `.trash/`, safe file resolution |
 | `sanitize.py`, `preview.py` | untrusted OCR Markdown → safe Markdown; Markdown → allowlisted HTML |
-| `images.py` | Pillow: upload checks, thumbnails, image sent to the sandbox, re-encoded illustrations |
+| `images.py`, `application/scan_images.py` | Pillow: upload checks, thumbnails, image sent to the sandbox, re-encoded illustrations; the ports through which the application handles them, and their errors |
 | `ocr_client.py`, `ocr_result.py`, `ocr_loop.py` | sandbox client, response validation, the single OCR loop |
 | `auth.py`, `middleware.py` | token / cookie session / CSRF header, security headers, body limits |
 | `api/` | HTTP routes |

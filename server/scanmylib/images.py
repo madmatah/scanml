@@ -9,10 +9,11 @@ from __future__ import annotations
 
 import io
 import warnings
-from dataclasses import dataclass
-from pathlib import Path
+from pathlib import PurePath
 
 from PIL import Image, UnidentifiedImageError
+
+from .application.scan_images import ImageRejected, ImageTooLarge, ScanInfo
 
 MAX_UPLOAD_BYTES = 40 * 1024 * 1024
 MAX_UPLOAD_PIXELS = 120_000_000
@@ -52,24 +53,7 @@ _TRANSPOSE = {
 }
 
 
-class ImageRejected(ValueError):
-    """The bytes are not an acceptable image."""
-
-
-class ImageTooLarge(ImageRejected):
-    """The image is acceptable in kind but exceeds a size limit."""
-
-
-@dataclass(frozen=True)
-class ScanInfo:
-    """An accepted upload: file extension and displayed size (EXIF orientation applied)."""
-
-    ext: str
-    width: int
-    height: int
-
-
-def _open(source: bytes | Path, max_pixels: int, max_side: int | None = None) -> Image.Image:
+def _open(source: bytes | PurePath, max_pixels: int, max_side: int | None = None) -> Image.Image:
     """Open an image with the allowed decoders, checking its size before decoding."""
     stream = io.BytesIO(source) if isinstance(source, bytes) else source
     try:
@@ -159,12 +143,12 @@ def ingest_scan(data: bytes) -> tuple[ScanInfo, bytes]:
     return ScanInfo(ext=ext, width=width, height=height), thumbnail
 
 
-def make_thumbnail(scan: Path, rotation: int) -> bytes:
+def make_thumbnail(scan: PurePath, rotation: int) -> bytes:
     with _open(scan, MAX_UPLOAD_PIXELS) as image:
         return _thumbnail(image, rotation)
 
 
-def prepare_for_ocr(scan: Path, rotation: int, max_side: int) -> bytes:
+def prepare_for_ocr(scan: PurePath, rotation: int, max_side: int) -> bytes:
     """The image sent to the sandbox: oriented, rotated, downscaled, metadata-free JPEG."""
     with _open(scan, MAX_UPLOAD_PIXELS) as image:
         _decode(image)
@@ -181,3 +165,14 @@ def reencode_ocr_image(data: bytes) -> bytes:
     with _open(data, MAX_OCR_IMAGE_PIXELS, MAX_OCR_IMAGE_SIDE) as image:
         _decode(image)
         return _jpeg(_rgb(image), quality=90)
+
+
+class PillowImages:
+    def ingest_scan(self, encoded_scan: bytes) -> tuple[ScanInfo, bytes]:
+        return ingest_scan(encoded_scan)
+
+    def make_thumbnail(self, scan: PurePath, rotation_degrees: int) -> bytes:
+        return make_thumbnail(scan, rotation_degrees)
+
+    def prepare_for_ocr(self, scan: PurePath, rotation_degrees: int, max_side_pixels: int) -> bytes:
+        return prepare_for_ocr(scan, rotation_degrees, max_side_pixels)

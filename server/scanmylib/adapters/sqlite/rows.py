@@ -4,9 +4,22 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from collections.abc import Mapping
 
 from ...domain.ordering import Coverage, PageNumber
-from ...domain.records import DocumentRecord, PageClaim, PageRecord
+from ...domain.records import DocumentRecord, DocumentStats, PageClaim, PageRecord
+
+
+def build_document_stats(stats: Mapping[str, int]) -> DocumentStats:
+    return DocumentStats(
+        page_count=stats.get("pages", 0),
+        done_count=stats.get("done", 0),
+        queued_count=stats.get("queued", 0),
+        processing_count=stats.get("processing", 0),
+        error_count=stats.get("error", 0),
+        excluded_count=stats.get("excluded", 0),
+        duplicate_count=stats.get("duplicates", 0),
+    )
 
 
 def build_document_record(row: sqlite3.Row) -> DocumentRecord:
@@ -22,7 +35,7 @@ def build_document_record(row: sqlite3.Row) -> DocumentRecord:
         unwarp=bool(row["unwarp"]),
         created_at=row["created_at"],
         updated_at=row["updated_at"],
-        stats=layout.get("stats") or {},
+        stats=build_document_stats(layout.get("stats") or {}),
         coverage=Coverage(
             ranges=tuple((start, end) for start, end in coverage.get("ranges", [])),
             unnumbered=coverage.get("unnumbered", 0),

@@ -1,4 +1,4 @@
-"""Database schema: creation, and in-place upgrade of a database made by an older api."""
+"""The SQLite database: the creation of its schema, and the in-place upgrade of a database made by an older api."""
 
 from __future__ import annotations
 
@@ -16,10 +16,10 @@ from typing import Any, NamedTuple
 import pytest
 from fastapi.testclient import TestClient
 
-from scanmylib import db as db_module
+from scanmylib.adapters.sqlite import database
+from scanmylib.adapters.sqlite.database import SCHEMA_VERSION, Database
 from scanmylib.app import create_app
 from scanmylib.config import Settings
-from scanmylib.db import SCHEMA_VERSION, Database
 from scanmylib.devtools.fake_ocr import FakeOcrServer
 from support import AUTH, TOKEN
 
@@ -280,7 +280,7 @@ def api_on_a_version_1_database(tmp_path_factory: pytest.TempPathFactory, reques
     )
 
 
-class TestTheDatabase:
+class TestTheSqliteDatabase:
     class TestTheDatabaseConstructor:
         class TestWhenTheFileHoldsAVersion1Database:
             @pytest.fixture
@@ -335,7 +335,7 @@ class TestTheDatabase:
                 path = tmp_path / "scanmylib.db"
                 make_version_1_database(path)
                 failing_upgrade = "ALTER TABLE pages RENAME COLUMN position TO rank; ALTER TABLE nothing ADD COLUMN x;"
-                monkeypatch.setitem(db_module._UPGRADES, 1, failing_upgrade)
+                monkeypatch.setitem(database._UPGRADES, 1, failing_upgrade)
                 return Opening(path=path, schema_version=1, open_the_database=lambda: Database(path))
 
             def test_should_raise_the_error_of_sqlite(self, opening: Opening) -> None:

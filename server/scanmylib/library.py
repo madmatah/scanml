@@ -21,8 +21,8 @@ from datetime import datetime
 from pathlib import Path
 
 from . import clock, images
+from .adapters.sqlite.database import Database
 from .config import Settings
-from .db import Database
 from .debounce import DebouncedBatch
 from .domain import ordering
 from .domain.text import slugify

@@ -21,7 +21,7 @@ from pathlib import Path
 from fastapi import HTTPException, Request, status
 
 from . import clock
-from .db import Database
+from .adapters.sqlite.database import Database
 
 SESSION_COOKIE = "scanmylib_session"
 SESSION_MAX_AGE_S = 365 * 24 * 3600

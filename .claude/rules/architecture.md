@@ -23,7 +23,7 @@ are tools: their logic lives in `scripts/lib/`, and they follow the rules of SOL
   composition roots on every layer. A library of plain values that does no I/O and reads no clock may serve any layer.
 - **No dependency cycle,** between modules of the same layer included.
 - **The api reaches the OCR engine only through the sandbox protocol** (`docs/OCR_SANDBOX.md`), behind the application's
-  OCR port: the sandbox implements the protocol in its own process, and so does the fake OCR in the development stack.
+  OCR ports: the sandbox implements the protocol in its own process, and so does the fake OCR in the development stack.
   The api never depends on a particular engine or model, so that another one can be plugged in by implementing a new
   worker.
 - **The code written before these layers keeps its layout until it is restructured,** which is planned for the api, the

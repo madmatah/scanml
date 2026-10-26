@@ -8,7 +8,7 @@ from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request
 
-from ..adapters.ocr_sandbox.client import OcrClient
+from ..application.ocr_engine import OcrEngineMonitor
 from ..auth import Authenticator
 from ..config import Settings
 from ..library import LibraryService
@@ -22,7 +22,7 @@ class Services:
     settings: Settings
     library: LibraryService
     auth: Authenticator
-    ocr: OcrClient
+    ocr: OcrEngineMonitor
 
 
 # Dependencies are coroutines so that they run on the event loop thread, the

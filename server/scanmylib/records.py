@@ -10,7 +10,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import TypedDict
 
-from .ordering import Coverage, PageInput, PageNumber
+from .domain.ordering import Coverage, PageInput, PageNumber
 
 DEFAULT_KIND = "document"
 

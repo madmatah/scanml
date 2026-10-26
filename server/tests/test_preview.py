@@ -17,7 +17,7 @@ from hostile_markup import (
     parse_markup,
     sanitize_page,
 )
-from scanmylib.assemble import GapSection, PageSection, Section, UnnumberedHeading
+from scanmylib.domain.assemble import GapSection, PageSection, Section, UnnumberedHeading
 from scanmylib.preview import MAX_RENDERED_LENGTH, render_document, render_markdown
 
 FILES_URL = "/api/documents/d0c/files"

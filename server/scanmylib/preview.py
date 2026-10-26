@@ -31,7 +31,7 @@ from dataclasses import dataclass
 import nh3
 from markdown_it import MarkdownIt
 
-from .assemble import GapSection, PageSection, Section, UnnumberedHeading
+from .domain.assemble import GapSection, PageSection, Section, UnnumberedHeading
 
 _markdown = MarkdownIt("commonmark", {"html": True}).enable(["table", "strikethrough"])
 

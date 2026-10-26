@@ -10,7 +10,7 @@ paths:
   - "server/scanmylib/images.py"
   - "server/scanmylib/sanitize.py"
   - "server/scanmylib/preview.py"
-  - "server/scanmylib/assemble.py"
+  - "server/scanmylib/domain/assemble.py"
   - "server/scanmylib/devtools/**"
   - "android/app/src/main/AndroidManifest.xml"
 ---

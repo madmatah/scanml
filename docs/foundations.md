@@ -148,10 +148,11 @@ The modules as they are, and the layer each one belongs to, whose directory the 
 | Unit | Module | Responsibility | Layer |
 |---|---|---|---|
 | api | `__main__`, `app`, `config` | Entry point, wiring of the services and routes, settings from the environment | Composition root |
-| api | `ordering` | Page numbering, reading order, duplicates and coverage of a document | Domain |
-| api | `records`, `text` | Typed records and the inputs of library operations; slugs and collation | Domain |
+| api | `domain/ordering` | Page numbering, reading order, duplicates and coverage of a document | Domain |
+| api | `records`, `domain/text` | Typed records and the inputs of library operations; slugs and collation | Domain |
 | api | `library`, `ocr_loop`, `publisher`, `debounce` | Documents and pages kept in sync with the library; the single OCR loop; publication of the library files | Application |
-| api | `assemble`, `preview` | Rendering of the library files and of the HTML previews | Domain (the rendering) and adapters (the files) |
+| api | `domain/assemble` | Rendering of the library files | Domain |
+| api | `preview` | Rendering of the HTML previews | Adapters |
 | api | `db`, `storage`, `export` | SQLite state; the library's files, atomic writes and trash; zip archives | Adapters |
 | api | `ocr_client`, `ocr_result` | Client of the sandbox protocol, and validation of its untrusted results | Adapters |
 | api | `images`, `sanitize`, `qr`, `clock`, `published_apk` | Pillow, the Markdown sanitizer, QR codes, timestamps, the published APK's metadata | Adapters |

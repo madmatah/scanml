@@ -22,6 +22,7 @@ from fastapi import HTTPException, Request, status
 
 from . import clock
 from .adapters.sqlite.database import Database
+from .domain import timestamps
 
 SESSION_COOKIE = "scanmylib_session"
 SESSION_MAX_AGE_S = 365 * 24 * 3600
@@ -85,7 +86,12 @@ class Authenticator:
         with self._db.transaction():
             self._db.execute(
                 "INSERT INTO sessions (id_hash, token_fingerprint, created_at, expires_ts) VALUES (?, ?, ?, ?)",
-                (_digest(session_id), self._token_fingerprint, clock.iso(clock.now()), time.time() + SESSION_MAX_AGE_S),
+                (
+                    _digest(session_id),
+                    self._token_fingerprint,
+                    timestamps.iso(clock.now()),
+                    time.time() + SESSION_MAX_AGE_S,
+                ),
             )
         return session_id
 

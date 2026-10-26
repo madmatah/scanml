@@ -9,7 +9,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from . import clock, preview
-from .domain import assemble
+from .domain import assemble, timestamps
 from .records import DocumentRecord, PageRecord
 from .storage import LibraryFiles
 
@@ -91,7 +91,7 @@ class Publisher:
             assemble.IndexEntry(_meta(document), document.pages_in_document, document.coverage)
             for document in documents
         ]
-        generated_at = clock.iso(clock.now())
+        generated_at = timestamps.iso(clock.now())
         self._files.write_index(
             assemble.render_index_markdown(entries, generated_at),
             assemble.render_index_metadata(entries, generated_at),

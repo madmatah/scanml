@@ -24,7 +24,7 @@ from . import clock, images
 from .adapters.sqlite.database import Database
 from .config import Settings
 from .debounce import DebouncedBatch
-from .domain import ordering
+from .domain import ordering, timestamps
 from .domain.text import slugify
 from .ocr_result import PageOcrOutput
 from .publisher import Publisher
@@ -226,8 +226,8 @@ class LibraryService:
                         kind,
                         changes.notes or "",
                         int(unwarp),
-                        clock.iso(moment),
-                        clock.iso(moment),
+                        timestamps.iso(moment),
+                        timestamps.iso(moment),
                         moment.timestamp(),
                     ),
                 )
@@ -291,7 +291,7 @@ class LibraryService:
         moment = clock.now()
         self._db.execute(
             "UPDATE documents SET updated_at = ?, updated_ts = ? WHERE id = ?",
-            (clock.iso(moment), moment.timestamp(), document_id),
+            (timestamps.iso(moment), moment.timestamp(), document_id),
         )
 
     def _remove_thumbnails(self, page_ids: Iterable[str]) -> None:
@@ -337,9 +337,9 @@ class LibraryService:
                             info.ext,
                             upload.session_id,
                             upload.seq,
-                            clock.iso(captured),
+                            timestamps.iso(captured),
                             captured.timestamp(),
-                            clock.iso(uploaded),
+                            timestamps.iso(uploaded),
                             uploaded.timestamp(),
                             info.width,
                             info.height,
@@ -364,7 +364,7 @@ class LibraryService:
         """``<capture time>_<page id prefix>``, longer prefix in the unlikely case of a clash."""
         hex_id = page_id.replace("-", "")
         for length in (8, 12, 16, 32):
-            key = f"{clock.compact(captured)}_{hex_id[:length]}"
+            key = f"{timestamps.compact(captured)}_{hex_id[:length]}"
             clash = self._db.one("SELECT 1 FROM pages WHERE document_id = ? AND key = ?", (document_id, key))
             if clash is None:
                 return key
@@ -568,7 +568,7 @@ class LibraryService:
                 "engine": output.engine.lower(),
                 "model": output.engine,
                 "duration_s": round(duration_s, 2),
-                "at": clock.iso(clock.now()),
+                "at": timestamps.iso(clock.now()),
                 "images": len(output.images),
                 "chars": len(output.markdown),
             }

@@ -7,7 +7,6 @@ import json
 import sqlite3
 from dataclasses import dataclass
 from datetime import datetime
-from pathlib import Path
 from typing import TypedDict
 
 from .domain.ordering import Coverage, PageInput, PageNumber
@@ -215,6 +214,6 @@ class PageClaim:
     attempts: int
     key: str
     slug: str
-    scan: Path
+    scan_ext: str
     rotation: int
     unwarp: bool

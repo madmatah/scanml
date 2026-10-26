@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import TypedDict
 
-from .domain.ordering import Coverage, PageInput, PageNumber
+from .ordering import Coverage, PageInput, PageNumber
 
 DEFAULT_KIND = "document"
 

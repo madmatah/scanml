@@ -149,7 +149,7 @@ The modules as they are, and the layer each one belongs to, whose directory the 
 |---|---|---|---|
 | api | `__main__`, `app`, `config` | Entry point, wiring of the services and routes, settings from the environment | Composition root |
 | api | `domain/ordering` | Page numbering, reading order, duplicates and coverage of a document | Domain |
-| api | `records`, `domain/text` | Typed records and the inputs of library operations; slugs and collation | Domain |
+| api | `domain/records`, `domain/text` | Typed records and the inputs of library operations; slugs and collation | Domain |
 | api | `domain/timestamps` | Moments written as text, in the API and in the names of keys and folders | Domain |
 | api | `library`, `ocr_loop`, `publisher`, `debounce` | Documents and pages kept in sync with the library; the single OCR loop; publication of the library files | Application |
 | api | `domain/assemble` | Rendering of the library files | Domain |

@@ -26,10 +26,7 @@ from .adapters.sqlite.rows import build_document_record, build_page_claim, build
 from .config import Settings
 from .debounce import DebouncedBatch
 from .domain import ordering, timestamps
-from .domain.text import slugify
-from .ocr_result import PageOcrOutput
-from .publisher import Publisher
-from .records import (
+from .domain.records import (
     DEFAULT_KIND,
     UNCHANGED,
     Conflict,
@@ -43,6 +40,9 @@ from .records import (
     PageRecord,
     PageUpload,
 )
+from .domain.text import slugify
+from .ocr_result import PageOcrOutput
+from .publisher import Publisher
 from .storage import DOCUMENT_MARKDOWN, LibraryFiles, atomic_write
 
 log = logging.getLogger(__name__)

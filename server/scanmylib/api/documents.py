@@ -7,8 +7,8 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from fastapi.responses import FileResponse, StreamingResponse
 
+from ..domain.records import DocumentRecord
 from ..export import iter_zip
-from ..records import DocumentRecord
 from .deps import Services, ServicesDep, require_auth, require_uuid
 from .schemas import DocumentBody, PageOrderBody
 from .serializers import document_json, page_json

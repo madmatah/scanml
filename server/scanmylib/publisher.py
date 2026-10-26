@@ -10,7 +10,7 @@ from collections.abc import Sequence
 
 from . import clock, preview
 from .domain import assemble, timestamps
-from .records import DocumentRecord, PageRecord
+from .domain.records import DocumentRecord, PageRecord
 from .storage import LibraryFiles
 
 

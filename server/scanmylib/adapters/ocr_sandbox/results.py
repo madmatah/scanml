@@ -16,8 +16,8 @@ import re
 from dataclasses import dataclass
 from typing import TypedDict
 
-from .adapters.pillow_images import MAX_OCR_IMAGE_BYTES, reencode_ocr_image
-from .application.scan_images import ImageRejected
+from ...application.scan_images import ImageRejected
+from ..pillow_images import MAX_OCR_IMAGE_BYTES, reencode_ocr_image
 from .sanitize import MarkdownTooLarge, is_safe_image_name, sanitize_markdown
 
 log = logging.getLogger(__name__)

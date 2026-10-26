@@ -8,7 +8,7 @@ from collections.abc import Sequence
 from html.parser import HTMLParser
 from types import MappingProxyType
 
-from scanmylib.sanitize import sanitize_markdown
+from scanmylib.adapters.ocr_sandbox.sanitize import sanitize_markdown
 
 PAGE_IMAGES = MappingProxyType({"a.jpg": "../images/K_1.jpg", "fig.png": "../images/K_2.jpg"})
 HOSTILE_PAYLOAD_COUNT = 3000

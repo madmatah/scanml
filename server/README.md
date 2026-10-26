@@ -22,9 +22,10 @@ Everything runs in Docker; nothing is installed on the host.
 | `domain/timestamps.py` | moments written as text, in the API and in the names of keys and folders |
 | `application/clock.py`, `adapters/system_clock.py` | the clock the application reads, and the wall clock behind it, in the container's `TZ` |
 | `storage.py` | library folder: atomic writes, `.trash/`, safe file resolution |
-| `sanitize.py`, `preview.py` | untrusted OCR Markdown → safe Markdown; Markdown → allowlisted HTML |
+| `preview.py` | Markdown → allowlisted HTML |
 | `adapters/pillow_images.py`, `application/scan_images.py` | Pillow: upload checks, thumbnails, image sent to the sandbox, re-encoded illustrations; the ports through which the application handles them, and their errors |
-| `ocr_client.py`, `ocr_result.py`, `ocr_loop.py` | sandbox client, response validation, the single OCR loop |
+| `adapters/ocr_sandbox/client.py`, `adapters/ocr_sandbox/results.py`, `adapters/ocr_sandbox/sanitize.py` | the OCR sandbox: its client, the validation of its responses, untrusted OCR Markdown → safe Markdown |
+| `ocr_loop.py` | the single OCR loop |
 | `auth.py`, `middleware.py` | token / cookie session / CSRF header, security headers, body limits |
 | `api/` | HTTP routes |
 | `devtools/fake_ocr.py` | fake sandbox for tests and UI development |

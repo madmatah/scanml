@@ -12,7 +12,7 @@ Everything runs in Docker; nothing is installed on the host.
 | Module | Role |
 |---|---|
 | `config.py` | `SCANMYLIB_*` environment variables |
-| `adapters/sqlite/database.py`, `records.py` | SQLite state (`/state/scanmylib.db`, WAL) and typed rows; an older schema is upgraded in place at start, after a copy is saved as `scanmylib.db.v<N>.bak` |
+| `adapters/sqlite/database.py`, `adapters/sqlite/rows.py`, `records.py` | SQLite state (`/state/scanmylib.db`, WAL), its rows read into typed records; an older schema is upgraded in place at start, after a copy is saved as `scanmylib.db.v<N>.bak` |
 | `library.py` | all mutations: documents, pages, OCR results; keeps DB and files in sync |
 | `domain/ordering.py` | page numbers (arabic, roman, spreads), inference, duplicates, placement and reading order, positions for a manual order, coverage |
 | `domain/assemble.py`, `publisher.py` | `document.md`, `document.json`, `INDEX.md`, `library.json` |

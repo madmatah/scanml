@@ -20,10 +20,10 @@ from collections.abc import Callable, Iterable, Sequence
 from datetime import datetime
 from pathlib import Path
 
-from . import images
 from .adapters.sqlite.database import Database
 from .adapters.sqlite.rows import build_document_record, build_page_claim, build_page_record, encode_layout_summary
 from .application.clock import Clock
+from .application.scan_images import ImageRejected, ScanImages
 from .config import Settings
 from .debounce import DebouncedBatch
 from .domain import ordering, timestamps
@@ -66,11 +66,14 @@ _LAYOUT_COLUMNS = (
 
 
 class LibraryService:
-    def __init__(self, settings: Settings, db: Database, files: LibraryFiles, clock: Clock) -> None:
+    def __init__(
+        self, settings: Settings, db: Database, files: LibraryFiles, clock: Clock, scan_images: ScanImages
+    ) -> None:
         self._settings = settings
         self._db = db
         self._files = files
         self._clock = clock
+        self._scan_images = scan_images
         self._publisher = Publisher(files, clock)
         self._locks: dict[str, asyncio.Lock] = {}
         #: Ids of the pages whose upload is being stored (their row does not exist yet).
@@ -170,7 +173,7 @@ class LibraryService:
         path = self._thumb_path(page.id)
         if not path.is_file():
             scan = self.scan_path(page, self.require_document(page.document_id))
-            data = await asyncio.to_thread(images.make_thumbnail, scan, page.rotation)
+            data = await asyncio.to_thread(self._scan_images.make_thumbnail, scan, page.rotation)
             await asyncio.to_thread(atomic_write, path, data)
         return path
 
@@ -304,7 +307,7 @@ class LibraryService:
         existing = self.get_page(upload.page_id)
         if existing is not None:
             return self._same_document(existing, document_id), False
-        info, thumbnail = await asyncio.to_thread(images.ingest_scan, upload.data)
+        info, thumbnail = await asyncio.to_thread(self._scan_images.ingest_scan, upload.data)
         captured = upload.captured_at or self._clock.now()
         async with self._lock(document_id):
             document = self.require_document(document_id)
@@ -402,8 +405,8 @@ class LibraryService:
     async def _rotate_thumbnail(self, page: PageRecord, rotation: int) -> None:
         scan = self.scan_path(page, self.require_document(page.document_id))
         try:
-            data = await asyncio.to_thread(images.make_thumbnail, scan, rotation)
-        except (OSError, images.ImageRejected) as exc:
+            data = await asyncio.to_thread(self._scan_images.make_thumbnail, scan, rotation)
+        except (OSError, ImageRejected) as exc:
             log.warning("page %s: cannot redraw the thumbnail: %s", page.key, exc)
             return
         await asyncio.to_thread(atomic_write, self._thumb_path(page.id), data)

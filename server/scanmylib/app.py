@@ -18,10 +18,11 @@ from .adapters.sqlite.database import Database
 from .adapters.system_clock import SystemClock
 from .api import documents, pages, system, web
 from .api.deps import Services
+from .application.scan_images import ImageRejected, ImageTooLarge
 from .auth import Authenticator, load_or_create_token
 from .config import Settings
 from .domain.records import Conflict, InvalidRequest, NotFound
-from .images import MAX_UPLOAD_BYTES, ImageRejected, ImageTooLarge
+from .images import MAX_UPLOAD_BYTES, PillowImages
 from .library import LibraryService
 from .middleware import BodySizeLimitMiddleware, SecurityHeadersMiddleware, body_limit
 from .ocr_client import OcrClient
@@ -67,10 +68,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         db = Database(settings.db_path)
         clock = SystemClock()
-        library = LibraryService(settings, db, LibraryFiles(settings.library_dir, clock), clock)
+        images = PillowImages()
+        library = LibraryService(settings, db, LibraryFiles(settings.library_dir, clock), clock, images)
         auth = Authenticator(load_or_create_token(settings.token_path, settings.token), db, clock)
         ocr = OcrClient(settings.ocr_socket, settings.ocr_timeout_s)
-        ocr_loop = OcrLoop(library, ocr, max_side=settings.ocr_max_side, retry_max_s=settings.ocr_retry_max_s)
+        ocr_loop = OcrLoop(library, ocr, images, max_side=settings.ocr_max_side, retry_max_s=settings.ocr_retry_max_s)
         library.add_work_listener(ocr_loop.notify)
         requeued = library.start()
         ocr_loop.start()

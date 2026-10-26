@@ -11,7 +11,7 @@ import pytest
 from PIL import Image
 
 from scanmylib import images
-from scanmylib.images import ImageRejected, ImageTooLarge, ScanInfo
+from scanmylib.application.scan_images import ImageRejected, ImageTooLarge, ScanInfo
 from support import BROKEN_EXIF, CORRUPT_PNGS, encoded, jpeg, mpo, png
 
 NOT_A_JPEG_PNG_OR_WEBP_IMAGE = "not a JPEG, PNG or WebP image"

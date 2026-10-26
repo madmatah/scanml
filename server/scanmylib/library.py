@@ -514,10 +514,13 @@ class LibraryService:
             attempts=row["attempts"],
             key=row["key"],
             slug=row["slug"],
-            scan=self._files.scan_path(row["slug"], row["key"], row["scan_ext"]),
+            scan_ext=row["scan_ext"],
             rotation=row["rotation"],
             unwarp=bool(row["unwarp"]),
         )
+
+    def locate_claimed_scan(self, claim: PageClaim) -> Path:
+        return self._files.scan_path(claim.slug, claim.key, claim.scan_ext)
 
     def release_page(self, claim: PageClaim) -> None:
         """Put a page back in the queue without counting an attempt (sandbox unavailable)."""

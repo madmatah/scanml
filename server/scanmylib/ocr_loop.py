@@ -99,8 +99,9 @@ class OcrLoop:
 
     async def _process(self, claim: PageClaim) -> bool:
         """OCR one page. Returns False when the sandbox is unavailable (page re-queued)."""
+        scan = self._library.locate_claimed_scan(claim)
         try:
-            image = await asyncio.to_thread(images.prepare_for_ocr, claim.scan, claim.rotation, self._max_side)
+            image = await asyncio.to_thread(images.prepare_for_ocr, scan, claim.rotation, self._max_side)
         except (OSError, images.ImageRejected) as exc:
             self._library.fail_page(claim, f"Unreadable scan: {exc}", retry=False)
             return True

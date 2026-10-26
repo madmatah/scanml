@@ -1,6 +1,6 @@
 r"""HTML previews of page and document Markdown for the web UI.
 
-The Markdown on disk is already sanitized (see sanitize.py); it is rendered
+The Markdown on disk is already sanitized (see adapters/ocr_sandbox/sanitize.py); it is rendered
 with markdown-it and filtered again through an allowlist sanitizer (nh3), so
 that a hand-edited page file cannot inject markup either. Image references
 (``images/…`` or ``../images/…``) are rewritten to the document's file

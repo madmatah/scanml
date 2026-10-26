@@ -15,12 +15,12 @@ import contextlib
 import logging
 import time
 
+from .adapters.ocr_sandbox.client import OcrClient, OcrPageFailed, OcrPageRejected, OcrUnavailable
+from .adapters.ocr_sandbox.results import OcrResultError, build_page_output
 from .application.scan_images import ImageRejected, OcrImages
 from .domain.pages import should_detect_orientation
 from .domain.records import PageClaim
 from .library import LibraryService
-from .ocr_client import OcrClient, OcrPageFailed, OcrPageRejected, OcrUnavailable
-from .ocr_result import OcrResultError, build_page_output
 
 log = logging.getLogger(__name__)
 

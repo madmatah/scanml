@@ -1,4 +1,4 @@
-"""The sanitizer of untrusted OCR Markdown (sanitize.py)."""
+"""The sanitizer of untrusted OCR Markdown (adapters/ocr_sandbox/sanitize.py)."""
 
 from __future__ import annotations
 
@@ -17,8 +17,8 @@ from hostile_markup import (
     parse_markup,
     sanitize_page,
 )
-from scanmylib import sanitize
-from scanmylib.sanitize import MarkdownTooLarge, is_safe_image_name
+from scanmylib.adapters.ocr_sandbox import sanitize
+from scanmylib.adapters.ocr_sandbox.sanitize import MarkdownTooLarge, is_safe_image_name
 
 TAGS_SANITIZED_MARKDOWN_MAY_HOLD = frozenset(
     {
@@ -161,7 +161,7 @@ class SanitizedPayload(NamedTuple):
     markdown: str
 
 
-class TestTheSanitizer:
+class TestTheOcrSandboxSanitizer:
     class TestTheSanitizeMarkdownFunction:
         class TestWhenTheTextHoldsAScriptLikeElement:
             @pytest.fixture(

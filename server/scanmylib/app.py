@@ -14,6 +14,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import __version__
+from .adapters.ocr_sandbox.client import OcrClient
 from .adapters.pillow_images import MAX_UPLOAD_BYTES, PillowImages
 from .adapters.sqlite.database import Database
 from .adapters.system_clock import SystemClock
@@ -25,7 +26,6 @@ from .config import Settings
 from .domain.records import Conflict, InvalidRequest, NotFound
 from .library import LibraryService
 from .middleware import BodySizeLimitMiddleware, SecurityHeadersMiddleware, body_limit
-from .ocr_client import OcrClient
 from .ocr_loop import OcrLoop
 from .storage import LibraryFiles
 

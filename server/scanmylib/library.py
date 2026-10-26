@@ -20,6 +20,7 @@ from collections.abc import Callable, Iterable, Sequence
 from datetime import datetime
 from pathlib import Path
 
+from .adapters.ocr_sandbox.results import PageOcrOutput
 from .adapters.sqlite.database import Database
 from .adapters.sqlite.rows import build_document_record, build_page_claim, build_page_record, encode_layout_summary
 from .application.clock import Clock
@@ -46,7 +47,6 @@ from .domain.records import (
     PageRecord,
     PageUpload,
 )
-from .ocr_result import PageOcrOutput
 from .publisher import Publisher
 from .storage import DOCUMENT_MARKDOWN, LibraryFiles, atomic_write
 

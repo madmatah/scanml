@@ -162,8 +162,8 @@ The modules as they are, and the layer each one belongs to, whose directory the 
 | api | `adapters/system_clock` | The wall clock, in the server's time zone | Adapters |
 | api | `adapters/pillow_images` | Pillow: the checks of an upload, thumbnails, the image sent to the OCR, re-encoded illustrations | Adapters |
 | api | `storage`, `export` | The library's files, atomic writes and trash; zip archives | Adapters |
-| api | `ocr_client`, `ocr_result` | Client of the sandbox protocol, and validation of its untrusted results | Adapters |
-| api | `sanitize`, `qr`, `published_apk` | The Markdown sanitizer, QR codes, the published APK's metadata | Adapters |
+| api | `adapters/ocr_sandbox/client`, `adapters/ocr_sandbox/results`, `adapters/ocr_sandbox/sanitize` | The OCR sandbox: the client of its protocol, the validation of its untrusted results, and the sanitizer of their Markdown | Adapters |
+| api | `qr`, `published_apk` | QR codes, the published APK's metadata | Adapters |
 | api | `api/`, `auth`, `middleware` | HTTP routes, the times that clients send, authentication, security headers and body limits | Adapters |
 | api | `devtools/fake_ocr` | The fake OCR sandbox of the development stack and the tests | Test support |
 | web UI | `main.js` | Entry point | Composition root |

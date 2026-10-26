@@ -1,4 +1,4 @@
-"""Validation of sandbox responses (ocr_result.py), using the fake engine's payloads."""
+"""Validation of sandbox responses (adapters/ocr_sandbox/results.py), using the fake engine's payloads."""
 
 from __future__ import annotations
 
@@ -10,8 +10,7 @@ from collections.abc import Callable
 import pytest
 from PIL import Image
 
-from scanmylib.devtools.fake_ocr import ParseResponse, canned_page, evil_page
-from scanmylib.ocr_result import (
+from scanmylib.adapters.ocr_sandbox.results import (
     MAX_BLOCK_CONTENT,
     MAX_BLOCKS_TEXT,
     MAX_IMAGES,
@@ -19,6 +18,7 @@ from scanmylib.ocr_result import (
     PageOcrOutput,
     build_page_output,
 )
+from scanmylib.devtools.fake_ocr import ParseResponse, canned_page, evil_page
 from support import CORRUPT_PNGS
 
 KEY = "20261012-201530_1a2b3c4d"
@@ -40,7 +40,7 @@ def make_page_42_with_an_engine_model(model: str) -> ParseResponse:
     return response
 
 
-class TestTheOcrResult:
+class TestTheOcrSandboxResults:
     class TestTheBuildPageOutputFunction:
         class TestWhenTheResponseIsAPageWithAnIllustration:
             @pytest.fixture

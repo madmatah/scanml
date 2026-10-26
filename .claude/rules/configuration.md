@@ -33,9 +33,11 @@ paths:
 
 ## Modules
 
-- **A module** is a unit with its own build, or, within a unit, one directory of a layer. Until a unit is restructured
-  into layers, its modules are its files and packages that hold one responsibility each, grouped in the rows of
-  `docs/foundations.md` > Layers and modules.
+- **A module** is a unit with its own build, or, within a unit, a source file that holds one responsibility, since a
+  file's public names are its entry point. A directory groups modules, such as the files of a layer or of one adapter's
+  technology, and is not a module itself, so that each file of a layer keeps its own boundary. In a unit not yet
+  restructured into layers, a directory that holds one responsibility counts as one module. The rows of
+  `docs/foundations.md` > Layers and modules group the modules.
 - **The repository holds five units:** the api (`server/`: `pyproject.toml`, its locks and its `Dockerfile`), the web UI
   that the api serves (`server/scanmylib/web/`, with its own tests and the `package.json` of its tools), the app
   (`android/`: its Gradle build and version catalog), the OCR sandbox (`ocr/`: its `Dockerfile` and `ocr/setup/`, which

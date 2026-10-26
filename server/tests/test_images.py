@@ -210,6 +210,21 @@ class TestTheImages:
                 with pytest.raises(ImageTooLarge, match="image too large"):
                     ingest_the_file()
 
+        class TestWhenTheScanIsAbovePillowsDefaultLimitButWithinTheUploadLimit:
+            #: 90.25 million pixels: above Pillow's default limit of 89,478,485 and below the upload limit of 120
+            #: million. Grayscale holds it in 90 MB of memory, where red, green and blue would take 270 MB.
+            SCAN_SIDE_PIXELS = 9_500
+
+            @pytest.fixture
+            def ingested_scan(self) -> IngestedScan:
+                return ingest(encoded(Image.new("L", (self.SCAN_SIDE_PIXELS,) * 2), "JPEG"))
+
+            def test_should_take_it_so_that_pillows_own_guard_never_refuses_a_scan_within_the_upload_limit(
+                self, ingested_scan: IngestedScan
+            ) -> None:
+                scan_info = ingested_scan.scan_info
+                assert (scan_info.width, scan_info.height) == (self.SCAN_SIDE_PIXELS, self.SCAN_SIDE_PIXELS)
+
     class TestTheMakeThumbnailFunction:
         class TestWhenTheUserTurnedTheScanThreeQuarterTurns:
             @pytest.fixture

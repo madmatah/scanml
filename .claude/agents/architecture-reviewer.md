@@ -34,8 +34,8 @@ Read first: `.claude/rules/architecture.md` and `.claude/rules/configuration.md`
   outside a composition root, a DI container, a service locator, a singleton, or module-level mutable state shared
   between callers.
 - **Plain data crosses boundaries** (`.claude/rules/architecture.md` > Ports and wiring): no framework or platform type
-  in a signature another layer sees, and no import that reaches inside another module instead of going through its entry
-  point.
+  in a signature another layer sees, no location that crosses a port as a value that can open its file, and no import
+  that reaches inside another module instead of going through its entry point.
 - **Each layer keeps its role** (`.claude/rules/architecture.md` > Responsibilities):
   - the domain holds the rules and stays pure: no I/O, no clock, no global mutable state, no framework, no platform API;
   - the application orchestrates and holds no rule;

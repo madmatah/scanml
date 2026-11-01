@@ -131,9 +131,11 @@ the revised plan and the commits so far: the one that stopped carries a context 
    repository: it is published, so it holds nothing that `.claude/rules/repository.md` > No personal information
    forbids. The pictures of a visible change need the pull request's number: they go in once it is open, as [Show a
    visible change](#show-a-visible-change) says.
-3. Open the pull request against `main`, or against the base it is stacked on:
-   `cd <worktree> && gh pr create --base <branch> --title "<title>" --body-file <file>`. Without a terminal, `gh` needs
-   both the title and the body.
+3. Open the pull request against `main`, or against the base it is stacked on: write its title with the Write tool to a
+   file in a directory that `mktemp -d` creates outside the worktree, then run
+   `cd <worktree> && gh pr create --base <branch> --title "$(cat <title file>)" --body-file <file>`, since `gh` reads
+   no title from a file and a title typed between double quotes runs its backquoted text. Without a terminal, `gh`
+   needs both the title and the body. Remove the title file's directory once the pull request is open.
 4. Make sure CI (`scripts/check.sh` on GitHub Actions, one job per area) passes on it: `gh pr checks <number> --watch`.
 
 ## Update the body

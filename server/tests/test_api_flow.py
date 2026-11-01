@@ -307,6 +307,12 @@ class RedrawnThumbnail:
     is_stored_again: bool
 
 
+@dataclass(frozen=True)
+class RewrittenMarkdown:
+    markdown: str
+    is_file_written_again: bool
+
+
 @pytest.fixture(scope="module")
 def document_lifecycle(tmp_path_factory: pytest.TempPathFactory) -> DocumentLifecycle:
     with running_api(tmp_path_factory.mktemp("api")) as api:
@@ -771,6 +777,28 @@ class TestADocument:
                 [f"{deletion.page_id}.jpg"],
                 [],
             )
+
+    class TestWhenItsMarkdownFileIsMissing:
+        TITLE = "Example Book"
+
+        @pytest.fixture(scope="class")
+        @classmethod
+        def rewritten_markdown(cls, tmp_path_factory: pytest.TempPathFactory) -> RewrittenMarkdown:
+            with running_api(tmp_path_factory.mktemp("api")) as api:
+                client = api.client
+                document_id = create_document(client, cls.TITLE)
+                markdown_url = f"/api/documents/{document_id}/markdown"
+                client.get(markdown_url, headers=AUTH).raise_for_status()
+                markdown_file = api.settings.library_dir / read_document(client, document_id)["slug"] / "document.md"
+                markdown_file.unlink()
+                markdown = client.get(markdown_url, headers=AUTH).text
+                return RewrittenMarkdown(markdown=markdown, is_file_written_again=markdown_file.is_file())
+
+        def test_should_serve_its_markdown(self, rewritten_markdown: RewrittenMarkdown) -> None:
+            assert f"# {self.TITLE}" in rewritten_markdown.markdown
+
+        def test_should_write_its_file_again(self, rewritten_markdown: RewrittenMarkdown) -> None:
+            assert rewritten_markdown.is_file_written_again is True
 
 
 class TestTheDocumentsOfALibrary:

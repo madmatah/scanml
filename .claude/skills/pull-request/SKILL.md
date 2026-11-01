@@ -8,11 +8,12 @@ description: Takes a change to ScanMyLib from a new branch to a merged pull requ
 `CLAUDE.md` > Workflow holds the rules this procedure applies. Below, `<base>` is `origin/main`, or the unmerged branch
 the work is stacked on, and `<worktree>` the branch's worktree, `~/Dev/scanmylib/.claude/worktrees/<topic>`. Every
 command of the branch below starts with `cd <worktree> &&`, as `.claude/rules/configuration.md` > Claude Code
-automation, "An agent given a worktree works only there" says. Write each file whose text you write, such as a plan, the
-findings of a round or a commit message, with the Write tool, never through a shell: in a heredoc, or in
-`git commit -m "…"`, the backquoted text that findings, plans and messages quote runs as commands. A command's output
-goes to its file by redirection. Give git a message from a file in a directory that `mktemp -d` creates outside the
-worktree, with `git commit -F <file>`.
+automation, "An agent given a worktree works only there" says, which a session that did not start in the branch's
+worktree reads before its first command. Write each file whose text you write, such as a plan, the findings of a round
+or a commit message, with the Write tool, never through a shell: in a heredoc, or in `git commit -m "…"`, the
+backquoted text that findings, plans and messages quote runs as commands. A command's output goes to its file by
+redirection. Give git a message from a file in a directory that `mktemp -d` creates outside the worktree, with
+`git commit -F <file>`.
 
 ## Start a branch
 

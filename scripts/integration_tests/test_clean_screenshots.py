@@ -1,4 +1,4 @@
-"""The cleanup of the screenshots of pull requests (`.claude/skills/clean-pr-screenshots/scripts/clean_screenshots.py`),
+"""The cleanup of the screenshots of pull requests (`pr_screenshots.py clean`),
 against a bare origin that the script takes for a GitHub repository, and a stand-in for the GitHub CLI
 (screenshots_support.py).
 
@@ -30,7 +30,7 @@ OPEN_PULL_REQUESTS = [
 
 
 def make_remote(test_case: type[unittest.TestCase]) -> Remote:
-    directory = tempfile.TemporaryDirectory(prefix="scanmylib-screenshots-")
+    directory = tempfile.TemporaryDirectory(prefix="pr-screenshots-tests-")
     test_case.addClassCleanup(directory.cleanup)
     return Remote(Path(os.path.realpath(directory.name)))
 

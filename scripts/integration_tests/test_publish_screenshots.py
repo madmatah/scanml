@@ -1,4 +1,4 @@
-"""The publication of screenshots for a pull request (`.claude/skills/pull-request/scripts/publish_screenshots.py`),
+"""The publication of screenshots for a pull request (`pr_screenshots.py publish`),
 against a bare origin that the script takes for a GitHub repository (screenshots_support.py).
 
 Needs git. Standard library only:
@@ -13,7 +13,18 @@ import unittest
 from pathlib import Path
 from typing import ClassVar
 
-from screenshots_support import BRANCH, GITHUB_URL, OWNER, PUBLISH, REPOSITORY, Remote, Run, make_png
+from screenshots_support import (
+    BRANCH,
+    GITHUB_URL,
+    HIDDEN_DATA_CHUNKS,
+    HIDDEN_TEXT,
+    OWNER,
+    PUBLISH,
+    REPOSITORY,
+    Remote,
+    Run,
+    make_png,
+)
 
 NUMBER = "12"
 OTHER_NUMBER = "13"
@@ -21,10 +32,6 @@ LIGHT = make_png(shade=255)
 DARK = make_png(shade=0)
 #: Over the branch's 30 MB, after which the script asks for a cleanup.
 HEAVY_HISTORY_BYTES = 31 * 1024 * 1024
-#: The chunks that may carry what a picture does not show: text, a time, Exif data, a color profile, a private chunk.
-HIDDEN_DATA_CHUNKS = [b"tEXt", b"zTXt", b"iTXt", b"eXIf", b"tIME", b"iCCP", b"prVt"]
-#: What such a chunk may say: a key and a path.
-HIDDEN_TEXT = b"Comment\x00/home/user"
 #: A chunk type that is no four letters, but an escape sequence that a terminal would act on.
 ESCAPE_CHUNK = b"\x1b[0m"
 #: LIGHT cut in the middle of its last chunk, IEND, whose 12 bytes are its length, type and checksum.
@@ -36,7 +43,7 @@ def build_link(commit: str, path: str) -> str:
 
 
 def make_remote(test_case: type[unittest.TestCase]) -> Remote:
-    directory = tempfile.TemporaryDirectory(prefix="scanmylib-screenshots-")
+    directory = tempfile.TemporaryDirectory(prefix="pr-screenshots-tests-")
     test_case.addClassCleanup(directory.cleanup)
     return Remote(Path(os.path.realpath(directory.name)))
 
@@ -200,6 +207,7 @@ class WhenAPictureCannotBePublished(unittest.TestCase):
         **{f"a {chunk.decode()} chunk": f"holds the chunk {chunk.decode()}," for chunk in HIDDEN_DATA_CHUNKS},
         "a chunk type that is no word": "holds the chunk b'\\x1b[0m',",
         "a truncated PNG file": "is a truncated PNG file",
+        "a tEXt chunk in a truncated PNG file": "holds the chunk tEXt,",
         "a name with a space": "name a picture with letters, digits",
         "a name that is not a .png": "name a picture with letters, digits",
         "two pictures of the same name": "two pictures are named library.png",
@@ -227,6 +235,10 @@ class WhenAPictureCannotBePublished(unittest.TestCase):
                 str(remote.write_picture("library-escape.png", make_png((ESCAPE_CHUNK, HIDDEN_TEXT)))),
             ],
             "a truncated PNG file": [NUMBER, str(remote.write_picture("library-cut.png", TRUNCATED))],
+            "a tEXt chunk in a truncated PNG file": [
+                NUMBER,
+                str(remote.write_picture("library-text-cut.png", make_png((b"tEXt", HIDDEN_TEXT))[:-6])),
+            ],
             "a name with a space": [NUMBER, str(remote.write_picture("library light.png", LIGHT))],
             "a name that is not a .png": [NUMBER, str(remote.write_picture("library.jpg", LIGHT))],
             "two pictures of the same name": [NUMBER, valid, str(remote.directory / "library.png")],

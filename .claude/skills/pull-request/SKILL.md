@@ -146,9 +146,10 @@ what it does without building it.
    that worktree. A branch that changes the database's schema shows its "after" only, since `<base>`'s api refuses the
    development stack's newer database.
 3. Once the pull request is open, publish them:
-   `cd <worktree> && ${CLAUDE_SKILL_DIR}/scripts/publish_screenshots.py <number> <picture>...`. It commits them on the
-   `pr-screenshots` branch of origin, under `pr-<number>/`, without touching the worktree, and prints a Markdown image
-   for each, linked by that commit, so that a later publication never changes what the description shows.
+   `cd <worktree> && python3 ${CLAUDE_SKILL_DIR}/scripts/pr_screenshots.py publish <number> <picture>...`. It commits
+   them on the `pr-screenshots` branch of origin, under `pr-<number>/`, without touching the worktree, and prints a
+   Markdown image for each, linked by that commit, so that a later publication never changes what the description
+   shows.
 4. Put the images in the body's "Screenshots", and update the pull request:
    `cd <worktree> && gh api -X PATCH 'repos/{owner}/{repo}/pulls/<number>' -F body=@<file>`, where `gh` fills in
    `{owner}` and `{repo}`: `gh pr edit` fails on the GraphQL fields of GitHub's retired Projects (classic).

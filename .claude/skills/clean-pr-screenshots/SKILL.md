@@ -11,9 +11,10 @@ The pull-request skill publishes the screenshots of pull requests on the `pr-scr
 deletes the whole branch: the pictures that descriptions link then break once GitHub drops their commits, so it first
 says which open pull requests still link one, and deletes only on the user's word.
 
-1. From any checkout of the repository, with `gh` logged in, run `${CLAUDE_SKILL_DIR}/scripts/clean_screenshots.py`. It
-   deletes nothing: it says whether the branch exists, and lists the open pull requests whose description links one of
-   its pictures.
+1. From any checkout of the repository, with `gh` logged in, run
+   `python3 ${CLAUDE_SKILL_DIR}/../pull-request/scripts/pr_screenshots.py clean`. It deletes nothing: it says whether
+   the branch exists, and lists the open pull requests whose description links one of its pictures.
 2. Show the user what it printed, and ask whether to delete the branch: an open pull request in the list loses its
    pictures, which its author can publish again afterwards.
-3. Only on the user's yes, run `${CLAUDE_SKILL_DIR}/scripts/clean_screenshots.py --delete`, and report what it printed.
+3. Only on the user's yes, run `python3 ${CLAUDE_SKILL_DIR}/../pull-request/scripts/pr_screenshots.py clean --delete`,
+   and report what it printed.

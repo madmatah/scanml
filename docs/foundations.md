@@ -155,10 +155,10 @@ The modules as they are, and the layer each one belongs to, whose directory the 
 | api | `domain/records`, `domain/text` | Typed records and the inputs of library operations; slugs and collation | Domain |
 | api | `domain/timestamps` | Moments written as text, in the API and in the names of keys and folders | Domain |
 | api | `library`, `ocr_loop`, `publisher`, `debounce` | Documents and pages kept in sync with the library; the single OCR loop; publication of the library files | Application |
-| api | `application/clock`, `application/scan_images`, `application/ocr_engine`, `application/library_files`, `application/thumbnails` | The ports of the clock, of the images of the scans, of the OCR engine, of the library's files and of the pages' thumbnails | Application |
+| api | `application/clock`, `application/scan_images`, `application/ocr_engine`, `application/library_files`, `application/thumbnails`, `application/catalog` | The ports of the clock, of the images of the scans, of the OCR engine, of the library's files, of the pages' thumbnails and of the catalog of documents and pages | Application |
 | api | `domain/assemble` | Rendering of the library files | Domain |
 | api | `preview` | Rendering of the HTML previews | Adapters |
-| api | `adapters/sqlite/database`, `adapters/sqlite/rows` | SQLite state, its rows read into records, and the summary of a document's layout written as JSON | Adapters |
+| api | `adapters/sqlite/database`, `adapters/sqlite/rows`, `adapters/sqlite/catalog` | SQLite state, its rows read into records, the summary of a document's layout written as JSON, and the catalog of documents and pages over them | Adapters |
 | api | `adapters/system_clock` | The wall clock, in the server's time zone | Adapters |
 | api | `adapters/pillow_images` | Pillow: the checks of an upload, thumbnails, the image sent to the OCR, re-encoded illustrations | Adapters |
 | api | `adapters/filesystem/library_files`, `adapters/filesystem/thumbnails`, `export` | The library's files, atomic writes and trash; the thumbnails, a cache in the state directory; zip archives | Adapters |

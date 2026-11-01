@@ -92,6 +92,12 @@ paths:
   be spliced into shell code.
 - **No `pull_request_target` workflow checks out untrusted code, and no secret reaches a run from a fork,** since either
   would hand the repository's credentials to code from outside.
+- **A step that can hang has its own timeout,** so that a hang fails that step with its log rather than the whole job:
+  the gate's step of each job, each step that installs and each step that publishes, such as the release's, set their
+  `timeout-minutes`, shorter than the job's, and the job's stays above the sum of the timeouts its steps set, with a
+  margin for the steps without one. The checkout sets none: GitHub's own action fetches the repository in seconds,
+  within the job's margin. Nor does a step whose action bounds its own wait and goes on without it, such as
+  `actions/cache`, which goes on as a cache miss: a shorter timeout would fail the job where the action goes on.
 - **CI uses no secret and never touches a stack:** it builds and tests in throwaway containers, and the Android build
   runs without a `.env`, unsigned, inside the runner's temporary directory.
 

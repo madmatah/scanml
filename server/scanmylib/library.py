@@ -21,7 +21,8 @@ from datetime import datetime
 from pathlib import PurePath
 
 from .adapters.sqlite.database import Database
-from .adapters.sqlite.rows import build_document_record, build_page_claim, build_page_record, encode_layout_summary
+from .adapters.sqlite.rows import build_page_claim, build_page_record, encode_layout_summary
+from .application.catalog import Catalog
 from .application.clock import Clock
 from .application.library_files import LibraryFiles
 from .application.ocr_engine import PageOcrOutput
@@ -70,6 +71,7 @@ class LibraryService:
     def __init__(
         self,
         settings: Settings,
+        catalog: Catalog,
         db: Database,
         files: LibraryFiles,
         thumbnails: Thumbnails,
@@ -78,6 +80,7 @@ class LibraryService:
         scan_images: ScanImages,
     ) -> None:
         self._settings = settings
+        self._catalog = catalog
         self._db = db
         self._files = files
         self._thumbnails = thumbnails
@@ -102,16 +105,16 @@ class LibraryService:
         """
         self._files.prepare()
         self._thumbnails.prepare()
-        with self._db.transaction():
-            requeued = self._db.execute("UPDATE pages SET status = 'queued' WHERE status = 'processing'").rowcount
-            document_ids = [row["id"] for row in self._db.all("SELECT id FROM documents")]
+        with self._catalog.open_transaction():
+            requeued_count = self._catalog.requeue_interrupted_pages()
+            document_ids = self._catalog.list_document_ids()
             for document_id in document_ids:
                 self._refresh_layout(document_id)
         self._assembly.start()
         for document_id in document_ids:
             self._assembly.schedule(document_id)
         self._assembly.schedule()
-        return requeued
+        return requeued_count
 
     async def aclose(self) -> None:
         await self._assembly.aclose()
@@ -130,12 +133,10 @@ class LibraryService:
     # -- queries -------------------------------------------------------------
 
     def list_documents(self) -> list[DocumentRecord]:
-        rows = self._db.all("SELECT * FROM documents ORDER BY updated_ts DESC, id")
-        return [build_document_record(row) for row in rows]
+        return self._catalog.list_documents()
 
     def get_document(self, document_id: str) -> DocumentRecord | None:
-        row = self._db.one("SELECT * FROM documents WHERE id = ?", (document_id,))
-        return build_document_record(row) if row else None
+        return self._catalog.get_document(document_id)
 
     def require_document(self, document_id: str) -> DocumentRecord:
         document = self.get_document(document_id)
@@ -145,15 +146,10 @@ class LibraryService:
 
     def list_pages(self, document_id: str) -> list[PageRecord]:
         """Pages of a document in the API order (reading order first)."""
-        rows = self._db.all(
-            "SELECT * FROM pages WHERE document_id = ? ORDER BY rank, captured_ts, id",
-            (document_id,),
-        )
-        return [build_page_record(row) for row in rows]
+        return self._catalog.list_pages(document_id)
 
     def get_page(self, page_id: str) -> PageRecord | None:
-        row = self._db.one("SELECT * FROM pages WHERE id = ?", (page_id,))
-        return build_page_record(row) if row else None
+        return self._catalog.get_page(page_id)
 
     def require_page(self, page_id: str) -> PageRecord:
         page = self.get_page(page_id)
@@ -219,7 +215,7 @@ class LibraryService:
                 return self.update_document(document_id, changes), False
             new_document = prepare_new_document(changes)
             moment = self._clock.now()
-            with self._db.transaction():
+            with self._catalog.open_transaction():
                 slug = self._free_slug(new_document.title)
                 self._db.execute(
                     "INSERT INTO documents (id, slug, title, author, kind, notes, unwarp,"
@@ -257,7 +253,7 @@ class LibraryService:
             if value is not None
         }
         if values:
-            with self._db.transaction():
+            with self._catalog.open_transaction():
                 assignments = ", ".join(f"{name} = ?" for name in values)
                 self._db.execute(
                     f"UPDATE documents SET {assignments} WHERE id = ?",  # noqa: S608 (column names from the code, values as ? parameters)
@@ -273,9 +269,9 @@ class LibraryService:
             document = self.get_document(document_id)
             if document is None:
                 return False
-            page_ids = [r["id"] for r in self._db.all("SELECT id FROM pages WHERE document_id = ?", (document_id,))]
+            page_ids = self._catalog.list_page_ids(document_id)
             trashed = await asyncio.to_thread(self._files.trash_document, document.slug)
-            with self._db.transaction():
+            with self._catalog.open_transaction():
                 self._db.execute("DELETE FROM documents WHERE id = ?", (document_id,))
             await asyncio.to_thread(self._thumbnails.remove, page_ids)
         log.info("document %s deleted, folder moved to %s", document.slug, trashed)
@@ -286,8 +282,7 @@ class LibraryService:
         return next(
             slug
             for slug in propose_slugs(title)
-            if self._db.one("SELECT 1 FROM documents WHERE slug = ?", (slug,)) is None
-            and not self._files.has_folder(slug)
+            if not self._catalog.is_slug_taken(slug) and not self._files.has_folder(slug)
         )
 
     def _touch(self, document_id: str) -> None:
@@ -323,7 +318,7 @@ class LibraryService:
                     self._store_scan, document.slug, key, info.ext, upload.data, upload.page_id, thumbnail
                 )
                 uploaded = self._clock.now()
-                with self._db.transaction():
+                with self._catalog.open_transaction():
                     self._db.execute(
                         "INSERT INTO pages (id, document_id, key, scan_ext, session_id, seq,"
                         " captured_at, captured_ts, uploaded_at, uploaded_ts, width, height,"
@@ -360,8 +355,7 @@ class LibraryService:
 
     def _free_key(self, document_id: str, captured: datetime, page_id: str) -> str:
         for key in propose_page_keys(captured, page_id):
-            clash = self._db.one("SELECT 1 FROM pages WHERE document_id = ? AND key = ?", (document_id, key))
-            if clash is None:
+            if not self._catalog.is_key_taken(document_id, key):
                 return key
         raise Conflict("page key already in use")
 
@@ -384,7 +378,7 @@ class LibraryService:
         if rotate:
             values["rotation"] = changes.rotation
         if values:
-            with self._db.transaction():
+            with self._catalog.open_transaction():
                 page = self.require_page(page_id)
                 assignments = ", ".join(f"{name} = ?" for name in values)
                 self._db.execute(
@@ -411,7 +405,7 @@ class LibraryService:
 
     def reprocess_page(self, page_id: str) -> PageRecord:
         """Queue the page for OCR again (its current outputs stay until replaced)."""
-        with self._db.transaction():
+        with self._catalog.open_transaction():
             page = self.require_page(page_id)
             self._requeue(page_id)
             self._touch(page.document_id)
@@ -433,9 +427,9 @@ class LibraryService:
         otherwise the client worked on an outdated list (Conflict). Only the
         pages that moved get a position (ordering.positions_for_order).
         """
-        with self._db.transaction():
+        with self._catalog.open_transaction():
             self.require_document(document_id)
-            pages = {page.id: page for page in self._pages(document_id)}
+            pages = {page.id: page for page in self._catalog.list_pages(document_id)}
             inputs = [page.ordering_input for page in pages.values()]
             layout = ordering.compute_layout(inputs)
             if len(set(page_ids)) != len(page_ids) or set(page_ids) != set(layout.reading_order):
@@ -456,7 +450,7 @@ class LibraryService:
 
     def clear_page_order(self, document_id: str) -> DocumentRecord:
         """Forget the positions of the pages: back to the order of numbers and sessions."""
-        with self._db.transaction():
+        with self._catalog.open_transaction():
             self.require_document(document_id)
             changed = self._db.execute(
                 "UPDATE pages SET position = NULL WHERE document_id = ? AND position IS NOT NULL",
@@ -480,7 +474,7 @@ class LibraryService:
                 return False
             document = self.require_document(page.document_id)
             await asyncio.to_thread(self._files.trash_page, document.slug, page.key, page.scan_ext)
-            with self._db.transaction():
+            with self._catalog.open_transaction():
                 self._db.execute("DELETE FROM pages WHERE id = ?", (page_id,))
                 self._touch(page.document_id)
                 self._refresh_layout(page.document_id)
@@ -492,7 +486,7 @@ class LibraryService:
 
     def claim_next_page(self) -> PageClaim | None:
         """Take the oldest queued page (FIFO by upload time) and mark it processing."""
-        with self._db.transaction():
+        with self._catalog.open_transaction():
             row = self._db.one(
                 "SELECT p.id, p.document_id, p.generation, p.attempts, p.key, p.scan_ext,"
                 " p.rotation, d.slug, d.unwarp FROM pages p JOIN documents d ON d.id = p.document_id"
@@ -517,7 +511,7 @@ class LibraryService:
         return outcome.status == "queued"
 
     def _end_attempt(self, claim: PageClaim, outcome: AttemptOutcome) -> None:
-        with self._db.transaction():
+        with self._catalog.open_transaction():
             updated = self._db.execute(
                 "UPDATE pages SET status = ?, attempts = ?, error = ?"
                 " WHERE id = ? AND generation = ? AND status = 'processing'",
@@ -552,7 +546,7 @@ class LibraryService:
                 duration_seconds=duration_s,
                 finished_at=self._clock.now(),
             )
-            with self._db.transaction():
+            with self._catalog.open_transaction():
                 updated = self._db.execute(
                     "UPDATE pages SET status = 'done', error = NULL, attempts = 0,"
                     " detected_numbers = ?, ocr = ?"
@@ -567,10 +561,6 @@ class LibraryService:
         return True
 
     # -- layout and assembly ---------------------------------------------------
-
-    def _pages(self, document_id: str) -> list[PageRecord]:
-        rows = self._db.all("SELECT * FROM pages WHERE document_id = ?", (document_id,))
-        return [build_page_record(row) for row in rows]
 
     def _refresh_layout(self, document_id: str) -> None:
         """Recompute numbering/order/coverage of a document and store it (in a transaction)."""

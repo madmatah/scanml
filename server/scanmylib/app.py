@@ -19,6 +19,7 @@ from .adapters.filesystem.thumbnails import FilesystemThumbnails
 from .adapters.ocr_sandbox.client import OcrClient
 from .adapters.ocr_sandbox.engine import SandboxOcrEngine
 from .adapters.pillow_images import MAX_UPLOAD_BYTES, PillowImages
+from .adapters.sqlite.catalog import SqliteCatalog
 from .adapters.sqlite.database import Database
 from .adapters.system_clock import SystemClock
 from .api import documents, pages, system, web
@@ -70,11 +71,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         db = Database(settings.db_path)
+        catalog = SqliteCatalog(db)
         clock = SystemClock()
         images = PillowImages()
         files = FilesystemLibrary(settings.library_dir, clock)
         thumbnails = FilesystemThumbnails(settings.thumbs_dir)
-        library = LibraryService(settings, db, files, thumbnails, Publisher(files, clock), clock, images)
+        # The service's writes run inside the catalog's transactions, which are
+        # atomic only on the catalog's own Database: never give it another one.
+        library = LibraryService(settings, catalog, db, files, thumbnails, Publisher(files, clock), clock, images)
         auth = Authenticator(load_or_create_token(settings.token_path, settings.token), db, clock)
         ocr_client = OcrClient(settings.ocr_socket, settings.ocr_timeout_s)
         ocr_engine = SandboxOcrEngine(ocr_client)

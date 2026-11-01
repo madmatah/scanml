@@ -1,18 +1,28 @@
 """Documents are listed most recently updated first, then by id, and the pages of a document by their rank in it, then
 by capture time, then by id; a list of ids comes in no particular order. A document or a page that does not exist reads
-as None. A slug is taken when a document has it, and a key when a page of the same document has it. Requeueing the
-interrupted pages queues again every page whose reading was under way, and returns how many there were. A transaction's
-changes take effect together when its block ends, or none of them when it raises, and a transaction opened inside
-another joins it. The catalog is called from the event loop's thread only, and nothing is awaited inside a transaction,
-so that a transaction is atomic for the other coroutines.
+as None. A slug is taken when a document has it, and a key when a page of the same document has it. The queue counts the
+pages in each status, zero for a status that no page has. Requeueing the interrupted pages queues again every page whose
+reading was under way, and returns how many there were. A transaction's changes take effect together when its block
+ends, or none of them when it raises, and a transaction opened inside another joins it. The catalog is called from the
+event loop's thread only, and nothing is awaited inside a transaction, so that a transaction is atomic for the other
+coroutines.
 """
 
 from __future__ import annotations
 
 from contextlib import AbstractContextManager
+from dataclasses import dataclass
 from typing import Protocol
 
 from ..domain.records import DocumentRecord, PageRecord
+
+
+@dataclass(frozen=True)
+class QueueCounts:
+    queued_count: int
+    processing_count: int
+    error_count: int
+    done_count: int
 
 
 class Catalog(Protocol):
@@ -25,4 +35,5 @@ class Catalog(Protocol):
     def get_page(self, page_id: str) -> PageRecord | None: ...
     def list_page_ids(self, document_id: str) -> list[str]: ...
     def is_key_taken(self, document_id: str, key: str) -> bool: ...
+    def count_queue(self) -> QueueCounts: ...
     def requeue_interrupted_pages(self) -> int: ...

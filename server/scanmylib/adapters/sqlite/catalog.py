@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from contextlib import AbstractContextManager
 
+from ...application.catalog import QueueCounts
 from ...domain.records import DocumentRecord, PageRecord
 from .database import Database
 from .rows import build_document_record, build_page_record
@@ -47,6 +48,17 @@ class SqliteCatalog:
     def is_key_taken(self, document_id: str, key: str) -> bool:
         clash = self._database.one("SELECT 1 FROM pages WHERE document_id = ? AND key = ?", (document_id, key))
         return clash is not None
+
+    def count_queue(self) -> QueueCounts:
+        counts = dict.fromkeys(("queued", "processing", "error", "done"), 0)
+        for row in self._database.all("SELECT status, COUNT(*) AS n FROM pages GROUP BY status"):
+            counts[row["status"]] = row["n"]
+        return QueueCounts(
+            queued_count=counts["queued"],
+            processing_count=counts["processing"],
+            error_count=counts["error"],
+            done_count=counts["done"],
+        )
 
     def requeue_interrupted_pages(self) -> int:
         return self._database.execute("UPDATE pages SET status = 'queued' WHERE status = 'processing'").rowcount

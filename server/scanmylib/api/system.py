@@ -8,6 +8,7 @@ from urllib.parse import quote
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
 from .. import API_LEVEL, __version__
+from ..application.catalog import QueueCounts
 from ..application.ocr_engine import EngineStatus, GpuStatus
 from ..auth import SESSION_COOKIE, SESSION_MAX_AGE_S
 from ..published_apk import APK_DOWNLOAD_PATH, published_apk
@@ -87,12 +88,21 @@ def _build_engine_status_json(engine_status: EngineStatus) -> dict[str, object]:
     }
 
 
+def _build_queue_counts_json(queue_counts: QueueCounts) -> dict[str, int]:
+    return {
+        "queued": queue_counts.queued_count,
+        "processing": queue_counts.processing_count,
+        "error": queue_counts.error_count,
+        "done": queue_counts.done_count,
+    }
+
+
 @protected.get("/api/status")
 async def status(services: ServicesDep) -> dict[str, object]:
     return {
         "version": __version__,
         "ocr": _build_engine_status_json(await services.ocr.read_status()),
-        "queue": services.library.queue_counts(),
+        "queue": _build_queue_counts_json(services.library.count_queue()),
         "library_dir": services.settings.library_host_path,
     }
 

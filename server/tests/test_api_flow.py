@@ -7,10 +7,12 @@ import io
 import json
 import re
 import shutil
+import sqlite3
 import threading
 import time
 import zipfile
 from collections.abc import Mapping
+from contextlib import closing
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
@@ -31,6 +33,7 @@ from support import (
     CORRUPT_PNGS,
     NO_NUMBER,
     Answer,
+    build_client,
     capture_answer,
     create_document,
     jpeg,
@@ -38,8 +41,10 @@ from support import (
     mpo,
     new_id,
     page_image,
+    preparing_settings,
     read_until,
     running_api,
+    serving_fake_ocr,
     upload,
     wait_for,
     wait_until_processed,
@@ -319,6 +324,12 @@ class RedrawnThumbnail:
 class RewrittenMarkdown:
     markdown: str
     is_file_written_again: bool
+
+
+@dataclass(frozen=True)
+class PagesWrittenAtStart:
+    out_of_date_page_id: str
+    written_page_ids: list[str]
 
 
 @pytest.fixture(scope="module")
@@ -807,6 +818,44 @@ class TestADocument:
 
         def test_should_write_its_file_again(self, rewritten_markdown: RewrittenMarkdown) -> None:
             assert rewritten_markdown.is_file_written_again is True
+
+    class TestWhenTheApiStartsWithTheStoredLayoutOfAPageOutOfDate:
+        OUT_OF_DATE_LABEL = "out of date"
+        PAGE_NUMBERS = (1, 2)
+
+        @pytest.fixture(scope="class")
+        @classmethod
+        def pages_written_at_start(cls, tmp_path_factory: pytest.TempPathFactory) -> PagesWrittenAtStart:
+            with (
+                preparing_settings(tmp_path_factory.mktemp("api")) as settings,
+                serving_fake_ocr(settings.ocr_socket),
+            ):
+                with build_client(settings) as client:
+                    document_id = create_document(client)
+                    page_ids = [
+                        upload(client, document_id, page_image(number)).json()["id"] for number in cls.PAGE_NUMBERS
+                    ]
+                    wait_until_processed(client, document_id)
+                out_of_date_page_id = page_ids[0]
+                with closing(sqlite3.connect(settings.db_path, isolation_level=None)) as connection:
+                    connection.execute(
+                        "UPDATE pages SET page_label = ? WHERE id = ?", (cls.OUT_OF_DATE_LABEL, out_of_date_page_id)
+                    )
+                    connection.execute("CREATE TABLE written_layouts (page_id TEXT NOT NULL)")
+                    connection.execute(
+                        "CREATE TRIGGER record_written_layout AFTER UPDATE OF page_label ON pages"
+                        " BEGIN INSERT INTO written_layouts VALUES (new.id); END"
+                    )
+                with build_client(settings):
+                    pass
+                with closing(sqlite3.connect(settings.db_path)) as connection:
+                    written_page_ids = [row[0] for row in connection.execute("SELECT page_id FROM written_layouts")]
+            return PagesWrittenAtStart(out_of_date_page_id, written_page_ids)
+
+        def test_should_write_the_layout_of_that_page_again_and_of_no_other(
+            self, pages_written_at_start: PagesWrittenAtStart
+        ) -> None:
+            assert pages_written_at_start.written_page_ids == [pages_written_at_start.out_of_date_page_id]
 
 
 class TestTheDocumentsOfALibrary:

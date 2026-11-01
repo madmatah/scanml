@@ -1,5 +1,5 @@
-"""Test support of the screenshot scripts of the skills: a bare origin that the scripts take for a GitHub repository,
-a clone of it, PNG files and a stand-in for the GitHub CLI.
+"""Test support of the screenshot script of the pull-request skill (`pr_screenshots.py`): a bare origin that the
+scripts take for a GitHub repository, a clone of it, PNG files and a stand-in for the GitHub CLI.
 """
 
 from __future__ import annotations
@@ -12,14 +12,20 @@ from dataclasses import dataclass
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
-PUBLISH = REPO / ".claude" / "skills" / "pull-request" / "scripts" / "publish_screenshots.py"
-CLEAN = REPO / ".claude" / "skills" / "clean-pr-screenshots" / "scripts" / "clean_screenshots.py"
+SCRIPT = REPO / ".claude" / "skills" / "pull-request" / "scripts" / "pr_screenshots.py"
+#: The script's commands.
+PUBLISH = "publish"
+CLEAN = "clean"
 OWNER = "example"
-REPOSITORY = "scanmylib"
+REPOSITORY = "project"
 #: origin's URL as the clone's configuration holds it, which git rewrites to the bare repository.
 GITHUB_URL = f"git@github.com:{OWNER}/{REPOSITORY}.git"
 BRANCH = "refs/heads/pr-screenshots"
 FETCHED_REF = "refs/remotes/origin/pr-screenshots"
+#: The chunks that may carry what a picture does not show: text, a time, Exif data, a color profile, a private chunk.
+HIDDEN_DATA_CHUNKS = [b"tEXt", b"zTXt", b"iTXt", b"eXIf", b"tIME", b"iCCP", b"prVt"]
+#: What such a chunk may say: a key and a path.
+HIDDEN_TEXT = b"Comment\x00/home/user"
 
 
 def make_png(*extra_chunks: tuple[bytes, bytes], shade: int = 0) -> bytes:
@@ -91,9 +97,9 @@ class Remote:
     def run_origin_git(self, *arguments: str, input_bytes: bytes | None = None) -> str:
         return self.run_git("--git-dir", str(self.origin), *arguments, input_bytes=input_bytes)
 
-    def run(self, script: Path, *arguments: str) -> Run:
+    def run(self, command: str, *arguments: str) -> Run:
         completed = subprocess.run(
-            ["python3", str(script), *arguments],
+            ["python3", str(SCRIPT), command, *arguments],
             cwd=self.clone,
             capture_output=True,
             text=True,

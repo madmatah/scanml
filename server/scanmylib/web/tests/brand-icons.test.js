@@ -6,7 +6,7 @@ const WEB = new URL('../', import.meta.url);
 const ICONS = new URL('static/icons/', WEB);
 
 const PNG_SIGNATURE = Uint8Array.of(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a);
-/** The chunks of the image itself, those that .claude/skills/pull-request/scripts/publish_screenshots.py keeps. */
+/** The chunks of the image itself, those that .claude/skills/pull-request/scripts/pr_screenshots.py keeps. */
 const IMAGE_CHUNKS = new Set(['IHDR', 'PLTE', 'IDAT', 'IEND', 'tRNS', 'gAMA', 'cHRM', 'sRGB', 'sBIT', 'bKGD', 'pHYs']);
 const MASKED_COLOR = {
   colorType: 2,

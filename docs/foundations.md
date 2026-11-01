@@ -437,8 +437,9 @@ Every branch goes through `/expert-review` before its pull request. It is a proj
   context on every turn, which costs more than the review it answers.
 - **The report says what the review cost,** agent by agent, so that the cost of the rounds shows while it builds up,
   and the decision to go on weighs it.
-- **A target other than the current branch is checked out outside the repository**, so a reviewed `CLAUDE.md` never
-  loads as an instruction.
+- **A target other than the current branch is checked out outside the repository**, at the commits its range resolves
+  once, so a reviewed `CLAUDE.md` never loads as an instruction, and nothing done to a branch while the review runs
+  changes what it reads.
 - **Reviews can run at the same time, from the same checkout:** each one keeps its scope in a temporary directory of
   its own.
 - **The report ends the review.** It suggests a fix for each finding but applies none: the session that owns the branch

@@ -5,7 +5,7 @@ from __future__ import annotations
 import io
 import zipfile
 from collections.abc import Buffer, Iterator, Sequence
-from pathlib import Path
+from pathlib import Path, PurePath
 
 _ALREADY_COMPRESSED = {".jpg", ".png", ".webp"}
 _CHUNK = 1024 * 1024
@@ -31,7 +31,7 @@ class _Sink(io.RawIOBase):
         return data
 
 
-def iter_zip(entries: Sequence[tuple[str, Path]]) -> Iterator[bytes]:
+def iter_zip(entries: Sequence[tuple[str, PurePath]]) -> Iterator[bytes]:
     """Yield a zip archive of (archive name, file) entries, chunk by chunk.
 
     Files that vanish while the archive is built (page deleted meanwhile) are skipped.
@@ -41,7 +41,7 @@ def iter_zip(entries: Sequence[tuple[str, Path]]) -> Iterator[bytes]:
         for name, path in entries:
             try:
                 info = zipfile.ZipInfo.from_file(path, name)
-                source = path.open("rb")
+                source = Path(path).open("rb")
             except FileNotFoundError:
                 continue
             info.compress_type = zipfile.ZIP_STORED if path.suffix in _ALREADY_COMPRESSED else zipfile.ZIP_DEFLATED

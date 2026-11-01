@@ -14,7 +14,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import __version__
-from .adapters.filesystem.library_files import LibraryFiles
+from .adapters.filesystem.library_files import FilesystemLibrary
 from .adapters.ocr_sandbox.client import OcrClient
 from .adapters.ocr_sandbox.engine import SandboxOcrEngine
 from .adapters.pillow_images import MAX_UPLOAD_BYTES, PillowImages
@@ -29,6 +29,7 @@ from .domain.records import Conflict, InvalidRequest, NotFound
 from .library import LibraryService
 from .middleware import BodySizeLimitMiddleware, SecurityHeadersMiddleware, body_limit
 from .ocr_loop import OcrLoop
+from .publisher import Publisher
 
 log = logging.getLogger(__name__)
 
@@ -70,7 +71,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         db = Database(settings.db_path)
         clock = SystemClock()
         images = PillowImages()
-        library = LibraryService(settings, db, LibraryFiles(settings.library_dir, clock), clock, images)
+        files = FilesystemLibrary(settings.library_dir, clock)
+        library = LibraryService(settings, db, files, Publisher(files, clock), clock, images)
         auth = Authenticator(load_or_create_token(settings.token_path, settings.token), db, clock)
         ocr_client = OcrClient(settings.ocr_socket, settings.ocr_timeout_s)
         ocr_engine = SandboxOcrEngine(ocr_client)

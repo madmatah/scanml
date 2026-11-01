@@ -19,7 +19,7 @@ from fastapi.testclient import TestClient
 from markdown_it import MarkdownIt
 from PIL import Image
 
-from scanmylib.adapters.filesystem.library_files import LibraryFiles
+from scanmylib.adapters.filesystem.library_files import FilesystemLibrary
 from scanmylib.devtools.fake_ocr import ParseRequest
 from scanmylib.domain.records import DocumentRecord, PageRecord
 from scanmylib.library import LibraryService
@@ -1574,10 +1574,12 @@ class TestTheFilesOfADocument:
         @pytest.fixture(scope="class")
         @classmethod
         def rewrite(cls, tmp_path_factory: pytest.TempPathFactory) -> RewriteAfterAFailure:
-            write_document = LibraryFiles.write_document
+            write_document = FilesystemLibrary.write_document
             failures: list[str] = []
 
-            def full_disk_once(self: LibraryFiles, slug: str, markdown: str, metadata: Mapping[str, object]) -> None:
+            def full_disk_once(
+                self: FilesystemLibrary, slug: str, markdown: str, metadata: Mapping[str, object]
+            ) -> None:
                 if not failures:
                     failures.append("ENOSPC")
                     raise OSError(errno.ENOSPC, "No space left on device")
@@ -1591,7 +1593,7 @@ class TestTheFilesOfADocument:
                 wait_until_processed(client, document_id)
                 markdown_file = api.settings.library_dir / SLUG / "document.md"
                 wait_for(lambda: markdown_file.is_file() and deleted["key"] in markdown_file.read_text())
-                patch.setattr(LibraryFiles, "write_document", full_disk_once)
+                patch.setattr(FilesystemLibrary, "write_document", full_disk_once)
                 deletion_status = client.delete(f"/api/pages/{deleted['id']}", headers=AUTH).status_code
                 wait_for(lambda: failures)
                 return RewriteAfterAFailure(

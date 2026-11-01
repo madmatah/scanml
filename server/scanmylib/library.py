@@ -18,12 +18,13 @@ import json
 import logging
 from collections.abc import Callable, Iterable, Sequence
 from datetime import datetime
-from pathlib import Path
+from pathlib import Path, PurePath
 
-from .adapters.filesystem.library_files import DOCUMENT_MARKDOWN, LibraryFiles, atomic_write
+from .adapters.filesystem.library_files import atomic_write
 from .adapters.sqlite.database import Database
 from .adapters.sqlite.rows import build_document_record, build_page_claim, build_page_record, encode_layout_summary
 from .application.clock import Clock
+from .application.library_files import LibraryFiles
 from .application.ocr_engine import PageOcrOutput
 from .application.scan_images import ImageRejected, ScanImages
 from .config import Settings
@@ -67,14 +68,20 @@ _LAYOUT_COLUMNS = (
 
 class LibraryService:
     def __init__(
-        self, settings: Settings, db: Database, files: LibraryFiles, clock: Clock, scan_images: ScanImages
+        self,
+        settings: Settings,
+        db: Database,
+        files: LibraryFiles,
+        publisher: Publisher,
+        clock: Clock,
+        scan_images: ScanImages,
     ) -> None:
         self._settings = settings
         self._db = db
         self._files = files
         self._clock = clock
         self._scan_images = scan_images
-        self._publisher = Publisher(files, clock)
+        self._publisher = publisher
         self._locks: dict[str, asyncio.Lock] = {}
         #: Ids of the pages whose upload is being stored (their row does not exist yet).
         self._storing: set[str] = set()
@@ -91,7 +98,7 @@ class LibraryService:
 
         Returns the number of pages that were being processed and are re-queued.
         """
-        self._files.ensure_root()
+        self._files.prepare()
         self._settings.thumbs_dir.mkdir(parents=True, exist_ok=True)
         with self._db.transaction():
             requeued = self._db.execute("UPDATE pages SET status = 'queued' WHERE status = 'processing'").rowcount
@@ -162,8 +169,8 @@ class LibraryService:
         """Host path of a document folder (display only)."""
         return f"{self._settings.library_host_path.rstrip('/')}/{document.slug}"
 
-    def scan_path(self, page: PageRecord, document: DocumentRecord) -> Path:
-        return self._files.scan_path(document.slug, page.key, page.scan_ext)
+    def scan_path(self, page: PageRecord, document: DocumentRecord) -> PurePath:
+        return self._files.locate_scan(document.slug, page.key, page.scan_ext)
 
     def _thumb_path(self, page_id: str) -> Path:
         return self._settings.thumbs_dir / f"{page_id}.jpg"
@@ -194,16 +201,15 @@ class LibraryService:
     async def document_markdown(self, document: DocumentRecord) -> str:
         """Current document.md (written now if a rewrite is pending or the file is missing)."""
         await self._assembly.flush(document.id)
-        path = self._files.document_dir(document.slug) / DOCUMENT_MARKDOWN
-        if not path.is_file():
+        if not await asyncio.to_thread(self._files.has_document_markdown, document.slug):
             self._assembly.schedule(document.id)
             await self._assembly.flush(document.id)
-        return await asyncio.to_thread(path.read_text, encoding="utf-8")
+        return await asyncio.to_thread(self._files.read_document_markdown, document.slug)
 
-    def document_file(self, document: DocumentRecord, relative: str) -> Path | None:
+    def document_file(self, document: DocumentRecord, relative: str) -> PurePath | None:
         return self._files.resolve_document_file(document.slug, relative)
 
-    async def export_entries(self, document: DocumentRecord, include_scans: bool) -> list[tuple[str, Path]]:
+    async def export_entries(self, document: DocumentRecord, include_scans: bool) -> Sequence[tuple[str, PurePath]]:
         await self._assembly.flush(document.id)
         return await asyncio.to_thread(self._files.export_entries, document.slug, include_scans)
 
@@ -235,7 +241,7 @@ class LibraryService:
                     ),
                 )
                 self._refresh_layout(document_id)
-            await asyncio.to_thread(self._files.ensure_document_dir, slug)
+            await asyncio.to_thread(self._files.create_folder, slug)
         self._assembly.schedule(document_id)
         return self.require_document(document_id), True
 
@@ -284,7 +290,7 @@ class LibraryService:
             slug
             for slug in propose_slugs(title)
             if self._db.one("SELECT 1 FROM documents WHERE slug = ?", (slug,)) is None
-            and not self._files.folder_exists(slug)
+            and not self._files.has_folder(slug)
         )
 
     def _touch(self, document_id: str) -> None:
@@ -506,8 +512,8 @@ class LibraryService:
             self._refresh_layout(row["document_id"])
         return build_page_claim(row)
 
-    def locate_claimed_scan(self, claim: PageClaim) -> Path:
-        return self._files.scan_path(claim.slug, claim.key, claim.scan_ext)
+    def locate_claimed_scan(self, claim: PageClaim) -> PurePath:
+        return self._files.locate_scan(claim.slug, claim.key, claim.scan_ext)
 
     def release_page(self, claim: PageClaim) -> None:
         self._end_attempt(claim, conclude_released_attempt(claim.attempts))

@@ -53,7 +53,7 @@ def _json_bytes(value: object) -> bytes:
     return (json.dumps(value, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
 
 
-class LibraryFiles:
+class FilesystemLibrary:
     """Paths and file operations under the library root."""
 
     def __init__(self, root: Path, clock: Clock) -> None:
@@ -64,25 +64,25 @@ class LibraryFiles:
     def trash(self) -> Path:
         return self.root / TRASH_DIR
 
-    def ensure_root(self) -> None:
+    def prepare(self) -> None:
         self.trash.mkdir(parents=True, exist_ok=True)
 
     def document_dir(self, slug: str) -> Path:
         return self.root / slug
 
-    def folder_exists(self, slug: str) -> bool:
+    def has_folder(self, slug: str) -> bool:
         return self.document_dir(slug).exists()
 
-    def ensure_document_dir(self, slug: str) -> None:
+    def create_folder(self, slug: str) -> None:
         self.document_dir(slug).mkdir(parents=True, exist_ok=True)
 
     # -- pages -------------------------------------------------------------
 
-    def scan_path(self, slug: str, key: str, ext: str) -> Path:
-        return self.document_dir(slug) / "scans" / f"{key}.{ext}"
+    def locate_scan(self, slug: str, key: str, extension: str) -> Path:
+        return self.document_dir(slug) / "scans" / f"{key}.{extension}"
 
-    def write_scan(self, slug: str, key: str, ext: str, data: bytes) -> None:
-        atomic_write(self.scan_path(slug, key, ext), data)
+    def write_scan(self, slug: str, key: str, extension: str, encoded_scan: bytes) -> None:
+        atomic_write(self.locate_scan(slug, key, extension), encoded_scan)
 
     def page_markdown_path(self, slug: str, key: str) -> Path:
         return self.document_dir(slug) / "pages" / f"{key}.md"
@@ -123,10 +123,10 @@ class LibraryFiles:
         atomic_write(folder / "ocr" / f"{key}.json", _json_bytes(raw))
         atomic_write(folder / "pages" / f"{key}.md", markdown.encode("utf-8"))
 
-    def trash_page(self, slug: str, key: str, ext: str) -> Path | None:
+    def trash_page(self, slug: str, key: str, extension: str) -> Path | None:
         """Move a page's scan and OCR outputs to the trash."""
         files = self._page_outputs(slug, key)
-        scan = self.scan_path(slug, key, ext)
+        scan = self.locate_scan(slug, key, extension)
         if scan.is_file():
             files.append(scan)
         if not files:
@@ -143,6 +143,12 @@ class LibraryFiles:
         target = self._unique_trash_dir(f"{slug}-{timestamps.compact(self._clock.now())}")
         os.rename(folder, target)
         return target
+
+    def has_document_markdown(self, slug: str) -> bool:
+        return (self.document_dir(slug) / DOCUMENT_MARKDOWN).is_file()
+
+    def read_document_markdown(self, slug: str) -> str:
+        return (self.document_dir(slug) / DOCUMENT_MARKDOWN).read_text(encoding="utf-8")
 
     def write_document(self, slug: str, markdown: str, metadata: Mapping[str, object]) -> None:
         folder = self.document_dir(slug)
@@ -191,7 +197,7 @@ class LibraryFiles:
     # -- trash -------------------------------------------------------------
 
     def _unique_trash_dir(self, name: str) -> Path:
-        self.ensure_root()
+        self.prepare()
         target = self.trash / name
         suffix = 2
         while target.exists():

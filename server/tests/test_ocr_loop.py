@@ -10,7 +10,7 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from scanmylib.adapters.filesystem.library_files import TRASH_DIR, LibraryFiles
+from scanmylib.adapters.filesystem.library_files import TRASH_DIR, FilesystemLibrary
 from scanmylib.devtools import fake_ocr
 from scanmylib.devtools.fake_ocr import ParseResponse, canned_page
 from scanmylib.domain.pages import MAX_OCR_RETRIES
@@ -409,10 +409,10 @@ class TestTheOcrLoop:
         def rotated_page(cls, tmp_path_factory: pytest.TempPathFactory) -> PageChangedDuringItsOcr:
             writes: list[str] = []
             writes_released = threading.Event()
-            write_page_outputs = LibraryFiles.write_page_outputs
+            write_page_outputs = FilesystemLibrary.write_page_outputs
 
             def held_write_page_outputs(
-                self: LibraryFiles,
+                self: FilesystemLibrary,
                 slug: str,
                 key: str,
                 markdown: str,
@@ -424,7 +424,7 @@ class TestTheOcrLoop:
                 write_page_outputs(self, slug, key, markdown, images, raw)
 
             with pytest.MonkeyPatch.context() as patch, running_api(tmp_path_factory.mktemp("api")) as api:
-                patch.setattr(LibraryFiles, "write_page_outputs", held_write_page_outputs)
+                patch.setattr(FilesystemLibrary, "write_page_outputs", held_write_page_outputs)
                 document_id = create_document(api.client)
                 try:
                     page = upload(api.client, document_id, jpeg(*SIDEWAYS_SCAN_SIZE_PIXELS)).json()

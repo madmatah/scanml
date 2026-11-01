@@ -431,8 +431,9 @@ Every branch goes through `/expert-review` before its pull request. It is a proj
   fix to the project's rules, since an expert reads only those of its domain.
 - **Rounds of fixes converge, or the user decides.** A fix can bring the bug that the next round finds, so each round
   of fixes is reviewed. A defect that a fix brought into the code it fixed says the method is wrong: a test of the whole
-  input space, or a simpler design, ends the chase sooner than more rounds. Past a few rounds, the user weighs what
-  remains against what the rounds cost.
+  input space, or a simpler design, ends the chase sooner than more rounds. A failed check is the exception: the gate
+  names what broke and checks the next patch, so the chase it starts has an end. Past a few rounds, the user weighs
+  what remains against what the rounds cost.
 - **A new agent fixes each round,** from a brief: an agent resumed round after round re-reads its whole, growing
   context on every turn, which costs more than the review it answers.
 - **The report says what the review cost,** agent by agent, so that the cost of the rounds shows while it builds up,
@@ -443,7 +444,7 @@ Every branch goes through `/expert-review` before its pull request. It is a proj
 - **Reviews can run at the same time, from the same checkout:** each one keeps its scope in a temporary directory of
   its own.
 - **The report ends the review.** It suggests a fix for each finding but applies none: the session that owns the branch
-  answers each one or has a fixer agent fix it, and the user decides at the merge.
+  answers each one or has a fixer agent fix it, a failed check always, and the user decides at the merge.
 
 ## References
 

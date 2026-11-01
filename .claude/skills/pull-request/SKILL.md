@@ -99,18 +99,21 @@ the revised plan and the commits so far: the one that stopped carries a context 
 3. Settle each finding as `CLAUDE.md` > Workflow, "Review before pushing" says. Give the findings to fix to a new
    `fixer` agent, with its brief: the worktree and its base, the purpose of the branch, each verified finding, and the
    commit each fix belongs to. It commits each fix as a `fixup!` commit, or as an `amend!` commit for a commit message,
-   as [Fold review fixes](#fold-review-fixes) shows. Before you fold them, review the fixes alone, against the
-   findings they answer: write those findings, as the review reported them, with the Write tool, to a file in a
-   directory that `mktemp -d` creates outside the worktree, and run
+   as [Fold review fixes](#fold-review-fixes) shows. A fix commit whose check failed is a finding of the round, given
+   to a new fixer like the others, even when its fix brought it, and never answered in the pull request. Before you
+   fold them, review the fixes alone, against the findings they answer: write those findings, as the review reported
+   them, and each failed check with its output, with the Write tool, to a file in a directory that `mktemp -d` creates
+   outside the worktree, and run
    `/expert-review <the commit before the first fix of the round>...<branch> --fixes <file>`. Remove the directory once
    the review of the fixes has handed back its report and you have settled each of its findings: given to a fixer,
    answered in the pull request, or carried into a revised plan. A finding that needs a change of design, or that a fix
-   brought into the code it fixed, ends the round instead: revise the plan of the branch with all the findings of the
-   round, as [Plan the work](#plan-the-work) says, give the change to a new agent, as [Write the code](#write-the-code)
-   says, shape the history again, as [Shape the history](#shape-the-history) says, and review the whole branch again,
-   as the first round does. Keep the cost of each round, from its report, for the decision that `CLAUDE.md` > Workflow,
-   "Rounds of review converge, or the user decides" leaves to the user. Go on round by round as `CLAUDE.md` > Workflow,
-   "Review before pushing" and "Rounds of review converge, or the user decides" say, then fold the fixes.
+   brought into the code it fixed, other than a failed check, ends the round instead: revise the plan of the branch
+   with all the findings of the round, as [Plan the work](#plan-the-work) says, give the change to a new agent, as
+   [Write the code](#write-the-code) says, shape the history again, as [Shape the history](#shape-the-history) says,
+   and review the whole branch again, as the first round does. Keep the cost of each round, from its report, for the
+   decision that `CLAUDE.md` > Workflow, "Rounds of review converge, or the user decides" leaves to the user. Go on
+   round by round as `CLAUDE.md` > Workflow, "Review before pushing" and "Rounds of review converge, or the user
+   decides" say, then fold the fixes.
 4. **A review that hands back too soon:** if the review hands back a report that says its triage or an expert still
    runs, or an answer of its triage or of an expert reaches you rather than the review, the review handed back too
    soon: set its report aside and act on none of it. Stop, and tell the user, or, when the user does not follow the

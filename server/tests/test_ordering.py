@@ -330,6 +330,16 @@ class LooseSessionsMoved(NamedTuple):
     moved_page_ids: set[str]
 
 
+class LayoutsOfTwoOrders(NamedTuple):
+    listed_layout: Layout
+    shuffled_layout: Layout
+
+
+class PositionsOfTwoOrders(NamedTuple):
+    listed_positions: dict[str, float | None]
+    shuffled_positions: dict[str, float | None]
+
+
 def reorder(pages: list[PageInput], wanted: list[str]) -> Reordering:
     layout = compute_layout(pages)
     by_id = {page.id: page for page in pages}
@@ -459,6 +469,16 @@ def make_pages_before_page_1_in_two_sessions() -> list[PageInput]:
         make_page("a1", session_id="a", seq=1, captured_ts=1, detected_numbers=("1",)),
         make_page("b0", session_id="b", seq=0, captured_ts=10),
         make_page("b1", session_id="b", seq=1, captured_ts=11, detected_numbers=("1",)),
+        make_page("x", session_id="x", seq=0, captured_ts=20),
+    ]
+
+
+def make_pages_before_page_1_in_two_sessions_captured_at_once() -> list[PageInput]:
+    return [
+        make_page("b0", session_id="b", seq=0, captured_ts=0),
+        make_page("b1", session_id="b", seq=1, captured_ts=11, detected_numbers=("1",)),
+        make_page("a0", session_id="a", seq=0, captured_ts=0),
+        make_page("a1", session_id="a", seq=1, captured_ts=1, detected_numbers=("1",)),
         make_page("x", session_id="x", seq=0, captured_ts=20),
     ]
 
@@ -1705,6 +1725,39 @@ class TestTheOrdering:
                 places = read_places_on_the_number_line(layout, ["a0", "b0"])
                 assert places[0] == places[1] == pytest.approx(1 - SESSION_STEP)
 
+        class TestWhenPagesOfTwoSessionsScannedAtOnceJustBeforeTheSamePage1ComeLastSessionFirst:
+            @pytest.fixture
+            def layout(self) -> Layout:
+                return compute_layout(make_pages_before_page_1_in_two_sessions_captured_at_once())
+
+            def test_should_break_their_tie_by_page_id_so_that_the_order_never_depends_on_how_the_pages_were_listed(
+                self, layout: Layout
+            ) -> None:
+                assert layout.reading_order == ("a0", "b0", "b1", "x")
+
+        class TestWhenItsPagesComeInAnotherOrder:
+            LATEST_CAPTURE_SECONDS = 1
+
+            @pytest.fixture(scope="class", params=SEEDS, ids=lambda seed: f"seed {seed}")
+            @classmethod
+            def layouts(cls, request: pytest.FixtureRequest) -> LayoutsOfTwoOrders:
+                random_generator = random.Random(request.param)
+                pages = [
+                    dataclasses.replace(
+                        page, captured_ts=float(random_generator.randint(0, cls.LATEST_CAPTURE_SECONDS))
+                    )
+                    for page in generate_pages(random_generator)
+                ]
+                return LayoutsOfTwoOrders(
+                    listed_layout=compute_layout(pages),
+                    shuffled_layout=compute_layout(random_generator.sample(pages, len(pages))),
+                )
+
+            def test_should_give_the_same_layout_so_that_the_order_the_catalog_lists_them_in_never_matters(
+                self, layouts: LayoutsOfTwoOrders
+            ) -> None:
+                assert layouts.shuffled_layout == layouts.listed_layout
+
     class TestTheCoverageGapsProperty:
         class TestWhenNumbersAreMissingBetweenTheRanges:
             @pytest.fixture
@@ -2114,6 +2167,31 @@ class TestTheOrdering:
 
             def test_should_give_positions_to_more_pages_than_needed(self, order_put: OrderPut) -> None:
                 assert {"f4", "f5", "f6"} < set(select_the_given_positions(order_put.positions))
+
+        class TestWhenItsPagesComeInAnotherOrder:
+            LATEST_CAPTURE_SECONDS = 1
+
+            @pytest.fixture(scope="class", params=SEEDS, ids=lambda seed: f"seed {seed}")
+            @classmethod
+            def positions(cls, request: pytest.FixtureRequest) -> PositionsOfTwoOrders:
+                random_generator = random.Random(request.param)
+                pages = [
+                    dataclasses.replace(
+                        page, captured_ts=float(random_generator.randint(0, cls.LATEST_CAPTURE_SECONDS))
+                    )
+                    for page in generate_pages_until(random_generator, holds_two_pages_to_order_or_more)
+                ]
+                wanted = list(compute_layout(pages).reading_order)
+                random_generator.shuffle(wanted)
+                return PositionsOfTwoOrders(
+                    listed_positions=positions_for_order(pages, wanted),
+                    shuffled_positions=positions_for_order(random_generator.sample(pages, len(pages)), wanted),
+                )
+
+            def test_should_give_the_same_positions_so_that_the_order_the_catalog_lists_them_in_never_matters(
+                self, positions: PositionsOfTwoOrders
+            ) -> None:
+                assert positions.shuffled_positions == positions.listed_positions
 
         class TestWhenAnOrderOtherThanTheCurrentOneIsAsked:
             def test_should_give_the_wanted_order(self, two_other_orders: TwoOrders) -> None:

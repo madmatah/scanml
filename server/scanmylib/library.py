@@ -21,7 +21,7 @@ from datetime import datetime
 from pathlib import PurePath
 
 from .adapters.sqlite.database import Database
-from .adapters.sqlite.rows import build_page_claim, build_page_record, encode_layout_summary
+from .adapters.sqlite.rows import build_page_claim
 from .application.catalog import Catalog, QueueCounts
 from .application.clock import Clock
 from .application.library_files import LibraryFiles
@@ -53,18 +53,6 @@ from .domain.records import (
 from .publisher import Publisher
 
 log = logging.getLogger(__name__)
-
-_LAYOUT_COLUMNS = (
-    "number",
-    "number_end",
-    "front_matter",
-    "number_source",
-    "page_label",
-    "duplicate_of",
-    "in_document",
-    "placement",
-    "rank",
-)
 
 
 class LibraryService:
@@ -561,31 +549,9 @@ class LibraryService:
 
     def _refresh_layout(self, document_id: str) -> None:
         """Recompute numbering/order/coverage of a document and store it (in a transaction)."""
-        rows = self._db.all("SELECT * FROM pages WHERE document_id = ?", (document_id,))
-        inputs = [build_page_record(row).ordering_input for row in rows]
+        inputs = [page.ordering_input for page in self._catalog.list_pages(document_id)]
         layout = ordering.compute_layout(inputs)
-        for row in rows:
-            placement = layout.placements[row["id"]]
-            number = placement.number
-            values = (
-                number.value if number else None,
-                number.end if number else None,
-                int(bool(number and number.front_matter)),
-                placement.source,
-                number.label if number else None,
-                placement.duplicate_of,
-                int(placement.in_document),
-                placement.placed_by,
-                placement.rank,
-            )
-            if values != tuple(row[column] for column in _LAYOUT_COLUMNS):
-                assignments = ", ".join(f"{column} = ?" for column in _LAYOUT_COLUMNS)
-                self._db.execute(
-                    f"UPDATE pages SET {assignments} WHERE id = ?",  # noqa: S608 (column names from the code, values as ? parameters)
-                    (*values, row["id"]),
-                )
-        summary = encode_layout_summary(summarize_layout(inputs, layout))
-        self._db.execute("UPDATE documents SET layout = ? WHERE id = ?", (summary, document_id))
+        self._catalog.store_layout(document_id, layout.placements, summarize_layout(inputs, layout))
 
     async def _assemble(self, document_ids: set[str], index: bool) -> None:
         for document_id in sorted(document_ids):

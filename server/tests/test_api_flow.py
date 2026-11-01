@@ -6,6 +6,7 @@ import errno
 import io
 import json
 import re
+import shutil
 import threading
 import time
 import zipfile
@@ -170,6 +171,13 @@ class UploadWithMetadata:
     page_id: str
     session_id: str
     page: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class KeysOfPagesCapturedTogether:
+    first_key: str
+    second_key: str
+    key_in_another_document: str
 
 
 @dataclass(frozen=True)
@@ -816,6 +824,24 @@ class TestTheDocumentsOfALibrary:
             def test_should_list_it_first(self, library_documents: LibraryDocuments) -> None:
                 assert library_documents.listed_after_change[0] == library_documents.first_id
 
+    class TestWhenOneTakesTheTitleOfAnotherWhoseFolderIsGone:
+        TITLE = "Letters"
+
+        @pytest.fixture(scope="class")
+        @classmethod
+        def second_slug(cls, tmp_path_factory: pytest.TempPathFactory) -> str:
+            with running_api(tmp_path_factory.mktemp("api")) as api:
+                client = api.client
+                first_id = create_document(client, cls.TITLE)
+                client.get(f"/api/documents/{first_id}/markdown", headers=AUTH).raise_for_status()
+                shutil.rmtree(api.settings.library_dir / read_document(client, first_id)["slug"])
+                second_id = create_document(client, cls.TITLE)
+                slug: str = read_document(client, second_id)["slug"]
+                return slug
+
+        def test_should_give_it_a_slug_of_its_own_since_the_other_still_holds_its_slug(self, second_slug: str) -> None:
+            assert second_slug == "letters-2"
+
 
 class TestABookScannedOutOfOrderAcrossSessions:
     class TestWhenItsPagesAreRead:
@@ -1009,6 +1035,37 @@ class TestAnUploadedPage:
         def test_should_queue_it_for_the_ocr(self, upload_with_metadata: UploadWithMetadata) -> None:
             page = upload_with_metadata.page
             assert (page["status"], page["ocr"]) == ("queued", None)
+
+    class TestWhenItIsCapturedInTheSameSecondAsAPageWhoseIdStartsTheSame:
+        CAPTURED_AT = "2026-10-12T20:15:30+02:00"
+        FIRST_PAGE_ID = "0a1b2c3d-0000-4000-8000-000000000001"
+        SECOND_PAGE_ID = "0a1b2c3d-0000-4000-8000-000000000002"
+        OTHER_DOCUMENT_PAGE_ID = "0a1b2c3d-0000-4000-8000-000000000003"
+
+        @pytest.fixture(scope="class")
+        @classmethod
+        def keys(cls, tmp_path_factory: pytest.TempPathFactory) -> KeysOfPagesCapturedTogether:
+            with running_api(tmp_path_factory.mktemp("api")) as api:
+                client = api.client
+                document_id, other_document_id = create_document(client), create_document(client)
+                first_page = upload(client, document_id, jpeg(), page_id=cls.FIRST_PAGE_ID, captured_at=cls.CAPTURED_AT)
+                second_page = upload(
+                    client, document_id, jpeg(), page_id=cls.SECOND_PAGE_ID, captured_at=cls.CAPTURED_AT
+                )
+                page_in_another_document = upload(
+                    client, other_document_id, jpeg(), page_id=cls.OTHER_DOCUMENT_PAGE_ID, captured_at=cls.CAPTURED_AT
+                )
+                return KeysOfPagesCapturedTogether(
+                    first_key=first_page.json()["key"],
+                    second_key=second_page.json()["key"],
+                    key_in_another_document=page_in_another_document.json()["key"],
+                )
+
+        def test_should_take_a_key_with_more_of_its_id(self, keys: KeysOfPagesCapturedTogether) -> None:
+            assert (keys.first_key, keys.second_key) == ("20261012-201530_0a1b2c3d", "20261012-201530_0a1b2c3d0000")
+
+        def test_should_keep_the_shortest_key_in_another_document(self, keys: KeysOfPagesCapturedTogether) -> None:
+            assert keys.key_in_another_document == "20261012-201530_0a1b2c3d"
 
     class TestWhenAFieldDoesNotHoldUp:
         @pytest.fixture(scope="class")

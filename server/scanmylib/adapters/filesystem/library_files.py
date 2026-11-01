@@ -15,8 +15,8 @@ import tempfile
 from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 
-from .application.clock import Clock
-from .domain import timestamps
+from ...application.clock import Clock
+from ...domain import timestamps
 
 TRASH_DIR = ".trash"
 DOCUMENT_MARKDOWN = "document.md"

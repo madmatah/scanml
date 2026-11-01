@@ -14,6 +14,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import __version__
+from .adapters.filesystem.library_files import LibraryFiles
 from .adapters.ocr_sandbox.client import OcrClient
 from .adapters.ocr_sandbox.engine import SandboxOcrEngine
 from .adapters.pillow_images import MAX_UPLOAD_BYTES, PillowImages
@@ -28,7 +29,6 @@ from .domain.records import Conflict, InvalidRequest, NotFound
 from .library import LibraryService
 from .middleware import BodySizeLimitMiddleware, SecurityHeadersMiddleware, body_limit
 from .ocr_loop import OcrLoop
-from .storage import LibraryFiles
 
 log = logging.getLogger(__name__)
 

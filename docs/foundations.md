@@ -161,7 +161,7 @@ The modules as they are, and the layer each one belongs to, whose directory the 
 | api | `adapters/sqlite/database`, `adapters/sqlite/rows` | SQLite state, its rows read into records, and the summary of a document's layout written as JSON | Adapters |
 | api | `adapters/system_clock` | The wall clock, in the server's time zone | Adapters |
 | api | `adapters/pillow_images` | Pillow: the checks of an upload, thumbnails, the image sent to the OCR, re-encoded illustrations | Adapters |
-| api | `storage`, `export` | The library's files, atomic writes and trash; zip archives | Adapters |
+| api | `adapters/filesystem/library_files`, `export` | The library's files, atomic writes and trash; zip archives | Adapters |
 | api | `adapters/ocr_sandbox/client`, `adapters/ocr_sandbox/results`, `adapters/ocr_sandbox/sanitize`, `adapters/ocr_sandbox/engine` | The OCR sandbox: the client of its protocol, the validation of its untrusted results, the sanitizer of their Markdown, and the OCR engine over them, which times the reading of a page and validates the untrusted status of the sandbox | Adapters |
 | api | `qr`, `published_apk` | QR codes, the published APK's metadata | Adapters |
 | api | `api/`, `auth`, `middleware` | HTTP routes, the times that clients send, authentication, security headers and body limits | Adapters |

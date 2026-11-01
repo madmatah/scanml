@@ -1,4 +1,4 @@
-"""Library folder operations (storage.py): atomic writes, trash, safe file resolution."""
+"""The library's files on disk (adapters/filesystem/library_files.py): atomic writes, trash, safe file resolution."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from typing import NamedTuple
 
 import pytest
 
-from scanmylib.storage import TRASH_DIR, LibraryFiles, atomic_write
+from scanmylib.adapters.filesystem.library_files import TRASH_DIR, LibraryFiles, atomic_write
 from support import FixedClock
 
 SLUG = "book"
@@ -46,7 +46,7 @@ def write_a_page_and_its_document(files: LibraryFiles) -> None:
     files.write_document(SLUG, "# Book\n", {"title": "Book"})
 
 
-class TestTheStorage:
+class TestTheLibraryFiles:
     @pytest.fixture
     def files(self, tmp_path: Path) -> LibraryFiles:
         library = LibraryFiles(tmp_path / "library", FixedClock(TRASHED_AT))

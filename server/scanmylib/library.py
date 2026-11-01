@@ -20,6 +20,7 @@ from collections.abc import Callable, Iterable, Sequence
 from datetime import datetime
 from pathlib import Path
 
+from .adapters.filesystem.library_files import DOCUMENT_MARKDOWN, LibraryFiles, atomic_write
 from .adapters.sqlite.database import Database
 from .adapters.sqlite.rows import build_document_record, build_page_claim, build_page_record, encode_layout_summary
 from .application.clock import Clock
@@ -48,7 +49,6 @@ from .domain.records import (
     PageUpload,
 )
 from .publisher import Publisher
-from .storage import DOCUMENT_MARKDOWN, LibraryFiles, atomic_write
 
 log = logging.getLogger(__name__)
 

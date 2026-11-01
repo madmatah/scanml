@@ -21,7 +21,7 @@ Everything runs in Docker; nothing is installed on the host.
 | `domain/text.py` | user-entered text, slugs, collation |
 | `domain/timestamps.py` | moments written as text, in the API and in the names of keys and folders |
 | `application/clock.py`, `adapters/system_clock.py` | the clock the application reads, and the wall clock behind it, in the container's `TZ` |
-| `storage.py` | library folder: atomic writes, `.trash/`, safe file resolution |
+| `adapters/filesystem/library_files.py` | library folder: atomic writes, `.trash/`, safe file resolution |
 | `preview.py` | Markdown → allowlisted HTML |
 | `adapters/pillow_images.py`, `application/scan_images.py` | Pillow: upload checks, thumbnails, image sent to the sandbox, re-encoded illustrations; the ports through which the application handles them, and their errors |
 | `application/ocr_engine.py`, `adapters/ocr_sandbox/` | the OCR ports, with a page's output, its errors and the engine's status; the sandbox behind them: its client, the validation of its responses, untrusted OCR Markdown → safe Markdown, and the engine that times a page's reading and validates its `/health` |

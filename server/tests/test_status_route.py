@@ -1,4 +1,5 @@
-"""The status route (GET /api/status): what it reports of the OCR sandbox, from the sandbox's /health."""
+"""The status route (GET /api/status): what it reports of the OCR sandbox, from the sandbox's /health, and how many
+pages of the queue are in each status."""
 
 from __future__ import annotations
 
@@ -12,7 +13,17 @@ from typing import Any, ClassVar
 import pytest
 
 from scanmylib import __version__
-from support import AUTH, build_client, preparing_settings, running_api
+from support import (
+    AUTH,
+    build_client,
+    create_document,
+    jpeg,
+    preparing_settings,
+    running_api,
+    upload,
+    wait_for,
+    wait_until_processed,
+)
 
 
 @dataclass(frozen=True)
@@ -237,3 +248,39 @@ class TestTheStatusRoute:
 
             def test_should_bound_its_error_to_300_characters(self, status_answer: StatusAnswer) -> None:
                 assert len(status_answer.ocr_status["last_error"]) <= 300
+
+        class TestWhenPagesAreInEveryStatusOfTheQueue:
+            REFUSAL_STATUS = 400
+            REFUSED_PAGE_COUNT = 2
+            READ_PAGE_COUNT = 3
+            HELD_PAGE_COUNT = 1
+            WAITING_PAGE_COUNT = 4
+
+            @pytest.fixture(scope="class")
+            @classmethod
+            def queue(cls, tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
+                with running_api(tmp_path_factory.mktemp("api")) as api:
+                    client = api.client
+                    document_id = create_document(client)
+                    api.fake_ocr.fail_next(cls.REFUSAL_STATUS, cls.REFUSED_PAGE_COUNT)
+                    for _ in range(cls.REFUSED_PAGE_COUNT + cls.READ_PAGE_COUNT):
+                        upload(client, document_id, jpeg()).raise_for_status()
+                    wait_until_processed(client, document_id)
+                    api.fake_ocr.parses_released.clear()
+                    try:
+                        upload(client, document_id, jpeg()).raise_for_status()
+                        wait_for(lambda: len(api.fake_ocr.requests) > cls.REFUSED_PAGE_COUNT + cls.READ_PAGE_COUNT)
+                        for _ in range(cls.WAITING_PAGE_COUNT):
+                            upload(client, document_id, jpeg()).raise_for_status()
+                        queue: dict[str, Any] = client.get("/api/status", headers=AUTH).json()["queue"]
+                    finally:
+                        api.fake_ocr.parses_released.set()
+                    return queue
+
+            def test_should_count_the_pages_in_each_status(self, queue: dict[str, Any]) -> None:
+                assert list(queue.items()) == [
+                    ("queued", self.WAITING_PAGE_COUNT),
+                    ("processing", self.HELD_PAGE_COUNT),
+                    ("error", self.REFUSED_PAGE_COUNT),
+                    ("done", self.READ_PAGE_COUNT),
+                ]

@@ -125,7 +125,7 @@ The section of each test framework below gives its own words for them, and how i
 
 - **Unit tests of the api:** `server/tests/`, with pytest, in the api's test image, without network and on a read-only
   filesystem. The HTTP API runs through FastAPI's test client, against the fake OCR sandbox on a real Unix socket.
-- **Unit tests of the web UI:** `server/scanmylib/web/tests/`, with `node --test`, on what needs no DOM: the modules of
+- **Unit tests of the web UI:** `server/scanmylib/web/tests/`, with `node --test`, on what needs no DOM: the files of
   the UI that hold none, the constants of the others, its translation catalog and its icons.
 - **Unit tests of the OCR sandbox:** `ocr/tests/`, with `unittest`, in the sandbox's image, without network or models;
   the tests that need an engine's environment skip without it.
@@ -142,7 +142,7 @@ The section of each test framework below gives its own words for them, and how i
   rather than in two of one name, which clash since both directories compile into the debug variant's tests. The
   pictures stay out of the code's history: they show the screens to whoever checks a change, and a pull request
   publishes those of a visible change (`.claude/skills/pull-request/SKILL.md` > Show a visible change).
-- **Unit tests of the scripts:** `scripts/tests/`, with `unittest` and the host's `python3`, on the modules of
+- **Unit tests of the scripts:** `scripts/tests/`, with `unittest` and the host's `python3`, on the files of
   `scripts/lib/`, on `scripts/release.py` and on the workflows of `.github/workflows/`, against throwaway repositories
   where git is needed.
 - **Integration tests of the scripts:** `scripts/integration_tests/`, with `unittest` and the host's `python3`, which

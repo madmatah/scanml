@@ -15,11 +15,11 @@ Software Foundation's style guide (PEP 8) and its typing PEPs. These rules come 
   constants. Acronyms are written as words in every case (`OcrClient`, `api_token`), where PEP 8 would capitalize them
   in class names (`OCRClient`), so that a name is spelled the same in the four languages of the project.
 - **Every signature is typed,** its parameters and its return, in the current syntax: `str | None`, `list[str]`,
-  `dict[str, int]`, never `Optional`, `List` or `Dict`. Each module starts with `from __future__ import annotations`, so
+  `dict[str, int]`, never `Optional`, `List` or `Dict`. Each file starts with `from __future__ import annotations`, so
   that a type may name a class defined further down. No `Any`, except where untyped data enters, such as parsed JSON,
   which becomes typed values at once.
 - **Plain data is a frozen dataclass** (`@dataclass(frozen=True)`), and a closed set of values an `enum.Enum`. A dict
-  crosses no module boundary, except at the edge where it becomes JSON. A location that crosses a port is a
+  crosses no boundary between files, except at the edge where it becomes JSON. A location that crosses a port is a
   `pathlib.PurePath`, which has none of `Path`'s file-system methods, so mypy refuses a call such as `read_bytes()` or
   `is_file()` on it; an adapter's own `Path` passes as one; an adapter that calls `Path`'s methods on a location it
   receives makes a `Path` of it first, and a library that takes any path-like takes it as it is.
@@ -28,8 +28,8 @@ Software Foundation's style guide (PEP 8) and its typing PEPs. These rules come 
   it on purpose. Catch the narrowest exception. `except Exception` only at a boundary that must keep running, such as
   the OCR loop or an image decoder that raises assorted types, with a comment that says why, and `except BaseException`
   only to clean up and raise again.
-- **What is internal starts with `_`,** and nothing imports another module's `_` name: a module's public names are its
-  entry point. No `import *`. Inside a package, imports are relative (`from .records import PageRecord`).
+- **What is internal starts with `_`.** No `import *`. Inside a package, imports are relative
+  (`from .records import PageRecord`).
 - **Async code never blocks the event loop.** Blocking work in a coroutine (files, SQLite, images) runs in
   `asyncio.to_thread`.
 - **No mutable default argument,** and no mutable class attribute shared between instances: a dataclass field takes

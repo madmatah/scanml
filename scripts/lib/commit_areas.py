@@ -1,7 +1,7 @@
 """The areas of the gate that the last commit touches, for `scripts/check.sh --last-commit`.
 
 A commit is checked on the areas that read the files it changes: an area that reads none of them gives the result it
-gave on the commit before. The integration tests of the scripts run for the scripts they run, and not for the modules
+gave on the commit before. The integration tests of the scripts run for the scripts they run, and not for the files
 that unit tests cover alone (`CLAUDE.md` > Workflow, "Commits"). A path that no rule below knows reaches every area, so
 that a file nobody thought of is checked rather than skipped.
 
@@ -51,7 +51,7 @@ PATH_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
     # No integration test runs them.
     ("scripts/release.py", ("lint", "scripts")),
     ("scripts/vendor-katex.sh", ("lint",)),
-    # The integration tests run the other scripts and their modules.
+    # The integration tests run the other scripts and their files.
     ("scripts/", ("lint", "scripts", "integration")),
     ("ruff.toml", ("lint",)),
     ("mypy.ini", ("lint",)),

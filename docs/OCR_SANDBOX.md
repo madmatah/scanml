@@ -22,7 +22,7 @@ overridable from `.env`):
 
 | variable | default | meaning |
 |---|---|---|
-| `OCR_ENGINE` | `paddleocr-vl` | engine module (see *Engines* below) |
+| `OCR_ENGINE` | `paddleocr-vl` | engine file (see *Engines* below) |
 | `OCR_BACKEND` | `vllm` | `vllm` (model served by vLLM) or `native` (model run by Paddle in the worker, much slower: see *Measurements*) |
 | `OCR_IDLE_UNLOAD_S` | `300` | idle delay before the engine is stopped |
 | `OCR_VLLM_GPU_MEM` | `0.15` | fraction of the GPU's memory vLLM may use (`--gpu-memory-utilization`); 0.15 ≈ 3.5 GiB on a 24 GiB card, the smallest value that is not slower |
@@ -201,7 +201,7 @@ supervisor (python3, stdlib)          HTTP on the Unix socket, FIFO queue, lifec
 
 ## Engines
 
-An engine is a module of `ocr/scanmylib_ocr/engines/` registered in its
+An engine is a file of `ocr/scanmylib_ocr/engines/` registered in its
 `__init__.py`. It provides an `EngineSpec` (stdlib only, read by the
 supervisor: worker command, model-specific `vllm serve` arguments, the
 `engine` object of results) and a `PageEngine` (worker side:
@@ -209,7 +209,7 @@ supervisor: worker command, model-specific `vllm serve` arguments, the
 response fields above). Its worker command accepts `--check`: it then imports
 the engine's libraries with `import_libraries()`, without loading a model or
 opening the protocol's pipes, and exits 0. Another vLLM-served OCR model is
-added by writing such a module, installing its weights with
+added by writing such a file, installing its weights with
 `ocr/setup/install.sh`, and selecting it with `OCR_ENGINE`.
 
 ## Measurements (RTX 3090, 2026-10-12)

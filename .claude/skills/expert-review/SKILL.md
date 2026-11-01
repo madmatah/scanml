@@ -110,7 +110,7 @@ skill names, with no value but the ones checked here, and read and search with t
 Read the "Scope" section of every expert agent, and pick the experts whose scope a changed file falls in. A file moved
 without a change does not count toward the size. It picks an expert only when its new path falls in a scope its old path
 was outside of, and that expert checks it against the rules this scope adds: its name, its layer, and its content under
-those rules. A scope that names moves itself, such as a renamed module, picks its expert for those moves too.
+those rules. A scope that names moves itself, such as a moved source file, picks its expert for those moves too.
 `correctness-reviewer` and `conventions-reviewer` cover every diff. A focus that names a domain adds the expert of that
 domain, or the closest one when no expert owns it yet.
 
@@ -158,7 +158,7 @@ name. Each prompt holds:
 - the changed files in that expert's domain, and the hunks that [Classify](#classify) gives it, with, in a round of
   fixes, those of the triage's `Fixes:` lines that answer its findings;
 - the files moved without a change into that expert's scope, with their old paths, and the moves its scope names, such
-  as a renamed module. They have no changed line: the expert reviews them whole against the rules of its scope;
+  as a moved source file. They have no changed line: the expert reviews them whole against the rules of its scope;
 - what is under review: the branch, the commit range, or the pull request's number;
 - in a round of fixes, the findings of its domain that the fixes answer;
 - the user's focus, word for word, if there is one.

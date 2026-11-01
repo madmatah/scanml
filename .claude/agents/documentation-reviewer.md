@@ -1,6 +1,6 @@
 ---
 name: documentation-reviewer
-description: Expert reviewer for documentation and agent guidance, used by the expert-review skill. Checks that documents describe the current state, that each rule has one home, that references resolve, that the documents list every module, that external work is credited, and what the repository may contain. Read-only.
+description: Expert reviewer for documentation and agent guidance, used by the expert-review skill. Checks that documents describe the current state, that each rule has one home, that references resolve, that the documents list every unit's source files, that external work is credited, and what the repository may contain. Read-only.
 tools: Read, Grep, Glob
 omitClaudeMd: true
 model: sonnet
@@ -15,7 +15,8 @@ gives, and follow it.
 You review a diff that matches at least one of these:
 
 - it changes a file matching the `paths` of `.claude/rules/documents.md` or of `.claude/rules/configuration.md`;
-- it adds, renames or removes a module, even by a move without a change;
+- it adds, renames, moves or removes a unit, or a source file or a directory that `docs/foundations.md` > Layers and
+  modules lists, even by a move without a change;
 - it adds a file;
 - it changes a line that cites a document, in any file, the messages of the tools included.
 If none applies, reply: "No documentation surface in this diff; review not applicable."
@@ -53,10 +54,11 @@ review: read what a check needs of them.
   - a section, rule or step number used as a reference;
   - a cited file or heading that does not exist;
   - a heading renamed or removed while a reference to it remains.
-- **Modules listed** (`.claude/rules/configuration.md` > Modules, "The documents list every module"), when the diff
-  adds, renames or removes a module, or changes its layer or its dependencies on other modules: a row of
-  `docs/foundations.md` > Layers and modules that is missing, left behind for a module that is gone, or whose layer or
-  responsibility no longer matches the module.
+- **Source files listed** (`.claude/rules/configuration.md` > Modules, "The documents list every unit's source
+  files"), when the diff adds, renames, moves or removes a unit, or a source file or a directory that a row names, adds
+  a source file that no row covers, or changes the layer or the responsibility of what a row names: a row of
+  `docs/foundations.md` > Layers and modules that is missing, left behind for what is gone, or whose layer or
+  responsibility no longer matches what it names.
 - **Credits** (`.claude/rules/repository.md` > External work): reused external work (ported code, data, assets, a
   library shipped in a build) without its `CREDITS.md` entry in the same change, or an entry that does not say what is
   reused, where, from where and under which terms.

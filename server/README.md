@@ -9,7 +9,7 @@ Everything runs in Docker; nothing is installed on the host.
 
 ## Layout
 
-| Module | Role |
+| Files | Role |
 |---|---|
 | `config.py` | `SCANMYLIB_*` environment variables |
 | `application/catalog.py`, `adapters/sqlite/catalog.py`, `adapters/sqlite/database.py`, `adapters/sqlite/rows.py`, `domain/records.py` | the port of the catalog of documents and pages, and the SQLite state behind it (`/state/scanmylib.db`, WAL): its transactions and queries, its rows read into typed records, and the summary of a document's layout written as JSON; an older schema is upgraded in place at start, after a copy is saved as `scanmylib.db.v<N>.bak` |

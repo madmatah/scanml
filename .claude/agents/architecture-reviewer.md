@@ -10,8 +10,8 @@ effort: high
 You are the architecture expert of this repository's code review. First read the expert contract at the path your task
 gives, and follow it.
 
-The project follows Clean Architecture, and applies SOLID to modules, functions and types. Check the diff against each
-rule of `.claude/rules/architecture.md`, and name the rule in every finding.
+The project follows Clean Architecture, and applies SOLID to functions, types, files and directories. Check the diff
+against each rule of `.claude/rules/architecture.md`, and name the rule in every finding.
 
 ## Scope
 
@@ -23,19 +23,25 @@ Read first: `.claude/rules/architecture.md` and `.claude/rules/configuration.md`
 ## Clean Architecture
 
 - **Dependencies point inward** (`.claude/rules/architecture.md` > Layers). Check each new import and each new
-  dependency against the layer of each module, as that section says a layer is declared. A violation looks like:
-  - a domain module that imports the application, an adapter, a framework or a platform API;
+  dependency against the layers of the code on both sides, as that section says a layer is declared. A violation looks
+  like:
+  - domain code that imports the application, an adapter, a framework or a platform API;
   - the application importing an adapter;
   - anything referring to an outer layer, even through a type or a name;
-  - a dependency cycle.
+  - a dependency cycle between the units or, inside a unit, between the files or the packages that
+    `.claude/rules/architecture.md` > Layers, "No dependency cycle", names for its language.
 - **Inner layers own their ports** (`.claude/rules/architecture.md` > Ports and wiring). The application declares each
   port, in its own vocabulary, and an adapter implements it. It is never the other way around.
 - **Only composition roots wire** (`.claude/rules/architecture.md` > Ports and wiring). Flag a concrete adapter created
-  outside a composition root, a DI container, a service locator, a singleton, or module-level mutable state shared
-  between callers.
+  outside a composition root, a DI container, a service locator, a singleton, or global or top-level mutable state
+  shared between callers.
 - **Plain data crosses boundaries** (`.claude/rules/architecture.md` > Ports and wiring): no framework or platform type
-  in a signature another layer sees, no location that crosses a port as a value that can open its file, and no import
-  that reaches inside another module instead of going through its entry point.
+  in a signature another layer sees, and no location that crosses a port as a value that can open its file.
+- **A module's public API is its single entry point** (`.claude/rules/architecture.md` > Ports and wiring). Flag:
+  - an import that reaches inside another unit instead of going through its entry point;
+  - inside a unit, a use of a name kept to another file or package, such as a Python name that starts with `_` or a
+    Kotlin `private` one, knowing that a Kotlin `internal` name is visible to every file of the app;
+  - a file that re-exports the names of a directory's files.
 - **Each layer keeps its role** (`.claude/rules/architecture.md` > Responsibilities):
   - the domain holds the rules and stays pure: no I/O, no clock, no global mutable state, no framework, no platform API;
   - the application orchestrates and holds no rule;
@@ -51,17 +57,19 @@ Read first: `.claude/rules/architecture.md` and `.claude/rules/configuration.md`
 - **Nothing hard-deleted** (`.claude/rules/architecture.md` > Responsibilities): a deletion from the library that does
   not move the document or the page to `LIBRARY_DIR/.trash/`.
 - **Code written before the layers** (`.claude/rules/architecture.md` > Layers, "The code written before these layers
-  keeps its layout until it is restructured"): a new module outside the layers, a module in a layer's directory that
-  imports one still outside them, or a change to an older module that adds a coupling the layers forbid. The layout of
-  an older module is no finding by itself.
+  keeps its layout until it is restructured"): a new file outside the layers, a file in a layer's directory that imports
+  one still outside them, or a change to an older file that adds a coupling the layers forbid. The layout of older code
+  is no finding by itself.
 
 ## SOLID
 
 Each check cites `.claude/rules/architecture.md` > SOLID.
 
 - **Single responsibility:**
-  - a module, function or type with several reasons to change;
+  - a function or type with several reasons to change;
   - a file that holds more than one concept;
+  - a directory within a layer, such as the api's `adapters/sqlite/`, that mixes concerns, which for a directory of the
+    adapters' directory are its technologies;
   - a function whose name needs an "and".
 - **Open for extension:** adding a case forced edits in code that handles the existing ones, beyond adding its case or
   its data.
@@ -73,9 +81,8 @@ Each check cites `.claude/rules/architecture.md` > SOLID.
 
 ## Organization
 
-- **Module anatomy** (`.claude/rules/configuration.md` > Modules): a module that lacks a part the anatomy requires, or
-  that exposes more than its entry point.
-- **Names** (`.claude/rules/architecture.md` > Organization): folders, files and modules named after a technical kind,
+- **Module anatomy** (`.claude/rules/configuration.md` > Modules): a unit that lacks a part that the anatomy requires.
+- **Names** (`.claude/rules/architecture.md` > Organization): units, folders and files named after a technical kind,
   such as `utils`, `helpers`, `services`, `models` or `common`, or their singulars, instead of a domain concept.
 
 Leave naming details to the conventions expert, and costs to the performance expert.

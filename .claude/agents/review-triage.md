@@ -32,7 +32,7 @@ concerns a secret, a real document name or personal information never quotes its
    outside input, the sandbox's isolation, tests, documents and the citations of documents.
 3. Give each candidate one verdict:
    - **run**, when the diff holds something its checks apply to;
-   - **skip**, only with a reason drawn from its Scope and from the diff, such as "architecture: no import, module, type
+   - **skip**, only with a reason drawn from its Scope and from the diff, such as "architecture: no import, file, type
      or dependency changes, only test bodies";
    - when unsure, **run**: a missed expert costs more than a needless one.
 

@@ -66,7 +66,7 @@ the revised plan and the commits so far: the one that stopped carries a context 
 - **Whenever the base is rewritten,** by its review fixes or by its merge, move only your own commits:
   `cd <worktree> && git rebase --onto <new base> $(git merge-base --fork-point <branch> HEAD)`. The new base is the
   branch itself, or `origin/main` once it is merged; the old copies of its commits would conflict with the new ones.
-  Once the base is merged, retarget the pull request to `main`.
+  Once the base is merged, retarget the pull request to `main`, as [Update the body](#update-the-body) says.
 - **The owner of a base keeps it until the branches built on it have moved.** Each of those branches is moved by its own
   owner.
 
@@ -131,6 +131,14 @@ the revised plan and the commits so far: the one that stopped carries a context 
    both the title and the body.
 4. Make sure CI (`scripts/check.sh` on GitHub Actions, one job per area) passes on it: `gh pr checks <number> --watch`.
 
+## Update the body
+
+The body and the base of an open pull request change through GitHub's API: update the body from its file with
+`cd <worktree> && gh api -X PATCH 'repos/{owner}/{repo}/pulls/<number>' -F body=@<file>`, and retarget the pull request
+to another base with `cd <worktree> && gh api -X PATCH 'repos/{owner}/{repo}/pulls/<number>' -f base=<branch>`, where
+`gh` fills in `{owner}` and `{repo}` from the checkout: `gh pr edit`, with `--body-file` or `--base`, fails on a
+repository that still carries GitHub's retired Projects (classic).
+
 ## Show a visible change
 
 A change that a screen shows, of the app or of the web UI, shows itself in its pull request, so that the reviewer sees
@@ -155,9 +163,8 @@ what it does without building it.
    file. The publication commits the pictures on the `pr-screenshots` branch of origin, under `pr-<number>/`, without
    touching the worktree, and prints a Markdown image for each, linked by that commit, so that a later publication
    never changes what the description shows.
-4. Put the images in the body's "Screenshots", and update the pull request:
-   `cd <worktree> && gh api -X PATCH 'repos/{owner}/{repo}/pulls/<number>' -F body=@<file>`, where `gh` fills in
-   `{owner}` and `{repo}`: `gh pr edit` fails on the GraphQL fields of GitHub's retired Projects (classic).
+4. Put the images in the body's "Screenshots", and update the pull request as [Update the body](#update-the-body)
+   says.
 5. If the script warns that the branch is heavy, tell the user: the maintainer cleans it with `/clean-pr-screenshots`.
 
 ## Fold review fixes
@@ -202,7 +209,7 @@ what it does without building it.
    Repeat this check until it lists none, then check the commits again, as [Shape the history](#shape-the-history)
    does.
 4. Push with `cd <worktree> && git push --force-with-lease`, then keep the body true: update every section the fixes
-   changed.
+   changed, as [Update the body](#update-the-body) says.
 
 ## Merge
 

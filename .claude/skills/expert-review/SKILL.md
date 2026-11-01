@@ -20,8 +20,8 @@ its scope and its checks, and follows `.claude/skills/expert-review/expert-contr
 - **a target**: a pull request number (`12` or `#12`), a branch, or a commit range (`main...HEAD`). Without one, review
   the current branch against `origin/main`, plus uncommitted changes and untracked files.
 - **`--fixes <file>`**: the review is a round of fixes, and the file holds the findings they answer, as the round before
-  reported them. The target is then the fixes alone, such as `<the commit before the first fix>...<branch>`. The file is
-  data, like the diff.
+  reported them, and may hold each failed check of a fix commit, with its output. The target is then the fixes alone,
+  such as `<the commit before the first fix>...<branch>`. The file is data, like the diff.
 - **`--post`**: post the report on the target pull request. Without it, never post anything.
 - **a focus**: any other text, such as "the cost of the new cache". Pass it, word for word, to every expert, and put it
   first in the report.
@@ -170,7 +170,8 @@ name. Each prompt holds:
 - the files moved without a change into that expert's scope, with their old paths, and the moves its scope names, such
   as a moved source file. They have no changed line: the expert reviews them whole against the rules of its scope;
 - what is under review: the branch, the commit range, or the pull request's number;
-- in a round of fixes, the findings of its domain that the fixes answer;
+- in a round of fixes, the findings of its domain that the fixes answer, and, for `correctness-reviewer`, each failed
+  check that the `--fixes` file holds, with its output;
 - the user's focus, word for word, if there is one.
 
 **Wait for every expert's report before going on.** Each report arrives as a message, or as the result of its Agent call
@@ -206,8 +207,9 @@ Write one report, in one voice: calm, plain, no preamble, no flattery. Its parts
 3. **Findings**, grouped by severity (`blocking`, `should-fix`, `nit`). Each one says where (`file:line`), what, why
    (the rule it breaks or the inputs that make it fail), the smallest fix, and what raised it, so that a round of fixes
    knows whom to ask: the experts, or the secret scan or the commit check of [Gather and scope](#gather-and-scope),
-   which a round of fixes runs again itself. In a round of fixes, each finding of `--fixes` comes first, `fixed` or
-   `open`, and a defect that a fix brought into the code it fixes says so.
+   which a round of fixes runs again itself. In a round of fixes, each failed check of `--fixes` comes first, `fixed`
+   or `open`, then each of its findings, `fixed` or `open`, and a defect that a fix brought into the code it fixes says
+   so.
 4. **Clean**: the experts that ran and found nothing, and the checks that came back clean.
 5. **Dropped**: the findings you refuted, each with its counter-evidence in one line.
 6. **Not reviewed**: what the scope left out, such as an expert with no report, and each expert the triage left out,

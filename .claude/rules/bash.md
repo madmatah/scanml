@@ -11,7 +11,7 @@ These rules come on top of `conventions.md`.
 - **Strict mode:** `#!/usr/bin/env bash`, then `set -euo pipefail`. A library that scripts source, such as
   `scripts/lib/common.sh`, has no shebang.
 - **Logic goes to Python.** A script runs commands. Parsing text, checking paths or settings, and any data structure go
-  to a module of `scripts/lib/` written with the standard library only, such as `stack.py` and `version.py`, where
+  to a file of `scripts/lib/` written with the standard library only, such as `stack.py` and `version.py`, where
   `scripts/tests/` tests them.
 - **Every expansion is quoted** (`"$path"`, `"${arguments[@]}"`), and a list is an array, never a string split on
   spaces. Tests use `[[ … ]]`, command substitution `$(…)`, and arithmetic `(( … ))`. An operand of `[[ … ]]`, the word

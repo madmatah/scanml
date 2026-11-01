@@ -104,7 +104,7 @@ web UI's comes with its move to TypeScript and React; none is planned yet for th
 - **Composition roots wire by hand,** so the whole graph sits in one place and the types check it. A DI container would
   resolve it at run time, by tokens.
 - **What is stored or shared is plain data,** so it saves, travels and replays as it is.
-- **SOLID applies to modules, functions and types,** so a new case is added beside the others, without rewriting them.
+- **SOLID applies to functions, types, files and directories,** so a new case is added beside the others, without rewriting them.
 - **The pipeline is engine-agnostic.** The api knows the engine only through the sandbox protocol, behind its OCR ports,
   so a better engine replaces the current one by implementing a new worker, and no code compensates for one model's
   mistakes: what one model needs, another would break.
@@ -144,10 +144,11 @@ states the rules, and `docs/SECURITY.md` the threat model, the guarantees and th
 
 ### Layers and modules
 
-The modules as they are, and the layer each one belongs to, whose directory the restructuring of
-[Principles](#principles) moves it into where one is planned. A module that mixes two layers splits along them.
+Each unit's source files as they are, grouped by responsibility, and the layer of each group, whose directory the
+restructuring of [Principles](#principles) moves it into where one is planned; a file that mixes two layers splits along
+them. The last row lists the scripts that the skills keep, which belong to no unit.
 
-| Unit | Module | Responsibility | Layer |
+| Unit | Source files | Responsibility | Layer |
 |---|---|---|---|
 | api | `__main__`, `app`, `config` | Entry point, wiring of the services and routes, settings from the environment | Composition root |
 | api | `domain/ordering` | Page numbering, reading order, duplicates and coverage of a document | Domain |
@@ -182,7 +183,7 @@ The modules as they are, and the layer each one belongs to, whose directory the 
 | OCR sandbox | `engines/paddleocr_vl`, `engines/images` | PaddleOCR-VL-1.6, and its image handling | Adapters |
 | scripts | `lib/stack.py`, `lib/version.py`, `lib/formatting.py`, `lib/parallel_tests.py`, `lib/commit_areas.py`, `lib/common.sh`, `lib/engine_check.sh` | The `.env` format, production's checkout and the isolation of a stack; the version of a build; what the gate hands to its formatters and linters, and what comes back; the gate's parallel run of the tests of the scripts; the areas a commit touches; shared shell functions; the check of the engine's environment in a new `ocr` container | Tools |
 | scripts | `setup.sh`, `dev-env.sh`, `dev.sh`, `build-apk.sh`, `check.sh`, `deploy.sh`, `prod.sh`, `release.py`, `e2e_test.py`, `verify-sandbox.sh`, `vendor-katex.sh` | Install, develop, build the app, check, deploy, operate, release, test end to end, verify the sandbox, vendor KaTeX | Tools |
-| skills | `pull-request/scripts/pr_screenshots.py` in `.claude/skills/` | Publish the screenshots of a pull request, copy them without their hidden data, and clean the branch that holds them | Tools |
+| — (the skills) | `pull-request/scripts/pr_screenshots.py` in `.claude/skills/` | Publish the screenshots of a pull request, copy them without their hidden data, and clean the branch that holds them | Tools |
 
 ## Repository layout
 
@@ -250,7 +251,7 @@ Each row names a rule, the rules file that states it, and what enforces it.
 | Part of the rules of the web UI's tests: assertions in tests only, no test focused or skipped by its name, no hook twice in a group, five levels at most (`.claude/rules/tests.md` > node:test) | Biome, in `scripts/check.sh lint` |
 | Part of the rules of continuous integration: actions pinned to commits, the jobs' permissions and credentials, no template injection (`.claude/rules/configuration.md` > Continuous integration) | zizmor, in `scripts/check.sh lint`; the unit tests of the workflows, in `scripts/check.sh scripts`, for the actions they may use, their permissions, their secrets, `pull_request_target` and what the release workflow runs |
 | A commit footer holds only what tools read (`CLAUDE.md` > Workflow) | `attribution` in `.claude/settings.json`, which keeps Claude Code's own commit trailers and pull request line out |
-| Part of the layers of the api: the domain imports only the domain and libraries of plain values, reads no wall clock and calls no input or output function; the application imports only the inner layers, libraries of plain values, Python's runtime and `PurePath`, reads the wall clock only through its port and calls no input or output function itself; the adapters import no composition root and no test support; a module in a layer imports none still outside the layers; no import cycle (`.claude/rules/architecture.md` > Layers, > Ports and wiring and > Responsibilities, `.claude/rules/python.md`, "Plain data is a frozen dataclass", `.claude/rules/tests.md` > Test support) | `server/tests/test_layers.py`, in `scripts/check.sh server` |
+| Part of the layers of the api: the domain imports only the domain and libraries of plain values, reads no wall clock and calls no input or output function; the application imports only the inner layers, libraries of plain values, Python's runtime and `PurePath`, reads the wall clock only through its port and calls no input or output function itself; the adapters import no composition root and no test support; a file in a layer imports none still outside the layers; no import cycle between the api's files (`.claude/rules/architecture.md` > Layers, > Ports and wiring and > Responsibilities, `.claude/rules/python.md`, "Plain data is a frozen dataclass", `.claude/rules/tests.md` > Test support) | `server/tests/test_layers.py`, in `scripts/check.sh server` |
 | Every rule no tool can check: architecture, conventions, tests as specification… | `/expert-review` ([Code review](#code-review)), before every pull request |
 
 ## Conventions
@@ -365,13 +366,13 @@ same place in every file; `.claude/rules/tests.md` says how tests are written.
 ### Test levels
 
 - **The unit tests run in the gate,** so that they are fast, need no GPU and can never reach production: those of the
-  api, the web UI and the sandbox in containers without network, those of the scripts' modules and of the workflows on
+  api, the web UI and the sandbox in containers without network, those of the scripts' files and of the workflows on
   the host's `python3`, with the standard library only. The api's tests use a fake sandbox that speaks the real protocol
   on a real Unix socket, so that the client and its limits are tested as they run.
 - **The integration tests of the scripts run the scripts themselves against a stand-in for docker,** because the guards
   they test must refuse what production owns without any container being built or started. They run apart from the
-  unit tests of the scripts' modules and of the workflows, in an area of the gate of their own, since a whole script
-  and the processes it starts cost far more than a call to a module.
+  unit tests of the scripts' files and of the workflows, in an area of the gate of their own, since a whole script
+  and the processes it starts cost far more than a call to a function.
 - **The end-to-end test and the isolation check need a running stack,** so they run against the development stack, or
   production after a deployment, outside the gate.
 - **The benchmarks need the real engine and the GPU,** so they run by hand, outside the gate.

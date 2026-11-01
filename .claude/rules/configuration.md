@@ -33,11 +33,8 @@ paths:
 
 ## Modules
 
-- **A module** is a unit with its own build, or, within a unit, a source file that holds one responsibility, since a
-  file's public names are its entry point. A directory groups modules, such as the files of a layer or of one adapter's
-  technology, and is not a module itself, so that each file of a layer keeps its own boundary. In a unit not yet
-  restructured into layers, a directory that holds one responsibility counts as one module. The rows of
-  `docs/foundations.md` > Layers and modules group the modules.
+- **A module** is one of the units below, each of which builds or is tested on its own. Neither a directory nor a file
+  is a module, whatever the language calls it, such as a Python module or package, or a Kotlin package.
 - **The repository holds five units:** the api (`server/`: `pyproject.toml`, its locks and its `Dockerfile`), the web UI
   that the api serves (`server/scanmylib/web/`, with its own tests and the `package.json` of its tools), the app
   (`android/`: its Gradle build and version catalog), the OCR sandbox (`ocr/`: its `Dockerfile` and `ocr/setup/`, which
@@ -46,10 +43,11 @@ paths:
 - **Each unit has its tests, and its build where it has one:** the build file named above, and the tests at the level
   that `tests.md` > Levels gives it. A new unit comes with both, and with its job in `.github/workflows/ci.yml` through
   `scripts/check.sh`.
-- **A tag marks a special treatment, and its absence is the default:** no module carries a tag that only says it is
-  ordinary, so a new module needs none.
-- **The documents list every module.** A change that adds, renames or removes a module, or changes its layer or its
-  responsibility, updates its row in `docs/foundations.md` > Layers and modules in the same change.
+- **The documents list every unit's source files.** `docs/foundations.md` > Layers and modules lists them, and the
+  scripts that the skills keep, one by one or by a directory that holds one responsibility, grouped by layer and by
+  responsibility, so that a reader finds where a concept lives and its layer while the units move into their layers. A
+  change that adds, renames, moves or removes a unit, a file or a directory that a row names, or adds a source file that
+  no row covers, or changes the layer or the responsibility of what a row names, updates the row in the same change.
 
 ## Dependencies
 

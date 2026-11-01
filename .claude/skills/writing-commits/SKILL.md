@@ -40,7 +40,7 @@ Take the type of the commit's dominant intention. When two seem to fit:
 | Restructures, renames or moves code without changing its behavior | `refactor` | `perf`, unless a measurement motivates it |
 | Changes only the layout of the code, such as a formatter's output | `style` | `refactor` |
 | Makes the code faster or leaner, as a measurement shows | `perf` | `refactor` |
-| Draws a module boundary or a layer, or adds a module | `refactor`, or `feat` when it brings new behavior | `chore` |
+| Draws a layer or a directory boundary, or adds a unit | `refactor`, or `feat` when it brings new behavior | `chore` |
 | Adds or extends the tests of behavior that already works | `test` | `fix`, whose commit carries the test that pins it |
 | Documents, guides and agent guidance | `docs` | `chore` |
 | The CI workflows | `ci` | `build`, `chore` |
@@ -59,7 +59,8 @@ Take the scope as `CLAUDE.md` > Workflow, "A commit scope names where the change
 - **A document of one unit,** such as `docs/API.md` for the api, takes the unit's scope, not `docs`.
 - **A test** takes the scope of the code it pins.
 - **A dependency** takes the scope of the unit whose manifest or lock declares it.
-- **A new unit** takes its own name, and a new module of a unit the unit's.
+- **A new unit** takes its own name, which the change adds to "A commit scope names where the change belongs", and a new
+  file or directory of a unit takes the unit's.
 - **A rule changed together with the skills, agents and documents that follow it** takes `rules`: the rule owns the
   decision.
 - **A release's own commit,** `chore(release): X.Y.Z`, takes `release`, the name of the skill that prepares it, though

@@ -39,7 +39,7 @@ before your first web request.
      the work changes;
    - **the method:** the tests cover each rule the work adds, and the whole input space where there is one, such as a
      standard or a format; the plan runs the tests that the gate skips and the work calls for, as
-     `.claude/skills/running-tests/SKILL.md` says; and no simpler design, existing module or maintained library would
+     `.claude/skills/running-tests/SKILL.md` says; and no simpler design, existing code or maintained library would
      do better;
    - **the risks:** outside input, the sandbox's isolation, production and the development stacks, the data that is
      stored or shared, a step that runs or installs something from outside the project, each new dependency, as

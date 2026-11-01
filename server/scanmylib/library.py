@@ -22,7 +22,7 @@ from pathlib import PurePath
 
 from .adapters.sqlite.database import Database
 from .adapters.sqlite.rows import build_page_claim, build_page_record, encode_layout_summary
-from .application.catalog import Catalog
+from .application.catalog import Catalog, QueueCounts
 from .application.clock import Clock
 from .application.library_files import LibraryFiles
 from .application.ocr_engine import PageOcrOutput
@@ -157,11 +157,8 @@ class LibraryService:
             raise NotFound("page not found")
         return page
 
-    def queue_counts(self) -> dict[str, int]:
-        counts = dict.fromkeys(("queued", "processing", "error", "done"), 0)
-        for row in self._db.all("SELECT status, COUNT(*) AS n FROM pages GROUP BY status"):
-            counts[row["status"]] = row["n"]
-        return counts
+    def count_queue(self) -> QueueCounts:
+        return self._catalog.count_queue()
 
     def folder(self, document: DocumentRecord) -> str:
         """Host path of a document folder (display only)."""

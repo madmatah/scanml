@@ -9,10 +9,10 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from . import preview
+from .adapters.filesystem.library_files import LibraryFiles
 from .application.clock import Clock
 from .domain import assemble, timestamps
 from .domain.records import DocumentRecord, PageRecord
-from .storage import LibraryFiles
 
 
 def files_url(document_id: str) -> str:

@@ -10,10 +10,10 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
+from scanmylib.adapters.filesystem.library_files import TRASH_DIR, LibraryFiles
 from scanmylib.devtools import fake_ocr
 from scanmylib.devtools.fake_ocr import ParseResponse, canned_page
 from scanmylib.domain.pages import MAX_OCR_RETRIES
-from scanmylib.storage import TRASH_DIR, LibraryFiles
 from support import (
     AUTH,
     RunningApi,

@@ -64,6 +64,10 @@ def list_trashed_contents(library_dir: Path) -> list[list[str]]:
     return [sorted(trashed_file.name for trashed_file in trashed.iterdir()) for trashed in trash]
 
 
+def list_thumbnail_files(thumbnail_directory: Path) -> list[str]:
+    return sorted(thumbnail_file.name for thumbnail_file in thumbnail_directory.iterdir())
+
+
 @dataclass(frozen=True)
 class DocumentLifecycle:
     created: Answer
@@ -252,6 +256,7 @@ class DeletedPage:
     trashed_contents_after_second_deletion: list[list[str]]
     page_ids: list[str]
     markdown: str
+    thumbnail_files_once_deleted: list[str]
 
 
 @dataclass(frozen=True)
@@ -287,6 +292,19 @@ class HostilePage:
 class SentPage:
     page_id: str
     params: dict[str, str]
+
+
+@dataclass(frozen=True)
+class DocumentDeletedWithAPage:
+    page_id: str
+    thumbnail_files_before_deletion: list[str]
+    thumbnail_files_once_deleted: list[str]
+
+
+@dataclass(frozen=True)
+class RedrawnThumbnail:
+    size_pixels: tuple[int, int]
+    is_stored_again: bool
 
 
 @pytest.fixture(scope="module")
@@ -506,6 +524,7 @@ def deleted_page(tmp_path_factory: pytest.TempPathFactory) -> DeletedPage:
         wait_until_processed(client, document_id)
         page_path = f"/api/pages/{deleted['id']}"
         deletion_status = client.delete(page_path, headers=AUTH).status_code
+        thumbnail_files_once_deleted = list_thumbnail_files(api.settings.thumbs_dir)
         status_once_deleted = client.get(page_path, headers=AUTH).status_code
         is_scan_left = (api.settings.library_dir / SLUG / "scans" / f"{deleted['key']}.jpg").exists()
         trashed_contents = list_trashed_contents(api.settings.library_dir)
@@ -523,6 +542,7 @@ def deleted_page(tmp_path_factory: pytest.TempPathFactory) -> DeletedPage:
             trashed_contents_after_second_deletion=list_trashed_contents(api.settings.library_dir),
             page_ids=page_ids,
             markdown=markdown,
+            thumbnail_files_once_deleted=thumbnail_files_once_deleted,
         )
 
 
@@ -725,6 +745,32 @@ class TestADocument:
 
         def test_should_hold_its_markdown(self, exported_document: ExportedDocument) -> None:
             assert "# Sample Café Guide" in exported_document.exported_markdown
+
+    class TestWhenItIsDeletedWithAPage:
+        @pytest.fixture(scope="class")
+        @classmethod
+        def document_deleted_with_a_page(cls, tmp_path_factory: pytest.TempPathFactory) -> DocumentDeletedWithAPage:
+            with running_api(tmp_path_factory.mktemp("api")) as api:
+                client = api.client
+                document_id = create_document(client)
+                page = upload(client, document_id, jpeg()).json()
+                wait_until_processed(client, document_id)
+                thumbnail_files_before_deletion = list_thumbnail_files(api.settings.thumbs_dir)
+                client.delete(f"/api/documents/{document_id}", headers=AUTH).raise_for_status()
+                return DocumentDeletedWithAPage(
+                    page_id=page["id"],
+                    thumbnail_files_before_deletion=thumbnail_files_before_deletion,
+                    thumbnail_files_once_deleted=list_thumbnail_files(api.settings.thumbs_dir),
+                )
+
+        def test_should_remove_the_thumbnail_of_its_page_from_the_state_directory(
+            self, document_deleted_with_a_page: DocumentDeletedWithAPage
+        ) -> None:
+            deletion = document_deleted_with_a_page
+            assert (deletion.thumbnail_files_before_deletion, deletion.thumbnail_files_once_deleted) == (
+                [f"{deletion.page_id}.jpg"],
+                [],
+            )
 
 
 class TestTheDocumentsOfALibrary:
@@ -1211,6 +1257,30 @@ class TestAPage:
         def test_should_draw_its_thumbnail_480_pixels_on_its_longer_side(self, page_views: PageViews) -> None:
             assert max(page_views.thumbnail_size) == 480
 
+    class TestWhenItsThumbnailIsLost:
+        THUMBNAIL_LONGER_SIDE_PIXELS = 480
+
+        @pytest.fixture(scope="class")
+        @classmethod
+        def redrawn_thumbnail(cls, tmp_path_factory: pytest.TempPathFactory) -> RedrawnThumbnail:
+            with running_api(tmp_path_factory.mktemp("api")) as api:
+                client = api.client
+                document_id = create_document(client)
+                page = upload(client, document_id, jpeg()).json()
+                wait_until_processed(client, document_id)
+                thumbnail_file = api.settings.thumbs_dir / f"{page['id']}.jpg"
+                thumbnail_file.unlink()
+                thumbnail = client.get(page["thumb_url"], headers=AUTH)
+                return RedrawnThumbnail(
+                    size_pixels=measure_image(thumbnail.content), is_stored_again=thumbnail_file.is_file()
+                )
+
+        def test_should_draw_it_again_from_its_scan(self, redrawn_thumbnail: RedrawnThumbnail) -> None:
+            assert max(redrawn_thumbnail.size_pixels) == self.THUMBNAIL_LONGER_SIDE_PIXELS
+
+        def test_should_store_it_again_so_that_it_is_drawn_only_once(self, redrawn_thumbnail: RedrawnThumbnail) -> None:
+            assert redrawn_thumbnail.is_stored_again is True
+
     class TestWhenSeveralPreviewsOfItAreRequestedAtOnce:
         @pytest.fixture(scope="class")
         @classmethod
@@ -1324,6 +1394,9 @@ class TestAPage:
 
         def test_should_leave_it_out_of_the_markdown_of_its_document(self, deleted_page: DeletedPage) -> None:
             assert deleted_page.deleted_key not in deleted_page.markdown
+
+        def test_should_remove_only_its_thumbnail_from_the_state_directory(self, deleted_page: DeletedPage) -> None:
+            assert deleted_page.thumbnail_files_once_deleted == [f"{deleted_page.kept_id}.jpg"]
 
         class TestWhenItIsDeletedAgain:
             def test_should_answer_not_found(self, deleted_page: DeletedPage) -> None:

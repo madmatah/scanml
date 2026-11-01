@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from pathlib import Path
 from typing import TypedDict
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
@@ -143,7 +144,7 @@ async def page_image(page_id: str, services: ServicesDep) -> FileResponse:
     library = services.library
     page = library.require_page(page_id)
     scan = library.scan_path(page, library.require_document(page.document_id))
-    if not scan.is_file():
+    if not Path(scan).is_file():
         raise HTTPException(404, "scan not found")
     # The original photo of a page never changes.
     return FileResponse(

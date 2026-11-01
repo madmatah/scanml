@@ -9,8 +9,8 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from . import preview
-from .adapters.filesystem.library_files import LibraryFiles
 from .application.clock import Clock
+from .application.library_files import PublishedFiles
 from .domain import assemble, timestamps
 from .domain.records import DocumentRecord, PageRecord
 
@@ -60,7 +60,7 @@ def _reading_order(pages: Sequence[PageRecord]) -> list[assemble.PageEntry]:
 
 
 class Publisher:
-    def __init__(self, files: LibraryFiles, clock: Clock) -> None:
+    def __init__(self, files: PublishedFiles, clock: Clock) -> None:
         self._files = files
         self._clock = clock
 

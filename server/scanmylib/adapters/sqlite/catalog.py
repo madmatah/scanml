@@ -2,12 +2,27 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from contextlib import AbstractContextManager
 
 from ...application.catalog import QueueCounts
+from ...domain.documents import LayoutSummary
+from ...domain.ordering import Placement
 from ...domain.records import DocumentRecord, PageRecord
 from .database import Database
-from .rows import build_document_record, build_page_record
+from .rows import build_document_record, build_page_record, encode_layout_summary
+
+_LAYOUT_COLUMNS = (
+    "number",
+    "number_end",
+    "front_matter",
+    "number_source",
+    "page_label",
+    "duplicate_of",
+    "in_document",
+    "placement",
+    "rank",
+)
 
 
 class SqliteCatalog:
@@ -62,3 +77,29 @@ class SqliteCatalog:
 
     def requeue_interrupted_pages(self) -> int:
         return self._database.execute("UPDATE pages SET status = 'queued' WHERE status = 'processing'").rowcount
+
+    def store_layout(self, document_id: str, placements: Mapping[str, Placement], summary: LayoutSummary) -> None:
+        rows = self._database.all("SELECT * FROM pages WHERE document_id = ?", (document_id,))
+        for row in rows:
+            placement = placements[row["id"]]
+            number = placement.number
+            values = (
+                number.value if number else None,
+                number.end if number else None,
+                int(bool(number and number.front_matter)),
+                placement.source,
+                number.label if number else None,
+                placement.duplicate_of,
+                int(placement.in_document),
+                placement.placed_by,
+                placement.rank,
+            )
+            if values != tuple(row[column] for column in _LAYOUT_COLUMNS):
+                assignments = ", ".join(f"{column} = ?" for column in _LAYOUT_COLUMNS)
+                self._database.execute(
+                    f"UPDATE pages SET {assignments} WHERE id = ?",  # noqa: S608 (column names from the code, values as ? parameters)
+                    (*values, row["id"]),
+                )
+        self._database.execute(
+            "UPDATE documents SET layout = ? WHERE id = ?", (encode_layout_summary(summary), document_id)
+        )

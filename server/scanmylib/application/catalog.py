@@ -2,18 +2,22 @@
 by capture time, then by id; a list of ids comes in no particular order. A document or a page that does not exist reads
 as None. A slug is taken when a document has it, and a key when a page of the same document has it. The queue counts the
 pages in each status, zero for a status that no page has. Requeueing the interrupted pages queues again every page whose
-reading was under way, and returns how many there were. A transaction's changes take effect together when its block
-ends, or none of them when it raises, and a transaction opened inside another joins it. The catalog is called from the
-event loop's thread only, and nothing is awaited inside a transaction, so that a transaction is atomic for the other
-coroutines.
+reading was under way, and returns how many there were. Storing a layout gives each page of the document its placement,
+which the layout holds for every one of them, and the document its summary. A transaction's changes take effect together
+when its block ends, or none of them when it raises, and a transaction opened inside another joins it. The catalog is
+called from the event loop's thread only, and nothing is awaited inside a transaction, so that a transaction is atomic
+for the other coroutines.
 """
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from typing import Protocol
 
+from ..domain.documents import LayoutSummary
+from ..domain.ordering import Placement
 from ..domain.records import DocumentRecord, PageRecord
 
 
@@ -37,3 +41,4 @@ class Catalog(Protocol):
     def is_key_taken(self, document_id: str, key: str) -> bool: ...
     def count_queue(self) -> QueueCounts: ...
     def requeue_interrupted_pages(self) -> int: ...
+    def store_layout(self, document_id: str, placements: Mapping[str, Placement], summary: LayoutSummary) -> None: ...

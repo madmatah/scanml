@@ -59,6 +59,7 @@ These constraints drive the choices in this document:
 | ktlint | 1.8.0 | Formatting and lint of the app's Kotlin, in Android Studio's style with trailing commas |
 | Biome | 2.5.15 | Formatting and lint of the web UI |
 | zizmor | 1.30.1 | Audit of the GitHub workflows |
+| GitHub CLI (`gh`) | — | The pull requests, and the listing that comes before their screenshots are cleaned up; the release workflow's tag and release |
 
 Notes:
 

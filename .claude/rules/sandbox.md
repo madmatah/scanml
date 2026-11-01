@@ -43,8 +43,9 @@ production runs next to the development stack on the same machine. These rules k
 ## Containers and the host
 
 - **Nothing that the repository runs needs a host install:** builds, tests and tools run in Docker containers, and the
-  scripts use only Bash, git, curl, the docker CLI, the standard library of the host's `python3`, and the tools of the
-  base system, such as coreutils, findutils, util-linux, iproute2, grep, sed, awk, tar, gzip, openssl and getent.
+  scripts use only Bash, git, curl, the docker CLI, the standard library of the host's `python3`, the GitHub CLI (`gh`)
+  for the pull requests and the cleanup of their screenshots, and the tools of the base system, such as coreutils,
+  findutils, util-linux, iproute2, grep, sed, awk, tar, gzip, openssl and getent.
 - **No container mounts the home directory or a secret,** apart from the signing container of `scripts/build-apk.sh`,
   which mounts the signing key read-only, without network, and signs nothing but the variant's application id with the
   versionCode the script gave the build.

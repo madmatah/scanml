@@ -34,6 +34,8 @@ Phone (ScanMyLib app)  ──Wi-Fi──▶  PC: api ──socket──▶ OCR s
 - **Disk**: about 17 GB for the OCR sandbox (environments and models), 3 GB for the Android toolchain, plus the library.
 - **Phone**: Android 8.0 or newer. The Google document scanner and the QR code reader of the app need Google Play
   services; without them, the app's own camera, photo import and manual pairing still work.
+- **Development**: the GitHub CLI (`gh`), logged in, with which the pull requests are opened and updated, and their
+  published screenshots cleaned up.
 
 ## Installation
 

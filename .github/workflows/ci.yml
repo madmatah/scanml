@@ -31,6 +31,7 @@ jobs:
           persist-credentials: false
       - name: Check the formatting, the lint and the types, without network
         run: scripts/check.sh lint
+        timeout-minutes: 10
 
   server:
     name: Server
@@ -42,6 +43,7 @@ jobs:
           persist-credentials: false
       - name: Run the tests in the test image, without network, on a read-only root filesystem
         run: scripts/check.sh server
+        timeout-minutes: 10
 
   web:
     name: Web UI
@@ -53,6 +55,7 @@ jobs:
           persist-credentials: false
       - name: Run the unit tests
         run: scripts/check.sh web
+        timeout-minutes: 5
 
   ocr:
     name: OCR sandbox
@@ -67,6 +70,7 @@ jobs:
       # running service (scripts/verify-sandbox.sh) needs the deployed stack and is not checked here.
       - name: Run the unit tests in the sandbox image, with its Python
         run: scripts/check.sh ocr
+        timeout-minutes: 15
 
   scripts:
     name: Scripts
@@ -78,11 +82,12 @@ jobs:
           persist-credentials: false
       - name: Run the unit tests of the scripts
         run: scripts/check.sh scripts
+        timeout-minutes: 5
 
   integration:
     name: Integration
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -94,11 +99,12 @@ jobs:
       # resolves configurations, nothing is built or started.
       - name: Run the integration tests of the scripts
         run: scripts/check.sh integration
+        timeout-minutes: 10
 
   android:
     name: Android
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 70
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -106,6 +112,7 @@ jobs:
       # build-apk.sh keeps the Android SDK and the Gradle home under DATA_DIR/android.
       - name: Put DATA_DIR in the runner's temporary directory
         run: echo "DATA_DIR=$RUNNER_TEMP/scanmylib-data" >> "$GITHUB_ENV"
+      # The cache steps set no timeout: actions/cache gives up a stuck download and goes on as a cache miss.
       # The SDK packages are pinned in build-apk.sh, which checks every download.
       - name: Cache the Android SDK
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -127,3 +134,4 @@ jobs:
       # is downloaded and checked against android/gradle/verification-metadata.xml.
       - name: Run the unit tests, lint and ktlint
         run: scripts/check.sh android
+        timeout-minutes: 40

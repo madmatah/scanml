@@ -16,17 +16,17 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Sequence
 from datetime import datetime
-from pathlib import Path, PurePath
+from pathlib import PurePath
 
-from .adapters.filesystem.library_files import atomic_write
 from .adapters.sqlite.database import Database
 from .adapters.sqlite.rows import build_document_record, build_page_claim, build_page_record, encode_layout_summary
 from .application.clock import Clock
 from .application.library_files import LibraryFiles
 from .application.ocr_engine import PageOcrOutput
 from .application.scan_images import ImageRejected, ScanImages
+from .application.thumbnails import Thumbnails
 from .config import Settings
 from .debounce import DebouncedBatch
 from .domain import ordering, timestamps
@@ -72,6 +72,7 @@ class LibraryService:
         settings: Settings,
         db: Database,
         files: LibraryFiles,
+        thumbnails: Thumbnails,
         publisher: Publisher,
         clock: Clock,
         scan_images: ScanImages,
@@ -79,6 +80,7 @@ class LibraryService:
         self._settings = settings
         self._db = db
         self._files = files
+        self._thumbnails = thumbnails
         self._clock = clock
         self._scan_images = scan_images
         self._publisher = publisher
@@ -99,7 +101,7 @@ class LibraryService:
         Returns the number of pages that were being processed and are re-queued.
         """
         self._files.prepare()
-        self._settings.thumbs_dir.mkdir(parents=True, exist_ok=True)
+        self._thumbnails.prepare()
         with self._db.transaction():
             requeued = self._db.execute("UPDATE pages SET status = 'queued' WHERE status = 'processing'").rowcount
             document_ids = [row["id"] for row in self._db.all("SELECT id FROM documents")]
@@ -172,17 +174,12 @@ class LibraryService:
     def scan_path(self, page: PageRecord, document: DocumentRecord) -> PurePath:
         return self._files.locate_scan(document.slug, page.key, page.scan_ext)
 
-    def _thumb_path(self, page_id: str) -> Path:
-        return self._settings.thumbs_dir / f"{page_id}.jpg"
-
-    async def thumbnail(self, page: PageRecord) -> Path:
-        """Thumbnail of a page, regenerated if the state directory lost it."""
-        path = self._thumb_path(page.id)
-        if not path.is_file():
+    async def thumbnail(self, page: PageRecord) -> PurePath:
+        if not await asyncio.to_thread(self._thumbnails.is_stored, page.id):
             scan = self.scan_path(page, self.require_document(page.document_id))
-            data = await asyncio.to_thread(self._scan_images.make_thumbnail, scan, page.rotation)
-            await asyncio.to_thread(atomic_write, path, data)
-        return path
+            thumbnail = await asyncio.to_thread(self._scan_images.make_thumbnail, scan, page.rotation)
+            await asyncio.to_thread(self._thumbnails.store, page.id, thumbnail)
+        return self._thumbnails.locate(page.id)
 
     async def page_markdown(self, page: PageRecord) -> str:
         document = self.require_document(page.document_id)
@@ -280,7 +277,7 @@ class LibraryService:
             trashed = await asyncio.to_thread(self._files.trash_document, document.slug)
             with self._db.transaction():
                 self._db.execute("DELETE FROM documents WHERE id = ?", (document_id,))
-            await asyncio.to_thread(self._remove_thumbnails, page_ids)
+            await asyncio.to_thread(self._thumbnails.remove, page_ids)
         log.info("document %s deleted, folder moved to %s", document.slug, trashed)
         self._assembly.schedule()
         return True
@@ -299,11 +296,6 @@ class LibraryService:
             "UPDATE documents SET updated_at = ?, updated_ts = ? WHERE id = ?",
             (timestamps.iso(moment), moment.timestamp(), document_id),
         )
-
-    def _remove_thumbnails(self, page_ids: Iterable[str]) -> None:
-        # Thumbnails are a cache in the state directory, not library content.
-        for page_id in page_ids:
-            self._thumb_path(page_id).unlink(missing_ok=True)
 
     # -- pages ---------------------------------------------------------------
 
@@ -375,7 +367,7 @@ class LibraryService:
 
     def _store_scan(self, slug: str, key: str, ext: str, data: bytes, page_id: str, thumbnail: bytes) -> None:
         self._files.write_scan(slug, key, ext, data)
-        atomic_write(self._thumb_path(page_id), thumbnail)
+        self._thumbnails.store(page_id, thumbnail)
 
     async def patch_page(self, page_id: str, changes: PageChanges) -> PageRecord:
         """Apply user corrections; a new rotation re-queues the page for OCR."""
@@ -411,11 +403,11 @@ class LibraryService:
     async def _rotate_thumbnail(self, page: PageRecord, rotation: int) -> None:
         scan = self.scan_path(page, self.require_document(page.document_id))
         try:
-            data = await asyncio.to_thread(self._scan_images.make_thumbnail, scan, rotation)
+            thumbnail = await asyncio.to_thread(self._scan_images.make_thumbnail, scan, rotation)
         except (OSError, ImageRejected) as exc:
             log.warning("page %s: cannot redraw the thumbnail: %s", page.key, exc)
             return
-        await asyncio.to_thread(atomic_write, self._thumb_path(page.id), data)
+        await asyncio.to_thread(self._thumbnails.store, page.id, thumbnail)
 
     def reprocess_page(self, page_id: str) -> PageRecord:
         """Queue the page for OCR again (its current outputs stay until replaced)."""
@@ -492,7 +484,7 @@ class LibraryService:
                 self._db.execute("DELETE FROM pages WHERE id = ?", (page_id,))
                 self._touch(page.document_id)
                 self._refresh_layout(page.document_id)
-            await asyncio.to_thread(self._remove_thumbnails, [page_id])
+            await asyncio.to_thread(self._thumbnails.remove, [page_id])
         self._assembly.schedule(page.document_id)
         return True
 

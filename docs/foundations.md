@@ -155,13 +155,13 @@ The modules as they are, and the layer each one belongs to, whose directory the 
 | api | `domain/records`, `domain/text` | Typed records and the inputs of library operations; slugs and collation | Domain |
 | api | `domain/timestamps` | Moments written as text, in the API and in the names of keys and folders | Domain |
 | api | `library`, `ocr_loop`, `publisher`, `debounce` | Documents and pages kept in sync with the library; the single OCR loop; publication of the library files | Application |
-| api | `application/clock`, `application/scan_images`, `application/ocr_engine`, `application/library_files` | The ports of the clock, of the images of the scans, of the OCR engine and of the library's files | Application |
+| api | `application/clock`, `application/scan_images`, `application/ocr_engine`, `application/library_files`, `application/thumbnails` | The ports of the clock, of the images of the scans, of the OCR engine, of the library's files and of the pages' thumbnails | Application |
 | api | `domain/assemble` | Rendering of the library files | Domain |
 | api | `preview` | Rendering of the HTML previews | Adapters |
 | api | `adapters/sqlite/database`, `adapters/sqlite/rows` | SQLite state, its rows read into records, and the summary of a document's layout written as JSON | Adapters |
 | api | `adapters/system_clock` | The wall clock, in the server's time zone | Adapters |
 | api | `adapters/pillow_images` | Pillow: the checks of an upload, thumbnails, the image sent to the OCR, re-encoded illustrations | Adapters |
-| api | `adapters/filesystem/library_files`, `export` | The library's files, atomic writes and trash; zip archives | Adapters |
+| api | `adapters/filesystem/library_files`, `adapters/filesystem/thumbnails`, `export` | The library's files, atomic writes and trash; the thumbnails, a cache in the state directory; zip archives | Adapters |
 | api | `adapters/ocr_sandbox/client`, `adapters/ocr_sandbox/results`, `adapters/ocr_sandbox/sanitize`, `adapters/ocr_sandbox/engine` | The OCR sandbox: the client of its protocol, the validation of its untrusted results, the sanitizer of their Markdown, and the OCR engine over them, which times the reading of a page and validates the untrusted status of the sandbox | Adapters |
 | api | `qr`, `published_apk` | QR codes, the published APK's metadata | Adapters |
 | api | `api/`, `auth`, `middleware` | HTTP routes, the times that clients send, authentication, security headers and body limits | Adapters |

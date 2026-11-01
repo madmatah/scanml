@@ -15,6 +15,7 @@ from fastapi.staticfiles import StaticFiles
 
 from . import __version__
 from .adapters.filesystem.library_files import FilesystemLibrary
+from .adapters.filesystem.thumbnails import FilesystemThumbnails
 from .adapters.ocr_sandbox.client import OcrClient
 from .adapters.ocr_sandbox.engine import SandboxOcrEngine
 from .adapters.pillow_images import MAX_UPLOAD_BYTES, PillowImages
@@ -72,7 +73,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         clock = SystemClock()
         images = PillowImages()
         files = FilesystemLibrary(settings.library_dir, clock)
-        library = LibraryService(settings, db, files, Publisher(files, clock), clock, images)
+        thumbnails = FilesystemThumbnails(settings.thumbs_dir)
+        library = LibraryService(settings, db, files, thumbnails, Publisher(files, clock), clock, images)
         auth = Authenticator(load_or_create_token(settings.token_path, settings.token), db, clock)
         ocr_client = OcrClient(settings.ocr_socket, settings.ocr_timeout_s)
         ocr_engine = SandboxOcrEngine(ocr_client)

@@ -205,16 +205,19 @@ what it does without building it.
      above, from the saved message under a corrected first line, and for a `squash!` commit the same form, from the
      message of that commit, `cd <worktree> && git log -1 --format=%B <that commit>`, followed by the saved message
      without its first line; fold again, and remove `<dir>`;
-   - **on a conflict,** stop: when the drop conflicts, `cd <worktree> && git rebase --abort`, which keeps the leftover;
-     when `git apply --3way` does, `cd <worktree> && git reset --merge`, the fix then living only in `<dir>`; when
-     folding again does, `cd <worktree> && git rebase --abort`, which keeps the fix as a commit. Keep `<dir>`, and tell
-     the user the leftover, the conflict and the paths of what you saved;
    - **when it fixes a commit of the branch this one is stacked on,** the fix belongs to that branch: its owner commits
      it there as above and folds it, then this branch moves, as [Stack on an unmerged
      branch](#stack-on-an-unmerged-branch) says. When another session owns that branch, keep `<dir>`, put the finding
      and the paths of `fix.patch`, and of `message` when one was saved, in your final report, for the coordinating
      session to pass on to that owner, and name the finding in the pull request. A check of this branch that fails for
-     want of that fix waits for the move.
+     want of that fix waits for the move;
+   - **when a step conflicts or fails,** such as `git apply --3way`, which exits with an error and no conflict when the
+     file it patches was deleted, undo it and keep `<dir>`: `cd <worktree> && git rebase --abort` when the drop stops,
+     which leaves the leftover on the branch, or when the fold stops, which leaves the fix as a commit;
+     `cd <worktree> && git reset --merge` when `git apply --3way` leaves conflicts or fails, which leaves the fix in
+     `<dir>/fix.patch` only. Resolve nothing, stop [Fold review fixes](#fold-review-fixes) and push nothing: tell the
+     user, or, when the user does not follow the work, put in your final report the finding, where its fix now lives
+     and the paths of `fix.patch`, and of `message` when one was saved.
 
    Repeat this check until it lists none, then check the commits again, as [Shape the history](#shape-the-history)
    does.

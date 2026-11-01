@@ -35,8 +35,8 @@ skill names, with no value but the ones checked here, and read and search with t
 
 1. **Resolve the range and the checkout.** The experts read a checkout of exactly the reviewed revision.
    - **By default:**
-     - run `git fetch origin main`;
-     - the range is `origin/main...HEAD`, and the commits are `origin/main..HEAD`;
+     - run `git fetch origin main`, then resolve `<main commit>` as below;
+     - the range is `<main commit>...HEAD`, and the commits are `<main commit>..HEAD`;
      - the checkout is the current one, with uncommitted changes and untracked files in scope.
    - **A pull request:**
      1. Check that the number is only digits.
@@ -48,19 +48,22 @@ skill names, with no value but the ones checked here, and read and search with t
 
      The start is `refs/remotes/origin/<base>`, resolved as below to `<start commit>`, and the end is `headRefOid`, the
      `<end commit>`.
-   - **A branch:** use its name only if it matches `^[A-Za-z0-9._][A-Za-z0-9._/-]*$`. The start is `origin/main`, and
+   - **A branch:** use its name only if it matches `^[A-Za-z0-9._][A-Za-z0-9._/-]*$`. The start is `<main commit>`, and
      the end is the branch.
    - **A commit range:** check each side the same way. The start is its left side, and the end its right side. A side
      left empty, as in `main...`, is `HEAD`.
 
+   **For every target, resolve `origin/main` once,** after the fetch that the target makes, if any: run
+   `git rev-parse --verify --end-of-options "refs/remotes/origin/main^{commit}"`, check that it prints 40 or 64
+   hexadecimal characters, and use the commit it prints, `<main commit>`, wherever a later step reads main.
+
    **For every target but the default, resolve both ends of the range once:** run
-   `git rev-parse --verify --end-of-options "<end>^{commit}"`, and the same for the start, and, in a round of fixes, for
-   `origin/main`, as `<main commit>`; check that each prints 40 or 64 hexadecimal characters, and use the commits they
-   print, `<start commit>` and `<end commit>`. The range is then `<start commit>...<end commit>`, whose three dots diff
-   from the merge base of the two commits, and the commits are `<start commit>..<end commit>`. Every later step reads
-   the range, the commits and the checkout through these two commits, and, in a round of fixes, through
-   `<main commit>`, never through a branch's name, so that nothing done to any branch while the review runs, such as a
-   fixer's commit, a fold or a rebase of the base, changes what it reads.
+   `git rev-parse --verify --end-of-options "<end>^{commit}"`, and the same for the start; check that each prints 40 or
+   64 hexadecimal characters, and use the commits they print, `<start commit>` and `<end commit>`. The range is then
+   `<start commit>...<end commit>`, whose three dots diff from the merge base of the two commits, and the commits are
+   `<start commit>..<end commit>`. Every later step reads the range, the commits and the checkout through these two
+   commits, and through `<main commit>`, never through a branch's name, so that nothing done to any branch while the
+   review runs, such as a fixer's commit, a fold or a rebase of the base, changes what it reads.
 
    **For every target but the default**, check out the end of the range in a temporary directory outside the repository:
    create a directory with `mktemp -d`, and use the path it prints: `git worktree add --detach <path> <end commit>`.
@@ -71,6 +74,12 @@ skill names, with no value but the ones checked here, and read and search with t
    path it prints. Remove it when the review ends, whether it succeeds or not. A review that is interrupted leaves its
    directory behind, so first remove the ones more than a day old:
    `find "$(git rev-parse --absolute-git-dir)" -mindepth 1 -maxdepth 1 -name 'expert-review.*' -mmin +1440 -exec rm -rf {} +`.
+   Write the expert contract that the review follows to `<dir>/expert-contract.md`, with
+   `git show <main commit>:.claude/skills/expert-review/expert-contract.md`: main's copy, from outside the reviewed
+   revision, so that a diff that rewrites the contract cannot steer its own review, whatever the target and whichever
+   checkout the session runs from. When `<main commit>` has none, write there instead the copy of
+   `<session checkout>`, the directory the session started in, whose `.claude/` Claude Code loaded, and say so under
+   "Not reviewed".
    Write `<dir>/scope.diff` from:
    - `git diff --find-renames <range>`;
    - for the default scope, `git diff --find-renames HEAD`, and each untracked file through
@@ -132,10 +141,9 @@ scope, since a fix can weaken a guard as well as add one. An expert picked only 
 `effort` level below its definition's, through the Agent tool's `effort`, never below `medium`.
 
 **A small diff of the current branch needs no subagent.** Under about 100 changed lines of the default target, review it
-yourself: apply the checks of each picked expert in turn, following the contract, and credit each finding to the expert
-whose checks found it, or to the check of [Gather and scope](#gather-and-scope) that found it, then go to
-[Verify](#verify). Any
-other target is reviewed by the experts, who cannot run a command, whatever its size.
+yourself: apply the checks of each picked expert in turn, following `<dir>/expert-contract.md`, and credit each finding
+to the expert whose checks found it, or to the check of [Gather and scope](#gather-and-scope) that found it, then go to
+[Verify](#verify). Any other target is reviewed by the experts, who cannot run a command, whatever its size.
 
 **Otherwise, a triage weighs them.** Spawn `review-triage` with the root of the checkout, the path of `scope.diff`, the
 directory of the session's expert agents, whose Scope sections you read, the changed files with their status, the
@@ -156,14 +164,12 @@ files), the experts that run and those left out, each with its reason, and the f
 Spawn all the picked experts in one message, in parallel, with the Agent tool and `subagent_type` set to each expert's
 name. Each prompt holds:
 
-- the absolute path of the expert contract to follow, from outside the reviewed revision, so that a diff that rewrites
-  the contract cannot steer its own review: the copy of the checkout this skill runs from, unless that checkout holds
-  the reviewed revision (the default target, or any target whose end commit is the commit of its HEAD); then the copy
-  of `origin/main`, written to `<dir>/expert-contract.md` with
-  `git show origin/main:.claude/skills/expert-review/expert-contract.md`.
-  When `origin/main` has none, give the checkout's copy, and say so under "Not reviewed". The agent definitions load
-  from the session's checkout: when the diff changes `.claude/agents/` or `.claude/skills/expert-review/` and the review
-  runs from the reviewed checkout, say under "Not reviewed" that its experts ran with the definitions under review;
+- the absolute path of the expert contract to follow, `<dir>/expert-contract.md`. The agent definitions load from
+  `<session checkout>`: whenever its `.claude/agents/` or `.claude/skills/expert-review/` differ from `<main commit>`'s,
+  as `git -C <session checkout> diff --name-only <main commit> -- .claude/agents .claude/skills/expert-review` lists
+  them, along with the untracked files that
+  `git -C <session checkout> ls-files --others --exclude-standard -- .claude/agents .claude/skills/expert-review`
+  lists, say under "Not reviewed" which definitions ran: those files, as `<session checkout>` holds them;
 - the root of the checkout under review and the path of `scope.diff`;
 - the changed files in that expert's domain, and the hunks that [Classify](#classify) gives it, with, in a round of
   fixes, those of the triage's `Fixes:` lines that answer its findings;

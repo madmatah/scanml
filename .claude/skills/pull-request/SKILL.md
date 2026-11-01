@@ -94,8 +94,10 @@ the revised plan and the commits so far: the one that stopped carries a context 
    `claude -p`, or with `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1` set, it runs in the foreground, and its report is the
    result of the call. Wait for it before you settle anything. A report that says its triage or an expert still runs
    was handed back too soon, as "A review that hands back too soon" below says. Claude Code loads the skills and agents
-   of the session's directory, not the branch's: when the branch changes the skills or agents that review or fix it,
-   review it from a session started in its worktree, or say in the pull request which definitions reviewed it.
+   of the session's directory, not the branch's: a session that did not start in the branch's worktree reviews and
+   fixes it with its own definitions, and one started there with the branch's own. When the branch changes the skills
+   or agents that review or fix it, the pull request names the definitions that reviewed it, and says when they are not
+   the branch's.
 3. Settle each finding as `CLAUDE.md` > Workflow, "Review before pushing" says. Give the findings to fix to a new
    `fixer` agent, with its brief: the worktree and its base, the purpose of the branch, each verified finding, and the
    commit each fix belongs to. It commits each fix as a `fixup!` commit, or as an `amend!` commit for a commit message,

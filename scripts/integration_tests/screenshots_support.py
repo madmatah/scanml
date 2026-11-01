@@ -1,13 +1,17 @@
 """Test support of the screenshot script of the pull-request skill (`pr_screenshots.py`): a bare origin that the
-scripts take for a GitHub repository, a clone of it, PNG files and a stand-in for the GitHub CLI.
+scripts take for a GitHub repository, a clone of it, PNG files, a stand-in for the GitHub CLI, and a limit on the size
+of the files that a run writes.
 """
 
 from __future__ import annotations
 
+import functools
 import os
+import resource
 import struct
 import subprocess
 import zlib
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -15,6 +19,7 @@ REPO = Path(__file__).resolve().parents[2]
 SCRIPT = REPO / ".claude" / "skills" / "pull-request" / "scripts" / "pr_screenshots.py"
 #: The script's commands.
 PUBLISH = "publish"
+STRIP = "strip"
 CLEAN = "clean"
 OWNER = "example"
 REPOSITORY = "project"
@@ -97,13 +102,23 @@ class Remote:
     def run_origin_git(self, *arguments: str, input_bytes: bytes | None = None) -> str:
         return self.run_git("--git-dir", str(self.origin), *arguments, input_bytes=input_bytes)
 
-    def run(self, command: str, *arguments: str) -> Run:
+    def run(self, command: str, *arguments: str, max_file_bytes: int | None = None) -> Run:
+        """Runs the script from the clone; a file it writes past `max_file_bytes` fails, as on a full disk."""
+
+        limit_file_size: Callable[[], None] | None = None
+        if max_file_bytes is not None:
+            # Python ignores the signal that the limit raises, so the write fails with an error instead.
+            limit_file_size = functools.partial(
+                resource.setrlimit, resource.RLIMIT_FSIZE, (max_file_bytes, max_file_bytes)
+            )
+
         completed = subprocess.run(
             ["python3", str(SCRIPT), command, *arguments],
             cwd=self.clone,
             capture_output=True,
             text=True,
             env=self.environment,
+            preexec_fn=limit_file_size,
             check=False,
         )
         return Run(completed.returncode, completed.stdout, completed.stderr)

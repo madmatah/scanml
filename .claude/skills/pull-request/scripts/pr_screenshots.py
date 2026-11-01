@@ -14,12 +14,15 @@ Python 3.9 or later, its standard library and git only, plus the GitHub CLI (`gh
 checkout whose `origin` is on GitHub. Run it through `python3`, since a copy of this file may lose its executable bit:
 
     python3 pr_screenshots.py publish NUMBER PICTURE...   one Markdown image per picture, for pull request NUMBER
+    python3 pr_screenshots.py strip DIRECTORY PICTURE...  a copy of each picture, with its image only, in DIRECTORY,
+                                                          a new directory that it creates
     python3 pr_screenshots.py clean                       what the cleanup would delete, and the pull requests it breaks
     python3 pr_screenshots.py clean --delete              the same, then deletes the branch on origin
 
 A picture is a PNG file of at most 10 MB, named with letters, digits, dots, dashes and underscores, that holds only the
 chunks of an image: the pixels, their palette, transparency and color space, never a chunk that carries text, a time or
-a profile.
+a profile. Capture tools often add such chunks: `strip` copies a picture without them into a directory that must not
+exist yet, and leaves the picture as it is.
 """
 
 from __future__ import annotations
@@ -28,6 +31,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -104,6 +108,50 @@ def _walk_chunks(path: Path, content: bytes) -> Iterator[tuple[bytes, bytes]]:
             raise Refusal(f"{path} is a truncated PNG file")
         yield content[position + 4 : position + 8], content[position:end]
         position = end
+
+
+def strip(directory: Path, paths: Sequence[Path]) -> list[Path]:
+    """Creates `directory` with a copy of each PNG file at `paths`, with the chunks of its image only; returns them.
+
+    Each copy keeps the name of its picture. `directory` must not exist yet, so no file is ever overwritten, the
+    pictures included. Every picture is read and checked first, and two pictures of the same name are refused, whatever
+    its case, since a filesystem may not tell the cases apart; only then is `directory` created and each copy written.
+    A failure while writing removes `directory` with what it holds, or says that it could not. A copy drops any color
+    profile, so its colors may shift slightly from those of a picture taken in a wider gamut, such as Display P3.
+    """
+    if os.path.lexists(directory):
+        raise Refusal(f"{directory} already exists: give a path that does not exist yet, which strip creates")
+    # The pictures by their name in any case, which the name of a copy keeps.
+    pictures: dict[str, Path] = {}
+    copies: dict[Path, bytes] = {}
+    for path in paths:
+        name = path.name.casefold()
+        if name in pictures:
+            raise Refusal(f"{pictures[name]} and {path} have the same name, whatever its case: rename one")
+        pictures[name] = path
+        try:
+            content = path.read_bytes()
+        except OSError as exc:
+            raise Refusal(f"cannot read {path}: {exc.strerror}") from None
+        image = (whole for chunk_type, whole in _walk_chunks(path, content) if chunk_type in _IMAGE_CHUNKS)
+        copies[directory / path.name] = _PNG_SIGNATURE + b"".join(image)
+    try:
+        # Refuses a path that something took in the meantime.
+        os.mkdir(directory)
+    except OSError as exc:
+        raise Refusal(f"cannot create {directory}: {exc.strerror}") from None
+    for copy, content in copies.items():
+        try:
+            with open(copy, "xb") as file:
+                file.write(content)
+        except OSError as exc:
+            message = f"cannot write {copy}: {exc.strerror}"
+            try:
+                shutil.rmtree(directory)
+            except OSError as removal:
+                message += f", and cannot remove {directory}, which holds part of the copies: {removal.strerror}"
+            raise Refusal(message) from None
+    return list(copies)
 
 
 def parse_github_repository(remote_url: str) -> tuple[str, str]:
@@ -295,6 +343,12 @@ def run_publish(number: int, pictures: Sequence[Path]) -> int:
     return 0
 
 
+def run_strip(directory: Path, pictures: Sequence[Path]) -> int:
+    for copy in strip(directory, pictures):
+        print(copy)
+    return 0
+
+
 def run_clean(delete: bool) -> int:
     owner, repository = find_origin_repository()
     if not _is_branch_on_origin():
@@ -323,6 +377,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     publishing = commands.add_parser("publish", help="publish pictures for the description of a pull request")
     publishing.add_argument("number", type=int, help="the number of the pull request")
     publishing.add_argument("pictures", type=Path, nargs="+", help="PNG files")
+    stripping = commands.add_parser("strip", help="copy pictures with the chunks of their image only")
+    stripping.add_argument("directory", type=Path, help="a path that does not exist yet, created for the copies")
+    stripping.add_argument("pictures", type=Path, nargs="+", help="PNG files, left as they are")
     cleaning = commands.add_parser("clean", help=f"list what deleting the {BRANCH} branch breaks, and delete it")
     cleaning.add_argument("--delete", action="store_true", help="delete the branch on origin")
     arguments = parser.parse_args(argv)
@@ -331,6 +388,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             if arguments.number <= 0:
                 publishing.error("the number of a pull request is positive")
             return run_publish(arguments.number, arguments.pictures)
+        if arguments.command == "strip":
+            return run_strip(arguments.directory, arguments.pictures)
         return run_clean(arguments.delete)
     except Refusal as refusal:
         print(f"error: {refusal}", file=sys.stderr)

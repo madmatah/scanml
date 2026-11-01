@@ -42,6 +42,8 @@ Read first: `.claude/rules/tests.md`.
   - a hook that runs once whose tests change what it produced, or read a live object that a later hook changes;
   - a hook that runs once and builds on an ancestor's hook that runs before each test;
   - a costly act rerun before each test, or a costly hook whose timeout is not sized for CI;
+  - an act kept alive across the rows of a table, by a cache, a closure or a fixture that holds it whole instead of the
+    plain copies its tests read;
   - a costly sequence whose nested groups hold hooks of their own, unless the section of its test framework has each
     group replay it;
   - a mid-sequence value read after the step that changes it, so that a test compares the final state with itself;

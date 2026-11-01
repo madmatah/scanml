@@ -52,9 +52,10 @@ The section of each test framework below gives its own words for them, and how i
   combination is the rule.
 - **A costly act runs once,** in a hook that runs once for its group, when its tests only read what it produced: a
   server on a real socket, a git repository, an image build by the docker stand-in, thousands of iterations. The act
-  captures, as plain copies, every value its tests read, and nothing under it changes what it produced. CI can run tests
-  several times slower than a contributor's machine, so where the framework times out a hook, the hook's timeout is at
-  least twice the act's duration on CI.
+  captures, as plain copies, every value its tests read, and nothing under it changes what it produced. A copy lets the
+  act be freed, where a cache, a closure or a fixture that keeps the whole act holds it for the whole run, once per row
+  of a parameterized group, until memory runs out. CI can run tests several times slower than a contributor's machine,
+  so where the framework times out a hook, the hook's timeout is at least twice the act's duration on CI.
 - **A sequence of steps nests:** each `When …` group continues from the state its parent left.
   - A cheap sequence continues in hooks that run before each test, each level adding one step.
   - A costly sequence runs whole in one hook that runs once, which captures a copy at each step, and its nested groups

@@ -137,15 +137,15 @@ Production runs on this machine, from the main checkout, `~/Dev/scanmylib`, and 
   commit. No other trailer, such as `Co-Authored-By`, `Generated with` or `Signed-off-by`: who typed a change says
   nothing of its reason.
 - **Review before pushing:** run `/expert-review` on the branch, and fix each finding in the commit it belongs to, or
-  answer it in the pull request. The review itself changes no code. Then review each round of fixes on its own diff,
-  against the findings it answers, since a fix can bring the bug the next round finds: a round whose blocking and
-  should-fix findings are all answered in the pull request, or that has none, ends the review, and the pull request
-  names the fixes that no expert reviewed.
+  answer it in the pull request, except a failed check of a fix commit, which a new fixer takes. The review itself
+  changes no code. Then review each round of fixes on its own diff, against the findings it answers, since a fix can
+  bring the bug the next round finds: a round whose blocking and should-fix findings are all answered in the pull
+  request, or that has none, ends the review, and the pull request names the fixes that no expert reviewed.
 - **Rounds of review converge, or the user decides:**
-  - a round that finds a defect that the previous fix brought into the same code calls for another method, not another
-    patch: a test that covers the whole input space, such as a conformance table, a property test or the standard's own
-    test data, a simpler design, or a library, planned and checked as "Plan before writing code" says. One round then
-    reviews it;
+  - a round that finds a defect, other than a failed check, that the previous fix brought into the same code calls for
+    another method, not another patch: a test that covers the whole input space, such as a conformance table, a
+    property test or the standard's own test data, a simpler design, or a library, planned and checked as "Plan before
+    writing code" says. One round then reviews it;
   - before a third round in all, weigh what remains against the risk of the code and the cost of the rounds so far: a
     should-fix in code that handles only trusted input may be answered in the pull request instead;
   - after four rounds in all, the review of the whole branch included, ask the user whether to go on, with what

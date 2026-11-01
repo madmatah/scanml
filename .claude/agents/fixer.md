@@ -47,6 +47,8 @@ the brief has the fixups reviewed, folds them and pushes.
 ## Report
 
 Your final message is the report, and nothing else: each finding, `fixed` with its commit, or `not fixed` with the
-reason; the result of the checks; then what you noticed outside the brief. A finding about a secret, a real document
+reason; the result of `scripts/check.sh --last-commit` on each commit: the commit, pass or fail, and the output of a
+failure; then the tests that the gate skips and that you ran, with their results; then what you noticed outside the
+brief. A finding about a secret, a real document
 name or personal information is reported without its value, as the expert contract of
 `.claude/skills/expert-review/expert-contract.md` > Evidence says.

@@ -105,6 +105,9 @@ Production runs on this machine, from the main checkout, `~/Dev/scanmylib`, and 
   `scripts/deploy.sh --apk`.
 - **Check a visible change** before calling it done: the web UI in a browser on the development stack, reading its
   console; the app in its screenshot tests (`.claude/rules/tests.md` > Levels). The gate cannot see what is drawn.
+- **Show a visible change in its pull request:** a change that a screen of the app or the web UI shows puts screenshots
+  of the screens it changes in its pull request, after the change and before it when the base can show the screen, so
+  that the reviewer sees it without running it, as the `pull-request` skill > Show a visible change says.
 - **Commits:** commit as you like while the work is in progress. Before pushing, rewrite the branch into atomic commits
   that each hold one reason to change, with its tests and documents, and pass `scripts/check.sh --last-commit`, the
   areas it touches; the last one passes `scripts/check.sh`. The header of a message follows Conventional Commits,

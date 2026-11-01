@@ -301,7 +301,8 @@ procedures. The reasons behind them:
   code's history, every clone would carry them, and CI artifacts would show every screen rather than the case a pull
   request makes. Each picture is linked by the commit that adds it, so a description never changes once written, and
   the branch is deleted whole from time to time rather than pruned, since rewriting the descriptions that link it
-  would cost more than publishing an open pull request's pictures again.
+  would cost more than publishing an open pull request's pictures again. Its commits are data, outside the rules of the
+  code's commits, and a ruleset that protects every branch leaves it out.
 
 ### Plans
 

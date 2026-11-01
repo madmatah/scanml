@@ -125,7 +125,8 @@ the revised plan and the commits so far: the one that stopped carries a context 
 2. Write the body from `.github/pull_request_template.md`, which `gh pr create --body-file` does not apply: fill each
    section in place of its comment, and tick a checklist item only once it holds. Write the body in a file outside the
    repository: it is published, so it holds nothing that `.claude/rules/repository.md` > No personal information
-   forbids.
+   forbids. The pictures of a visible change need the pull request's number: they go in once it is open, as [Show a
+   visible change](#show-a-visible-change) says.
 3. Open the pull request against `main`, or against the base it is stacked on:
    `cd <worktree> && gh pr create --base <branch> --title "<title>" --body-file <file>`. Without a terminal, `gh` needs
    both the title and the body.
@@ -144,15 +145,23 @@ repository that still carries GitHub's retired Projects (classic).
 A change that a screen shows, of the app or of the web UI, shows itself in its pull request, so that the reviewer sees
 what it does without building it.
 
-1. Take each screen that the change changes, of the app or of the web UI, after the change and, when it existed, before
-   it. Name each PNG for what it shows, such as `library-reading-dark-before.png` and `library-reading-dark-after.png`.
-   They are published on a public branch, so they show invented data only, never a phone's screen capture, production
-   or the user's library (`.claude/rules/repository.md` > No real document names and > No personal information).
-2. Take the "before" on `<base>`, in a worktree of its own (`git worktree add --detach <path> <base>`, then
-   `scripts/dev-env.sh` there): the app's screenshot test of the screen, or the web UI on the development stack, whose
-   slot `scripts/dev.sh up` there takes over; take the slot back with `scripts/dev.sh up` in `<worktree>`, and remove
-   that worktree. A branch that changes the database's schema shows its "after" only, since `<base>`'s api refuses the
-   development stack's newer database.
+1. Take each screen that the change changes, of the app or of the web UI, after the change and, when it existed and
+   `<base>` can show it, before it. Save each one as a PNG in a directory that `mktemp -d` creates outside the worktree,
+   named for what it shows, such as `library-reading-dark-before.png` and `library-reading-dark-after.png`. They are
+   published on a public branch, and a published picture stays readable by anyone who has its link, even after the
+   cleanup, so they show invented data only, never a phone's screen capture, production or the user's library
+   (`.claude/rules/repository.md` > No real document names and > No personal information).
+2. Take the "before" on `<base>`, in a worktree of its own, `.claude/worktrees/<topic>-before`: create it with
+   `cd ~/Dev/scanmylib && git worktree add --detach .claude/worktrees/<topic>-before <base>`, and run
+   `cd ~/Dev/scanmylib/.claude/worktrees/<topic>-before && scripts/dev-env.sh`; then take the app's screenshot test of
+   the screen there, each command prefixed with the same `cd`, or the web UI on the development stack, whose slot
+   `cd ~/Dev/scanmylib/.claude/worktrees/<topic>-before && scripts/dev.sh up` takes over. Hand the slot back with
+   `cd <worktree> && scripts/dev.sh up`, then remove that worktree with
+   `cd ~/Dev/scanmylib && git worktree remove --force .claude/worktrees/<topic>-before`: a build or a run leaves
+   untracked output there, which a plain `remove` refuses to delete, and this detached checkout of `<base>` holds
+   nothing else of value. When `<base>` cannot show a screen, take its "after" only, and say why in
+   the "Screenshots" section: a branch that changes the database's schema, for instance, since `<base>`'s api refuses
+   the development stack's newer database.
 3. Once the pull request is open, publish them:
    `cd <worktree> && python3 ${CLAUDE_SKILL_DIR}/scripts/pr_screenshots.py publish <number> <picture>...`. It refuses a
    picture that holds anything other than its pixels, such as text, a time or a color profile, which capture tools often
@@ -162,7 +171,7 @@ what it does without building it.
    prints the path of each copy: publish the copies. It refuses a `<dir>` that exists, so that it never overwrites a
    file. The publication commits the pictures on the `pr-screenshots` branch of origin, under `pr-<number>/`, without
    touching the worktree, and prints a Markdown image for each, linked by that commit, so that a later publication
-   never changes what the description shows.
+   never changes what the description shows. Remove the directories of the pictures once they are published.
 4. Put the images in the body's "Screenshots", and update the pull request as [Update the body](#update-the-body)
    says.
 5. If the script warns that the branch is heavy, tell the user: the maintainer cleans it with `/clean-pr-screenshots`.
@@ -209,7 +218,10 @@ what it does without building it.
    Repeat this check until it lists none, then check the commits again, as [Shape the history](#shape-the-history)
    does.
 4. Push with `cd <worktree> && git push --force-with-lease`, then keep the body true: update every section the fixes
-   changed, as [Update the body](#update-the-body) says.
+   changed, and the "Screenshots" section, with pictures taken and published as [Show a visible
+   change](#show-a-visible-change) says. A screen whose change the fixes alter is published again, and its new "after"
+   takes the place of the former one; a screen that they change for the first time gets its "before" too; a screen
+   whose change they undo loses its images. Then update the body once, as [Update the body](#update-the-body) says.
 
 ## Merge
 

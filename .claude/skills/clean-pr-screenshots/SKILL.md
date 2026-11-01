@@ -8,8 +8,8 @@ disable-model-invocation: true
 
 The pull-request skill publishes the screenshots of pull requests on the `pr-screenshots` branch of origin
 (`.claude/skills/pull-request/SKILL.md` > Show a visible change), which grows with each publication. The cleanup
-deletes the whole branch: the pictures that descriptions link then break once GitHub drops their commits, so it first
-says which open pull requests still link one, and deletes only on the user's word.
+deletes the whole branch: the pictures that descriptions link then break once GitHub drops their commits, merged pull
+requests included, so it first says which open pull requests still link one, and deletes only on the user's word.
 
 1. From any checkout of the repository, with `gh` logged in, run
    `python3 ${CLAUDE_SKILL_DIR}/../pull-request/scripts/pr_screenshots.py clean`. It deletes nothing: it says whether

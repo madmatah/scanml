@@ -52,7 +52,9 @@ sandbox, `.claude/rules/documents.md` > Expert reviewers, and `CLAUDE.md` > Prod
   - a GitHub Actions workflow with broad `permissions`;
   - an action not pinned to a full commit SHA, or a version label that does not match its SHA;
   - event data interpolated with `${{ }}` into a `run:` script instead of passing through `env:`;
-  - `pull_request_target` that checks out untrusted code, or secrets exposed to forks.
+  - `pull_request_target` that checks out untrusted code, or secrets exposed to forks;
+  - a step that `.claude/rules/configuration.md` > Continuous integration, "A step that can hang has its own timeout",
+    covers, without its `timeout-minutes`, or a step or a job whose `timeout-minutes` breaks that rule.
 - **Checks** (`.claude/rules/configuration.md` > Checks): a check that enforces a rule narrowed, by a file excluded, a
   rule turned off or lowered, a threshold loosened, or a step dropped from the gate or from its CI run, without its
   rules file changing with it and a stated reason.

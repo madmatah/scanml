@@ -14,7 +14,6 @@ Every mutation goes through `LibraryService`:
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 from collections.abc import Callable, Sequence
 from dataclasses import replace
@@ -22,7 +21,6 @@ from datetime import datetime
 from pathlib import PurePath
 
 from .adapters.sqlite.database import Database
-from .adapters.sqlite.rows import build_page_claim
 from .application.catalog import Catalog, NewPage, QueueCounts
 from .application.clock import Clock
 from .application.library_files import LibraryFiles
@@ -320,7 +318,7 @@ class LibraryService:
                 page = self.require_page(page_id)
                 self._catalog.update_page(page_id, changes_to_store)
                 if rotate:
-                    self._requeue(page_id)
+                    self._catalog.requeue_page(page_id)
                 self._touch(page.document_id)
                 self._refresh_layout(page.document_id)
             self._assembly.schedule(page.document_id)
@@ -341,18 +339,12 @@ class LibraryService:
         """Queue the page for OCR again (its current outputs stay until replaced)."""
         with self._catalog.open_transaction():
             page = self.require_page(page_id)
-            self._requeue(page_id)
+            self._catalog.requeue_page(page_id)
             self._touch(page.document_id)
             self._refresh_layout(page.document_id)
         self._assembly.schedule(page.document_id)
         self._work_queued()
         return self.require_page(page_id)
-
-    def _requeue(self, page_id: str) -> None:
-        self._db.execute(
-            "UPDATE pages SET status = 'queued', error = NULL, attempts = 0, generation = generation + 1 WHERE id = ?",
-            (page_id,),
-        )
 
     def reorder_pages(self, document_id: str, page_ids: Sequence[str]) -> DocumentRecord:
         """Put the pages of the reading order in the given order (PUT /api/documents/{id}/order).
@@ -415,18 +407,12 @@ class LibraryService:
     # -- OCR loop interface ----------------------------------------------------
 
     def claim_next_page(self) -> PageClaim | None:
-        """Take the oldest queued page (FIFO by upload time) and mark it processing."""
         with self._catalog.open_transaction():
-            row = self._db.one(
-                "SELECT p.id, p.document_id, p.generation, p.attempts, p.key, p.scan_ext,"
-                " p.rotation, d.slug, d.unwarp FROM pages p JOIN documents d ON d.id = p.document_id"
-                " WHERE p.status = 'queued' ORDER BY p.uploaded_ts, p.id LIMIT 1"
-            )
-            if row is None:
+            claim = self._catalog.claim_next_page()
+            if claim is None:
                 return None
-            self._db.execute("UPDATE pages SET status = 'processing' WHERE id = ?", (row["id"],))
-            self._refresh_layout(row["document_id"])
-        return build_page_claim(row)
+            self._refresh_layout(claim.document_id)
+        return claim
 
     def locate_claimed_scan(self, claim: PageClaim) -> PurePath:
         return self._files.locate_scan(claim.slug, claim.key, claim.scan_ext)
@@ -442,12 +428,7 @@ class LibraryService:
 
     def _end_attempt(self, claim: PageClaim, outcome: AttemptOutcome) -> None:
         with self._catalog.open_transaction():
-            updated = self._db.execute(
-                "UPDATE pages SET status = ?, attempts = ?, error = ?"
-                " WHERE id = ? AND generation = ? AND status = 'processing'",
-                (outcome.status, outcome.attempt_count, outcome.error, claim.page_id, claim.generation),
-            ).rowcount
-            if not updated:
+            if not self._catalog.end_attempt(claim, outcome):
                 return
             if outcome.status == "error":
                 self._touch(claim.document_id)
@@ -477,13 +458,7 @@ class LibraryService:
                 finished_at=self._clock.now(),
             )
             with self._catalog.open_transaction():
-                updated = self._db.execute(
-                    "UPDATE pages SET status = 'done', error = NULL, attempts = 0,"
-                    " detected_numbers = ?, ocr = ?"
-                    " WHERE id = ? AND generation = ? AND status = 'processing'",
-                    (json.dumps(list(output.detected_numbers)), json.dumps(ocr), claim.page_id, claim.generation),
-                ).rowcount
-                if not updated:
+                if not self._catalog.complete_page(claim, output.detected_numbers, ocr):
                     return False
                 self._touch(claim.document_id)
                 self._refresh_layout(claim.document_id)

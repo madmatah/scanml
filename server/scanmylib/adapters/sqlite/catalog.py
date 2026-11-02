@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+import json
+from collections.abc import Mapping, Sequence
 from contextlib import AbstractContextManager
 from datetime import datetime
 
@@ -10,9 +11,18 @@ from ...application.catalog import NewPage, QueueCounts
 from ...domain import timestamps
 from ...domain.documents import LayoutSummary, NewDocument
 from ...domain.ordering import Placement
-from ...domain.records import UNCHANGED, DocumentChanges, DocumentRecord, PageChanges, PageRecord
+from ...domain.pages import AttemptOutcome
+from ...domain.records import (
+    UNCHANGED,
+    DocumentChanges,
+    DocumentRecord,
+    OcrSummary,
+    PageChanges,
+    PageClaim,
+    PageRecord,
+)
 from .database import Database
-from .rows import build_document_record, build_page_record, encode_layout_summary
+from .rows import build_document_record, build_page_claim, build_page_record, encode_layout_summary
 
 _LAYOUT_COLUMNS = (
     "number",
@@ -203,3 +213,41 @@ class SqliteCatalog:
 
     def remove_page(self, page_id: str) -> None:
         self._database.execute("DELETE FROM pages WHERE id = ?", (page_id,))
+
+    def claim_next_page(self) -> PageClaim | None:
+        row = self._database.one(
+            "SELECT p.id, p.document_id, p.generation, p.attempts, p.key, p.scan_ext,"
+            " p.rotation, d.slug, d.unwarp FROM pages p JOIN documents d ON d.id = p.document_id"
+            " WHERE p.status = 'queued' ORDER BY p.uploaded_ts, p.id LIMIT 1"
+        )
+        if row is None:
+            return None
+        self._database.execute("UPDATE pages SET status = 'processing' WHERE id = ?", (row["id"],))
+        return build_page_claim(row)
+
+    def end_attempt(self, claim: PageClaim, outcome: AttemptOutcome) -> bool:
+        return (
+            self._database.execute(
+                "UPDATE pages SET status = ?, attempts = ?, error = ?"
+                " WHERE id = ? AND generation = ? AND status = 'processing'",
+                (outcome.status, outcome.attempt_count, outcome.error, claim.page_id, claim.generation),
+            ).rowcount
+            > 0
+        )
+
+    def complete_page(self, claim: PageClaim, detected_numbers: Sequence[str], ocr: OcrSummary) -> bool:
+        return (
+            self._database.execute(
+                "UPDATE pages SET status = 'done', error = NULL, attempts = 0,"
+                " detected_numbers = ?, ocr = ?"
+                " WHERE id = ? AND generation = ? AND status = 'processing'",
+                (json.dumps(list(detected_numbers)), json.dumps(ocr), claim.page_id, claim.generation),
+            ).rowcount
+            > 0
+        )
+
+    def requeue_page(self, page_id: str) -> None:
+        self._database.execute(
+            "UPDATE pages SET status = 'queued', error = NULL, attempts = 0, generation = generation + 1 WHERE id = ?",
+            (page_id,),
+        )

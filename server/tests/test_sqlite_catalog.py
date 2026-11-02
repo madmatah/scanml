@@ -1,10 +1,10 @@
 """The catalog of documents and pages in SQLite (adapters/sqlite/catalog.py): its transactions, the order of its lists,
-the changes of its documents and pages, and the pages it queues again."""
+the changes of its documents and pages, and its queue of pages to read."""
 
 from __future__ import annotations
 
-import collections.abc
 import contextlib
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -17,7 +17,8 @@ from scanmylib.adapters.sqlite.database import Database
 from scanmylib.application.catalog import NewPage
 from scanmylib.application.scan_images import ScanInfo
 from scanmylib.domain.documents import NewDocument
-from scanmylib.domain.records import DocumentChanges, DocumentRecord, PageChanges, PageRecord
+from scanmylib.domain.pages import AttemptOutcome
+from scanmylib.domain.records import DocumentChanges, DocumentRecord, OcrSummary, PageChanges, PageClaim, PageRecord
 
 DOCUMENT_ID = "0f000000-0000-4000-8000-000000000000"
 MOMENT = "2026-10-12T20:00:00+02:00"
@@ -68,6 +69,42 @@ UNPOSITIONED_PAGE_ID = "1e000000-0000-4000-8000-000000000003"
 POSITION_TO_CLEAR = 3.5
 OTHER_DOCUMENT_PAGE_ID = "1e000000-0000-4000-8000-000000000004"
 OTHER_DOCUMENT_POSITION = 0.5
+ALREADY_READ_PAGE_ID = "3a000000-0000-4000-8000-000000000000"
+FIRST_TIED_QUEUED_PAGE_ID = "3b000000-0000-4000-8000-000000000001"
+SECOND_TIED_QUEUED_PAGE_ID = "3b000000-0000-4000-8000-000000000002"
+EARLIER_UPLOADED_PAGE_ID = "3c000000-0000-4000-8000-000000000000"
+QUEUED_PAGE_IDS = (EARLIER_UPLOADED_PAGE_ID, SECOND_TIED_QUEUED_PAGE_ID, FIRST_TIED_QUEUED_PAGE_ID)
+EARLIEST_UPLOAD_MOMENT = datetime.fromisoformat("2026-10-13T08:46:00+02:00")
+EARLIER_UPLOAD_MOMENT = datetime.fromisoformat("2026-10-13T08:47:00+02:00")
+LATER_UPLOAD_MOMENT = datetime.fromisoformat("2026-10-13T08:48:00+02:00")
+FAILURE_MESSAGE = "the sandbox could not read the page"
+FAILED_OUTCOME = AttemptOutcome("error", 1, FAILURE_MESSAGE)
+RETRIED_OUTCOME = AttemptOutcome("queued", 1, None)
+DETECTED_NUMBERS = ("12",)
+OCR_SUMMARY: OcrSummary = {
+    "engine": "fake",
+    "model": "Fake",
+    "duration_s": 1.25,
+    "at": "2026-10-13T08:49:00+02:00",
+    "images": 0,
+    "chars": 42,
+}
+FIRST_GENERATION = 0
+SECOND_GENERATION = 1
+
+
+@dataclass(frozen=True)
+class ChangeUnderAClaim:
+    description: str
+    apply: Callable[[SqliteCatalog, PageClaim], bool]
+
+
+CHANGES_UNDER_A_CLAIM = (
+    ChangeUnderAClaim("ending-its-attempt", lambda catalog, claim: catalog.end_attempt(claim, FAILED_OUTCOME)),
+    ChangeUnderAClaim(
+        "completing-its-page", lambda catalog, claim: catalog.complete_page(claim, DETECTED_NUMBERS, OCR_SUMMARY)
+    ),
+)
 
 
 def insert_document(database: Database, document_id: str, *, updated_timestamp_seconds: float) -> None:
@@ -132,6 +169,13 @@ def add_example_page(
     )
 
 
+def claim_the_next_page(catalog: SqliteCatalog) -> PageClaim:
+    claim = catalog.claim_next_page()
+    if claim is None:
+        raise LookupError("no queued page to claim")
+    return claim
+
+
 class AbandonedTransaction(Exception):
     pass
 
@@ -146,6 +190,18 @@ class RequeuedPages:
 class ClearedPositions:
     cleared_count: int
     other_document_positions: list[float | None]
+
+
+@dataclass(frozen=True)
+class ClaimedPages:
+    claimed_page_ids: list[str]
+    claim_once_none_is_queued: PageClaim | None
+
+
+@dataclass(frozen=True)
+class ChangedPage:
+    is_changed: bool
+    pages: list[PageRecord]
 
 
 class TestTheSqliteCatalog:
@@ -339,9 +395,7 @@ class TestTheSqliteCatalog:
 
         class TestWhenItsChangesHoldNoField:
             @pytest.fixture
-            def update_the_document(
-                self, tmp_path: Path, request: pytest.FixtureRequest
-            ) -> collections.abc.Callable[[], None]:
+            def update_the_document(self, tmp_path: Path, request: pytest.FixtureRequest) -> Callable[[], None]:
                 database = Database(tmp_path / "scanmylib.db")
                 request.addfinalizer(database.close)
                 catalog = SqliteCatalog(database)
@@ -349,7 +403,7 @@ class TestTheSqliteCatalog:
                 return lambda: catalog.update_document(FIRST_ADDED_DOCUMENT_ID, DocumentChanges())
 
             def test_should_refuse_them_since_an_update_sets_at_least_one(
-                self, update_the_document: collections.abc.Callable[[], None]
+                self, update_the_document: Callable[[], None]
             ) -> None:
                 with pytest.raises(ValueError, match="at least one"):
                     update_the_document()
@@ -430,9 +484,7 @@ class TestTheSqliteCatalog:
 
         class TestWhenItsChangesHoldNoField:
             @pytest.fixture
-            def update_the_page(
-                self, tmp_path: Path, request: pytest.FixtureRequest
-            ) -> collections.abc.Callable[[], None]:
+            def update_the_page(self, tmp_path: Path, request: pytest.FixtureRequest) -> Callable[[], None]:
                 database = Database(tmp_path / "scanmylib.db")
                 request.addfinalizer(database.close)
                 catalog = SqliteCatalog(database)
@@ -441,7 +493,7 @@ class TestTheSqliteCatalog:
                 return lambda: catalog.update_page(NEW_PAGE_ID, PageChanges())
 
             def test_should_refuse_them_since_an_update_sets_at_least_one(
-                self, update_the_page: collections.abc.Callable[[], None]
+                self, update_the_page: Callable[[], None]
             ) -> None:
                 with pytest.raises(ValueError, match="at least one"):
                     update_the_page()
@@ -533,3 +585,137 @@ class TestTheSqliteCatalog:
 
             def test_should_keep_the_positions_of_another_document(self, cleared_positions: ClearedPositions) -> None:
                 assert cleared_positions.other_document_positions == [OTHER_DOCUMENT_POSITION]
+
+    class TestTheClaimNextPageMethod:
+        class TestWhenPagesAreQueued:
+            @pytest.fixture
+            def claimed_pages(self, tmp_path: Path) -> ClaimedPages:
+                with contextlib.closing(Database(tmp_path / "scanmylib.db")) as database:
+                    catalog = SqliteCatalog(database)
+                    add_example_document(catalog, DOCUMENT_ID, added_at=FIRST_MOMENT)
+                    add_example_page(catalog, ALREADY_READ_PAGE_ID, uploaded_at=EARLIEST_UPLOAD_MOMENT)
+                    catalog.complete_page(claim_the_next_page(catalog), DETECTED_NUMBERS, OCR_SUMMARY)
+                    add_example_page(catalog, EARLIER_UPLOADED_PAGE_ID, uploaded_at=EARLIER_UPLOAD_MOMENT)
+                    add_example_page(catalog, SECOND_TIED_QUEUED_PAGE_ID, uploaded_at=LATER_UPLOAD_MOMENT)
+                    add_example_page(catalog, FIRST_TIED_QUEUED_PAGE_ID, uploaded_at=LATER_UPLOAD_MOMENT)
+                    claimed_page_ids = [claim_the_next_page(catalog).page_id for _ in QUEUED_PAGE_IDS]
+                    return ClaimedPages(claimed_page_ids, catalog.claim_next_page())
+
+            def test_should_claim_each_queued_page_once_by_upload_then_by_id(self, claimed_pages: ClaimedPages) -> None:
+                assert claimed_pages.claimed_page_ids == [
+                    EARLIER_UPLOADED_PAGE_ID,
+                    FIRST_TIED_QUEUED_PAGE_ID,
+                    SECOND_TIED_QUEUED_PAGE_ID,
+                ]
+
+            def test_should_claim_none_once_every_queued_page_is_claimed(self, claimed_pages: ClaimedPages) -> None:
+                assert claimed_pages.claim_once_none_is_queued is None
+
+    class TestTheRequeuePageMethod:
+        class TestWhenItsReadingFailed:
+            @pytest.fixture
+            def pages(self, tmp_path: Path) -> list[PageRecord]:
+                with contextlib.closing(Database(tmp_path / "scanmylib.db")) as database:
+                    catalog = SqliteCatalog(database)
+                    add_example_document(catalog, DOCUMENT_ID, added_at=FIRST_MOMENT)
+                    add_example_page(catalog, NEW_PAGE_ID)
+                    catalog.end_attempt(claim_the_next_page(catalog), FAILED_OUTCOME)
+                    catalog.requeue_page(NEW_PAGE_ID)
+                    return catalog.list_pages(DOCUMENT_ID)
+
+            def test_should_queue_it_again_with_its_error_and_attempts_cleared_under_a_new_generation(
+                self, pages: list[PageRecord]
+            ) -> None:
+                assert [(page.status, page.error, page.attempts, page.generation) for page in pages] == [
+                    ("queued", None, 0, SECOND_GENERATION)
+                ]
+
+    class TestTheEndAttemptMethod:
+        class TestWhenItsClaimIsCurrent:
+            @pytest.fixture
+            def changed_page(self, tmp_path: Path) -> ChangedPage:
+                with contextlib.closing(Database(tmp_path / "scanmylib.db")) as database:
+                    catalog = SqliteCatalog(database)
+                    add_example_document(catalog, DOCUMENT_ID, added_at=FIRST_MOMENT)
+                    add_example_page(catalog, NEW_PAGE_ID)
+                    is_changed = catalog.end_attempt(claim_the_next_page(catalog), FAILED_OUTCOME)
+                    return ChangedPage(is_changed, catalog.list_pages(DOCUMENT_ID))
+
+            def test_should_record_its_outcome(self, changed_page: ChangedPage) -> None:
+                assert [(page.status, page.attempts, page.error) for page in changed_page.pages] == [
+                    ("error", FAILED_OUTCOME.attempt_count, FAILURE_MESSAGE)
+                ]
+
+            def test_should_say_that_it_did(self, changed_page: ChangedPage) -> None:
+                assert changed_page.is_changed is True
+
+    class TestTheCompletePageMethod:
+        class TestWhenItsClaimIsCurrent:
+            @pytest.fixture
+            def changed_page(self, tmp_path: Path) -> ChangedPage:
+                with contextlib.closing(Database(tmp_path / "scanmylib.db")) as database:
+                    catalog = SqliteCatalog(database)
+                    add_example_document(catalog, DOCUMENT_ID, added_at=FIRST_MOMENT)
+                    add_example_page(catalog, NEW_PAGE_ID)
+                    catalog.end_attempt(claim_the_next_page(catalog), RETRIED_OUTCOME)
+                    is_changed = catalog.complete_page(claim_the_next_page(catalog), DETECTED_NUMBERS, OCR_SUMMARY)
+                    return ChangedPage(is_changed, catalog.list_pages(DOCUMENT_ID))
+
+            def test_should_mark_the_page_read_with_its_numbers_and_ocr_summary_and_no_attempts(
+                self, changed_page: ChangedPage
+            ) -> None:
+                assert [
+                    (page.status, page.attempts, page.detected_numbers, page.ocr) for page in changed_page.pages
+                ] == [("done", 0, DETECTED_NUMBERS, OCR_SUMMARY)]
+
+            def test_should_say_that_it_did(self, changed_page: ChangedPage) -> None:
+                assert changed_page.is_changed is True
+
+    class TestWhenAClaimIsNoLongerCurrent:
+        @pytest.fixture(params=CHANGES_UNDER_A_CLAIM, ids=[change.description for change in CHANGES_UNDER_A_CLAIM])
+        def change_under_a_claim(self, request: pytest.FixtureRequest) -> ChangeUnderAClaim:
+            change: ChangeUnderAClaim = request.param
+            return change
+
+        class TestWhenItsPageWasQueuedAgainAndClaimedAnew:
+            @pytest.fixture
+            def changed_page(self, tmp_path: Path, change_under_a_claim: ChangeUnderAClaim) -> ChangedPage:
+                with contextlib.closing(Database(tmp_path / "scanmylib.db")) as database:
+                    catalog = SqliteCatalog(database)
+                    add_example_document(catalog, DOCUMENT_ID, added_at=FIRST_MOMENT)
+                    add_example_page(catalog, NEW_PAGE_ID)
+                    stale_claim = claim_the_next_page(catalog)
+                    catalog.requeue_page(NEW_PAGE_ID)
+                    claim_the_next_page(catalog)
+                    is_changed = change_under_a_claim.apply(catalog, stale_claim)
+                    return ChangedPage(is_changed, catalog.list_pages(DOCUMENT_ID))
+
+            def test_should_say_that_it_changed_nothing(self, changed_page: ChangedPage) -> None:
+                assert changed_page.is_changed is False
+
+            def test_should_leave_the_page_being_read_under_its_new_claim(self, changed_page: ChangedPage) -> None:
+                assert [
+                    (page.status, page.generation, page.attempts, page.error, page.detected_numbers)
+                    for page in changed_page.pages
+                ] == [("processing", SECOND_GENERATION, 0, None, ())]
+
+        class TestWhenItsAttemptHasAlreadyEnded:
+            @pytest.fixture
+            def changed_page(self, tmp_path: Path, change_under_a_claim: ChangeUnderAClaim) -> ChangedPage:
+                with contextlib.closing(Database(tmp_path / "scanmylib.db")) as database:
+                    catalog = SqliteCatalog(database)
+                    add_example_document(catalog, DOCUMENT_ID, added_at=FIRST_MOMENT)
+                    add_example_page(catalog, NEW_PAGE_ID)
+                    claim = claim_the_next_page(catalog)
+                    catalog.end_attempt(claim, RETRIED_OUTCOME)
+                    is_changed = change_under_a_claim.apply(catalog, claim)
+                    return ChangedPage(is_changed, catalog.list_pages(DOCUMENT_ID))
+
+            def test_should_say_that_it_changed_nothing(self, changed_page: ChangedPage) -> None:
+                assert changed_page.is_changed is False
+
+            def test_should_leave_the_page_queued_as_its_ended_attempt_left_it(self, changed_page: ChangedPage) -> None:
+                assert [
+                    (page.status, page.generation, page.attempts, page.error, page.detected_numbers)
+                    for page in changed_page.pages
+                ] == [("queued", FIRST_GENERATION, RETRIED_OUTCOME.attempt_count, None, ())]

@@ -13,6 +13,7 @@ import os
 import re
 import shlex
 import sqlite3
+import subprocess
 import unittest
 from collections.abc import Callable, Mapping
 from contextlib import closing
@@ -24,6 +25,7 @@ from typing import ClassVar, NamedTuple
 from docker_shim import LoggedCall, Rule
 from installation_support import (
     BOUNDED_ENGINE_CHECK,
+    CLIPBOARD_SEQUENCE,
     COPIED,
     ENGINE_CHECK,
     ENGINE_CHECK_MODULE,
@@ -74,6 +76,14 @@ ISOLATED_SANDBOX_CHECK = (
     "--security-opt", "no-new-privileges:true", "--user", f"{os.getuid()}:{os.getgid()}",
     "--device", "nvidia.com/gpu=all",
 )  # fmt: skip
+INSTALL_SANDBOX = r"^compose .* run --rm -T --pull never ocr-setup$"
+#: The free space of a new sandbox, which the disk of a test cannot give: the tests lower it to nothing.
+ROOM_FOR_A_NEW_SANDBOX = MappingProxyType(
+    {"scripts/deploy.sh": ("NEW_SANDBOX_BYTES=$((36 * 1024 * 1024 * 1024))", "NEW_SANDBOX_BYTES=0")}
+)
+REPLACED_MANIFEST = '{"sandbox": "replaced"}'
+NEW_MANIFEST = '{"sandbox": "new"}'
+INSTALLATION_LOG = "the installation's log\n"
 #: The options of the ocr service's own settings that the check takes from compose.yaml.
 SERVICE_SETTINGS_OF_THE_CHECK = ("--env=HOME=/tmp/home", "--env=HF_HUB_OFFLINE=1", "--memory=17179869184",
                                  "--pids-limit=4096")  # fmt: skip
@@ -126,6 +136,20 @@ def deploy(
     )
 
 
+def make_installation_with_a_sandbox_to_replace(test_case: type[InstallationTestCase]) -> Installation:
+    installation = make_installation(test_case, ROOM_FOR_A_NEW_SANDBOX)
+    (installation.production_data / "sandbox" / "MANIFEST.json").write_text(REPLACED_MANIFEST)
+    return installation
+
+
+def build_sandbox_installation(sandbox: Path, *, exit_status: int = 0) -> Rule:
+    """ocr-setup, which installs the new sandbox next to `sandbox`, its log first and its manifest last, and prints what
+    a sandbox may."""
+    log = {f"{sandbox}.new/setup.log": INSTALLATION_LOG}
+    manifest = {f"{sandbox}.new/MANIFEST.json": NEW_MANIFEST} if exit_status == 0 else {}
+    return {"match": INSTALL_SANDBOX, "stdout": SANDBOX_OUTPUT, "exit": exit_status, "host_files": log | manifest}
+
+
 def find_sandbox_check(calls: list[LoggedCall]) -> list[str]:
     """The arguments of the check of the sandbox before the restart: raises StopIteration when it never ran, as
     find_command does."""
@@ -168,6 +192,12 @@ def find_compose_build(commands: list[str]) -> str:
     return next(command for command in commands if re.search(COMPOSE_BUILD, command))
 
 
+def parse_env(env_text: str | None) -> dict[str, str]:
+    if env_text is None:
+        raise FileNotFoundError("no .env to read")
+    return dict(line.split("=", 1) for line in env_text.splitlines() if line and not line.startswith("#"))
+
+
 def read_option_value(command: str, option: str) -> str:
     return "".join(command.partition(f"{option} ")[2].split()[:1])
 
@@ -180,7 +210,7 @@ def replace_once(text: str, old: str, new: str) -> str:
     return text.replace(old, new, 1)
 
 
-def write_rehearsal_env(installation: Installation, rehearsal_data: Path, api_port: int) -> None:
+def write_rehearsal_env(installation: Installation, rehearsal_data: Path, api_port: int, **changes: str) -> None:
     (installation.worktree / ".env").write_text(
         installation.build_development_env(
             COMPOSE_PROJECT_NAME=REHEARSAL_PROJECT,
@@ -189,6 +219,7 @@ def write_rehearsal_env(installation: Installation, rehearsal_data: Path, api_po
             LIBRARY_DIR=f"{rehearsal_data}/library",
             ANDROID_DIR=f"{rehearsal_data}/android",
             API_PORT=str(api_port),
+            **changes,
         )
     )
 
@@ -1020,6 +1051,9 @@ class WhenTheNewImageFailsTheCheckOfTheSandbox(InstallationTestCase):
         self.assertEqual(len(self.logs), 1)
         self.assertEqual([text[:40] for text in SANDBOX_TEXTS if text in self.logs[0]], [])
 
+    def test_should_suggest_a_new_sandbox_in_case_the_new_image_needs_one(self) -> None:
+        self.assertIn("deploy with --new-sandbox", self.deploy_run.stdout)
+
 
 class WhenTheCheckOfTheSandboxDoesNotFinishInTime(InstallationTestCase):
     deploy_run: ClassVar[ScriptRun]
@@ -1055,6 +1089,460 @@ class WhenTheCheckOfTheSandboxDoesNotFinishInTime(InstallationTestCase):
 
     def test_should_start_nothing(self) -> None:
         self.assertEqual([command for command in self.commands if " up " in command], [])
+
+
+class WhenTheReleaseIsDeployedWithANewSandbox(InstallationTestCase):
+    production_checkout: ClassVar[Path]
+    production_data: ClassVar[Path]
+    deploy_run: ClassVar[ScriptRun]
+    commands: ClassVar[list[str]]
+    installation_call: ClassVar[LoggedCall]
+    sandbox_check: ClassVar[list[str]]
+    production_env: ClassVar[dict[str, str]]
+    sandbox_manifest: ClassVar[str | None]
+    replaced_sandboxes: ClassVar[dict[str, str | None]]
+    is_new_sandbox_left: ClassVar[bool]
+    is_env_copy_left: ClassVar[bool]
+    going_back_lines: ClassVar[list[str]]
+    sandbox_manifest_after_going_back: ClassVar[str | None]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        installation = make_installation_with_a_sandbox_to_replace(cls)
+        start_fake_api(cls, installation.production_api_port)
+        sandbox = installation.production_data / "sandbox"
+        cls.production_checkout = installation.production_checkout
+        cls.production_data = installation.production_data
+        cls.deploy_run = deploy(installation, "--new-sandbox", rules=[build_sandbox_installation(sandbox)])
+        calls = installation.read_docker_calls()
+        cls.commands = installation.read_docker_commands()
+        cls.installation_call = next(call for call in calls if re.search(INSTALL_SANDBOX, " ".join(call["argv"])))
+        cls.sandbox_check = find_sandbox_check(calls)
+        cls.production_env = parse_env((installation.production_checkout / ".env").read_text())
+        cls.sandbox_manifest = read_text_if_present(sandbox / "MANIFEST.json")
+        cls.replaced_sandboxes = {
+            path.name: read_text_if_present(path / "MANIFEST.json")
+            for path in installation.production_data.glob("sandbox.replaced-*")
+        }
+        cls.is_new_sandbox_left = Path(f"{sandbox}.new").exists()
+        env_file = read_option_value(" ".join(cls.installation_call["argv"]), "--env-file")
+        cls.is_env_copy_left = Path(env_file).exists()
+        going_back = cls.deploy_run.stdout.split("Deployed scanmylib", 1)[-1]
+        cls.going_back_lines = [line.strip() for line in going_back.splitlines() if line.startswith("  ")]
+        for move in [line for line in cls.going_back_lines if line.startswith("mv -T ")]:
+            subprocess.run(shlex.split(move), check=True)
+        cls.sandbox_manifest_after_going_back = read_text_if_present(sandbox / "MANIFEST.json")
+
+    def find_command_index(self, pattern: str) -> int:
+        return next(index for index, command in enumerate(self.commands) if re.search(pattern, command))
+
+    def test_should_succeed(self) -> None:
+        self.assertEqual(self.deploy_run.returncode, 0, self.deploy_run.output)
+
+    def test_should_install_the_new_sandbox_with_ocr_setup_from_production_s_checkout_without_a_terminal(self) -> None:
+        argv = self.installation_call["argv"]
+        self.assertEqual(
+            [*argv[:3], *argv[argv.index("--env-file") + 2 :]],
+            ["compose", "--project-directory", str(self.production_checkout), "--profile", "fake-ocr", "--profile",
+             "setup", "run", "--rm", "-T", "--pull", "never", "ocr-setup"],
+        )  # fmt: skip
+
+    def test_should_give_ocr_setup_a_copy_of_env_that_only_sets_where_it_installs(self) -> None:
+        expected = {**self.production_env, "SANDBOX_SETUP_DIR": f"{self.production_data}/sandbox.new"}
+        self.assertEqual(parse_env(self.installation_call.get("env_file")), expected)
+
+    def test_should_remove_the_copy_of_env(self) -> None:
+        self.assertFalse(self.is_env_copy_left)
+
+    def test_should_check_the_new_image_against_the_new_sandbox(self) -> None:
+        self.assertIn(f"type=bind,src={self.production_data}/sandbox.new,dst=/opt/sandbox,readonly", self.sandbox_check)
+
+    def test_should_check_the_new_sandbox_once_installed(self) -> None:
+        self.assertGreater(self.find_command_index(SANDBOX_CHECK), self.find_command_index(INSTALL_SANDBOX))
+
+    def test_should_stop_the_ocr_service_before_the_restart(self) -> None:
+        self.assertLess(self.find_command_index(r" stop ocr$"), self.find_command_index(r" up -d --no-build --wait"))
+
+    def test_should_install_the_new_sandbox_while_production_runs(self) -> None:
+        self.assertLess(self.find_command_index(INSTALL_SANDBOX), self.find_command_index(r" stop ocr$"))
+
+    def test_should_run_the_new_sandbox_in_sandbox_dir(self) -> None:
+        self.assertEqual(self.sandbox_manifest, NEW_MANIFEST)
+
+    def test_should_keep_the_replaced_sandbox(self) -> None:
+        self.assertEqual(list(self.replaced_sandboxes.values()), [REPLACED_MANIFEST])
+
+    def test_should_name_the_replaced_sandbox_after_the_deployment(self) -> None:
+        self.assertRegex(next(iter(self.replaced_sandboxes)), r"^sandbox\.replaced-\d{8}-\d{6}$")
+
+    def test_should_leave_no_new_sandbox_aside(self) -> None:
+        self.assertFalse(self.is_new_sandbox_left)
+
+    def test_should_say_how_to_remove_the_replaced_sandbox_since_the_scripts_never_delete_one(self) -> None:
+        replaced = self.production_data / next(iter(self.replaced_sandboxes))
+        self.assertIn(f"  rm -rf {replaced}\n", self.deploy_run.stdout)
+
+    def test_should_pass_what_the_installation_prints_through_cat_v_since_it_is_untrusted(self) -> None:
+        self.assertNotIn(CLIPBOARD_SEQUENCE, self.deploy_run.output)
+
+    def test_should_say_to_stop_the_ocr_service_before_going_back_to_the_replaced_sandbox(self) -> None:
+        first_move = next(index for index, line in enumerate(self.going_back_lines) if line.startswith("mv -T "))
+        self.assertIn("scripts/prod.sh compose stop ocr", self.going_back_lines[:first_move])
+
+    def test_should_print_the_moves_that_go_back_to_the_replaced_sandbox(self) -> None:
+        self.assertEqual(self.sandbox_manifest_after_going_back, REPLACED_MANIFEST)
+
+    def test_should_say_to_deploy_the_previous_release_again_on_it(self) -> None:
+        self.assertIn("\n  scripts/deploy.sh --allow-downgrade\n", self.deploy_run.stdout)
+
+    def test_should_put_no_version_that_the_api_reports_in_the_commands_it_prints(self) -> None:
+        self.assertEqual([line for line in self.going_back_lines if VERSION in line], [])
+
+
+class WhenTheInstallationOfTheNewSandboxFails(InstallationTestCase):
+    production_data: ClassVar[Path]
+    deploy_run: ClassVar[ScriptRun]
+    commands: ClassVar[list[str]]
+    backups: ClassVar[list[str]]
+    sandbox_manifest: ClassVar[str | None]
+    is_new_sandbox_left: ClassVar[bool]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        installation = make_installation_with_a_sandbox_to_replace(cls)
+        start_fake_api(cls, installation.production_api_port)
+        sandbox = installation.production_data / "sandbox"
+        cls.production_data = installation.production_data
+        failing = build_sandbox_installation(sandbox, exit_status=1)
+        cls.deploy_run = deploy(installation, "--new-sandbox", rules=[failing])
+        cls.commands = installation.read_docker_commands()
+        cls.backups = list_backups(installation)
+        cls.sandbox_manifest = read_text_if_present(sandbox / "MANIFEST.json")
+        cls.is_new_sandbox_left = Path(f"{sandbox}.new").is_dir()
+
+    def test_should_fail_at_the_new_sandbox(self) -> None:
+        self.assertNotEqual(self.deploy_run.returncode, 0)
+        self.assertIn('DEPLOY FAILED during the step "sandbox"', self.deploy_run.stdout)
+
+    def test_should_say_that_production_is_unchanged(self) -> None:
+        self.assertIn("Production is unchanged", self.deploy_run.stdout)
+
+    def test_should_tag_latest_the_images_that_production_runs_again(self) -> None:
+        self.assertIn("tag scanmylib-ocr:deployed scanmylib-ocr:latest", self.commands)
+
+    def test_should_check_no_sandbox(self) -> None:
+        self.assertEqual([command for command in self.commands if re.search(SANDBOX_CHECK, command)], [])
+
+    def test_should_back_up_nothing(self) -> None:
+        self.assertEqual(self.backups, [])
+
+    def test_should_neither_stop_nor_start_anything(self) -> None:
+        self.assertEqual([command for command in self.commands if re.search(r" (up|stop) ", command)], [])
+
+    def test_should_leave_the_running_sandbox_in_place(self) -> None:
+        self.assertEqual(self.sandbox_manifest, REPLACED_MANIFEST)
+
+    def test_should_keep_the_new_sandbox_for_its_log(self) -> None:
+        self.assertTrue(self.is_new_sandbox_left)
+
+    def test_should_say_how_to_read_its_log_and_remove_it(self) -> None:
+        new_sandbox = f"{self.production_data}/sandbox.new"
+        self.assertIn(f"cat -v {new_sandbox}/setup.log", self.deploy_run.stdout)
+        self.assertIn(f"rm -rf {new_sandbox}", self.deploy_run.stdout)
+
+
+class WhenTheFailedInstallationLeavesALinkForItsLog(InstallationTestCase):
+    new_sandbox: ClassVar[Path]
+    deploy_run: ClassVar[ScriptRun]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        installation = make_installation_with_a_sandbox_to_replace(cls)
+        start_fake_api(cls, installation.production_api_port)
+        cls.new_sandbox = installation.production_data / "sandbox.new"
+        host_file = installation.production_data / "state" / "token"
+        failing: Rule = {
+            "match": INSTALL_SANDBOX,
+            "exit": 1,
+            "host_links": {f"{cls.new_sandbox}/setup.log": str(host_file)},
+        }
+        cls.deploy_run = deploy(installation, "--new-sandbox", rules=[failing])
+
+    def test_should_fail_at_the_new_sandbox(self) -> None:
+        self.assertNotEqual(self.deploy_run.returncode, 0)
+        self.assertIn('DEPLOY FAILED during the step "sandbox"', self.deploy_run.stdout)
+
+    def test_should_never_suggest_reading_a_file_of_the_host_through_the_link(self) -> None:
+        self.assertNotIn(f"cat -v {self.new_sandbox}/setup.log", self.deploy_run.stdout)
+
+    def test_should_say_how_to_remove_the_new_sandbox(self) -> None:
+        self.assertIn(f"rm -rf {self.new_sandbox}", self.deploy_run.stdout)
+
+
+class WhenTheNewImageFailsTheCheckOfTheNewSandbox(InstallationTestCase):
+    new_sandbox: ClassVar[Path]
+    deploy_run: ClassVar[ScriptRun]
+    commands: ClassVar[list[str]]
+    backups: ClassVar[list[str]]
+    sandbox_manifest: ClassVar[str | None]
+    new_sandbox_manifest: ClassVar[str | None]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        installation = make_installation_with_a_sandbox_to_replace(cls)
+        start_fake_api(cls, installation.production_api_port)
+        sandbox = installation.production_data / "sandbox"
+        cls.new_sandbox = Path(f"{sandbox}.new")
+        rules: list[Rule] = [build_sandbox_installation(sandbox), {"match": SANDBOX_CHECK, "exit": 1}]
+        cls.deploy_run = deploy(installation, "--new-sandbox", rules=rules)
+        cls.commands = installation.read_docker_commands()
+        cls.backups = list_backups(installation)
+        cls.sandbox_manifest = read_text_if_present(sandbox / "MANIFEST.json")
+        cls.new_sandbox_manifest = read_text_if_present(Path(f"{sandbox}.new") / "MANIFEST.json")
+
+    def test_should_fail_at_the_check_of_the_sandbox(self) -> None:
+        self.assertNotEqual(self.deploy_run.returncode, 0)
+        self.assertIn('DEPLOY FAILED during the step "check"', self.deploy_run.stdout)
+
+    def test_should_say_that_production_is_unchanged(self) -> None:
+        self.assertIn("Production is unchanged", self.deploy_run.stdout)
+
+    def test_should_back_up_nothing(self) -> None:
+        self.assertEqual(self.backups, [])
+
+    def test_should_neither_stop_nor_start_anything(self) -> None:
+        self.assertEqual([command for command in self.commands if re.search(r" (up|stop) ", command)], [])
+
+    def test_should_leave_the_running_sandbox_in_place(self) -> None:
+        self.assertEqual(self.sandbox_manifest, REPLACED_MANIFEST)
+
+    def test_should_keep_the_new_sandbox_aside(self) -> None:
+        self.assertEqual(self.new_sandbox_manifest, NEW_MANIFEST)
+
+    def test_should_not_suggest_the_option_it_was_given(self) -> None:
+        self.assertNotIn("deploy with --new-sandbox", self.deploy_run.stdout)
+
+    def test_should_say_that_the_new_image_could_not_import_the_engine_s_libraries_from_the_new_sandbox(self) -> None:
+        self.assertIn(f"could not import the engine's libraries from {self.new_sandbox}.", self.deploy_run.stdout)
+
+    def test_should_show_why_with_the_check_on_the_new_sandbox(self) -> None:
+        self.assertRegex(
+            self.deploy_run.stdout, rf"\n  docker run .*src={re.escape(str(self.new_sandbox))}\\,dst=/opt/sandbox"
+        )
+
+    def test_should_say_how_to_remove_the_new_sandbox_before_deploying_again(self) -> None:
+        self.assertIn(f"rm -rf {self.new_sandbox}\n", self.deploy_run.stdout)
+
+
+class WhenTheRestartFailsOnceTheSandboxesAreSwapped(InstallationTestCase):
+    deploy_run: ClassVar[ScriptRun]
+    rollback_moves: ClassVar[list[str]]
+    sandbox_manifest_after_the_rollback: ClassVar[str | None]
+    sandboxes_after_the_rollback: ClassVar[list[str]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        installation = make_installation_with_a_sandbox_to_replace(cls)
+        start_fake_api(cls, installation.production_api_port)
+        sandbox = installation.production_data / "sandbox"
+        rules: list[Rule] = [build_sandbox_installation(sandbox), {"match": r" up -d --no-build --wait", "exit": 1}]
+        cls.deploy_run = deploy(installation, "--new-sandbox", rules=rules)
+        rollback = cls.deploy_run.stdout.split("DEPLOY FAILED", 1)[-1]
+        cls.rollback_moves = [line.strip() for line in rollback.splitlines() if line.startswith("  mv -T ")]
+        for move in cls.rollback_moves:
+            subprocess.run(shlex.split(move), check=True)
+        cls.sandbox_manifest_after_the_rollback = read_text_if_present(sandbox / "MANIFEST.json")
+        cls.sandboxes_after_the_rollback = sorted(
+            re.sub(r"\d{8}-\d{6}", "<time>", path.name) for path in installation.production_data.glob("sandbox*")
+        )
+
+    def test_should_fail_at_the_restart(self) -> None:
+        self.assertNotEqual(self.deploy_run.returncode, 0)
+        self.assertIn('DEPLOY FAILED during the step "restart"', self.deploy_run.stdout)
+
+    def test_should_print_the_two_moves_that_undo_the_swap(self) -> None:
+        self.assertEqual(len(self.rollback_moves), 2, self.deploy_run.stdout)
+
+    def test_should_put_the_replaced_sandbox_back_with_the_printed_moves(self) -> None:
+        self.assertEqual(self.sandbox_manifest_after_the_rollback, REPLACED_MANIFEST)
+
+    def test_should_keep_the_new_sandbox_aside_with_the_printed_moves(self) -> None:
+        self.assertEqual(self.sandboxes_after_the_rollback, ["sandbox", "sandbox.failed-<time>"])
+
+
+class WhenTheAppFailsToBuildOnceTheSandboxesAreSwapped(InstallationTestCase):
+    production_data: ClassVar[Path]
+    deploy_run: ClassVar[ScriptRun]
+    replaced_sandboxes: ClassVar[list[str]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        installation = make_installation_with_a_sandbox_to_replace(cls)
+        start_fake_api(cls, installation.production_api_port)
+        cls.production_data = installation.production_data
+        rules: list[Rule] = [
+            build_sandbox_installation(installation.production_data / "sandbox"),
+            {"match": "^run .*scanmylib-android-build", "exit": 1},
+        ]
+        cls.deploy_run = deploy(installation, "--apk", "--new-sandbox", rules=rules)
+        cls.replaced_sandboxes = [path.name for path in installation.production_data.glob("sandbox.replaced-*")]
+
+    def test_should_fail_at_the_app(self) -> None:
+        self.assertNotEqual(self.deploy_run.returncode, 0)
+        self.assertIn('DEPLOY FAILED during the step "apk"', self.deploy_run.stdout)
+
+    def test_should_say_where_the_replaced_sandbox_is_kept_for_a_rollback(self) -> None:
+        self.assertEqual(len(self.replaced_sandboxes), 1)
+        self.assertIn(
+            f"kept for a rollback in {self.production_data}/{self.replaced_sandboxes[0]}", self.deploy_run.stdout
+        )
+
+
+class WhenANewSandboxIsLeftFromAnEarlierDeployment(InstallationTestCase):
+    deploy_run: ClassVar[ScriptRun]
+    writing_calls: ClassVar[list[list[str]]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        installation = make_installation_with_a_sandbox_to_replace(cls)
+        start_fake_api(cls, installation.production_api_port)
+        (installation.production_data / "sandbox.new").mkdir()
+        (installation.production_data / "sandbox.new" / "setup.log").write_text(INSTALLATION_LOG)
+        cls.deploy_run = deploy(installation, "--new-sandbox")
+        cls.writing_calls = list_writing_calls(installation.read_docker_calls())
+
+    def test_should_refuse_and_say_how_to_read_it(self) -> None:
+        self.assertNotEqual(self.deploy_run.returncode, 0)
+        self.assertIn(
+            "sandbox.new is left from an earlier installation: read its setup.log through cat -v",
+            self.deploy_run.output,
+        )
+
+    def test_should_only_read_from_docker(self) -> None:
+        self.assertEqual(self.writing_calls, [])
+
+
+def point_the_sandbox_at_data_dir(installation: Installation) -> None:
+    data_dir = str(installation.production_data)
+    env = installation.build_production_env(SANDBOX_DIR=data_dir, SANDBOX_SETUP_DIR=data_dir)
+    (installation.production_checkout / ".env").write_text(env)
+
+
+def point_the_sandbox_at_library_dir(installation: Installation) -> None:
+    library = str(installation.library)
+    env = installation.build_production_env(SANDBOX_DIR=library, SANDBOX_SETUP_DIR=library)
+    (installation.production_checkout / ".env").write_text(env)
+
+
+def point_the_sandbox_at_the_checkout(installation: Installation) -> None:
+    checkout = str(installation.production_checkout)
+    env = installation.build_production_env(SANDBOX_DIR=checkout, SANDBOX_SETUP_DIR=checkout)
+    (installation.production_checkout / ".env").write_text(env)
+
+
+def put_the_signing_key_in_sandbox_dir(installation: Installation) -> None:
+    keystore = installation.production_data / "sandbox" / "keystore"
+    keystore.mkdir()
+    env = installation.build_production_env(ANDROID_KEYSTORE_DIR=str(keystore))
+    (installation.production_checkout / ".env").write_text(env)
+
+
+def put_something_else_than_a_sandbox_in_sandbox_dir(installation: Installation) -> None:
+    sandbox = installation.production_data / "sandbox"
+    (sandbox / "MANIFEST.json").unlink()
+    (sandbox / "notes.txt").write_text("not a sandbox")
+
+
+class WhenANewSandboxWouldMoveWhatIsNotASandbox(InstallationTestCase):
+    preconditions: ClassVar[Mapping[str, BrokenPrecondition]] = MappingProxyType(
+        {
+            "DATA_DIR as SANDBOX_DIR": BrokenPrecondition(point_the_sandbox_at_data_dir, "is or contains DATA_DIR"),
+            "a SANDBOX_DIR that holds no sandbox": BrokenPrecondition(
+                put_something_else_than_a_sandbox_in_sandbox_dir, "holds no MANIFEST.json and is not empty"
+            ),
+            "LIBRARY_DIR as SANDBOX_DIR": BrokenPrecondition(
+                point_the_sandbox_at_library_dir, "is, contains or lies inside LIBRARY_DIR"
+            ),
+            "the checkout as SANDBOX_DIR": BrokenPrecondition(
+                point_the_sandbox_at_the_checkout, "is, contains or lies inside the checkout"
+            ),
+            "a SANDBOX_DIR that holds the signing key": BrokenPrecondition(
+                put_the_signing_key_in_sandbox_dir, "is, contains or lies inside ANDROID_KEYSTORE_DIR"
+            ),
+        }
+    )
+    deploy_runs: ClassVar[dict[str, ScriptRun]]
+    writing_calls: ClassVar[dict[str, list[list[str]]]]
+    is_database_in_place: ClassVar[dict[str, bool]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.deploy_runs, cls.writing_calls, cls.is_database_in_place = {}, {}, {}
+        for row, broken_precondition in cls.preconditions.items():
+            installation = make_installation_with_a_sandbox_to_replace(cls)
+            start_fake_api(cls, installation.production_api_port)
+            broken_precondition.break_it(installation)
+            cls.deploy_runs[row] = deploy(installation, "--new-sandbox")
+            cls.writing_calls[row] = list_writing_calls(installation.read_docker_calls())
+            cls.is_database_in_place[row] = (installation.production_data / "state" / "scanmylib.db").is_file()
+
+    def test_should_refuse_and_say_why(self) -> None:
+        self.assertEqual(sorted(self.deploy_runs), sorted(self.preconditions))
+        for row, deploy_run in self.deploy_runs.items():
+            with self.subTest(row):
+                self.assertNotEqual(deploy_run.returncode, 0)
+                self.assertIn(self.preconditions[row].refusal, deploy_run.output)
+
+    def test_should_only_read_from_docker(self) -> None:
+        self.assertEqual(sorted(self.writing_calls), sorted(self.preconditions))
+        for row, writing_calls in self.writing_calls.items():
+            with self.subTest(row):
+                self.assertEqual(writing_calls, [])
+
+    def test_should_leave_production_s_database_in_place(self) -> None:
+        self.assertEqual(self.is_database_in_place, dict.fromkeys(self.preconditions, True))
+
+
+class WhenADeploymentWithANewSandboxIsADryRun(InstallationTestCase):
+    production_data: ClassVar[Path]
+    deploy_run: ClassVar[ScriptRun]
+    writing_calls: ClassVar[list[list[str]]]
+    sandboxes: ClassVar[list[str]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        installation = make_installation_with_a_sandbox_to_replace(cls)
+        start_fake_api(cls, installation.production_api_port)
+        cls.production_data = installation.production_data
+        cls.deploy_run = deploy(installation, "--dry-run", "--new-sandbox")
+        cls.writing_calls = list_writing_calls(installation.read_docker_calls())
+        cls.sandboxes = sorted(path.name for path in installation.production_data.glob("sandbox*"))
+
+    def test_should_succeed(self) -> None:
+        self.assertEqual(self.deploy_run.returncode, 0, self.deploy_run.output)
+
+    def test_should_say_that_it_would_install_the_new_sandbox_with_ocr_setup(self) -> None:
+        self.assertIn(
+            f"would run docker compose, with .env but SANDBOX_SETUP_DIR={self.production_data}/sandbox.new: "
+            "--profile setup run --rm -T --pull never ocr-setup",
+            self.deploy_run.stdout,
+        )
+
+    def test_should_say_that_it_would_check_the_new_image_against_the_new_sandbox(self) -> None:
+        self.assertIn(f"src={self.production_data}/sandbox.new", self.deploy_run.stdout)
+
+    def test_should_say_that_it_would_swap_the_sandboxes(self) -> None:
+        self.assertRegex(
+            self.deploy_run.stdout,
+            rf"would run: mv -T {re.escape(str(self.production_data))}/sandbox "
+            rf"{re.escape(str(self.production_data))}/sandbox\.replaced-\d{{8}}-\d{{6}}\n",
+        )
+
+    def test_should_only_read_from_docker(self) -> None:
+        self.assertEqual(self.writing_calls, [])
+
+    def test_should_leave_the_sandboxes_as_they_were(self) -> None:
+        self.assertEqual(self.sandboxes, ["sandbox"])
 
 
 class WhenTheSandboxIsNotIsolated(InstallationTestCase):
@@ -1591,6 +2079,183 @@ class WhenRehearsedOnTheFakeOcrWithoutASandbox(InstallationTestCase):
 
     def test_should_not_ask_for_an_ocr_sandbox(self) -> None:
         self.assertNotIn("no OCR sandbox", self.rehearsal.output)
+
+
+class WhenANewSandboxIsRehearsedOnProductionsSandbox(InstallationTestCase):
+    rehearsal: ClassVar[ScriptRun]
+    writing_calls: ClassVar[list[list[str]]]
+    sandboxes: ClassVar[list[str]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        installation = make_installation(cls, ROOM_FOR_A_NEW_SANDBOX)
+        write_rehearsal_env(installation, installation.directory / "rehearsal", find_free_port(), OCR_SERVICE="ocr")
+        cls.rehearsal = rehearse(installation, "--new-sandbox")
+        cls.writing_calls = list_writing_calls(installation.read_docker_calls())
+        cls.sandboxes = sorted(path.name for path in installation.production_data.glob("sandbox*"))
+
+    def test_should_refuse_since_the_sandbox_is_production_s(self) -> None:
+        self.assertNotEqual(self.rehearsal.returncode, 0)
+        self.assertIn("SANDBOX_DIR: ", self.rehearsal.stdout)
+        self.assertIn("is production's SANDBOX_DIR", self.rehearsal.stdout)
+
+    def test_should_refuse_before_anything_is_built_or_installed(self) -> None:
+        self.assertEqual(self.writing_calls, [])
+
+    def test_should_leave_production_s_sandbox_alone(self) -> None:
+        self.assertEqual(self.sandboxes, ["sandbox"])
+
+
+class WhenANewSandboxIsRehearsedOnTheStacksDataDir(InstallationTestCase):
+    rehearsal: ClassVar[ScriptRun]
+    commands: ClassVar[list[str]]
+    is_new_sandbox_made: ClassVar[bool]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        # The stack's DATA_DIR as its sandbox passes every check of .env, but the new sandbox would go next to it, and
+        # the restart would move the stack's data.
+        installation = make_installation(cls, ROOM_FOR_A_NEW_SANDBOX)
+        rehearsal_data = installation.directory / "rehearsal"
+        rehearsal_data.mkdir()
+        write_rehearsal_env(
+            installation, rehearsal_data, find_free_port(), OCR_SERVICE="ocr", SANDBOX_DIR=str(rehearsal_data)
+        )
+        installation.answer_docker([NEW_OCR_IMAGE])
+        cls.rehearsal = rehearse(installation, "--new-sandbox")
+        cls.commands = installation.read_docker_commands()
+        cls.is_new_sandbox_made = Path(f"{rehearsal_data}.new").exists()
+
+    def test_should_refuse_since_sandbox_dir_is_the_stack_s_data_dir(self) -> None:
+        self.assertNotEqual(self.rehearsal.returncode, 0)
+        self.assertIn("is or contains DATA_DIR", self.rehearsal.output)
+
+    def test_should_refuse_before_ocr_setup_runs(self) -> None:
+        self.assertEqual([command for command in self.commands if re.search(INSTALL_SANDBOX, command)], [])
+
+    def test_should_make_no_new_sandbox(self) -> None:
+        self.assertFalse(self.is_new_sandbox_made)
+
+
+class WhenTheCopyOfEnvThatInstallsANewSandboxReachesOutsideTheStacksData(InstallationTestCase):
+    outside: ClassVar[Path]
+    rehearsal: ClassVar[ScriptRun]
+    commands: ClassVar[list[str]]
+    is_new_sandbox_made: ClassVar[bool]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        # The stack's own .env passes, but docker compose, given the copy that sets SANDBOX_SETUP_DIR, resolves an
+        # ocr-setup that mounts a directory outside the stack's DATA_DIR.
+        installation = make_installation(cls, ROOM_FOR_A_NEW_SANDBOX)
+        api_port = find_free_port()
+        start_fake_api(cls, api_port)
+        rehearsal_data = installation.directory / "rehearsal"
+        sandbox = rehearsal_data / "sandbox"
+        sandbox.mkdir(parents=True)
+        cls.outside = installation.directory / "outside"
+        cls.outside.mkdir()
+        write_rehearsal_env(installation, rehearsal_data, api_port, OCR_SERVICE="ocr", SANDBOX_DIR=str(sandbox))
+        ocr_setup = {
+            "image": f"{REHEARSAL_PROJECT}-ocr:latest",
+            "network_mode": "none",
+            "volumes": [{"type": "bind", "source": str(cls.outside), "target": "/opt/sandbox"}],
+        }
+        resolved = json.dumps({"name": REHEARSAL_PROJECT, "services": {"ocr-setup": ocr_setup}})
+        installation.answer_docker(
+            [
+                {"match": r"--env-file \S*/scanmylib-env\.\w+ .*config (--no-interpolate )?--format json$",
+                 "stdout": resolved},
+                NEW_OCR_IMAGE,
+                *build_running_sandbox_rules(str(sandbox), str(rehearsal_data)),
+            ]
+        )  # fmt: skip
+        cls.rehearsal = rehearse(installation, "--new-sandbox")
+        cls.commands = installation.read_docker_commands()
+        cls.is_new_sandbox_made = Path(f"{sandbox}.new").exists()
+
+    def test_should_refuse_since_the_copy_is_not_isolated_from_production(self) -> None:
+        self.assertNotEqual(self.rehearsal.returncode, 0)
+        self.assertIn("the copy of .env that installs the new sandbox is not isolated", self.rehearsal.output)
+
+    def test_should_name_the_mount_outside_the_stack_s_data(self) -> None:
+        self.assertIn(f"bind mount {self.outside} -> /opt/sandbox", self.rehearsal.output)
+
+    def test_should_refuse_before_ocr_setup_runs(self) -> None:
+        self.assertEqual([command for command in self.commands if re.search(INSTALL_SANDBOX, command)], [])
+
+    def test_should_make_no_new_sandbox(self) -> None:
+        self.assertFalse(self.is_new_sandbox_made)
+
+
+class WhenANewSandboxIsRehearsedOnTheStacksOwnSandbox(InstallationTestCase):
+    rehearsal: ClassVar[ScriptRun]
+    commands: ClassVar[list[str]]
+    sandbox_manifest: ClassVar[str | None]
+    replaced_sandboxes: ClassVar[list[str]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        installation = make_installation(cls, ROOM_FOR_A_NEW_SANDBOX)
+        api_port = find_free_port()
+        start_fake_api(cls, api_port)
+        rehearsal_data = installation.directory / "rehearsal"
+        sandbox = rehearsal_data / "sandbox"
+        sandbox.mkdir(parents=True)
+        write_rehearsal_env(installation, rehearsal_data, api_port, OCR_SERVICE="ocr", SANDBOX_DIR=str(sandbox))
+        installation.answer_docker(
+            [
+                build_sandbox_installation(sandbox),
+                NEW_OCR_IMAGE,
+                *build_running_sandbox_rules(str(sandbox), str(rehearsal_data)),
+            ]
+        )
+        cls.rehearsal = rehearse(installation, "--new-sandbox")
+        cls.commands = installation.read_docker_commands()
+        cls.sandbox_manifest = read_text_if_present(sandbox / "MANIFEST.json")
+        cls.replaced_sandboxes = [path.name for path in rehearsal_data.glob("sandbox.replaced-*")]
+
+    def test_should_succeed(self) -> None:
+        self.assertEqual(self.rehearsal.returncode, 0, self.rehearsal.output)
+
+    def test_should_check_that_its_sandboxes_are_not_production_s(self) -> None:
+        self.assertIn("the rehearsal's sandboxes are not production's", self.rehearsal.stdout)
+
+    def test_should_check_that_the_copy_of_env_shares_nothing_with_production_before_ocr_setup_runs(self) -> None:
+        stdout = self.rehearsal.stdout
+        copy_checked = stdout.index("the copy of .env that installs the new sandbox shares nothing with production")
+        self.assertLess(copy_checked, stdout.index("--profile setup run --rm -T --pull never ocr-setup"))
+
+    def test_should_run_the_new_sandbox_in_sandbox_dir(self) -> None:
+        self.assertEqual(self.sandbox_manifest, NEW_MANIFEST)
+
+    def test_should_keep_the_stack_s_empty_sandbox_aside(self) -> None:
+        self.assertEqual(len(self.replaced_sandboxes), 1)
+
+    def test_should_say_to_deploy_the_previous_release_again_as_a_rehearsal(self) -> None:
+        command = f"\n  SCANMYLIB_DEPLOY_REHEARSAL={REHEARSAL_PROJECT} scripts/deploy.sh --allow-downgrade\n"
+        self.assertIn(command, self.rehearsal.stdout)
+
+
+class WhenANewSandboxIsRehearsedOnTheFakeOcr(InstallationTestCase):
+    rehearsal: ClassVar[ScriptRun]
+    writing_calls: ClassVar[list[list[str]]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        installation = make_installation(cls, ROOM_FOR_A_NEW_SANDBOX)
+        write_rehearsal_env(installation, installation.directory / "rehearsal", find_free_port())
+        cls.rehearsal = rehearse(installation, "--new-sandbox")
+        cls.writing_calls = list_writing_calls(installation.read_docker_calls())
+
+    def test_should_refuse_since_the_fake_ocr_runs_no_sandbox(self) -> None:
+        self.assertNotEqual(self.rehearsal.returncode, 0)
+        self.assertIn(
+            "--new-sandbox installs the OCR sandbox, which OCR_SERVICE=ocr-fake does not run", self.rehearsal.output
+        )
+
+    def test_should_only_read_from_docker(self) -> None:
+        self.assertEqual(self.writing_calls, [])
 
 
 class WhenRehearsedWithAnEnvThatPointsAtProduction(InstallationTestCase):

@@ -44,6 +44,14 @@ chooses.
 
   `scripts/setup.sh`, the first installation, runs the isolation check, then the engine check, once it starts the
   services. A failed isolation or engine check stops `ocr`, and a deploy then leaves its images untagged `:deployed`.
+- **A deployment can install a new sandbox, and never deletes one:** with `--new-sandbox`, `scripts/deploy.sh` installs
+  it next to the running one, `SANDBOX_DIR.new`, while production runs, checks the new image against it before the
+  restart, and at the restart renames the running sandbox `SANDBOX_DIR.replaced-<time>` and the new one `SANDBOX_DIR`.
+  It renames only a `SANDBOX_DIR` that holds a sandbox, or nothing, and that neither is nor contains `DATA_DIR`, lies
+  inside it only as `DATA_DIR/sandbox`, and is, contains or lies inside none of `LIBRARY_DIR`, `ANDROID_DIR`,
+  `ANDROID_KEYSTORE_DIR` and the checkout, which a rename would move with it. A failure before the restart leaves
+  production and its sandbox as they were, and one after it prints the renames that undo it. The scripts only rename
+  sandboxes; the user removes a replaced one once a rollback is no longer wanted.
 - **Production's images are built on the current image of each base tag:** `scripts/deploy.sh` and `scripts/setup.sh`
   build with `--pull`, since the builder may otherwise keep using a copy of the tag that the machine pulled long before.
   They keep the build's cache, which a new base invalidates above it, so that the Debian packages an image adds are

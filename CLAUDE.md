@@ -174,7 +174,7 @@ Production runs on this machine, from the main checkout, `~/Dev/scanmylib`, and 
   `.env`, and refuses production without `--production`.
 - `scripts/verify-sandbox.sh`: the isolation of the running `ocr` service.
 - `scripts/release.py`: the next release, why, and the draft of its notes; the `release` skill runs it.
-- For the user, in the main checkout: `scripts/deploy.sh --dry-run`, then `scripts/deploy.sh [--apk]`;
+- For the user, in the main checkout: `scripts/deploy.sh --dry-run`, then `scripts/deploy.sh [--apk] [--new-sandbox]`;
   `scripts/prod.sh compose COMMAND...`; `scripts/setup.sh` for a first installation.
 
 ## Rules

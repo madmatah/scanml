@@ -210,9 +210,11 @@ services:
   # One-shot installer (profile "setup"): the only OCR container with network.
   # It sees nothing but the sandbox dir, where it installs packages and models,
   # read-write: SANDBOX_SETUP_DIR, which only production's .env sets (written by
-  # scripts/setup.sh), never a worktree's, whose stack mounts production's
-  # SANDBOX_DIR read-only. Without it, the bind source below does not exist and
-  # the container cannot start.
+  # scripts/setup.sh), never a worktree's, whose stack mounts its SANDBOX_DIR
+  # read-only; or the temporary copy of a .env with which scripts/deploy.sh
+  # --new-sandbox installs a new sandbox next to the running one, SANDBOX_DIR.new.
+  # Without it, the bind source below does not exist and the container cannot
+  # start.
   ocr-setup:
     profiles: ["setup"]
     build: *ocr-build

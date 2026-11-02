@@ -175,7 +175,7 @@ def start_fake_api(test_case: type[unittest.TestCase], port: int) -> FakeApi:
 
 
 class Installation:
-    def __init__(self, directory: Path) -> None:
+    def __init__(self, directory: Path, edits: Mapping[str, tuple[str, str]] | None = None) -> None:
         self.directory = directory
         self.home = directory / "home"
         self.tools = directory / "bin"
@@ -197,7 +197,7 @@ class Installation:
         (self.tools / "docker").chmod(0o755)
         self.answer_docker([])
         self._make_production_data()
-        self._make_repositories()
+        self._make_repositories(edits or {})
 
     def _make_production_data(self) -> None:
         state = self.production_data / "state"
@@ -216,7 +216,7 @@ class Installation:
         (keystore / "password").write_text("secret")
         self.library.mkdir()
 
-    def _make_repositories(self) -> None:
+    def _make_repositories(self, edits: Mapping[str, tuple[str, str]]) -> None:
         self.production_checkout.parent.mkdir(parents=True)
         self.run_git(self.directory, "init", "--quiet", "--bare", "--initial-branch=main", str(self.origin))
         self.run_git(self.directory, "init", "--quiet", "--initial-branch=main", str(self.production_checkout))
@@ -224,6 +224,12 @@ class Installation:
             target = self.production_checkout / name
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(REPO / name, target)
+        for name, (old, new) in edits.items():
+            target = self.production_checkout / name
+            text = target.read_text()
+            if old not in text:
+                raise ValueError(f"{old!r} is not in {name}: the edit would change nothing")
+            target.write_text(text.replace(old, new, 1))
         self.run_git(self.production_checkout, "add", "--all")
         self.run_git(self.production_checkout, "commit", "--quiet", "--message", "Initial commit")
         # The release VERSION, as .github/workflows/release.yml publishes it.
@@ -366,10 +372,14 @@ class UncleanCheckout:
     refusal: str
 
 
-def make_installation(test_case: type[InstallationTestCase]) -> Installation:
+def make_installation(
+    test_case: type[InstallationTestCase], edits: Mapping[str, tuple[str, str]] | None = None
+) -> Installation:
+    """An installation whose release holds the scripts of this checkout, with `edits` made to them, each an old text
+    replaced by a new one, such as a bound that a test's own disk cannot meet."""
     directory = tempfile.TemporaryDirectory(prefix="scanmylib-scripts-")
     test_case.addClassCleanup(directory.cleanup)
-    return Installation(Path(os.path.realpath(directory.name)))
+    return Installation(Path(os.path.realpath(directory.name)), edits)
 
 
 def build_running_sandbox_rules(

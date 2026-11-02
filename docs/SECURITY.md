@@ -22,17 +22,22 @@ content into its results.
 | the children's output escaped where the supervisor relays it | the stdout and stderr of vLLM and of the worker, and the error texts quoted from them, reach `docker logs` and the engine check with each character that is not printable written as an escape: the text the engine's libraries or the model print, control sequences from a page's content included, cannot act on an operator's terminal. A process that runs its own code in the sandbox can still write to the container's output directly, so the `ocr` container's log stays untrusted output |
 | GPU through CDI only | the only device exposed |
 
-On the machine, downloads (packages, models) are made **only once** by
-`ocr-setup`, which has network access but only sees the sandbox directory,
+On the machine, downloads (packages, models) are made **only by `ocr-setup`, at
+an installation**, which has network access but only sees the sandbox directory,
 read-write: `SANDBOX_SETUP_DIR`, which only production's `.env` sets
 (`scripts/setup.sh`). A development stack mounts production's `SANDBOX_DIR`
 read-only, or with `scripts/dev-env.sh --own-sandbox` a sandbox of its own
 inside its `DATA_DIR`, read-only too, and cannot run `ocr-setup` (its bind
-source does not exist). Pinned
-versions: `paddlepaddle-gpu==3.2.1`, `paddleocr==3.7.0` and `vllm==0.31.0`, in
-`ocr/setup/requirements-paddle.in` and `ocr/setup/requirements-vllm.in`, and
-the models by Hugging Face commit, in `ocr/setup/install.sh` (what is installed:
-`SANDBOX_DIR/MANIFEST.json`).
+source does not exist). `scripts/deploy.sh --new-sandbox` installs a new sandbox
+next to the running one, `SANDBOX_DIR.new`, through a temporary copy of the
+stack's `.env` that changes only `SANDBOX_SETUP_DIR`; in a rehearsal, that copy
+passes the development stack's isolation checks before `ocr-setup` runs, and the
+sandboxes it renames must not be production's. What `ocr-setup` prints is
+untrusted: it runs without a terminal and its output goes through `cat -v`.
+Pinned versions: `paddlepaddle-gpu==3.2.1`, `paddleocr==3.7.0` and
+`vllm==0.31.0`, in `ocr/setup/requirements-paddle.in` and
+`ocr/setup/requirements-vllm.in`, and the models by Hugging Face commit, in
+`ocr/setup/install.sh` (what is installed: `SANDBOX_DIR/MANIFEST.json`).
 No Paddle code runs during this network phase: the models are fetched with
 `huggingface_hub`.
 

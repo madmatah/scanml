@@ -10,6 +10,7 @@ import io
 import json
 import os
 import re
+import shutil
 import sys
 import tempfile
 import types
@@ -363,6 +364,60 @@ class TheReadEnvFunctionWhenTheFileIsMissing(unittest.TestCase):
 
     def test_should_refuse_it_naming_it(self) -> None:
         self.assertRaisesRegex(stack.EnvError, re.escape(f"{self.missing_path}: "), self.read)
+
+
+class TheSetEnvValuesFunctionWhenAKeyIsSetOrAdded(unittest.TestCase):
+    def setUp(self) -> None:
+        values = {"COMPOSE_PROJECT_NAME": "scanmylib", "SANDBOX_SETUP_DIR": "/data/a", "API_PORT": "8765"}
+        self.changed = stack.set_env_values(values, ["SANDBOX_SETUP_DIR=/data/a.new", "OCR_SERVICE=ocr"])
+
+    def test_should_replace_the_value_of_the_key_in_its_place_add_the_new_key_and_keep_the_rest(self) -> None:
+        self.assertEqual(
+            list(self.changed.items()),
+            [
+                ("COMPOSE_PROJECT_NAME", "scanmylib"),
+                ("SANDBOX_SETUP_DIR", "/data/a.new"),
+                ("API_PORT", "8765"),
+                ("OCR_SERVICE", "ocr"),
+            ],
+        )
+
+
+class TheSetEnvValuesFunctionWhenASettingWouldReadDifferentlyInDockerCompose(unittest.TestCase):
+    #: The lines that read_env refuses, each given as a setting: one that holds a line break more is refused as such.
+    settings: ClassVar[Mapping[str, tuple[str, str]]] = types.MappingProxyType(
+        {
+            row: (
+                text.removesuffix("\n"),
+                "one KEY=VALUE line only" if re.search(r"[\n\r]", text.removesuffix("\n")) else reason,
+            )
+            for row, (text, reason) in TheReadEnvFunctionWhenALineWouldReadDifferentlyInDockerCompose.lines.items()
+        }
+        | {"a key that changes what docker compose does": ("COMPOSE_FILE=x", "would change what docker compose does")}
+    )
+
+    def setUp(self) -> None:
+        self.setting_acts = {
+            row: functools.partial(stack.set_env_values, {"COMPOSE_PROJECT_NAME": "scanmylib-dev"}, [setting])
+            for row, (setting, _) in self.settings.items()
+        }
+
+    def test_should_refuse_it_saying_why_so_that_a_copy_of_env_never_reads_otherwise_in_docker_compose(self) -> None:
+        for row, (_, reason) in self.settings.items():
+            with self.subTest(row):
+                self.assertRaisesRegex(stack.EnvError, re.escape(reason), self.setting_acts[row])
+
+
+class TheMainFunctionWhenAskedForACopyOfAnEnvWithAKeySet(unittest.TestCase):
+    def setUp(self) -> None:
+        path = write_env(make_directory(self) / ".env", "# comment\nA=1\nB=2\n")
+        output = io.StringIO()
+        with redirect_stdout(output):
+            self.exit_code = stack.main(["env", str(path), "--set", "A=3"])
+        self.printed = output.getvalue()
+
+    def test_should_print_its_lines_with_the_new_value(self) -> None:
+        self.assertEqual((self.exit_code, self.printed), (0, "A=3\nB=2\n"))
 
 
 class TheNormalizeImageFunction(unittest.TestCase):
@@ -1444,6 +1499,246 @@ class TheComposeCommandProblemsFunctionWhenProductionWouldChangeOtherwiseThanThr
         for row, (_, expected) in self.commands.items():
             with self.subTest(row):
                 self.assertIn(expected, "".join(self.problems[row][:1]), self.problems[row])
+
+
+STAMP = "20261103-120000"
+MANIFEST = '{"generated_at": "2026-11-03T12:00:00"}'
+
+
+@dataclass(frozen=True)
+class SandboxLayout:
+    directory: Path
+    data_dir: Path
+    library_dir: Path
+    android_dir: Path
+    checkout: Path
+
+    @property
+    def other_paths(self) -> dict[str, str]:
+        return {
+            "LIBRARY_DIR": str(self.library_dir),
+            "ANDROID_DIR": str(self.android_dir),
+            "the checkout": str(self.checkout),
+        }
+
+
+def make_sandbox_layout(test: unittest.TestCase) -> SandboxLayout:
+    directory = make_directory(test)
+    layout = SandboxLayout(directory, directory / "data", directory / "library", directory / "data" / "android",
+                           directory / "checkout")  # fmt: skip
+    for path in (layout.data_dir / "sandbox", layout.library_dir, layout.android_dir, layout.checkout):
+        path.mkdir(parents=True)
+    (layout.data_dir / "sandbox" / "MANIFEST.json").write_text(MANIFEST)
+    return layout
+
+
+def find_new_sandbox_problems(
+    layout: SandboxLayout, sandbox_dir: str, stamp: str = STAMP, needed_bytes: int = 0
+) -> tuple[stack.NewSandbox, list[str]]:
+    return stack.find_new_sandbox_problems(
+        sandbox_dir, stamp, needed_bytes, data_dir=str(layout.data_dir), other_paths=layout.other_paths
+    )
+
+
+class TheFindNewSandboxProblemsFunctionWhenTheSandboxCanBeReplaced(unittest.TestCase):
+    def setUp(self) -> None:
+        self.layout = make_sandbox_layout(self)
+        self.sandbox, self.problems = find_new_sandbox_problems(self.layout, f"{self.layout.data_dir}/sandbox/")
+
+    def test_should_find_none(self) -> None:
+        self.assertEqual(self.problems, [])
+
+    def test_should_install_the_new_sandbox_next_to_it_even_when_its_path_ends_with_a_slash(self) -> None:
+        self.assertEqual(self.sandbox.new, f"{self.layout.data_dir}/sandbox.new")
+
+    def test_should_name_the_replaced_sandbox_after_the_deployment(self) -> None:
+        self.assertEqual(self.sandbox.replaced, f"{self.layout.data_dir}/sandbox.replaced-{STAMP}")
+
+
+class TheFindNewSandboxProblemsFunctionWhenTheSandboxIsAnEmptyDirectory(unittest.TestCase):
+    def setUp(self) -> None:
+        layout = make_sandbox_layout(self)
+        (layout.data_dir / "sandbox" / "MANIFEST.json").unlink()
+        self.problems = find_new_sandbox_problems(layout, f"{layout.data_dir}/sandbox")[1]
+
+    def test_should_find_none_so_that_a_stack_s_own_sandbox_created_empty_gets_its_first_one(self) -> None:
+        self.assertEqual(self.problems, [])
+
+
+class TheFindNewSandboxProblemsFunctionWhenTheSandboxLiesOutsideDataDir(unittest.TestCase):
+    def setUp(self) -> None:
+        layout = make_sandbox_layout(self)
+        (layout.directory / "sandbox").mkdir()
+        self.problems = find_new_sandbox_problems(layout, f"{layout.directory}/sandbox")[1]
+
+    def test_should_find_none_since_it_shares_nothing_with_production_s_other_paths(self) -> None:
+        self.assertEqual(self.problems, [])
+
+
+class TheFindNewSandboxProblemsFunctionWhenTheSandboxCannotBeReplaced(unittest.TestCase):
+    def setUp(self) -> None:
+        layout = make_sandbox_layout(self)
+        directory = layout.directory
+        for name in ("linked", "left", "replaced", "not-a-sandbox"):
+            (directory / name).mkdir()
+            (directory / name / "MANIFEST.json").write_text(MANIFEST)
+        (directory / "not-a-sandbox" / "MANIFEST.json").rename(directory / "not-a-sandbox" / "scanmylib.db")
+        (layout.data_dir / "state").mkdir()
+        (layout.data_dir / "state" / "MANIFEST.json").write_text(MANIFEST)
+        (directory / "file").write_text("x")
+        (directory / "link").symlink_to(directory / "linked")
+        for name in ("left", "left-with-a-log", "left-with-a-link"):
+            (directory / f"{name}.new").mkdir()
+            (directory / name).mkdir(exist_ok=True)
+            (directory / name / "MANIFEST.json").write_text(MANIFEST)
+        (directory / "left-with-a-log.new" / "setup.log").write_text("the installation's log\n")
+        (directory / "left-with-a-link.new" / "setup.log").symlink_to(layout.data_dir / "sandbox" / "MANIFEST.json")
+        (directory / f"replaced.replaced-{STAMP}").mkdir()
+        rows = {
+            "a relative path": ("sandbox", STAMP, 0, "is not an absolute path"),
+            "a missing directory": (f"{directory}/missing", STAMP, 0, "does not exist"),
+            "a file": (f"{directory}/file", STAMP, 0, "is not a directory"),
+            "a symbolic link, which a rename would move instead": (f"{directory}/link", STAMP, 0, "symbolic link"),
+            "a mount point, which a rename cannot move": ("/proc", STAMP, 0, "is a mount point"),
+            "a directory that is neither a sandbox nor empty": (
+                f"{directory}/not-a-sandbox",
+                STAMP,
+                0,
+                "holds no MANIFEST.json and is not empty",
+            ),
+            "DATA_DIR, whose database a rename would move": (str(layout.data_dir), STAMP, 0, "is or contains DATA_DIR"),
+            "a parent of DATA_DIR": (str(directory), STAMP, 0, "is or contains DATA_DIR"),
+            "a directory of DATA_DIR other than DATA_DIR/sandbox": (
+                f"{layout.data_dir}/state",
+                STAMP,
+                0,
+                "lies inside DATA_DIR",
+            ),
+            "LIBRARY_DIR": (str(layout.library_dir), STAMP, 0, "is, contains or lies inside LIBRARY_DIR"),
+            "a directory inside the checkout": (
+                f"{layout.checkout}/ocr",
+                STAMP,
+                0,
+                "is, contains or lies inside the checkout",
+            ),
+            "a new sandbox left from an earlier installation": (
+                f"{directory}/left",
+                STAMP,
+                0,
+                "left from an earlier installation",
+            ),
+            "a new sandbox left with its log": (
+                f"{directory}/left-with-a-log",
+                STAMP,
+                0,
+                "left from an earlier installation: read its setup.log through cat -v",
+            ),
+            "a new sandbox left with a link for its log, which reading would follow": (
+                f"{directory}/left-with-a-link",
+                STAMP,
+                0,
+                "left from an earlier installation, without a regular setup.log to read",
+            ),
+            "a replaced sandbox of the same name": (f"{directory}/replaced", STAMP, 0, "exists already"),
+            "a stamp that is not a time": (f"{layout.data_dir}/sandbox", "../x", 0, "is not YYYYMMDD-HHMMSS"),
+            "more free space needed than the filesystem holds": (
+                f"{layout.data_dir}/sandbox",
+                STAMP,
+                shutil.disk_usage(directory).total + 1,
+                "GiB free, and a new sandbox needs",
+            ),
+        }
+        (layout.checkout / "ocr").mkdir()
+        self.reasons = {row: reason for row, (*_, reason) in rows.items()}
+        self.problems = {
+            row: find_new_sandbox_problems(layout, path, stamp, needed_bytes)[1]
+            for row, (path, stamp, needed_bytes, _) in rows.items()
+        }
+
+    def test_should_refuse_it_saying_why(self) -> None:
+        self.assertEqual(sorted(self.problems), sorted(self.reasons))
+        for row, reason in self.reasons.items():
+            with self.subTest(row):
+                self.assertTrue(mentions(self.problems[row], reason), self.problems[row])
+
+
+class TheFindNewSandboxProblemsFunctionWhenAnotherPathOfTheStackForbidsIt(unittest.TestCase):
+    def setUp(self) -> None:
+        layout = make_sandbox_layout(self)
+        android_outside = layout.directory / "android"
+        (android_outside / "sandbox").mkdir(parents=True)
+        rows = {
+            "inside an ANDROID_DIR outside DATA_DIR": (
+                {"ANDROID_DIR": str(android_outside)},
+                f"{android_outside}/sandbox",
+                f"is, contains or lies inside ANDROID_DIR ({android_outside})",
+            ),
+            "next to another path that is relative": (
+                {"LIBRARY_DIR": "library"},
+                f"{layout.data_dir}/sandbox",
+                "LIBRARY_DIR: 'library' is not an absolute path",
+            ),
+        }
+        self.reasons = {row: reason for row, (*_, reason) in rows.items()}
+        self.problems = {
+            row: stack.find_new_sandbox_problems(
+                sandbox_dir, STAMP, 0, data_dir=str(layout.data_dir), other_paths=other_paths
+            )[1]
+            for row, (other_paths, sandbox_dir, _) in rows.items()
+        }
+
+    def test_should_refuse_it_saying_why(self) -> None:
+        self.assertEqual(sorted(self.problems), sorted(self.reasons))
+        for row, reason in self.reasons.items():
+            with self.subTest(row):
+                self.assertTrue(mentions(self.problems[row], reason), self.problems[row])
+
+
+@unittest.skipIf(os.geteuid() == 0, "root writes to a directory whatever its mode")
+class TheFindNewSandboxProblemsFunctionWhenThisUserCannotWriteToItsParent(unittest.TestCase):
+    def setUp(self) -> None:
+        layout = make_sandbox_layout(self)
+        parent = layout.directory / "parent"
+        (parent / "sandbox").mkdir(parents=True)
+        parent.chmod(0o555)
+        self.addCleanup(parent.chmod, 0o755)
+        self.problems = find_new_sandbox_problems(layout, f"{parent}/sandbox")[1]
+
+    def test_should_refuse_it_since_the_new_sandbox_goes_there(self) -> None:
+        self.assertTrue(mentions(self.problems, "this user cannot write to"), self.problems)
+
+
+def run_check_new_sandbox(layout: SandboxLayout, sandbox_dir: str) -> tuple[int, str, str]:
+    output, errors = io.StringIO(), io.StringIO()
+    others = [f"--other-path={name}={path}" for name, path in layout.other_paths.items()]
+    arguments = ["check-new-sandbox", sandbox_dir, "--stamp", STAMP, "--needed-bytes", "0", "--data-dir",
+                 str(layout.data_dir), *others]  # fmt: skip
+    with redirect_stdout(output), redirect_stderr(errors):
+        exit_code = stack.main(arguments)
+    return exit_code, output.getvalue(), errors.getvalue()
+
+
+class TheMainFunctionWhenAskedWhereANewSandboxGoes(unittest.TestCase):
+    def setUp(self) -> None:
+        self.layout = make_sandbox_layout(self)
+        self.exit_code, self.printed, _ = run_check_new_sandbox(self.layout, f"{self.layout.data_dir}/sandbox")
+
+    def test_should_print_the_new_and_the_replaced_sandbox(self) -> None:
+        data_dir = self.layout.data_dir
+        self.assertEqual(
+            (self.exit_code, self.printed),
+            (0, f"NEW={data_dir}/sandbox.new\nREPLACED={data_dir}/sandbox.replaced-{STAMP}\n"),
+        )
+
+
+class TheMainFunctionWhenANewSandboxCannotGoNextToTheSandbox(unittest.TestCase):
+    def setUp(self) -> None:
+        layout = make_sandbox_layout(self)
+        self.exit_code, self.printed, self.error_text = run_check_new_sandbox(layout, str(layout.library_dir))
+
+    def test_should_fail_printing_no_path_and_saying_why(self) -> None:
+        self.assertEqual((self.exit_code, self.printed), (1, ""))
+        self.assertIn("is, contains or lies inside LIBRARY_DIR", self.error_text)
 
 
 def build_sandbox_service(**settings: object) -> stack.JsonObject:

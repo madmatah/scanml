@@ -20,7 +20,7 @@ RUN apt-get update \
 # runs pip once uv is in: left in, it would only add its advisories to the
 # vulnerability scan, and so would the wheel of pip that ensurepip keeps to
 # install it again.
-RUN pip install --no-cache-dir uv==0.10.9 \
+RUN pip install --no-cache-dir uv==0.13.4 \
  && python3 -m pip uninstall --yes pip \
  && rm /usr/local/lib/python3.12/ensurepip/_bundled/pip-*.whl
 

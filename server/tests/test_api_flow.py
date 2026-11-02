@@ -332,6 +332,21 @@ class PagesWrittenAtStart:
     written_page_ids: list[str]
 
 
+@dataclass(frozen=True)
+class EmptyDocumentPatch:
+    answer: Answer
+    document_before: dict[str, Any]
+    documents_before: list[dict[str, Any]]
+    documents_after: list[dict[str, Any]]
+
+
+@dataclass(frozen=True)
+class PagePatchWithItsRotation:
+    answer: Answer
+    documents_before: list[dict[str, Any]]
+    documents_after: list[dict[str, Any]]
+
+
 @pytest.fixture(scope="module")
 def document_lifecycle(tmp_path_factory: pytest.TempPathFactory) -> DocumentLifecycle:
     with running_api(tmp_path_factory.mktemp("api")) as api:
@@ -712,6 +727,32 @@ class TestADocument:
             self, invalid_document_requests: InvalidDocumentRequests
         ) -> None:
             assert invalid_document_requests.unknown_document_with_an_empty_title_status == 404
+
+    class TestWhenItIsPatchedWithNoField:
+        @pytest.fixture(scope="class")
+        @classmethod
+        def empty_patch(cls, tmp_path_factory: pytest.TempPathFactory) -> EmptyDocumentPatch:
+            with running_api(tmp_path_factory.mktemp("api")) as api:
+                client = api.client
+                document_id = create_document(client)
+                create_document(client, "Example Book")
+                documents_before = client.get("/api/documents", headers=AUTH).json()["documents"]
+                document_before = {document["id"]: document for document in documents_before}[document_id]
+                answer = capture_answer(client.patch(f"/api/documents/{document_id}", json={}, headers=AUTH))
+                return EmptyDocumentPatch(
+                    answer=answer,
+                    document_before=document_before,
+                    documents_before=documents_before,
+                    documents_after=client.get("/api/documents", headers=AUTH).json()["documents"],
+                )
+
+        def test_should_answer_the_document_as_it_was(self, empty_patch: EmptyDocumentPatch) -> None:
+            assert (empty_patch.answer.status, empty_patch.answer.body) == (200, empty_patch.document_before)
+
+        def test_should_leave_the_list_of_documents_as_it_was_since_nothing_of_it_changed(
+            self, empty_patch: EmptyDocumentPatch
+        ) -> None:
+            assert empty_patch.documents_after == empty_patch.documents_before
 
     class TestWhenABookIsCreatedWithoutSayingWhetherToUnwarpIt:
         def test_should_unwarp_its_pages(self, new_documents: NewDocuments) -> None:
@@ -1491,6 +1532,43 @@ class TestAPage:
 
             def test_should_turn_its_thumbnail(self, rotated_page: RotatedPage) -> None:
                 assert rotated_page.thumbnail_size_after == rotated_page.thumbnail_size_before[::-1]
+
+    class TestWhenItIsPatchedWithTheRotationItHas:
+        CURRENT_ROTATION_DEGREES = 0
+
+        @pytest.fixture(scope="class")
+        @classmethod
+        def patch_with_its_rotation(cls, tmp_path_factory: pytest.TempPathFactory) -> PagePatchWithItsRotation:
+            with running_api(tmp_path_factory.mktemp("api")) as api:
+                client = api.client
+                document_id = create_document(client)
+                page = upload(client, document_id, jpeg()).json()
+                wait_until_processed(client, document_id)
+                create_document(client, "Example Book")
+                documents_before = client.get("/api/documents", headers=AUTH).json()["documents"]
+                answer = capture_answer(
+                    client.patch(
+                        f"/api/pages/{page['id']}", json={"rotation": cls.CURRENT_ROTATION_DEGREES}, headers=AUTH
+                    )
+                )
+                return PagePatchWithItsRotation(
+                    answer=answer,
+                    documents_before=documents_before,
+                    documents_after=client.get("/api/documents", headers=AUTH).json()["documents"],
+                )
+
+        def test_should_leave_it_read_since_its_orientation_did_not_change(
+            self, patch_with_its_rotation: PagePatchWithItsRotation
+        ) -> None:
+            assert (patch_with_its_rotation.answer.status, patch_with_its_rotation.answer.body["status"]) == (
+                200,
+                "done",
+            )
+
+        def test_should_leave_the_list_of_documents_as_it_was_since_nothing_of_its_document_changed(
+            self, patch_with_its_rotation: PagePatchWithItsRotation
+        ) -> None:
+            assert patch_with_its_rotation.documents_after == patch_with_its_rotation.documents_before
 
     class TestWhenItIsReprocessed:
         def test_should_queue_it_again(self, reprocessed_page: ReprocessedPage) -> None:

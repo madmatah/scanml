@@ -9,10 +9,10 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
-from .application.clock import Clock
-from .application.library_files import PublishedFiles
-from .domain import assemble, timestamps
-from .domain.records import DocumentRecord, PageRecord
+from ..domain import assemble, timestamps
+from ..domain.records import DocumentRecord, PageRecord
+from .clock import Clock
+from .library_files import PublishedFiles
 
 
 def _meta(document: DocumentRecord) -> assemble.DocumentMeta:

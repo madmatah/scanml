@@ -9,10 +9,10 @@ from typing import Annotated
 from fastapi import Depends, HTTPException, Request
 
 from ..adapters.http_api.preview import HtmlPreviews
+from ..application.library import LibraryService
 from ..application.ocr_engine import OcrEngineMonitor
 from ..auth import Authenticator
 from ..config import Settings
-from ..library import LibraryService
 
 UUID_PATTERN = r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
 _UUID = re.compile(UUID_PATTERN)

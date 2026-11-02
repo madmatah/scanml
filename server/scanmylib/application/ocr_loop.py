@@ -6,11 +6,11 @@ import asyncio
 import contextlib
 import logging
 
-from .application.ocr_engine import OcrEngine, OcrPageFailed, OcrPageRejected, OcrResultError, OcrUnavailable
-from .application.scan_images import ImageRejected, OcrImages
-from .domain.pages import should_detect_orientation
-from .domain.records import PageClaim
+from ..domain.pages import should_detect_orientation
+from ..domain.records import PageClaim
 from .library import LibraryService
+from .ocr_engine import OcrEngine, OcrPageFailed, OcrPageRejected, OcrResultError, OcrUnavailable
+from .scan_images import ImageRejected, OcrImages
 
 log = logging.getLogger(__name__)
 

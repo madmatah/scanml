@@ -1,4 +1,4 @@
-"""Debounced rewrites of the library files (debounce.py): batching and retries."""
+"""Debounced rewrites of the library files (application/debounce.py): batching and retries."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from typing import NamedTuple
 
 import pytest
 
-from scanmylib.debounce import BatchAction, DebouncedBatch
+from scanmylib.application.debounce import BatchAction, DebouncedBatch
 
 THE_INDEX = "index"
 

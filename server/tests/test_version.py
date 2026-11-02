@@ -6,9 +6,11 @@ from pathlib import Path
 
 import pytest
 
-from scanmylib import read_version
+import scanmylib
+from scanmylib import VERSION_FILE, read_version
 
 UNKNOWN = "unknown"
+PACKAGE_DIRECTORY = Path(scanmylib.__file__).resolve().parent
 
 
 def write_version_file(folder: Path, content: str) -> Path:
@@ -71,3 +73,7 @@ class TestTheVersion:
 
             def test_should_report_an_unknown_version(self, version: str) -> None:
                 assert version == UNKNOWN
+
+    class TestTheVersionFileConstant:
+        def test_should_name_the_file_beside_the_package_where_the_image_build_copies_the_version(self) -> None:
+            assert VERSION_FILE == PACKAGE_DIRECTORY.parent / "VERSION"

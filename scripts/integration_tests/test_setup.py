@@ -162,7 +162,7 @@ class WhenTheFirstInstallationCompletes(InstallationTestCase):
         self,
     ) -> None:
         self.assertEqual(len(self.compose_builds), 1)
-        self.assertRegex(self.compose_builds[0], r" build --pull api ocr$")
+        self.assertRegex(self.compose_builds[0], r" --profile setup build --pull api ocr ocr-setup$")
 
     def test_should_check_the_engine_s_environment_in_the_new_sandbox(self) -> None:
         self.assertIn(ENGINE_CHECK, self.commands)
@@ -185,7 +185,7 @@ class WhenTheFirstInstallationInstallsTheSandbox(InstallationTestCase):
     def setUpClass(cls) -> None:
         installation = make_installation(cls)
         (installation.production_data / "sandbox" / "MANIFEST.json").unlink()
-        installing: list[Rule] = [{"match": r" ocr-setup$", "stdout": SANDBOX_OUTPUT, "stderr": SANDBOX_OUTPUT}]
+        installing: list[Rule] = [{"match": INSTALL_SANDBOX, "stdout": SANDBOX_OUTPUT, "stderr": SANDBOX_OUTPUT}]
         cls.setup_run = install_for_the_first_time(installation, installing)
         cls.commands = installation.read_docker_commands()
 

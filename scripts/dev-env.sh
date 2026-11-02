@@ -2,7 +2,7 @@
 # Writes the .env of this worktree for the development stack: the single development slot that
 # runs next to production, one at a time, from any worktree (see CLAUDE.md).
 #
-#   COMPOSE_PROJECT_NAME=scanmylib-dev   containers scanmylib-dev-*, images scanmylib-dev-api/-ocr
+#   COMPOSE_PROJECT_NAME=scanmylib-dev   containers scanmylib-dev-*, images scanmylib-dev-api/-ocr/-ocr-setup
 #   API_PORT=8770                        web UI and phone API (production: 8765)
 #   DATA_DIR=<production DATA_DIR>-dev   its own state, socket, caches, APK, logs and a test library
 #                                        (LIBRARY_DIR=$DATA_DIR/library), never the user's library

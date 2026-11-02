@@ -16,8 +16,8 @@ organize the results on disk as Markdown + illustrations that AI agents can read
 
 | Component | Where | Trust | Network | Sees |
 |---|---|---|---|---|
-| `ocr` (sandbox) | `ocr/` → image `scanmylib-ocr` | **untrusted** (Paddle, vLLM, model code) | **none** (only `lo`) | `/opt/sandbox` (ro: venvs+models), `/run/scanmylib` (socket), `/var/cache/ocr` (rw cache), tmpfs `/tmp` |
-| `ocr-setup` | same image, profile `setup` | untrusted | yes (downloads only) | only `/opt/sandbox` (rw: `SANDBOX_SETUP_DIR`, set in production's `.env` only, or `SANDBOX_DIR.new` through the temporary copy of `.env` of `scripts/deploy.sh --new-sandbox`) |
+| `ocr` (sandbox) | `ocr/` → image `scanmylib-ocr` (its runtime target: no uv, no pip) | **untrusted** (Paddle, vLLM, model code) | **none** (only `lo`) | `/opt/sandbox` (ro: venvs+models), `/run/scanmylib` (socket), `/var/cache/ocr` (rw cache), tmpfs `/tmp` |
+| `ocr-setup` | `ocr/` → image `scanmylib-ocr-setup` (its setup target: the same base, with uv and the installer), profile `setup` | untrusted | yes (downloads only) | only `/opt/sandbox` (rw: `SANDBOX_SETUP_DIR`, set in production's `.env` only, or `SANDBOX_DIR.new` through the temporary copy of `.env` of `scripts/deploy.sh --new-sandbox`) |
 | `api` | `server/` → image `scanmylib-api` | ours | LAN (published port) | `/library`, `/state`, `/run/scanmylib`, `/app-dist` (ro) |
 | `ocr-fake` (development only) | api image, profile `fake-ocr`: canned results instead of `ocr`; refuses the production project and a socket that a sandbox serves | ours | **none** | `/run/scanmylib` (socket), tmpfs `/tmp` |
 | Android app | `android/` | ours | LAN | its own app storage |

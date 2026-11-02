@@ -67,7 +67,7 @@ RELEASE_TAGS_ALONE = Tags(f"v{VERSION}\n", (f"refs/tags/v{VERSION}", f"refs/tags
 REHEARSAL_PROJECT = "scanmylib-review-test"
 REHEARSAL_ENVIRONMENT = MappingProxyType({"SCANMYLIB_DEPLOY_REHEARSAL": REHEARSAL_PROJECT})
 REHEARSED_APP_VERSION = "0.2.4-dev+g1a2b3c4d5e6f.dirty"
-COMPOSE_BUILD = r"^compose .* build (--[a-z-]+ )*api ocr$"
+COMPOSE_BUILD = r"^compose .* build (--[a-z-]+ )*api ocr( ocr-setup)?$"
 SANDBOX_CHECK = rf"^run .* python3 -m {re.escape(ENGINE_CHECK_MODULE)}$"
 SANDBOX_CHECK_NAME = re.compile(r"scanmylib-sandbox-check-\d{8}-\d{6}")
 #: What keeps the check of the sandbox before the restart as isolated as the ocr service, after its --name.
@@ -1138,6 +1138,9 @@ class WhenTheReleaseIsDeployedWithANewSandbox(InstallationTestCase):
 
     def test_should_succeed(self) -> None:
         self.assertEqual(self.deploy_run.returncode, 0, self.deploy_run.output)
+
+    def test_should_build_the_setup_image_with_the_others_since_only_it_holds_the_installer(self) -> None:
+        self.assertRegex(find_compose_build(self.commands), r" --profile setup build --pull api ocr ocr-setup$")
 
     def test_should_install_the_new_sandbox_with_ocr_setup_from_production_s_checkout_without_a_terminal(self) -> None:
         argv = self.installation_call["argv"]

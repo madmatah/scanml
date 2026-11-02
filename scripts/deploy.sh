@@ -34,7 +34,8 @@
 # checkout as project directory (production's containers record it: scripts/lib/stack.py).
 #
 # Steps:
-#   1. images: api and ocr built from the export, on the current image of each base tag (--pull);
+#   1. images: api and ocr built from the export, and with --new-sandbox ocr-setup, the image that
+#      installs a sandbox, on the current image of each base tag (--pull);
 #      the running containers are not touched. The images production runs keep the tag
 #      <prefix>-<service>:deployed (the images of its containers get it whenever it names another,
 #      e.g. on the first run, or after a deploy that failed once the containers were recreated):
@@ -583,7 +584,13 @@ failed once the containers were recreated: it names the running image again"
     fi
 done
 echo "  the commit ${head_commit:0:12}, exported to $EXPORT"
-COMPOSE_ROOT=$EXPORT run compose build --pull api ocr
+built_services=(api ocr)
+profile_arguments=()
+if ((INSTALLS_NEW_SANDBOX)); then
+    built_services+=(ocr-setup)
+    profile_arguments=(--profile setup)
+fi
+COMPOSE_ROOT=$EXPORT run compose "${profile_arguments[@]}" build --pull "${built_services[@]}"
 # A failure puts :latest back on the previous image before it prints the check to run by hand: both name the new one.
 NEW_OCR_IMAGE=$IMAGE_PREFIX-ocr:latest
 if [[ $OCR_SERVICE == ocr ]] && ! ((DRY_RUN)); then

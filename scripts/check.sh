@@ -191,7 +191,7 @@ check_server() {
 
 check_ocr() {
     local image
-    image=$(build_image "$ROOT/ocr")
+    image=$(build_image --target runtime "$ROOT/ocr")
     run_tool --init --tmpfs /tmp -v "$ROOT/ocr:/app:ro" "$image" python3 -m unittest discover -s /app/tests
 }
 

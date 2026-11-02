@@ -1,5 +1,6 @@
 # Which stack this is comes from .env: COMPOSE_PROJECT_NAME names the containers
-# (<project>-api-1...) and IMAGE_PREFIX the images (<prefix>-api, <prefix>-ocr).
+# (<project>-api-1...) and IMAGE_PREFIX the images (<prefix>-api, <prefix>-ocr,
+# <prefix>-ocr-setup).
 # Production's .env (scanmylib for both) is written by scripts/setup.sh in
 # production's checkout; a worktree's, for the development stack, by
 # scripts/dev-env.sh.
@@ -12,6 +13,7 @@ name: ${COMPOSE_PROJECT_NAME:?no COMPOSE_PROJECT_NAME in .env. In a worktree run
 
 x-ocr-build: &ocr-build
   context: ./ocr
+  target: runtime
   args:
     UID: ${SCANMYLIB_UID:-1000}
     GID: ${SCANMYLIB_GID:-1000}
@@ -217,8 +219,12 @@ services:
   # start.
   ocr-setup:
     profiles: ["setup"]
-    build: *ocr-build
-    image: ${IMAGE_PREFIX:-${COMPOSE_PROJECT_NAME}}-ocr:latest
+    # An image of its own, the only one with uv and the installer, so that the
+    # image the sandbox runs holds neither.
+    build:
+      <<: *ocr-build
+      target: setup
+    image: ${IMAGE_PREFIX:-${COMPOSE_PROJECT_NAME}}-ocr-setup:latest
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
     user: "${SCANMYLIB_UID:-1000}:${SCANMYLIB_GID:-1000}"
@@ -233,4 +239,3 @@ services:
       HOME: /tmp/home
     tmpfs:
       - /tmp:size=8g,mode=1777
-    command: ["bash", "/app/setup/install.sh"]

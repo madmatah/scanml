@@ -295,6 +295,9 @@ class WhenGivenTheWebUiAndTheSandbox(InstallationTestCase):
     def test_should_build_the_image_of_the_sandbox_from_the_worktree(self) -> None:
         self.assertTrue(self.checks[1][-1].endswith(f"{self.worktree}/ocr"), self.checks[1])
 
+    def test_should_test_the_image_the_sandbox_runs_not_its_setup_image(self) -> None:
+        self.assertIn(f"--target runtime {self.worktree}/ocr", " ".join(self.checks[1]))
+
     def test_should_run_each_without_network_or_privileges(self) -> None:
         tests = {"web UI": self.checks[0], "sandbox": self.checks[2]}
         for area, run in tests.items():

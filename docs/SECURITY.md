@@ -21,6 +21,7 @@ content into its results.
 | rotated Docker logs (5 × 10 MB) | the sandbox cannot fill the system disk by writing logs |
 | the children's output escaped where the supervisor relays it | the stdout and stderr of vLLM and of the worker, and the error texts quoted from them, reach `docker logs` and the engine check with each character that is not printable written as an escape: the text the engine's libraries or the model print, control sequences from a page's content included, cannot act on an operator's terminal. A process that runs its own code in the sandbox can still write to the container's output directly, so the `ocr` container's log stays untrusted output |
 | GPU through CDI only | the only device exposed |
+| the runtime image, without uv or pip | the image the service runs holds no package installer: uv and the installer live in the setup image, which only `ocr-setup` runs |
 
 On the machine, downloads (packages, models) are made **only by `ocr-setup`, at
 an installation**, which has network access but only sees the sandbox directory,
@@ -141,8 +142,8 @@ rehearsal) checks what docker compose resolves for the stack, every profile
 included:
 
 - the project, every image (compared as Docker reads image names, and
-  required to be the stack's own `<IMAGE_PREFIX>-api:latest` or
-  `-ocr:latest`) and every published port must differ from production's
+  required to be the stack's own `<IMAGE_PREFIX>-api:latest`,
+  `-ocr:latest` or `-ocr-setup:latest`) and every published port must differ from production's
   (its `.env`, the defaults, and its running containers);
 - every host path must be inside the stack's own `DATA_DIR`, which itself is
   outside the system directories, `/tmp` and your home directory (the one of
@@ -304,12 +305,12 @@ data or library; an `--api` URL without an explicit port is refused) without
 - **Code scanning** shows the rest, which `.github/workflows/vulnerability-scan.yml` reads with Google's OSV-Scanner
   every Monday, on demand, and on a push to `main` that changes what it scans, in four scans:
   - `sandbox-environments`: the OCR sandbox's two environments, resolved from `ocr/setup/requirements-paddle.in` and
-    `ocr/setup/requirements-vllm.in` in the sandbox's base image, with its uv, as a new installation would resolve them
-    that day, without installing them;
+    `ocr/setup/requirements-vllm.in` in the sandbox's base image, with the uv of its setup image, as a new installation
+    would resolve them that day, without installing them, and that uv, by its version;
   - `repository-locks`: the gate's Python tools (`scripts/lint/requirements.lock`) and the app's libraries and Gradle
     plugins (`android/gradle/verification-metadata.xml`);
   - `api-image` and `sandbox-image`: the Debian and Python packages of the api's image, as production runs it, and of
-    the sandbox's image.
+    the image the sandbox runs.
 
   The scan only reports: it runs on no pull request, and fails only when a scan itself fails. The container that
   resolves the sandbox's environments mounts nothing of the runner but the read-only requirements and a work directory

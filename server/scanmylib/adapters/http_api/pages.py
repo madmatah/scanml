@@ -10,10 +10,10 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import FileResponse
 from starlette.datastructures import FormData, UploadFile
 
-from ..adapters.pillow_images import MAX_UPLOAD_BYTES, SCAN_MEDIA_TYPES
-from ..application.scan_images import ImageRejected
-from ..domain.records import PageUpload
-from .deps import ServicesDep, is_uuid, require_auth, require_uuid
+from ...application.scan_images import ImageRejected
+from ...domain.records import PageUpload
+from ..pillow_images import MAX_UPLOAD_BYTES, SCAN_MEDIA_TYPES
+from .dependencies import ServicesDep, is_uuid, require_auth, require_uuid
 from .schemas import PagePatchBody
 from .serializers import page_json
 

@@ -9,11 +9,11 @@ from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request
 
-from ..adapters.http_api.authentication import check_credential
-from ..adapters.http_api.preview import HtmlPreviews
-from ..application.access import Access
-from ..application.library import LibraryService
-from ..application.ocr_engine import OcrEngineMonitor
+from ...application.access import Access
+from ...application.library import LibraryService
+from ...application.ocr_engine import OcrEngineMonitor
+from .authentication import check_credential
+from .preview import HtmlPreviews
 
 UUID_PATTERN = r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
 _UUID = re.compile(UUID_PATTERN)

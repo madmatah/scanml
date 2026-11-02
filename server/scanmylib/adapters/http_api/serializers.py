@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ..domain.records import DocumentRecord, PageRecord
+from ...domain.records import DocumentRecord, PageRecord
 
 _OCR_FIELDS = ("engine", "duration_s", "at", "images", "chars")
 

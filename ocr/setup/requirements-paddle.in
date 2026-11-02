@@ -1,0 +1,5 @@
+# PaddlePaddle's GPU build is not published on PyPI: its wheel comes from Paddle's own CDN, by direct URL, and every
+# other package from PyPI.
+paddlepaddle-gpu @ https://paddle-whl.cdn.bcebos.com/stable/cu126/paddlepaddle-gpu/paddlepaddle_gpu-3.2.1-cp312-cp312-linux_x86_64.whl
+paddleocr[doc-parser]==3.7.0
+safetensors

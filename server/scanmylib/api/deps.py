@@ -8,8 +8,9 @@ from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request
 
+from ..adapters.http_api.authentication import check_credential
+from ..application.access import Access
 from ..application.ocr_engine import OcrEngineMonitor
-from ..auth import Authenticator
 from ..config import Settings
 from ..library import LibraryService
 
@@ -21,7 +22,7 @@ _UUID = re.compile(UUID_PATTERN)
 class Services:
     settings: Settings
     library: LibraryService
-    auth: Authenticator
+    access: Access
     ocr: OcrEngineMonitor
 
 
@@ -34,7 +35,7 @@ async def get_services(request: Request) -> Services:
 
 async def require_auth(request: Request) -> None:
     services: Services = request.app.state.services
-    services.auth.check(request)
+    check_credential(request, services.access)
 
 
 ServicesDep = Annotated[Services, Depends(get_services)]

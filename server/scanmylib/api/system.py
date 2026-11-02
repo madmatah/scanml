@@ -8,9 +8,10 @@ from urllib.parse import quote
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
 from .. import API_LEVEL, __version__
+from ..adapters.http_api.authentication import SESSION_COOKIE
 from ..application.catalog import QueueCounts
 from ..application.ocr_engine import EngineStatus, GpuStatus
-from ..auth import SESSION_COOKIE, SESSION_MAX_AGE_S
+from ..domain.web_sessions import SESSION_LIFETIME
 from ..published_apk import APK_DOWNLOAD_PATH, published_apk
 from ..qr import qr_svg
 from .deps import Services, ServicesDep, public_url, require_auth
@@ -42,13 +43,13 @@ def health(services: ServicesDep) -> dict[str, object]:
 
 @public.post("/api/session", status_code=204)
 async def open_session(body: SessionBody, request: Request, services: ServicesDep) -> Response:
-    if not services.auth.token_matches(body.token.strip()):
+    if not services.access.token_matches(body.token.strip()):
         raise HTTPException(401, "unauthorized")
     response = Response(status_code=204)
     response.set_cookie(
         SESSION_COOKIE,
-        services.auth.open_session(),
-        max_age=SESSION_MAX_AGE_S,
+        services.access.open_session(),
+        max_age=int(SESSION_LIFETIME.total_seconds()),
         path="/",
         httponly=True,
         samesite="strict",
@@ -62,7 +63,7 @@ async def close_session(request: Request, services: ServicesDep) -> Response:
     """Log out: forget the session (if any) and clear the cookie."""
     session_id = request.cookies.get(SESSION_COOKIE)
     if session_id:
-        services.auth.close_session(session_id)
+        services.access.close_session(session_id)
     response = Response(status_code=204)
     response.delete_cookie(SESSION_COOKIE, path="/", httponly=True, samesite="strict")
     return response
@@ -109,7 +110,7 @@ async def status(services: ServicesDep) -> dict[str, object]:
 
 def _pairing(services: Services, request: Request) -> _Pairing:
     url = public_url(services, request)
-    token = services.auth.token
+    token = services.access.token
     return {
         "url": url,
         "token": token,

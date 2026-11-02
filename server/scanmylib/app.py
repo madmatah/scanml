@@ -26,8 +26,8 @@ from .adapters.sqlite.web_sessions import SqliteWebSessions
 from .adapters.system_clock import SystemClock
 from .api import documents, pages, system, web
 from .api.deps import Services
+from .application.access import Access
 from .application.scan_images import ImageRejected, ImageTooLarge
-from .auth import Authenticator
 from .config import Settings
 from .domain.records import Conflict, InvalidRequest, NotFound
 from .library import LibraryService
@@ -81,7 +81,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         # The service's writes run inside the catalog's transactions, which are
         # atomic only on the catalog's own Database: never give it another one.
         library = LibraryService(settings, catalog, db, files, thumbnails, Publisher(files, clock), clock, images)
-        auth = Authenticator(load_or_create_token(settings.token_path, settings.token), SqliteWebSessions(db), clock)
+        access = Access(load_or_create_token(settings.token_path, settings.token), SqliteWebSessions(db), clock)
         ocr_client = OcrClient(settings.ocr_socket, settings.ocr_timeout_s)
         ocr_engine = SandboxOcrEngine(ocr_client)
         ocr_loop = OcrLoop(
@@ -90,7 +90,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         library.add_work_listener(ocr_loop.notify)
         requeued = library.start()
         ocr_loop.start()
-        app.state.services = Services(settings=settings, library=library, auth=auth, ocr=ocr_engine)
+        app.state.services = Services(settings=settings, library=library, access=access, ocr=ocr_engine)
         log.info(
             "ScanMyLib %s: library %s, OCR socket %s, %d interrupted page(s) re-queued",
             __version__,

@@ -156,8 +156,10 @@ them. The last row lists the scripts that the skills keep, which belong to no un
 | api | `domain/pages` | A page's rules: its key, its OCR attempts and the summary of its OCR, the orientation the sandbox detects | Domain |
 | api | `domain/records`, `domain/text` | Typed records and the inputs of library operations; slugs and collation | Domain |
 | api | `domain/timestamps` | Moments written as text, in the API and in the names of keys and folders | Domain |
+| api | `domain/web_sessions` | A web session's rules: how long it lasts | Domain |
 | api | `library`, `ocr_loop`, `publisher`, `debounce` | Documents and pages kept in sync with the library; the single OCR loop; publication of the library files | Application |
 | api | `application/clock`, `application/scan_images`, `application/ocr_engine`, `application/library_files`, `application/thumbnails`, `application/catalog`, `application/web_sessions` | The ports of the clock, of the images of the scans, of the OCR engine, of the library's files, of the pages' thumbnails, of the catalog of documents and pages and of the web sessions | Application |
+| api | `application/access` | Who may use the api: the token, compared in constant time, and the web sessions opened with it | Application |
 | api | `domain/assemble` | Rendering of the library files | Domain |
 | api | `preview` | Rendering of the HTML previews | Adapters |
 | api | `adapters/sqlite/database`, `adapters/sqlite/rows`, `adapters/sqlite/catalog`, `adapters/sqlite/web_sessions` | SQLite state, its rows read into records, the summary of a document's layout written as JSON, and the catalog of documents and pages and the web sessions over them | Adapters |
@@ -166,7 +168,7 @@ them. The last row lists the scripts that the skills keep, which belong to no un
 | api | `adapters/filesystem/library_files`, `adapters/filesystem/thumbnails`, `adapters/filesystem/token_file`, `export` | The library's files, atomic writes and trash; the thumbnails, a cache in the state directory; the API token, in a file of the state directory that only its owner reads; zip archives | Adapters |
 | api | `adapters/ocr_sandbox/client`, `adapters/ocr_sandbox/results`, `adapters/ocr_sandbox/sanitize`, `adapters/ocr_sandbox/engine` | The OCR sandbox: the client of its protocol, the validation of its untrusted results, the sanitizer of their Markdown, and the OCR engine over them, which times the reading of a page and validates the untrusted status of the sandbox | Adapters |
 | api | `qr`, `published_apk` | QR codes, the published APK's metadata | Adapters |
-| api | `api/`, `auth`, `middleware` | HTTP routes, the times that clients send, authentication, security headers and body limits | Adapters |
+| api | `api/`, `adapters/http_api/authentication`, `middleware` | HTTP routes, the times that clients send, the credential of each request, security headers and body limits | Adapters |
 | api | `devtools/fake_ocr` | The fake OCR sandbox of the development stack and the tests | Test support |
 | web UI | `main.js` | Entry point | Composition root |
 | web UI | `lib/order.js`, `lib/reading.js`, `lib/math.js`, `lib/format.js`, `lib/labels.js` | Ordering, reading view, formulas, formatting and labels | Domain |

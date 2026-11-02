@@ -20,6 +20,7 @@ Everything runs in Docker; nothing is installed on the host.
 | `domain/assemble.py`, `publisher.py` | `document.md`, `document.json`, `INDEX.md`, `library.json` |
 | `domain/text.py` | user-entered text, slugs, collation |
 | `domain/timestamps.py` | moments written as text, in the API and in the names of keys and folders |
+| `domain/web_sessions.py` | a web session's rules: how long it lasts |
 | `application/clock.py`, `adapters/system_clock.py` | the clock the application reads, and the wall clock behind it, in the container's `TZ` |
 | `application/library_files.py`, `adapters/filesystem/library_files.py` | the ports of the library's files, and the library folder behind them: atomic writes, `.trash/`, safe file resolution |
 | `application/thumbnails.py`, `adapters/filesystem/thumbnails.py` | the port of the pages' thumbnails, and their cache behind it in the state directory's `thumbs/` |
@@ -28,8 +29,8 @@ Everything runs in Docker; nothing is installed on the host.
 | `application/ocr_engine.py`, `adapters/ocr_sandbox/` | the OCR ports, with a page's output, its errors and the engine's status; the sandbox behind them: its client, the validation of its responses, untrusted OCR Markdown → safe Markdown, and the engine that times a page's reading and validates its `/health` |
 | `ocr_loop.py` | the single OCR loop |
 | `adapters/filesystem/token_file.py` | the API token: `SCANMYLIB_TOKEN`, else the state directory's `token`, generated on first start, readable by its owner only |
-| `application/web_sessions.py`, `adapters/sqlite/web_sessions.py` | the port of the web sessions, and their table in the SQLite state, which holds the hash of each session's id, never the id |
-| `auth.py`, `middleware.py` | token / cookie session / CSRF header, security headers, body limits |
+| `application/access.py`, `application/web_sessions.py`, `adapters/sqlite/web_sessions.py` | who may use the api: the token, compared in constant time, and the web sessions opened with it, which end on logout, after a year, or when the token changes; the port of the web sessions, and their table in the SQLite state, which holds the hash of each session's id, never the id |
+| `adapters/http_api/authentication.py`, `middleware.py` | the credential of a request: the bearer token, or the session cookie with the CSRF header on a change; security headers, body limits |
 | `api/` | HTTP routes |
 | `devtools/fake_ocr.py` | fake sandbox for tests and UI development |
 

@@ -1,1 +1,1 @@
-"""The SQLite adapter: the database of the api's state, its rows, and the catalog of documents and pages over them."""
+"""The SQLite adapter: the api's state, its rows, the catalog of documents and pages, and the web sessions."""

@@ -17,12 +17,13 @@ import asyncio
 import json
 import logging
 from collections.abc import Callable, Sequence
+from dataclasses import replace
 from datetime import datetime
 from pathlib import PurePath
 
 from .adapters.sqlite.database import Database
 from .adapters.sqlite.rows import build_page_claim
-from .application.catalog import Catalog, QueueCounts
+from .application.catalog import Catalog, NewPage, QueueCounts
 from .application.clock import Clock
 from .application.library_files import LibraryFiles
 from .application.ocr_engine import PageOcrOutput
@@ -30,7 +31,7 @@ from .application.scan_images import ImageRejected, ScanImages
 from .application.thumbnails import Thumbnails
 from .config import Settings
 from .debounce import DebouncedBatch
-from .domain import ordering, timestamps
+from .domain import ordering
 from .domain.documents import check_document_changes, prepare_new_document, propose_slugs, summarize_layout
 from .domain.pages import (
     AttemptOutcome,
@@ -40,7 +41,6 @@ from .domain.pages import (
     summarize_ocr,
 )
 from .domain.records import (
-    UNCHANGED,
     Conflict,
     DocumentChanges,
     DocumentRecord,
@@ -270,25 +270,18 @@ class LibraryService:
                 )
                 uploaded = self._clock.now()
                 with self._catalog.open_transaction():
-                    self._db.execute(
-                        "INSERT INTO pages (id, document_id, key, scan_ext, session_id, seq,"
-                        " captured_at, captured_ts, uploaded_at, uploaded_ts, width, height,"
-                        " status, hint_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?)",
-                        (
-                            upload.page_id,
-                            document_id,
-                            key,
-                            info.ext,
-                            upload.session_id,
-                            upload.seq,
-                            timestamps.iso(captured),
-                            captured.timestamp(),
-                            timestamps.iso(uploaded),
-                            uploaded.timestamp(),
-                            info.width,
-                            info.height,
-                            upload.hint_number,
-                        ),
+                    self._catalog.add_page(
+                        NewPage(
+                            id=upload.page_id,
+                            document_id=document_id,
+                            key=key,
+                            scan=info,
+                            session_id=upload.session_id,
+                            seq=upload.seq,
+                            hint_number=upload.hint_number,
+                            captured_at=captured,
+                            uploaded_at=uploaded,
+                        )
                     )
                     self._touch(document_id)
                     self._refresh_layout(document_id)
@@ -321,21 +314,11 @@ class LibraryService:
         if rotate:
             assert changes.rotation is not None
             await self._rotate_thumbnail(page, changes.rotation)
-        values: dict[str, object] = {}
-        if changes.manual_number is not UNCHANGED:
-            values["manual_number"] = changes.manual_number
-        if changes.excluded is not None:
-            values["excluded"] = int(changes.excluded)
-        if rotate:
-            values["rotation"] = changes.rotation
-        if values:
+        changes_to_store = replace(changes, rotation=changes.rotation if rotate else None)
+        if changes_to_store != PageChanges():
             with self._catalog.open_transaction():
                 page = self.require_page(page_id)
-                assignments = ", ".join(f"{name} = ?" for name in values)
-                self._db.execute(
-                    f"UPDATE pages SET {assignments} WHERE id = ?",  # noqa: S608 (column names from the code, values as ? parameters)
-                    (*values.values(), page_id),
-                )
+                self._catalog.update_page(page_id, changes_to_store)
                 if rotate:
                     self._requeue(page_id)
                 self._touch(page.document_id)
@@ -385,17 +368,16 @@ class LibraryService:
             layout = ordering.compute_layout(inputs)
             if len(set(page_ids)) != len(page_ids) or set(page_ids) != set(layout.reading_order):
                 raise Conflict("page set changed")
-            changes = [
-                (position, page_id)
+            moved_positions = {
+                page_id: position
                 for page_id, position in ordering.positions_for_order(inputs, page_ids).items()
                 if position != pages[page_id].position
-            ]
-            for change in changes:
-                self._db.execute("UPDATE pages SET position = ? WHERE id = ?", change)
-            if changes:
+            }
+            if moved_positions:
+                self._catalog.set_page_positions(moved_positions)
                 self._touch(document_id)
                 self._refresh_layout(document_id)
-        if changes:
+        if moved_positions:
             self._assembly.schedule(document_id)
         return self.require_document(document_id)
 
@@ -403,14 +385,11 @@ class LibraryService:
         """Forget the positions of the pages: back to the order of numbers and sessions."""
         with self._catalog.open_transaction():
             self.require_document(document_id)
-            changed = self._db.execute(
-                "UPDATE pages SET position = NULL WHERE document_id = ? AND position IS NOT NULL",
-                (document_id,),
-            ).rowcount
-            if changed:
+            cleared_count = self._catalog.clear_page_positions(document_id)
+            if cleared_count:
                 self._touch(document_id)
                 self._refresh_layout(document_id)
-        if changed:
+        if cleared_count:
             self._assembly.schedule(document_id)
         return self.require_document(document_id)
 
@@ -426,7 +405,7 @@ class LibraryService:
             document = self.require_document(page.document_id)
             await asyncio.to_thread(self._files.trash_page, document.slug, page.key, page.scan_ext)
             with self._catalog.open_transaction():
-                self._db.execute("DELETE FROM pages WHERE id = ?", (page_id,))
+                self._catalog.remove_page(page_id)
                 self._touch(page.document_id)
                 self._refresh_layout(page.document_id)
             await asyncio.to_thread(self._thumbnails.remove, [page_id])

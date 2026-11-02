@@ -1,5 +1,5 @@
 """The catalog of documents and pages in SQLite (adapters/sqlite/catalog.py): its transactions, the order of its lists,
-the changes of its documents, and the pages it queues again."""
+the changes of its documents and pages, and the pages it queues again."""
 
 from __future__ import annotations
 
@@ -8,13 +8,16 @@ import contextlib
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from types import MappingProxyType
 
 import pytest
 
 from scanmylib.adapters.sqlite.catalog import SqliteCatalog
 from scanmylib.adapters.sqlite.database import Database
+from scanmylib.application.catalog import NewPage
+from scanmylib.application.scan_images import ScanInfo
 from scanmylib.domain.documents import NewDocument
-from scanmylib.domain.records import DocumentChanges, DocumentRecord, PageRecord
+from scanmylib.domain.records import DocumentChanges, DocumentRecord, PageChanges, PageRecord
 
 DOCUMENT_ID = "0f000000-0000-4000-8000-000000000000"
 MOMENT = "2026-10-12T20:00:00+02:00"
@@ -44,6 +47,27 @@ LATER_MOMENT = datetime.fromisoformat(LATER_MOMENT_TEXT)
 LATEST_MOMENT = datetime.fromisoformat(LATEST_MOMENT_TEXT)
 FIRST_ADDED_DOCUMENT_ID = "0d000000-0000-4000-8000-000000000001"
 LATER_ADDED_DOCUMENT_ID = "0d000000-0000-4000-8000-000000000002"
+OTHER_DOCUMENT_ID = "0e000000-0000-4000-8000-000000000000"
+NEW_PAGE_ID = "1d000000-0000-4000-8000-000000000000"
+SCAN = ScanInfo("jpg", 1200, 1600)
+SEQ = 3
+HINT_NUMBER = 12
+SESSION_ID = "5e000000-0000-4000-8000-000000000000"
+CAPTURED_MOMENT_TEXT = "2026-10-13T08:45:10+02:00"
+CAPTURED_MOMENT = datetime.fromisoformat(CAPTURED_MOMENT_TEXT)
+CAPTURED_TIMESTAMP_SECONDS = CAPTURED_MOMENT.timestamp()
+UPLOADED_MOMENT_TEXT = "2026-10-13T08:45:40+02:00"
+UPLOADED_MOMENT = datetime.fromisoformat(UPLOADED_MOMENT_TEXT)
+MANUAL_NUMBER = 7
+QUARTER_TURN_DEGREES = 90
+REMOVED_PAGE_ID = "1f000000-0000-4000-8000-000000000001"
+KEPT_PAGE_ID = "1f000000-0000-4000-8000-000000000002"
+POSITIONS = MappingProxyType({"1e000000-0000-4000-8000-000000000001": 1.5, "1e000000-0000-4000-8000-000000000002": 2.5})
+POSITIONED_PAGE_IDS = tuple(POSITIONS)
+UNPOSITIONED_PAGE_ID = "1e000000-0000-4000-8000-000000000003"
+POSITION_TO_CLEAR = 3.5
+OTHER_DOCUMENT_PAGE_ID = "1e000000-0000-4000-8000-000000000004"
+OTHER_DOCUMENT_POSITION = 0.5
 
 
 def insert_document(database: Database, document_id: str, *, updated_timestamp_seconds: float) -> None:
@@ -90,6 +114,24 @@ def add_example_document(catalog: SqliteCatalog, document_id: str, *, added_at: 
     catalog.add_document(document_id, f"{EXAMPLE_SLUG_PREFIX}{document_id}", NEW_DOCUMENT, added_at)
 
 
+def add_example_page(
+    catalog: SqliteCatalog, page_id: str, *, document_id: str = DOCUMENT_ID, uploaded_at: datetime = UPLOADED_MOMENT
+) -> None:
+    catalog.add_page(
+        NewPage(
+            id=page_id,
+            document_id=document_id,
+            key=page_id,
+            scan=SCAN,
+            session_id=SESSION_ID,
+            seq=SEQ,
+            hint_number=HINT_NUMBER,
+            captured_at=CAPTURED_MOMENT,
+            uploaded_at=uploaded_at,
+        )
+    )
+
+
 class AbandonedTransaction(Exception):
     pass
 
@@ -98,6 +140,12 @@ class AbandonedTransaction(Exception):
 class RequeuedPages:
     requeued_count: int
     page_statuses: list[str]
+
+
+@dataclass(frozen=True)
+class ClearedPositions:
+    cleared_count: int
+    other_document_positions: list[float | None]
 
 
 class TestTheSqliteCatalog:
@@ -318,3 +366,170 @@ class TestTheSqliteCatalog:
 
             def test_should_remove_its_page_with_it(self, page: PageRecord | None) -> None:
                 assert page is None
+
+    class TestTheAddPageMethod:
+        class TestWhenAPageIsAdded:
+            @pytest.fixture
+            def pages(self, tmp_path: Path) -> list[PageRecord]:
+                with contextlib.closing(Database(tmp_path / "scanmylib.db")) as database:
+                    catalog = SqliteCatalog(database)
+                    add_example_document(catalog, DOCUMENT_ID, added_at=FIRST_MOMENT)
+                    add_example_page(catalog, NEW_PAGE_ID)
+                    return catalog.list_pages(DOCUMENT_ID)
+
+            def test_should_record_it_queued_for_reading_with_the_fields_of_its_upload(
+                self, pages: list[PageRecord]
+            ) -> None:
+                assert [
+                    (
+                        page.id,
+                        page.key,
+                        page.scan_ext,
+                        page.width,
+                        page.height,
+                        page.session_id,
+                        page.seq,
+                        page.hint_number,
+                        page.captured_at,
+                        page.captured_ts,
+                        page.uploaded_at,
+                        page.status,
+                    )
+                    for page in pages
+                ] == [
+                    (
+                        NEW_PAGE_ID,
+                        NEW_PAGE_ID,
+                        SCAN.ext,
+                        SCAN.width,
+                        SCAN.height,
+                        SESSION_ID,
+                        SEQ,
+                        HINT_NUMBER,
+                        CAPTURED_MOMENT_TEXT,
+                        CAPTURED_TIMESTAMP_SECONDS,
+                        UPLOADED_MOMENT_TEXT,
+                        "queued",
+                    )
+                ]
+
+    class TestTheUpdatePageMethod:
+        class TestWhenItsChangesLeaveItsManualNumberAsItIs:
+            @pytest.fixture
+            def pages(self, tmp_path: Path) -> list[PageRecord]:
+                with contextlib.closing(Database(tmp_path / "scanmylib.db")) as database:
+                    catalog = SqliteCatalog(database)
+                    add_example_document(catalog, DOCUMENT_ID, added_at=FIRST_MOMENT)
+                    add_example_page(catalog, NEW_PAGE_ID)
+                    catalog.update_page(NEW_PAGE_ID, PageChanges(manual_number=MANUAL_NUMBER))
+                    catalog.update_page(NEW_PAGE_ID, PageChanges(excluded=True))
+                    return catalog.list_pages(DOCUMENT_ID)
+
+            def test_should_keep_its_manual_number_and_set_the_field_they_hold(self, pages: list[PageRecord]) -> None:
+                assert [(page.manual_number, page.excluded) for page in pages] == [(MANUAL_NUMBER, True)]
+
+        class TestWhenItsChangesHoldNoField:
+            @pytest.fixture
+            def update_the_page(
+                self, tmp_path: Path, request: pytest.FixtureRequest
+            ) -> collections.abc.Callable[[], None]:
+                database = Database(tmp_path / "scanmylib.db")
+                request.addfinalizer(database.close)
+                catalog = SqliteCatalog(database)
+                add_example_document(catalog, DOCUMENT_ID, added_at=FIRST_MOMENT)
+                add_example_page(catalog, NEW_PAGE_ID)
+                return lambda: catalog.update_page(NEW_PAGE_ID, PageChanges())
+
+            def test_should_refuse_them_since_an_update_sets_at_least_one(
+                self, update_the_page: collections.abc.Callable[[], None]
+            ) -> None:
+                with pytest.raises(ValueError, match="at least one"):
+                    update_the_page()
+
+        class TestWhenItsManualNumberIsNone:
+            @pytest.fixture
+            def pages(self, tmp_path: Path) -> list[PageRecord]:
+                with contextlib.closing(Database(tmp_path / "scanmylib.db")) as database:
+                    catalog = SqliteCatalog(database)
+                    add_example_document(catalog, DOCUMENT_ID, added_at=FIRST_MOMENT)
+                    add_example_page(catalog, NEW_PAGE_ID)
+                    catalog.update_page(NEW_PAGE_ID, PageChanges(manual_number=MANUAL_NUMBER))
+                    catalog.update_page(NEW_PAGE_ID, PageChanges(manual_number=None))
+                    return catalog.list_pages(DOCUMENT_ID)
+
+            def test_should_clear_the_manual_number_of_the_page(self, pages: list[PageRecord]) -> None:
+                assert [page.manual_number for page in pages] == [None]
+
+        class TestWhenItsChangesHoldARotation:
+            @pytest.fixture
+            def pages(self, tmp_path: Path) -> list[PageRecord]:
+                with contextlib.closing(Database(tmp_path / "scanmylib.db")) as database:
+                    catalog = SqliteCatalog(database)
+                    add_example_document(catalog, DOCUMENT_ID, added_at=FIRST_MOMENT)
+                    add_example_page(catalog, NEW_PAGE_ID)
+                    catalog.update_page(NEW_PAGE_ID, PageChanges(rotation=QUARTER_TURN_DEGREES))
+                    return catalog.list_pages(DOCUMENT_ID)
+
+            def test_should_set_the_rotation_of_the_page(self, pages: list[PageRecord]) -> None:
+                assert [page.rotation for page in pages] == [QUARTER_TURN_DEGREES]
+
+    class TestTheSetPagePositionsMethod:
+        class TestWhenOneOfThePositionsIsNone:
+            @pytest.fixture
+            def positions_by_page_id(self, tmp_path: Path) -> dict[str, float | None]:
+                with contextlib.closing(Database(tmp_path / "scanmylib.db")) as database:
+                    catalog = SqliteCatalog(database)
+                    add_example_document(catalog, DOCUMENT_ID, added_at=FIRST_MOMENT)
+                    for page_id in (*POSITIONED_PAGE_IDS, UNPOSITIONED_PAGE_ID):
+                        add_example_page(catalog, page_id)
+                    catalog.set_page_positions({UNPOSITIONED_PAGE_ID: POSITION_TO_CLEAR})
+                    catalog.set_page_positions({**POSITIONS, UNPOSITIONED_PAGE_ID: None})
+                    return {page.id: page.position for page in catalog.list_pages(DOCUMENT_ID)}
+
+            def test_should_give_each_page_its_own_position(
+                self, positions_by_page_id: dict[str, float | None]
+            ) -> None:
+                assert {page_id: positions_by_page_id[page_id] for page_id in POSITIONED_PAGE_IDS} == POSITIONS
+
+            def test_should_clear_the_position_of_the_page_given_none(
+                self, positions_by_page_id: dict[str, float | None]
+            ) -> None:
+                assert positions_by_page_id[UNPOSITIONED_PAGE_ID] is None
+
+    class TestTheRemovePageMethod:
+        class TestWhenItsDocumentHasAnotherPage:
+            @pytest.fixture
+            def page_ids(self, tmp_path: Path) -> list[str]:
+                with contextlib.closing(Database(tmp_path / "scanmylib.db")) as database:
+                    catalog = SqliteCatalog(database)
+                    add_example_document(catalog, DOCUMENT_ID, added_at=FIRST_MOMENT)
+                    add_example_page(catalog, REMOVED_PAGE_ID)
+                    add_example_page(catalog, KEPT_PAGE_ID)
+                    catalog.remove_page(REMOVED_PAGE_ID)
+                    return [page.id for page in catalog.list_pages(DOCUMENT_ID)]
+
+            def test_should_remove_that_page_and_keep_the_other(self, page_ids: list[str]) -> None:
+                assert page_ids == [KEPT_PAGE_ID]
+
+    class TestTheClearPagePositionsMethod:
+        class TestWhenSomeOfItsPagesHaveAPosition:
+            @pytest.fixture
+            def cleared_positions(self, tmp_path: Path) -> ClearedPositions:
+                with contextlib.closing(Database(tmp_path / "scanmylib.db")) as database:
+                    catalog = SqliteCatalog(database)
+                    add_example_document(catalog, DOCUMENT_ID, added_at=FIRST_MOMENT)
+                    add_example_document(catalog, OTHER_DOCUMENT_ID, added_at=FIRST_MOMENT)
+                    for page_id in (*POSITIONED_PAGE_IDS, UNPOSITIONED_PAGE_ID):
+                        add_example_page(catalog, page_id)
+                    add_example_page(catalog, OTHER_DOCUMENT_PAGE_ID, document_id=OTHER_DOCUMENT_ID)
+                    catalog.set_page_positions({**POSITIONS, OTHER_DOCUMENT_PAGE_ID: OTHER_DOCUMENT_POSITION})
+                    cleared_count = catalog.clear_page_positions(DOCUMENT_ID)
+                    return ClearedPositions(
+                        cleared_count, [page.position for page in catalog.list_pages(OTHER_DOCUMENT_ID)]
+                    )
+
+            def test_should_count_the_pages_that_had_one(self, cleared_positions: ClearedPositions) -> None:
+                assert cleared_positions.cleared_count == len(POSITIONS)
+
+            def test_should_keep_the_positions_of_another_document(self, cleared_positions: ClearedPositions) -> None:
+                assert cleared_positions.other_document_positions == [OTHER_DOCUMENT_POSITION]

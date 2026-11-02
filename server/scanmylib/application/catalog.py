@@ -3,10 +3,12 @@ by capture time, then by id; a list of ids comes in no particular order. A docum
 as None. A slug is taken when a document has it, and a key when a page of the same document has it. The queue counts the
 pages in each status, zero for a status that no page has. Requeueing the interrupted pages queues again every page whose
 reading was under way, and returns how many there were. Storing a layout gives each page of the document its placement,
-which the layout holds for every one of them, and the document its summary. A transaction's changes take effect together
-when its block ends, or none of them when it raises, and a transaction opened inside another joins it. The catalog is
-called from the event loop's thread only, and nothing is awaited inside a transaction, so that a transaction is atomic
-for the other coroutines.
+which the layout holds for every one of them, and the document its summary. Adding a document records it as created and
+last updated at the moment given, touching it records the moment of its last update, and removing it removes its pages
+with it. Updating a document sets the fields its changes hold, at least one, and keeps the others. A transaction's
+changes take effect together when its block ends, or none of them when it raises, and a transaction opened inside
+another joins it. The catalog is called from the event loop's thread only, and nothing is awaited inside a transaction,
+so that a transaction is atomic for the other coroutines. An update whose changes hold no field raises ValueError.
 """
 
 from __future__ import annotations
@@ -14,11 +16,12 @@ from __future__ import annotations
 from collections.abc import Mapping
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Protocol
 
-from ..domain.documents import LayoutSummary
+from ..domain.documents import LayoutSummary, NewDocument
 from ..domain.ordering import Placement
-from ..domain.records import DocumentRecord, PageRecord
+from ..domain.records import DocumentChanges, DocumentRecord, PageRecord
 
 
 @dataclass(frozen=True)
@@ -42,3 +45,7 @@ class Catalog(Protocol):
     def count_queue(self) -> QueueCounts: ...
     def requeue_interrupted_pages(self) -> int: ...
     def store_layout(self, document_id: str, placements: Mapping[str, Placement], summary: LayoutSummary) -> None: ...
+    def add_document(self, document_id: str, slug: str, document: NewDocument, created_at: datetime) -> None: ...
+    def update_document(self, document_id: str, changes: DocumentChanges) -> None: ...
+    def touch_document(self, document_id: str, updated_at: datetime) -> None: ...
+    def remove_document(self, document_id: str) -> None: ...

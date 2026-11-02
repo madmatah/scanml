@@ -202,22 +202,7 @@ class LibraryService:
             moment = self._clock.now()
             with self._catalog.open_transaction():
                 slug = self._free_slug(new_document.title)
-                self._db.execute(
-                    "INSERT INTO documents (id, slug, title, author, kind, notes, unwarp,"
-                    " created_at, updated_at, updated_ts) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    (
-                        document_id,
-                        slug,
-                        new_document.title,
-                        new_document.author,
-                        new_document.kind,
-                        new_document.notes,
-                        int(new_document.unwarp),
-                        timestamps.iso(moment),
-                        timestamps.iso(moment),
-                        moment.timestamp(),
-                    ),
-                )
+                self._catalog.add_document(document_id, slug, new_document, moment)
                 self._refresh_layout(document_id)
             await asyncio.to_thread(self._files.create_folder, slug)
         self._assembly.schedule(document_id)
@@ -226,24 +211,9 @@ class LibraryService:
     def update_document(self, document_id: str, changes: DocumentChanges) -> DocumentRecord:
         self.require_document(document_id)
         check_document_changes(changes)
-        values: dict[str, object] = {
-            name: value
-            for name, value in (
-                ("title", changes.title),
-                ("author", changes.author),
-                ("kind", changes.kind),
-                ("notes", changes.notes),
-                ("unwarp", None if changes.unwarp is None else int(changes.unwarp)),
-            )
-            if value is not None
-        }
-        if values:
+        if changes != DocumentChanges():
             with self._catalog.open_transaction():
-                assignments = ", ".join(f"{name} = ?" for name in values)
-                self._db.execute(
-                    f"UPDATE documents SET {assignments} WHERE id = ?",  # noqa: S608 (column names from the code, values as ? parameters)
-                    (*values.values(), document_id),
-                )
+                self._catalog.update_document(document_id, changes)
                 self._touch(document_id)
             self._assembly.schedule(document_id)
         return self.require_document(document_id)
@@ -257,7 +227,7 @@ class LibraryService:
             page_ids = self._catalog.list_page_ids(document_id)
             trashed = await asyncio.to_thread(self._files.trash_document, document.slug)
             with self._catalog.open_transaction():
-                self._db.execute("DELETE FROM documents WHERE id = ?", (document_id,))
+                self._catalog.remove_document(document_id)
             await asyncio.to_thread(self._thumbnails.remove, page_ids)
         log.info("document %s deleted, folder moved to %s", document.slug, trashed)
         self._assembly.schedule()
@@ -271,11 +241,7 @@ class LibraryService:
         )
 
     def _touch(self, document_id: str) -> None:
-        moment = self._clock.now()
-        self._db.execute(
-            "UPDATE documents SET updated_at = ?, updated_ts = ? WHERE id = ?",
-            (timestamps.iso(moment), moment.timestamp(), document_id),
-        )
+        self._catalog.touch_document(document_id, self._clock.now())
 
     # -- pages ---------------------------------------------------------------
 

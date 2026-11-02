@@ -4,11 +4,13 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from contextlib import AbstractContextManager
+from datetime import datetime
 
 from ...application.catalog import QueueCounts
-from ...domain.documents import LayoutSummary
+from ...domain import timestamps
+from ...domain.documents import LayoutSummary, NewDocument
 from ...domain.ordering import Placement
-from ...domain.records import DocumentRecord, PageRecord
+from ...domain.records import DocumentChanges, DocumentRecord, PageRecord
 from .database import Database
 from .rows import build_document_record, build_page_record, encode_layout_summary
 
@@ -103,3 +105,50 @@ class SqliteCatalog:
         self._database.execute(
             "UPDATE documents SET layout = ? WHERE id = ?", (encode_layout_summary(summary), document_id)
         )
+
+    def add_document(self, document_id: str, slug: str, document: NewDocument, created_at: datetime) -> None:
+        self._database.execute(
+            "INSERT INTO documents (id, slug, title, author, kind, notes, unwarp,"
+            " created_at, updated_at, updated_ts) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                document_id,
+                slug,
+                document.title,
+                document.author,
+                document.kind,
+                document.notes,
+                int(document.unwarp),
+                timestamps.iso(created_at),
+                timestamps.iso(created_at),
+                created_at.timestamp(),
+            ),
+        )
+
+    def update_document(self, document_id: str, changes: DocumentChanges) -> None:
+        values: dict[str, object] = {
+            name: value
+            for name, value in (
+                ("title", changes.title),
+                ("author", changes.author),
+                ("kind", changes.kind),
+                ("notes", changes.notes),
+                ("unwarp", None if changes.unwarp is None else int(changes.unwarp)),
+            )
+            if value is not None
+        }
+        if not values:
+            raise ValueError("an update of a document sets at least one of its fields")
+        assignments = ", ".join(f"{name} = ?" for name in values)
+        self._database.execute(
+            f"UPDATE documents SET {assignments} WHERE id = ?",  # noqa: S608 (column names from the code, values as ? parameters)
+            (*values.values(), document_id),
+        )
+
+    def touch_document(self, document_id: str, updated_at: datetime) -> None:
+        self._database.execute(
+            "UPDATE documents SET updated_at = ?, updated_ts = ? WHERE id = ?",
+            (timestamps.iso(updated_at), updated_at.timestamp(), document_id),
+        )
+
+    def remove_document(self, document_id: str) -> None:
+        self._database.execute("DELETE FROM documents WHERE id = ?", (document_id,))

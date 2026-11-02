@@ -1,8 +1,9 @@
 """The catalog of documents and pages in SQLite (adapters/sqlite/catalog.py): its transactions, the order of its lists,
-and the pages it queues again."""
+the changes of its documents, and the pages it queues again."""
 
 from __future__ import annotations
 
+import collections.abc
 import contextlib
 from dataclasses import dataclass
 from datetime import datetime
@@ -12,6 +13,8 @@ import pytest
 
 from scanmylib.adapters.sqlite.catalog import SqliteCatalog
 from scanmylib.adapters.sqlite.database import Database
+from scanmylib.domain.documents import NewDocument
+from scanmylib.domain.records import DocumentChanges, DocumentRecord, PageRecord
 
 DOCUMENT_ID = "0f000000-0000-4000-8000-000000000000"
 MOMENT = "2026-10-12T20:00:00+02:00"
@@ -30,6 +33,17 @@ EARLIEST_CAPTURE_SECONDS = 1.0
 TIED_CAPTURE_SECONDS = 5.0
 LATER_CAPTURE_SECONDS = 9.0
 STATUSES_BY_RANK = ("processing", "processing", "queued", "done", "error")
+EXAMPLE_SLUG_PREFIX = "example-book-"
+NEW_DOCUMENT = NewDocument("Example Book", "Jane Doe", "book", "Bought second-hand", True)
+OTHER_AUTHOR = "John Roe"
+FIRST_MOMENT_TEXT = "2026-10-13T09:00:00+02:00"
+LATER_MOMENT_TEXT = "2026-10-13T10:30:00+02:00"
+LATEST_MOMENT_TEXT = "2026-10-14T08:15:00+02:00"
+FIRST_MOMENT = datetime.fromisoformat(FIRST_MOMENT_TEXT)
+LATER_MOMENT = datetime.fromisoformat(LATER_MOMENT_TEXT)
+LATEST_MOMENT = datetime.fromisoformat(LATEST_MOMENT_TEXT)
+FIRST_ADDED_DOCUMENT_ID = "0d000000-0000-4000-8000-000000000001"
+LATER_ADDED_DOCUMENT_ID = "0d000000-0000-4000-8000-000000000002"
 
 
 def insert_document(database: Database, document_id: str, *, updated_timestamp_seconds: float) -> None:
@@ -70,6 +84,10 @@ def insert_a_page_being_read(database: Database) -> None:
         rank=0,
         captured_timestamp_seconds=MOMENT_TIMESTAMP_SECONDS,
     )
+
+
+def add_example_document(catalog: SqliteCatalog, document_id: str, *, added_at: datetime) -> None:
+    catalog.add_document(document_id, f"{EXAMPLE_SLUG_PREFIX}{document_id}", NEW_DOCUMENT, added_at)
 
 
 class AbandonedTransaction(Exception):
@@ -192,3 +210,111 @@ class TestTheSqliteCatalog:
 
             def test_should_count_the_pages_it_queued_again(self, requeued_pages: RequeuedPages) -> None:
                 assert requeued_pages.requeued_count == 2
+
+    class TestTheAddDocumentMethod:
+        class TestWhenTwoAreAddedOneAfterTheOther:
+            @pytest.fixture
+            def documents(self, tmp_path: Path) -> list[DocumentRecord]:
+                with contextlib.closing(Database(tmp_path / "scanmylib.db")) as database:
+                    catalog = SqliteCatalog(database)
+                    add_example_document(catalog, FIRST_ADDED_DOCUMENT_ID, added_at=FIRST_MOMENT)
+                    add_example_document(catalog, LATER_ADDED_DOCUMENT_ID, added_at=LATER_MOMENT)
+                    return catalog.list_documents()
+
+            def test_should_record_each_created_and_last_updated_at_the_moment_it_was_added(
+                self, documents: list[DocumentRecord]
+            ) -> None:
+                assert [(document.id, document.created_at, document.updated_at) for document in documents] == [
+                    (LATER_ADDED_DOCUMENT_ID, LATER_MOMENT_TEXT, LATER_MOMENT_TEXT),
+                    (FIRST_ADDED_DOCUMENT_ID, FIRST_MOMENT_TEXT, FIRST_MOMENT_TEXT),
+                ]
+
+            def test_should_record_each_with_its_slug_and_the_fields_of_the_new_document(
+                self, documents: list[DocumentRecord]
+            ) -> None:
+                assert {
+                    document.id: (
+                        document.slug,
+                        document.title,
+                        document.author,
+                        document.kind,
+                        document.notes,
+                        document.unwarp,
+                    )
+                    for document in documents
+                } == {
+                    document_id: (
+                        f"{EXAMPLE_SLUG_PREFIX}{document_id}",
+                        NEW_DOCUMENT.title,
+                        NEW_DOCUMENT.author,
+                        NEW_DOCUMENT.kind,
+                        NEW_DOCUMENT.notes,
+                        NEW_DOCUMENT.unwarp,
+                    )
+                    for document_id in (FIRST_ADDED_DOCUMENT_ID, LATER_ADDED_DOCUMENT_ID)
+                }
+
+    class TestTheTouchDocumentMethod:
+        class TestWhenTheFirstOfTwoDocumentsIsTouched:
+            @pytest.fixture
+            def documents(self, tmp_path: Path) -> list[DocumentRecord]:
+                with contextlib.closing(Database(tmp_path / "scanmylib.db")) as database:
+                    catalog = SqliteCatalog(database)
+                    add_example_document(catalog, FIRST_ADDED_DOCUMENT_ID, added_at=FIRST_MOMENT)
+                    add_example_document(catalog, LATER_ADDED_DOCUMENT_ID, added_at=LATER_MOMENT)
+                    catalog.touch_document(FIRST_ADDED_DOCUMENT_ID, LATEST_MOMENT)
+                    return catalog.list_documents()
+
+            def test_should_record_the_moment_of_its_last_update_and_keep_that_of_its_creation(
+                self, documents: list[DocumentRecord]
+            ) -> None:
+                assert [(document.id, document.created_at, document.updated_at) for document in documents] == [
+                    (FIRST_ADDED_DOCUMENT_ID, FIRST_MOMENT_TEXT, LATEST_MOMENT_TEXT),
+                    (LATER_ADDED_DOCUMENT_ID, LATER_MOMENT_TEXT, LATER_MOMENT_TEXT),
+                ]
+
+    class TestTheUpdateDocumentMethod:
+        class TestWhenItsChangesHoldSomeOfItsFields:
+            @pytest.fixture
+            def documents(self, tmp_path: Path) -> list[DocumentRecord]:
+                with contextlib.closing(Database(tmp_path / "scanmylib.db")) as database:
+                    catalog = SqliteCatalog(database)
+                    add_example_document(catalog, FIRST_ADDED_DOCUMENT_ID, added_at=FIRST_MOMENT)
+                    catalog.update_document(FIRST_ADDED_DOCUMENT_ID, DocumentChanges(author=OTHER_AUTHOR, unwarp=False))
+                    return catalog.list_documents()
+
+            def test_should_set_those_fields_and_keep_the_others(self, documents: list[DocumentRecord]) -> None:
+                assert [
+                    (document.title, document.author, document.kind, document.notes, document.unwarp)
+                    for document in documents
+                ] == [(NEW_DOCUMENT.title, OTHER_AUTHOR, NEW_DOCUMENT.kind, NEW_DOCUMENT.notes, False)]
+
+        class TestWhenItsChangesHoldNoField:
+            @pytest.fixture
+            def update_the_document(
+                self, tmp_path: Path, request: pytest.FixtureRequest
+            ) -> collections.abc.Callable[[], None]:
+                database = Database(tmp_path / "scanmylib.db")
+                request.addfinalizer(database.close)
+                catalog = SqliteCatalog(database)
+                add_example_document(catalog, FIRST_ADDED_DOCUMENT_ID, added_at=FIRST_MOMENT)
+                return lambda: catalog.update_document(FIRST_ADDED_DOCUMENT_ID, DocumentChanges())
+
+            def test_should_refuse_them_since_an_update_sets_at_least_one(
+                self, update_the_document: collections.abc.Callable[[], None]
+            ) -> None:
+                with pytest.raises(ValueError, match="at least one"):
+                    update_the_document()
+
+    class TestTheRemoveDocumentMethod:
+        class TestWhenItHasAPage:
+            @pytest.fixture
+            def page(self, tmp_path: Path) -> PageRecord | None:
+                with contextlib.closing(Database(tmp_path / "scanmylib.db")) as database:
+                    insert_a_page_being_read(database)
+                    catalog = SqliteCatalog(database)
+                    catalog.remove_document(DOCUMENT_ID)
+                    return catalog.get_page(PAGE_BEING_READ_ID)
+
+            def test_should_remove_its_page_with_it(self, page: PageRecord | None) -> None:
+                assert page is None

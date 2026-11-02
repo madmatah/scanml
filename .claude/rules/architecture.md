@@ -30,11 +30,11 @@ tree. The scripts of `scripts/` are tools: their logic lives in `scripts/lib/`, 
   OCR ports: the sandbox implements the protocol in its own process, and so does the fake OCR in the development stack.
   The api never depends on a particular engine or model, so that another one can be plugged in by implementing a new
   worker.
-- **The code written before these layers keeps its layout until it is restructured,** which is planned for the api, the
-  app and the web UI, not yet for the OCR sandbox. Until then, a new file follows the layers, and a change to an older
-  one adds no coupling that they forbid: no technology reached from code that holds a rule, no rule in an adapter, no
-  framework type across a port. A file in a layer's directory, moved or new, imports none that is still outside the
-  layers, which would bring it that file's couplings.
+- **The code written before these layers keeps its layout until it is restructured,** which is planned for the app and
+  the web UI, not yet for the OCR sandbox. Until then, a new file follows the layers, and a change to an older one adds
+  no coupling that they forbid: no technology reached from code that holds a rule, no rule in an adapter, no framework
+  type across a port. A file in a layer's directory, moved or new, imports none that is still outside the layers, which
+  would bring it that file's couplings.
 
 ## Ports and wiring
 

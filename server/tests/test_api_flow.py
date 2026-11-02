@@ -897,6 +897,27 @@ class TestADocument:
         ) -> None:
             assert pages_written_at_start.written_page_ids == [pages_written_at_start.out_of_date_page_id]
 
+    class TestWhenItIsPreviewedWithAMissingPage:
+        PAGE_NUMBERS_IN_UPLOAD_ORDER = (3, 1)
+        PREVIEW_PARTS = re.compile(r'<p class="(?:page-marker|missing-pages)"[^>]*>([^<]*)</p>|<h2>([^<]*)</h2>')
+
+        @pytest.fixture(scope="class")
+        @classmethod
+        def previewed_parts(cls, tmp_path_factory: pytest.TempPathFactory) -> list[str]:
+            with running_api(tmp_path_factory.mktemp("api")) as api:
+                client = api.client
+                document_id = create_document(client)
+                for page_number in cls.PAGE_NUMBERS_IN_UPLOAD_ORDER:
+                    upload(client, document_id, page_image(page_number))
+                wait_until_processed(client, document_id)
+                html: str = client.get(f"/api/documents/{document_id}/html", headers=AUTH).json()["html"]
+            return ["".join(match) for match in cls.PREVIEW_PARTS.findall(html)]
+
+        def test_should_show_each_page_with_its_own_text_in_reading_order_and_the_missing_one_between(
+            self, previewed_parts: list[str]
+        ) -> None:
+            assert previewed_parts == ["Page 1", "Chapter 1", "Missing page: 2", "Page 3", "Chapter 3"]
+
 
 class TestTheDocumentsOfALibrary:
     class TestWhenTheyAreCreated:
@@ -1409,6 +1430,12 @@ class TestAPage:
         def test_should_point_its_html_preview_to_the_illustration_the_api_serves(self, page_views: PageViews) -> None:
             illustration_url = f"/api/documents/{page_views.document_id}/files/images/{page_views.page['key']}_1.jpg"
             assert f'src="{illustration_url}"' in page_views.page_html
+
+        def test_should_point_the_html_preview_of_its_document_to_the_illustration_the_api_serves(
+            self, page_views: PageViews
+        ) -> None:
+            illustration_url = f"/api/documents/{page_views.document_id}/files/images/{page_views.page['key']}_1.jpg"
+            assert f'src="{illustration_url}"' in page_views.document_html
 
         def test_should_mark_the_page_in_the_html_preview_of_its_document(self, page_views: PageViews) -> None:
             assert '<p class="page-marker" data-label="42">Page 42</p>' in page_views.document_html

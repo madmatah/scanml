@@ -27,11 +27,11 @@ from .adapters.sqlite.web_sessions import SqliteWebSessions
 from .adapters.system_clock import SystemClock
 from .api import documents, pages, system, web
 from .api.deps import Services
+from .application.access import Access
 from .application.library import LibraryService
 from .application.ocr_loop import OcrLoop
 from .application.publisher import Publisher
 from .application.scan_images import ImageRejected, ImageTooLarge
-from .auth import Authenticator
 from .config import Settings
 from .domain.records import Conflict, InvalidRequest, NotFound
 from .middleware import BodySizeLimitMiddleware, SecurityHeadersMiddleware, body_limit
@@ -88,7 +88,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             images,
             assembly_delay_seconds=settings.assemble_delay_s,
         )
-        auth = Authenticator(load_or_create_token(settings.token_path, settings.token), SqliteWebSessions(db), clock)
+        access = Access(load_or_create_token(settings.token_path, settings.token), SqliteWebSessions(db), clock)
         ocr_client = OcrClient(settings.ocr_socket, settings.ocr_timeout_s)
         ocr_engine = SandboxOcrEngine(ocr_client)
         ocr_loop = OcrLoop(
@@ -98,7 +98,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         requeued = library.start()
         ocr_loop.start()
         app.state.services = Services(
-            settings=settings, library=library, auth=auth, ocr=ocr_engine, previews=HtmlPreviews()
+            settings=settings, library=library, access=access, ocr=ocr_engine, previews=HtmlPreviews()
         )
         log.info(
             "ScanMyLib %s: library %s, OCR socket %s, %d interrupted page(s) re-queued",

@@ -22,8 +22,8 @@ from fastapi.testclient import TestClient
 from markdown_it import MarkdownIt
 from PIL import Image
 
-from scanmylib import preview
 from scanmylib.adapters.filesystem.library_files import FilesystemLibrary
+from scanmylib.adapters.http_api import preview
 from scanmylib.devtools.fake_ocr import ParseRequest
 from scanmylib.library import LibraryService
 from support import (

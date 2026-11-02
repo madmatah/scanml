@@ -11,10 +11,8 @@ set -euo pipefail
 
 SANDBOX=/opt/sandbox
 LOG="$SANDBOX/setup.log"
+SETUP_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 
-PADDLE_WHEEL_URL="https://paddle-whl.cdn.bcebos.com/stable/cu126/paddlepaddle-gpu/paddlepaddle_gpu-3.2.1-cp312-cp312-linux_x86_64.whl"
-PADDLEOCR_SPEC="paddleocr[doc-parser]==3.7.0"
-VLLM_SPEC="vllm==0.31.0"
 MODEL_REPO="PaddlePaddle/PaddleOCR-VL-1.6"
 MODEL_REVISION="c5630abae1d940eafe0697512a0325494b02ab42"
 
@@ -34,14 +32,11 @@ step_done() { [[ -f "$SANDBOX/.done-$1" ]]; }
 mark_done() { date -Is > "$SANDBOX/.done-$1"; }
 
 # 1. PaddlePaddle + PaddleOCR (layout detection and the document-parsing pipeline).
-#    Only the paddlepaddle-gpu wheel comes from the official Paddle CDN (it is not
-#    published on PyPI); all its dependencies are resolved from PyPI.
 if ! step_done venv-paddle; then
     echo "--- [1/4] venv-paddle"
     rm -rf "$SANDBOX/venv-paddle"
     uv venv --python /usr/local/bin/python3.12 "$SANDBOX/venv-paddle"
-    uv pip install --python "$SANDBOX/venv-paddle/bin/python" \
-        "paddlepaddle-gpu @ $PADDLE_WHEEL_URL" "$PADDLEOCR_SPEC" safetensors
+    uv pip install --python "$SANDBOX/venv-paddle/bin/python" -r "$SETUP_DIR/requirements-paddle.in"
     mark_done venv-paddle
 fi
 
@@ -50,7 +45,7 @@ if ! step_done venv-vllm; then
     echo "--- [2/4] venv-vllm"
     rm -rf "$SANDBOX/venv-vllm"
     uv venv --python /usr/local/bin/python3.12 "$SANDBOX/venv-vllm"
-    uv pip install --python "$SANDBOX/venv-vllm/bin/python" "$VLLM_SPEC"
+    uv pip install --python "$SANDBOX/venv-vllm/bin/python" -r "$SETUP_DIR/requirements-vllm.in"
     mark_done venv-vllm
 fi
 

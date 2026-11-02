@@ -31,7 +31,9 @@ Phone (ScanMyLib app)  ──Wi-Fi──▶  PC: api ──socket──▶ OCR s
 - **GPU**: an NVIDIA GPU of the Turing generation (RTX 20 series) or newer, with an NVIDIA driver 580 or newer (the
   sandbox uses CUDA 13 builds of vLLM), and about 5 GB of free VRAM while pages are processed. The model is unloaded
   when idle. See "OCR engine" for cards with less than 24 GB.
-- **Disk**: about 17 GB for the OCR sandbox (environments and models), 3 GB for the Android toolchain, plus the library.
+- **Disk**: about 17 GB for the OCR sandbox (environments and models), 3 GB for the Android toolchain, plus the library;
+  a deployment that installs a new sandbox (`--new-sandbox`) needs 36 GiB free next to it, and keeps the replaced one,
+  17 GB, until you remove it.
 - **Phone**: Android 8.0 or newer. The Google document scanner and the QR code reader of the app need Google Play
   services; without them, the app's own camera, photo import and manual pairing still work.
 - **Development**: the GitHub CLI (`gh`), logged in, with which the pull requests are opened and updated, and their
@@ -228,8 +230,9 @@ Nothing is ever erased: deleted documents and pages go to `LIBRARY_DIR/.trash/`.
   `DATA_DIR/backups/`.
 - `ANDROID_DIR/keystore`: the app's signing key. Without it, a new version of the app cannot update the installed one.
 
-Everything else can be downloaded again: the OCR sandbox by `ocr-setup` (`scripts/setup.sh` on a new installation), the
-Android toolchain by the next app build.
+Everything else can be downloaded again: the OCR sandbox by `ocr-setup` (`scripts/setup.sh` on a new installation,
+`scripts/deploy.sh --new-sandbox` on an existing one, into a `SANDBOX_DIR` created empty if it was lost), the Android
+toolchain by the next app build.
 
 ## Security
 
@@ -288,6 +291,38 @@ It runs no tests: a release is tested before it is published, and the deployment
 If a step fails, it says what state production is in and prints the commands to roll back to the `:deployed` images and
 the backup of the state. A closed terminal does not interrupt it, and each run is logged in
 `DATA_DIR/logs/deploy-<date>.log`.
+
+A release whose notes say so needs a new OCR sandbox, which `--new-sandbox` installs:
+
+```bash
+scripts/deploy.sh --dry-run --new-sandbox   # checks, among them SANDBOX_DIR and 36 GiB free next to it
+scripts/deploy.sh --apk --new-sandbox
+```
+
+`SANDBOX_DIR` must hold a sandbox, or nothing, since the restart moves it whole. It must not be or contain `DATA_DIR`,
+may lie inside it only as `DATA_DIR/sandbox`, and must be, contain or lie inside none of `LIBRARY_DIR`, `ANDROID_DIR`,
+`ANDROID_KEYSTORE_DIR` and the checkout. It installs the new sandbox into `SANDBOX_DIR.new` before the backup, for about
+an hour (about 16 GB of downloads), while production keeps running. During that hour `:latest` already names the new
+images: do not run `scripts/prod.sh compose up` until the deployment ends. It then checks the new image against the new
+sandbox, and at the restart stops `ocr` and renames the running sandbox `SANDBOX_DIR.replaced-<time>` and the new one
+`SANDBOX_DIR`.
+
+- **If it fails before the restart,** production is unchanged. Read the installation's log,
+  `cat -v SANDBOX_DIR.new/setup.log` (`cat -v` shows the control characters a downloaded package may print instead of
+  passing them to the terminal), which the deployment shows only when it is a regular file: the installation writes it,
+  and a link there would show a file of the host. Then remove `SANDBOX_DIR.new` before trying again.
+- **If it fails after the restart,** run the commands it prints: they stop the services, put the replaced sandbox back
+  (`mv -T`), the previous images and the state, and restart them.
+- **To go back to the replaced sandbox** once the deployment succeeded, run the commands it prints: they stop `ocr`,
+  rename the two sandboxes (`mv -T`), and deploy the previous release again on the replaced sandbox: check out its tag
+  with `git checkout`, then run `scripts/deploy.sh --allow-downgrade`.
+- **Once the new sandbox works,** read a page, then remove the replaced sandbox when going back is no longer wanted
+  (`rm -rf SANDBOX_DIR.replaced-<time>`, which the deployment prints): the scripts never delete a sandbox.
+
+A rehearsal on the development stack (`scripts/dev-env.sh --own-sandbox`, then
+`SCANMYLIB_DEPLOY_REHEARSAL=scanmylib-dev scripts/deploy.sh --new-sandbox`) installs with the dependencies as they
+resolve that day: production's installation, on another day, may resolve others, which the checks of the deployment and
+a first page then judge.
 
 `VERSION` is the version of both the PC side and the app (shown in the web UI and in the app's connection check). The
 app's version code is derived from it, so a new app always installs over the previous one.

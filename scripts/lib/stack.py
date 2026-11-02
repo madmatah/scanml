@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""The .env of a ScanMyLib stack, production's checkout, the isolation of a stack from production, and the settings
-that the check of a sandbox before a restart takes from the ocr service.
+"""The .env of a ScanMyLib stack and its copy with a setting changed, production's checkout, the isolation of a stack
+from production, where a deployment installs a new sandbox, and the settings that the check of a sandbox before a
+restart takes from the ocr service.
 
 Shared by the scripts: scripts/lib/common.sh runs it, scripts/e2e_test.py imports it. Standard
 library only, so that it runs with the host's python3.
@@ -67,8 +68,9 @@ the first merges them into the settings) together with the .env of the stack, an
 scripts/prod.sh pass on (COMPOSE_COMMANDS, COMMAND_OPTIONS).
 
 Usage:
-    stack.py env FILE
-        check FILE and print its KEY=VALUE lines
+    stack.py env FILE [--set KEY=VALUE]...
+        check FILE and print its KEY=VALUE lines, with each KEY of --set given that value, in its
+        place or at the end: a copy of FILE that changes only those keys
     stack.py production-checkout  < [containers]
         print production's checkout
     stack.py check-isolation --env FILE --project-dir DIR --compose-file FILE
@@ -80,6 +82,14 @@ Usage:
         directory except inside DIR (GitHub Actions' RUNNER_TEMP) (exit status 1)
     stack.py check-compose-command [--production] -- COMMAND [ARGS...]
         print why scripts/dev.sh (or scripts/prod.sh) refuses this docker compose command
+    stack.py check-new-sandbox SANDBOX_DIR --stamp YYYYMMDD-HHMMSS --needed-bytes N --data-dir DIR
+            [--other-path NAME=PATH]...
+        print NEW= and REPLACED=, where scripts/deploy.sh --new-sandbox installs a new sandbox and
+        moves the one it replaces, else every reason why it cannot (exit status 1): SANDBOX_DIR
+        must be an existing directory, not a link or a mount point, that holds a MANIFEST.json or
+        nothing, in a parent this user can write to, without a leftover NEW, with N bytes free; it
+        must not be or contain DIR (the stack's DATA_DIR), and lies inside it only as DIR/sandbox;
+        it must neither be, contain nor lie inside any PATH, each named NAME in the reasons
     stack.py sandbox-check-options  < configuration
         print, one per line, the docker run options that give the check of the sandbox before the
         restart (scripts/deploy.sh) the environment and the limits of the ocr service
@@ -94,8 +104,9 @@ import json
 import os
 import pwd
 import re
+import shutil
 import sys
-from collections.abc import Collection
+from collections.abc import Collection, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -209,23 +220,40 @@ def read_env(path: str | os.PathLike[str]) -> dict[str, str]:
         if not line or line.startswith("#"):
             continue
         where = f"{path}, line {number}"
-        key, equals, value = line.partition("=")
-        if not equals or not _KEY.fullmatch(key):
-            raise EnvError(
-                f"{where}: expected KEY=VALUE (KEY in capital letters, nothing before it, no spaces "
-                f"around '='), a comment starting with '#' in the first column, or a blank line: {line!r}"
-            )
-        if not _VALUE.fullmatch(value):
-            raise EnvError(
-                f"{where}: the value of {key} may only contain letters, digits and _ . / : @ % + , - "
-                f"(no spaces, quotes, '$', '#', '\\', and no comment after the value): {value!r}"
-            )
-        if _FORBIDDEN_KEY.match(key):
-            raise EnvError(f"{where}: {key} would change what docker compose does: not allowed in .env")
+        key, value = _read_env_line(line, where)
         if key in values:
             raise EnvError(f"{where}: {key} is set twice")
         values[key] = value
     return values
+
+
+def _read_env_line(line: str, where: str) -> tuple[str, str]:
+    key, equals, value = line.partition("=")
+    if not equals or not _KEY.fullmatch(key):
+        raise EnvError(
+            f"{where}: expected KEY=VALUE (KEY in capital letters, nothing before it, no spaces "
+            f"around '='), a comment starting with '#' in the first column, or a blank line: {line!r}"
+        )
+    if not _VALUE.fullmatch(value):
+        raise EnvError(
+            f"{where}: the value of {key} may only contain letters, digits and _ . / : @ % + , - "
+            f"(no spaces, quotes, '$', '#', '\\', and no comment after the value): {value!r}"
+        )
+    if _FORBIDDEN_KEY.match(key):
+        raise EnvError(f"{where}: {key} would change what docker compose does: not allowed in .env")
+    return key, value
+
+
+def set_env_values(values: dict[str, str], settings: list[str]) -> dict[str, str]:
+    """Each setting is held to the strict format of a line of .env, so that the copy of a .env reads in docker compose
+    as the scripts read it."""
+    changed = dict(values)
+    for setting in settings:
+        if "\n" in setting or "\r" in setting:
+            raise EnvError(f"--set {setting!r}: one KEY=VALUE line only")
+        key, value = _read_env_line(setting, f"--set {setting!r}")
+        changed[key] = value
+    return changed
 
 
 # -- paths ------------------------------------------------------------------
@@ -658,7 +686,93 @@ def isolation_problems(
     return list(dict.fromkeys(problems))
 
 
-# -- the check of a sandbox before the restart --------------------------------
+_STAMP = re.compile(r"\d{8}-\d{6}")
+
+
+@dataclass(frozen=True)
+class NewSandbox:
+    new: str
+    replaced: str
+
+
+def find_new_sandbox_problems(
+    sandbox_dir: str, stamp: str, needed_bytes: int, *, data_dir: str, other_paths: Mapping[str, str]
+) -> tuple[NewSandbox, list[str]]:
+    """The scripts only ever rename a sandbox, and a rename moves whole whatever SANDBOX_DIR holds."""
+    path = os.path.normpath(sandbox_dir) if sandbox_dir.startswith("/") else sandbox_dir
+    sandbox = NewSandbox(new=f"{path}.new", replaced=f"{path}.replaced-{stamp}")
+    if not path.startswith("/"):
+        return sandbox, [f"SANDBOX_DIR: '{sandbox_dir}' is not an absolute path"]
+    if not _STAMP.fullmatch(stamp):
+        return sandbox, [f"the stamp '{stamp}' is not YYYYMMDD-HHMMSS"]
+    parent = os.path.dirname(path)
+    problems = []
+    if os.path.islink(path):
+        problems.append(f"SANDBOX_DIR: {path} is a symbolic link, which a rename would move instead of the sandbox")
+    elif not os.path.exists(path):
+        problems.append(f"SANDBOX_DIR: {path} does not exist")
+    elif not os.path.isdir(path):
+        problems.append(f"SANDBOX_DIR: {path} is not a directory")
+    elif os.path.ismount(path):
+        problems.append(f"SANDBOX_DIR: {path} is a mount point, which a rename cannot move")
+    elif not os.path.isfile(os.path.join(path, "MANIFEST.json")) and _holds_entries(path):
+        problems.append(f"SANDBOX_DIR: {path} holds no MANIFEST.json and is not empty: it is not a sandbox")
+    problems += _find_shared_path_problems(path, data_dir, other_paths)
+    if os.path.isdir(parent) and not os.access(parent, os.W_OK):
+        problems.append(f"SANDBOX_DIR: this user cannot write to {parent}, where the new sandbox goes")
+    if os.path.lexists(sandbox.new):
+        # setup.log is written by untrusted code: reading a link would show a file of the host.
+        log = os.path.join(sandbox.new, "setup.log")
+        if os.path.isfile(log) and not os.path.islink(log):
+            problems.append(
+                f"{sandbox.new} is left from an earlier installation: read its setup.log through cat -v, then remove it"
+            )
+        else:
+            problems.append(
+                f"{sandbox.new} is left from an earlier installation, without a regular setup.log to read: remove it"
+            )
+    if os.path.lexists(sandbox.replaced):
+        problems.append(f"{sandbox.replaced} exists already")
+    if os.path.isdir(parent):
+        free_bytes = shutil.disk_usage(parent).free
+        if free_bytes < needed_bytes:
+            problems.append(
+                f"{parent} has {free_bytes / 1024**3:.1f} GiB free, and a new sandbox needs "
+                f"{needed_bytes / 1024**3:.1f} GiB"
+            )
+    return sandbox, problems
+
+
+def _holds_entries(directory: str) -> bool:
+    try:
+        with os.scandir(directory) as entries:
+            return any(True for _ in entries)
+    except OSError:
+        return True
+
+
+def _find_shared_path_problems(path: str, data_dir: str, other_paths: Mapping[str, str]) -> list[str]:
+    """DATA_DIR/sandbox is where an installation puts the sandbox, and holds nothing else of DATA_DIR."""
+    problems = []
+    sandbox = real(path)
+    for name, other_path in {"DATA_DIR": data_dir, **other_paths}.items():
+        if not other_path.startswith("/"):
+            problems.append(f"{name}: '{other_path}' is not an absolute path")
+            continue
+        other = real(other_path)
+        if name == "DATA_DIR":
+            if contains(sandbox, other):
+                problems.append(
+                    f"SANDBOX_DIR: {path} is or contains DATA_DIR ({other_path}), which a rename would move"
+                )
+            elif contains(other, sandbox) and sandbox != os.path.join(other, "sandbox"):
+                problems.append(
+                    f"SANDBOX_DIR: {path} lies inside DATA_DIR ({other_path}) elsewhere than {other_path}/sandbox"
+                )
+        elif contains(sandbox, other) or contains(other, sandbox):
+            problems.append(f"SANDBOX_DIR: {path} is, contains or lies inside {name} ({other_path})")
+    return problems
+
 
 #: The service whose environment and limits the check before the restart takes.
 SANDBOX_SERVICE = "ocr"
@@ -917,6 +1031,9 @@ def main(argv: list[str] | None = None) -> int:
     commands = parser.add_subparsers(dest="command", required=True)
     env_command = commands.add_parser("env", help="check a .env and print its KEY=VALUE lines")
     env_command.add_argument("file")
+    env_command.add_argument(
+        "--set", action="append", default=[], metavar="KEY=VALUE", help="print KEY with this value instead, or add it"
+    )
     commands.add_parser("production-checkout", help="production's checkout (containers on stdin)")
     check = commands.add_parser("check-isolation", help="what a stack shares with production")
     check.add_argument("--env", required=True, help="the stack's .env")
@@ -931,11 +1048,19 @@ def main(argv: list[str] | None = None) -> int:
     commands.add_parser(
         "sandbox-check-options", help="the docker run options of the check before the restart (configuration on stdin)"
     )
+    new_sandbox = commands.add_parser("check-new-sandbox", help="where deploy.sh --new-sandbox installs a sandbox")
+    new_sandbox.add_argument("sandbox_dir", metavar="SANDBOX_DIR")
+    new_sandbox.add_argument("--stamp", required=True, help="the deployment's YYYYMMDD-HHMMSS")
+    new_sandbox.add_argument("--needed-bytes", required=True, type=int, help="the free space an installation needs")
+    new_sandbox.add_argument("--data-dir", required=True, help="the stack's DATA_DIR")
+    new_sandbox.add_argument(
+        "--other-path", action="append", default=[], metavar="NAME=PATH", help="a path that SANDBOX_DIR must not share"
+    )
     args = parser.parse_args(argv)
 
     try:
         if args.command == "env":
-            for key, value in read_env(args.file).items():
+            for key, value in set_env_values(read_env(args.file), args.set).items():
                 print(f"{key}={value}")
             return 0
         if args.command == "sandbox-check-options":
@@ -945,7 +1070,15 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "production-checkout":
             print(production_checkout(_read_containers()))
             return 0
-        if args.command == "check-compose-command":
+        if args.command == "check-new-sandbox":
+            other_paths = dict(item.partition("=")[::2] for item in args.other_path)
+            sandbox, problems = find_new_sandbox_problems(
+                args.sandbox_dir, args.stamp, args.needed_bytes, data_dir=args.data_dir, other_paths=other_paths
+            )
+            if not problems:
+                print(f"NEW={sandbox.new}")
+                print(f"REPLACED={sandbox.replaced}")
+        elif args.command == "check-compose-command":
             command = args.argv[1:] if args.argv[:1] == ["--"] else args.argv
             problems = compose_command_problems(command, production=args.production)
         elif args.command == "check-paths":

@@ -17,7 +17,7 @@ organize the results on disk as Markdown + illustrations that AI agents can read
 | Component | Where | Trust | Network | Sees |
 |---|---|---|---|---|
 | `ocr` (sandbox) | `ocr/` → image `scanmylib-ocr` | **untrusted** (Paddle, vLLM, model code) | **none** (only `lo`) | `/opt/sandbox` (ro: venvs+models), `/run/scanmylib` (socket), `/var/cache/ocr` (rw cache), tmpfs `/tmp` |
-| `ocr-setup` | same image, profile `setup` | untrusted | yes (downloads only) | only `/opt/sandbox` (rw: `SANDBOX_SETUP_DIR`, set in production's `.env` only) |
+| `ocr-setup` | same image, profile `setup` | untrusted | yes (downloads only) | only `/opt/sandbox` (rw: `SANDBOX_SETUP_DIR`, set in production's `.env` only, or `SANDBOX_DIR.new` through the temporary copy of `.env` of `scripts/deploy.sh --new-sandbox`) |
 | `api` | `server/` → image `scanmylib-api` | ours | LAN (published port) | `/library`, `/state`, `/run/scanmylib`, `/app-dist` (ro) |
 | `ocr-fake` (development only) | api image, profile `fake-ocr`: canned results instead of `ocr`; refuses the production project and a socket that a sandbox serves | ours | **none** | `/run/scanmylib` (socket), tmpfs `/tmp` |
 | Android app | `android/` | ours | LAN | its own app storage |
@@ -30,7 +30,7 @@ in production, written by `scripts/setup.sh`; a worktree's development stack is 
 `scripts/dev-env.sh`, see `CLAUDE.md`):
 
 - `DATA_DIR` (e.g. `/data/USER/scanmylib`) → `run/` (Unix socket), `ocr-cache/`, `state/` (api DB, token, thumbnails), `app/` (built APK and its metadata `scanmylib.json`, relayed by `/api/health`), `backups/` (state copies made by `scripts/deploy.sh`), `logs/`.
-- `SANDBOX_DIR` (e.g. `DATA_DIR/sandbox`) → the OCR venvs and models, mounted read-only; `SANDBOX_SETUP_DIR` (production only, the same directory) is where `ocr-setup` writes them.
+- `SANDBOX_DIR` (e.g. `DATA_DIR/sandbox`) → the OCR venvs and models, mounted read-only; `SANDBOX_SETUP_DIR` (production only, the same directory) is where `ocr-setup` writes them at the first installation. `scripts/deploy.sh --new-sandbox` installs a new one in `SANDBOX_DIR.new`, then renames the running one `SANDBOX_DIR.replaced-<time>`, kept for a rollback, and the new one `SANDBOX_DIR`.
 - `ANDROID_DIR` (e.g. `DATA_DIR/android`) → Android SDK, Gradle caches, signing key (`keystore/`, or `ANDROID_KEYSTORE_DIR`: the development stack uses production's key, read-only, with its own toolchain).
 - `LIBRARY_DIR` (e.g. `~/Documents/ScanMyLib`) → the organized library (pure content, see below).
 

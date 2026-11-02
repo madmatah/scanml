@@ -36,10 +36,13 @@ production runs next to the development stack on the same machine. These rules k
   of its own, never the library or production's state. It may use the GPU through CDI only (`nvidia.com/gpu=all`), as
   the service does.
 - **Untrusted components are downloaded only by the `ocr-setup` container,** pinned by version or commit, and no Paddle
-  code runs with network access. `ocr-setup` writes the sandbox through `SANDBOX_SETUP_DIR`, which only production's
-  `.env` sets; every other container mounts `SANDBOX_DIR` read-only. On GitHub's runners, outside the user's machine,
-  the vulnerability scan (`.github/workflows/vulnerability-scan.yml`) also resolves the requirements of the Paddle and
-  vLLM engines, without installing them:
+  code runs with network access. `ocr-setup` writes a sandbox through `SANDBOX_SETUP_DIR`, which only production's
+  `.env` sets, for the first installation, or the temporary copy of a stack's `.env` with which
+  `scripts/deploy.sh --new-sandbox` installs a new sandbox next to the running one, `SANDBOX_DIR.new`: in a rehearsal,
+  that copy passes the isolation checks of a development stack, so the new sandbox lies inside the stack's own
+  `DATA_DIR`. Every other container mounts a sandbox read-only. On GitHub's runners, outside the user's machine, the
+  vulnerability scan (`.github/workflows/vulnerability-scan.yml`) also resolves the requirements of the Paddle and vLLM
+  engines, without installing them:
   - it resolves them in a container of the Python image, never of the sandbox's: read-only, without capabilities or
     privilege escalation (`--cap-drop ALL`, `no-new-privileges`), as a non-root user, in a job that holds no token that
     writes, with no host mount but the read-only requirements and a work directory that the runner never reads back;
@@ -78,7 +81,9 @@ production runs next to the development stack on the same machine. These rules k
 - **Production is operated by hand only through `scripts/prod.sh compose`,** whose allowlist of compose commands
   (`scripts/lib/stack.py check-compose-command --production`) refuses builds, one-off containers and the commands that
   copy or push out of a stack: production changes only through `scripts/deploy.sh`. `scripts/deploy.sh` and
-  `scripts/setup.sh`, which build and change production, run docker compose with production's `.env` only.
+  `scripts/setup.sh`, which build and change production, run docker compose with production's `.env` only, or, for the
+  `ocr-setup` of `scripts/deploy.sh --new-sandbox`, a temporary copy of it that changes only `SANDBOX_SETUP_DIR`,
+  written by `scripts/lib/stack.py env --set`.
 - **A setting that a change needs goes into the allowlist of `scripts/lib/stack.py` in the same pull request,** with the
   reason it is safe, and a test of `scripts/tests/` that shows what it allows.
 - **A development stack writes only inside its own `DATA_DIR`,** and reads production's OCR models and signing key

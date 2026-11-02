@@ -53,6 +53,20 @@ cd ~/Dev/scanmylib && git worktree add --detach .claude/worktrees/release-next o
 cd ~/Dev/scanmylib/.claude/worktrees/release-next && scripts/dev-env.sh
 ```
 
+When `ocr/setup/` or `ocr/Dockerfile` changed since the last release, a deployment of this release installs a new
+sandbox, and the machine's sandbox is not the one to test. This fails when they changed:
+
+```bash
+cd ~/Dev/scanmylib/.claude/worktrees/release-next \
+  && git diff --quiet "v$(cat VERSION)" HEAD -- ocr/setup ocr/Dockerfile
+```
+
+In that case, run `cd ~/Dev/scanmylib/.claude/worktrees/release-next && scripts/dev-env.sh --own-sandbox` instead, and
+install the development stack's own sandbox from this commit, as `.claude/skills/running-tests/SKILL.md` > A change to
+the sandbox's setup says, with the user's approval of its downloads, every time: a sandbox installed before, by another
+commit or from another worktree of the development slot, which shares it, is not this commit's. The release's notes then
+say that its deployment needs `--new-sandbox` ([Propose the version](#propose-the-version)).
+
 Then run the block of `.claude/skills/running-tests/SKILL.md` > A change under `ocr/`, with
 `~/Dev/scanmylib/.claude/worktrees/release-next` as `<worktree>`. Nothing may fail. It builds the development slot's
 `scanmylib-dev-ocr:latest` from this commit: a session that runs the development stack with the real OCR builds its
@@ -91,6 +105,11 @@ request](#open-the-release-pull-request) adds to the release's section, or, for 
 section again from the release's commits. If the release can be published as it is, it says so: it is waiting for its
 run, or its tag is not fetched.
 
+When the sandbox's setup changed since the last release ([Test the sandbox with its
+engine](#test-the-sandbox-with-its-engine)), add to the draft, under Changed, an entry that says that deploying this
+release needs `scripts/deploy.sh --new-sandbox`, which installs the new sandbox next to the running one (`README.md` >
+Updating): nothing else tells the installations.
+
 Show the user the version, the reason, the draft and the commits left out, in their language. Wait for their go-ahead,
 another increment, or changes to the draft: entries reworded, merged or removed, a left-out commit that matters to the
 readers added, a Security or Removed section.
@@ -106,7 +125,8 @@ cd ~/Dev/scanmylib/.claude/worktrees/release-vX.Y.Z && scripts/release.py --comm
 ```
 
 It writes `VERSION` and the section (dated today, UTC) and commits them as `chore(release): X.Y.Z` with the commit the
-notes were written on (trailer `Release-Base`). Apply the changes the user asked for to `CHANGELOG.md`, then
+notes were written on (trailer `Release-Base`). Apply the changes the user asked for to `CHANGELOG.md`, and the entry
+about a new sandbox, then
 `cd ~/Dev/scanmylib/.claude/worktrees/release-vX.Y.Z && git add CHANGELOG.md && git commit --amend --no-edit`: the
 release stays one commit, with its trailer. Then:
 

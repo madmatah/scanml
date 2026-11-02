@@ -120,7 +120,8 @@ if [[ -f $SANDBOX_DIR/MANIFEST.json ]]; then
     say "OCR sandbox already installed ($SANDBOX_DIR/MANIFEST.json)"
 else
     say "Installing the OCR sandbox (downloads: ~16 GB)"
-    compose --profile setup run --rm ocr-setup
+    # Untrusted output: no terminal (-T, no stdin), and every control character escaped.
+    compose --profile setup run --rm -T ocr-setup < /dev/null 2>&1 | cat -v
 fi
 
 # --- 4. Android APK ---------------------------------------------------------

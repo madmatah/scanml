@@ -7,22 +7,25 @@ first in PATH. CONFIG is a JSON file:
     {"log": "...", "real_docker": "/usr/bin/docker",
      "rules": [{"match": "<regex>", "max_calls": 1, "stdout": "...", "stderr": "...", "exit": 0,
                 "snapshot": "<dir>", "no_image_id": true, "files": {"<path in the container>": "<text>"},
-                "links": {"<path in the container>": "<target>"}, "host_files": {"<path>": "<text>"}}, ...]}
+                "links": {"<path in the container>": "<target>"}, "host_files": {"<path>": "<text>"},
+                "host_links": {"<path>": "<target>"}}, ...]}
 
 Every call is appended to the log (one JSON line: the arguments, the environment variables that could change what docker
-compose does, and the files of a build context read from stdin, which `docker build ... -` reads in full, as docker
-does, and refuses without the Dockerfile its --file names). The first rule whose regular expression matches the
-arguments joined with spaces answers the call; with "max_calls", a rule answers only as long as the log holds at most
-that many calls that it matches, this one included, and later calls go on to the next rule; with "snapshot", a `docker
-compose` call first copies its --project-directory there (what a build would see); with "files" or "links", a `docker
-run` call writes a file or makes a link (in place of a file or a directory) where its -v mounts put that path of the
-container, as the tool would, and fails as docker does: on a read-only mount, on a mount point, or through a link that
-leaves the mount; with "host_files", it writes files of the host, as a person editing them meanwhile would. A `docker
-run` whose -v mount lies in a read-only one without its mount point fails, as docker cannot create it. Without a
-matching rule, `docker compose ... config ...` runs the real docker compose, which only resolves the configuration
-(DOCKER_HOST points to a socket that does not exist: no daemon is ever reached), and anything else succeeds without
-output. A `docker build --iidfile FILE ...` that succeeds writes a made-up image id there, unless its rule says
-"no_image_id".
+compose does, the text of the --env-file of a `docker compose` call, which a script may write for that call alone, and
+the files of a build context read from stdin, which `docker build ... -` reads in full, as docker does, and refuses
+without the Dockerfile its --file names). A `docker compose` call whose --env-file has no value or cannot be read fails,
+as docker compose does. The first rule whose regular expression matches the arguments joined with spaces answers the
+call; with "max_calls", a rule answers only as long as the log holds at most that many calls that it matches, this one
+included, and later calls go on to the next rule; with "snapshot", a `docker compose` call first copies its
+--project-directory there (what a build would see); with "files" or "links", a `docker run` call writes a file or makes
+a link (in place of a file or a directory) where its -v mounts put that path of the container, as the tool would, and
+fails as docker does: on a read-only mount, on a mount point, or through a link that leaves the mount; with "host_files"
+or "host_links", it writes files or makes links on the host, as a person editing them meanwhile would, or a container
+through a writable mount. A `docker run` whose -v mount lies in a read-only one without its mount point fails, as docker
+cannot create it. Without a matching rule, `docker compose ... config ...` runs the real docker compose, which only
+resolves the configuration (DOCKER_HOST points to a socket that does not exist: no daemon is ever reached), and anything
+else succeeds without output. A `docker build --iidfile FILE ...` that succeeds writes a made-up image id there, unless
+its rule says "no_image_id".
 """
 
 from __future__ import annotations
@@ -78,11 +81,13 @@ class Rule(TypedDict, total=False):
     files: dict[str, str]
     links: dict[str, str]
     host_files: dict[str, str]
+    host_links: dict[str, str]
 
 
 class LoggedCall(TypedDict):
     argv: list[str]
     env: dict[str, str]
+    env_file: NotRequired[str]
     context: NotRequired[list[str]]
 
 
@@ -97,6 +102,16 @@ def compose_command(argv: list[str]) -> str | None:
         elif not argument.startswith("-"):
             return argument
     return None
+
+
+def read_env_file(argv: list[str]) -> str | None:
+    """Raises OSError when the --env-file has no value or cannot be read, as docker compose fails then."""
+    if compose_command(argv) is None or "--env-file" not in argv:
+        return None
+    if argv[-1] == "--env-file":
+        raise OSError("flag needs an argument: --env-file")
+    with open(argv[argv.index("--env-file") + 1], encoding="utf-8") as env_file:
+        return env_file.read()
 
 
 def image_id(build_argv: list[str]) -> str:
@@ -186,6 +201,8 @@ def edit_host_files(rule: Rule) -> None:
     for path, text in rule.get("host_files", {}).items():
         with open(path, "w", encoding="utf-8") as file:
             file.write(text)
+    for path, target in rule.get("host_links", {}).items():
+        os.symlink(target, path)
 
 
 def count_logged_calls(log_path: str, pattern: str) -> int:
@@ -209,11 +226,22 @@ def main() -> int:
         if name.startswith(("COMPOSE_", "DOCKER_", "BUILDKIT_")) or name in _WATCHED
     }
     call: LoggedCall = {"argv": argv, "env": watched}
+    env_file: str | None = None
+    env_file_error: OSError | None = None
+    try:
+        env_file = read_env_file(argv)
+    except OSError as exc:
+        env_file_error = exc
+    if env_file is not None:
+        call["env_file"] = env_file
     context = read_build_context(argv)
     if context is not None:
         call["context"] = context
     with open(config["log"], "a", encoding="utf-8") as log:
         log.write(json.dumps(call) + "\n")
+    if env_file_error is not None:
+        sys.stderr.write(f"couldn't read env file: {env_file_error}\n")
+        return 1
     if context is not None and find_dockerfile(argv) not in context:
         sys.stderr.write(f"failed to read dockerfile: open {find_dockerfile(argv)}: no such file or directory\n")
         return 1

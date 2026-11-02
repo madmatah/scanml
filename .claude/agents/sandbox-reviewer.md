@@ -31,18 +31,20 @@ Read first: `.claude/rules/sandbox.md`, `.claude/rules/configuration.md` > Depen
   read-only `SANDBOX_DIR`, the socket directory and its cache directory; a change that `scripts/verify-sandbox.sh` would
   no longer check; a container of the sandbox's image that a script or a procedure starts, `ocr-setup` apart, that
   lacks any of `--network none`, a read-only root filesystem, `--cap-drop ALL`, `no-new-privileges` and a non-root user,
-  or that has a host mount other than the read-only `SANDBOX_DIR`, the read-only code it runs and a working directory
-  of its own, or a mount of the library or of production's state.
+  or that has a host mount other than a sandbox directory, read-only (`SANDBOX_DIR`, or `SANDBOX_DIR.new` for the
+  check of a new sandbox before a deployment's restart), the read-only code it runs and a working directory of its
+  own, a device other than the GPU through CDI, or a mount of the library or of production's state.
 - **Downloads into the sandbox** (`.claude/rules/sandbox.md` > The OCR sandbox): a package or a model fetched elsewhere
   than by `ocr-setup`, unpinned, or by code that runs Paddle with network access; a container other than `ocr-setup`
-  that mounts the sandbox writable, or a `.env` other than production's that sets `SANDBOX_SETUP_DIR`. The resolution
-  of the requirements of the Paddle and vLLM engines by the vulnerability scan, within the bounds that rule gives it,
-  is not such a fetch; flag one that leaves them: a container of the sandbox's image; a container without a read-only
-  root filesystem, `--cap-drop ALL`, `no-new-privileges` or a non-root user; a host mount besides the read-only
-  requirements and the work directory; a work directory that the runner reads back; a result that reaches the upload
-  otherwise than through the standard output that the runner writes; a scanner that writes outside its scratch
-  directory, or a scratch directory inside the upload or holding it; a job that holds a token that writes; an install
-  of the engines.
+  that mounts the sandbox writable, or a `.env` other than production's that sets `SANDBOX_SETUP_DIR`, besides the
+  temporary copy with which `scripts/deploy.sh --new-sandbox` installs `SANDBOX_DIR.new`, which in a rehearsal must pass
+  the isolation checks of a development stack before `ocr-setup` runs. The resolution of the requirements of the Paddle
+  and vLLM engines by the vulnerability scan, within the bounds that rule gives it, is not such a fetch; flag one that
+  leaves them: a container of the sandbox's image; a container without a read-only root filesystem, `--cap-drop ALL`,
+  `no-new-privileges` or a non-root user; a host mount besides the read-only requirements and the work directory; a work
+  directory that the runner reads back; a result that reaches the upload otherwise than through the standard output that
+  the runner writes; a scanner that writes outside its scratch directory, or a scratch directory inside the upload or
+  holding it; a job that holds a token that writes; an install of the engines.
 - **Untrusted output** (`.claude/rules/sandbox.md` > The OCR sandbox): a change to what the api reads from the sandbox
   that drops a bound on a size or a count, writes a file under a name the sandbox sent, stores an image without
   re-encoding it, or lets Markdown or HTML reach the library or a browser without the sanitizer.

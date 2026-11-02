@@ -131,7 +131,8 @@ web UI's comes with its move to TypeScript and React; none is planned yet for th
 The OCR engine runs in the `ocr` container: no network interface besides loopback, a read-only root filesystem, no
 capabilities, a non-root user, and no host file but its models (read-only), its socket and its cache. The api talks to
 it through a Unix socket, with the protocol of `docs/OCR_SANDBOX.md`. Its packages and models are downloaded once, by
-the `ocr-setup` container, pinned by version or commit, so that no Paddle code ever runs with network access. Whatever
+the `ocr-setup` container, pinned by version or commit, so that no Paddle code ever runs with network access; a
+deployment installs a new sandbox next to the running one, and switches to it at its restart. Whatever
 it returns is checked, re-encoded and sanitized before it reaches the library or a browser. `.claude/rules/sandbox.md`
 states the rules, and `docs/SECURITY.md` the threat model, the guarantees and the residual risks.
 
@@ -150,6 +151,7 @@ states the rules, and `docs/SECURITY.md` the threat model, the guarantees and th
 | Brand mark | the project's own drawing, an open book in scan corners: in teal on paper cream wherever the product's icon shows, and alone, in the theme's primary (app) or accent (web UI), on its screens; each unit holds its own copies, with the same path data, since a unit builds and tests only from its own tree |
 | Pairing and access | a random bearer token, shared by QR code; plain HTTP on the local network; remote use through a VPN |
 | Deployment | Docker Compose (`api`, `ocr`), restarted automatically with Docker; no official instance: each installation deploys the releases it chooses, with `scripts/deploy.sh` |
+| Sandbox upgrades | a release that needs a new sandbox is deployed with `scripts/deploy.sh --new-sandbox`, which installs it next to the running one while production runs, checks the new image against it, and swaps the two by renaming them at the restart, keeping the replaced one for a rollback: installing in place would leave production without OCR for the hour of downloads and with nothing to go back to; switching through `.env` would make a new writer of production's `.env`; a symbolic link would not recreate the container, and a later restart would switch silently; a separate script would be a second way to change production, while the image and the sandbox must switch at the same restart |
 | Releases | one version for the api and the app (`VERSION`), so that the app a PC offers always matches its api; a release is a pull request of its own, whose notes are drafted from the Conventional Commits since the last release (`scripts/release.py`) in the Keep a Changelog format, and a workflow publishes it once it is merged, so that a release is reviewed like any change and published by nothing but its merge |
 | Development | changes are made in worktrees and tried on a development stack and app (`fr.scanmylib.dev`) beside production; the scripts' guards protect production from misconfiguration, mistakes in a branch and compromised build dependencies, not from a deliberately malicious branch (`docs/SECURITY.md`) |
 
@@ -195,7 +197,7 @@ them. The last row lists the scripts that the skills keep, which belong to no un
 | OCR sandbox | `protocol`, `engines/base` | Messages between supervisor and worker, the interface of an engine | Application |
 | OCR sandbox | `manager`, `runtime`, `config`, `gpu`, `client` | Engine lifecycle and page queue, engine processes, settings, GPU readings, a client of the socket | Application and adapters |
 | OCR sandbox | `engines/paddleocr_vl`, `engines/images` | PaddleOCR-VL-1.6, and its image handling | Adapters |
-| scripts | `lib/stack.py`, `lib/version.py`, `lib/formatting.py`, `lib/parallel_tests.py`, `lib/commit_areas.py`, `lib/common.sh`, `lib/engine_check.sh` | The `.env` format, production's checkout and the isolation of a stack; the version of a build; what the gate hands to its formatters and linters, and what comes back; the gate's parallel run of the tests of the scripts; the areas a commit touches; shared shell functions; the check of the engine's environment in a new `ocr` container, and of a sandbox with a new image before a restart | Tools |
+| scripts | `lib/stack.py`, `lib/version.py`, `lib/formatting.py`, `lib/parallel_tests.py`, `lib/commit_areas.py`, `lib/common.sh`, `lib/engine_check.sh` | The `.env` format and its copy with a setting changed, production's checkout and the isolation of a stack, where a deployment installs a new sandbox, and the settings that the check of a sandbox before a restart takes from the `ocr` service; the version of a build; what the gate hands to its formatters and linters, and what comes back; the gate's parallel run of the tests of the scripts; the areas a commit touches; shared shell functions; the check of the engine's environment in a new `ocr` container, and of a sandbox with a new image before a restart | Tools |
 | scripts | `setup.sh`, `dev-env.sh`, `dev.sh`, `build-apk.sh`, `check.sh`, `deploy.sh`, `prod.sh`, `release.py`, `e2e_test.py`, `verify-sandbox.sh`, `vendor-katex.sh` | Install, develop, build the app, check, deploy, operate, release, test end to end, verify the sandbox, vendor KaTeX | Tools |
 | — (the skills) | `pull-request/scripts/pr_screenshots.py` in `.claude/skills/` | Publish the screenshots of a pull request, copy them without their hidden data, and clean the branch that holds them | Tools |
 
@@ -412,6 +414,10 @@ checks, and how production's images are built. The reasons:
   same import as the check after the restart, not a test suite, and it costs a deployment the seconds of that import.
   It runs in a `docker run` container of its own, isolated as the service is, rather than through `compose run ocr`,
   which would run engine code in a container that no isolation check has looked at.
+- **A new sandbox is checked before it is used, and the replaced one is kept.** The installation runs for about an
+  hour, while production runs, and resolves the engines' dependencies as they are that day, with no lock: the check
+  before the restart, the checks after it and the first page are what tell that the new sandbox works, and the replaced
+  sandbox is what a rollback goes back to, so only the user deletes it.
 - **A deployment pulls its base images and keeps the build's cache.** Without the pull, the builder may keep building
   on a copy of a tag that the machine pulled long before, or fall back to it when Docker Hub does not answer, while the
   official images are rebuilt regularly, and sooner for a critical fix. A new base invalidates every layer above it, so

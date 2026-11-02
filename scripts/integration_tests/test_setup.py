@@ -13,6 +13,7 @@ from typing import ClassVar
 from docker_shim import Rule
 from installation_support import (
     BOUNDED_ENGINE_CHECK,
+    CLIPBOARD_SEQUENCE,
     ENGINE_CHECK,
     ENGINE_CHECK_MODULE,
     PRODUCTION_ENGINE_CHECK_STEPS,
@@ -29,6 +30,7 @@ from installation_support import (
 )
 
 ENGINE_CHECK_FAILURE = "the check of the engine's environment failed"
+INSTALL_SANDBOX = r"^compose .* run --rm -T ocr-setup$"
 
 
 def install_for_the_first_time(installation: Installation, rules: list[Rule]) -> ScriptRun:
@@ -173,6 +175,25 @@ class WhenTheFirstInstallationCompletes(InstallationTestCase):
 
     def test_should_leave_the_ocr_service_running(self) -> None:
         self.assertEqual(list_ocr_stops(self.commands), [])
+
+
+class WhenTheFirstInstallationInstallsTheSandbox(InstallationTestCase):
+    setup_run: ClassVar[ScriptRun]
+    commands: ClassVar[list[str]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        installation = make_installation(cls)
+        (installation.production_data / "sandbox" / "MANIFEST.json").unlink()
+        installing: list[Rule] = [{"match": r" ocr-setup$", "stdout": SANDBOX_OUTPUT, "stderr": SANDBOX_OUTPUT}]
+        cls.setup_run = install_for_the_first_time(installation, installing)
+        cls.commands = installation.read_docker_commands()
+
+    def test_should_install_the_sandbox_with_ocr_setup_without_a_terminal(self) -> None:
+        self.assertEqual(len([command for command in self.commands if re.search(INSTALL_SANDBOX, command)]), 1)
+
+    def test_should_pass_what_the_installation_prints_through_cat_v_since_it_is_untrusted(self) -> None:
+        self.assertNotIn(CLIPBOARD_SEQUENCE, self.setup_run.output)
 
 
 class WhenTheEngineEnvironmentIsBroken(InstallationTestCase):

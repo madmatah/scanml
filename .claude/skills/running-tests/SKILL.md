@@ -53,6 +53,45 @@ in its new image, as [A change under `ocr/`](#a-change-under-ocr) runs it. Start
 the checks of the sandbox's own directories and runs no engine. Stop it when you are done, as `CLAUDE.md` > Workflow,
 "The development stack" says.
 
+### A change to the sandbox's setup
+
+A change to what installs the sandbox, `ocr/setup/` or the packages of `ocr/Dockerfile`, is tested on a sandbox that it
+installs, never on production's, which the development stack only reads. Give the development stack a sandbox of its
+own, then install the new one there as a deployment would, with a rehearsal of `scripts/deploy.sh --new-sandbox`
+(`README.md` > Updating):
+
+1. Ask the user first, as `.claude/rules/configuration.md` > Dependencies says: an installation downloads about 16 GB,
+   takes about an hour, and needs 36 GiB free next to the sandbox (`README.md` > Updating).
+2. `cd <worktree> && scripts/dev-env.sh --own-sandbox`, which points `SANDBOX_DIR` at `<DATA_DIR>/sandbox`, inside the
+   stack's own `DATA_DIR`. To compare with today's sandbox, or to rehearse a rollback, copy production's into it first,
+   which only reads it: `cd <worktree> && cp -a --reflink=auto <production's SANDBOX_DIR>/. <DATA_DIR>/sandbox/`.
+3. Commit the change, since a rehearsal builds and installs the commit, then run
+   `cd <worktree> && SCANMYLIB_DEPLOY_REHEARSAL=scanmylib-dev scripts/deploy.sh --dry-run --new-sandbox`, and the same
+   without `--dry-run`. Add `--first-install` to both while the development stack has no database,
+   `<DATA_DIR>/state/scanmylib.db`, which its first `scripts/dev.sh up` creates.
+4. On the new sandbox, run [A change to the `ocr` service](#a-change-to-the-ocr-service), the unit tests of
+   [A change under `ocr/`](#a-change-under-ocr), and the end-to-end test of
+   [A change to the flow from the phone to the library](#a-change-to-the-flow-from-the-phone-to-the-library).
+
+If the installation fails, read its log, `<DATA_DIR>/sandbox.new/setup.log`, with
+`cd <worktree> && cat -v <that path>`, since what a package prints is untrusted, and only once
+`cd <worktree> && test -f <that path> && test ! -L <that path>` passes: the installation writes it, and a link there
+would show a file of the host. Before a path under `DATA_DIR` is removed, such as a leftover `sandbox.new` or a
+`sandbox.replaced-<time>` no longer needed, build it from `DATA_DIR` as
+`cd <worktree> && scripts/lib/stack.py env .env` prints it, never typed by hand, and check it against production's
+paths and the mounts of production's containers, as `scripts/deploy.sh` does, with an empty list when production has
+no container, since `docker inspect` fails without one:
+
+```bash
+cd <worktree> \
+  && ids=$(docker ps --all --quiet --filter label=com.docker.compose.project=scanmylib) \
+  && { if [[ -n $ids ]]; then docker inspect $ids; else echo '[]'; fi; } \
+  | scripts/lib/stack.py check-paths NAME=PATH
+```
+
+Keep the new sandbox: the release tests on it (`.claude/skills/release/SKILL.md` > Test the sandbox with its engine).
+`scripts/dev-env.sh` without the option goes back to production's sandbox, read-only.
+
 ### A change to the flow from the phone to the library
 
 A change to the upload, the reading of the pages or what the api writes in the library passes

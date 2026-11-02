@@ -16,6 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from . import __version__
 from .adapters.filesystem.library_files import FilesystemLibrary
 from .adapters.filesystem.thumbnails import FilesystemThumbnails
+from .adapters.filesystem.token_file import load_or_create_token
 from .adapters.http_api.preview import HtmlPreviews
 from .adapters.ocr_sandbox.client import OcrClient
 from .adapters.ocr_sandbox.engine import SandboxOcrEngine
@@ -29,7 +30,7 @@ from .application.library import LibraryService
 from .application.ocr_loop import OcrLoop
 from .application.publisher import Publisher
 from .application.scan_images import ImageRejected, ImageTooLarge
-from .auth import Authenticator, load_or_create_token
+from .auth import Authenticator
 from .config import Settings
 from .domain.records import Conflict, InvalidRequest, NotFound
 from .middleware import BodySizeLimitMiddleware, SecurityHeadersMiddleware, body_limit

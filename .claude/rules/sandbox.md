@@ -14,6 +14,7 @@ paths:
   - "server/scanmylib/domain/assemble.py"
   - "server/scanmylib/devtools/**"
   - "android/app/src/main/AndroidManifest.xml"
+  - ".github/workflows/vulnerability-scan.yml"
 ---
 
 # Isolation
@@ -34,7 +35,18 @@ production runs next to the development stack on the same machine. These rules k
   code it runs, read-only, and a working directory of its own, never the library or production's state.
 - **Untrusted components are downloaded only by the `ocr-setup` container,** pinned by version or commit, and no Paddle
   code runs with network access. `ocr-setup` writes the sandbox through `SANDBOX_SETUP_DIR`, which only production's
-  `.env` sets; every other container mounts `SANDBOX_DIR` read-only.
+  `.env` sets; every other container mounts `SANDBOX_DIR` read-only. On GitHub's runners, outside the user's machine,
+  the vulnerability scan (`.github/workflows/vulnerability-scan.yml`) also resolves the requirements of the Paddle and
+  vLLM engines, without installing them:
+  - it resolves them in a container of the Python image, never of the sandbox's: read-only, without capabilities or
+    privilege escalation (`--cap-drop ALL`, `no-new-privileges`), as a non-root user, in a job that holds no token that
+    writes, with no host mount but the read-only requirements and a work directory that the runner never reads back;
+    the runner writes the resolution's standard output into the uploaded results itself, and the scanner writes only
+    into a scratch directory of its own, outside the upload, so that the build code can plant no file or link in what
+    the run uploads;
+  - it runs none of their code but the build code of a source distribution whose metadata it must build, as `ocr-setup`
+    would;
+  - it builds the sandbox's image only to read its packages, and never starts it.
 - **Everything the sandbox returns is untrusted data:** its sizes, names, HTML and Markdown. The api checks every size
   and count against its limits, names every file it writes itself, re-encodes images with Pillow, sanitizes the Markdown
   before writing it, renders HTML through its allowlist sanitizer, and serves the web UI with a strict Content Security

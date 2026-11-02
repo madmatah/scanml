@@ -68,15 +68,17 @@ paths:
   - the Python tools of the gate, by `scripts/lint/requirements.lock`, installed with
     `pip install --require-hashes --no-deps --only-binary :all:`, and Biome, by
     `server/scanmylib/web/package-lock.json`, installed with `npm ci --ignore-scripts`;
-  - ShellCheck and shfmt, by the image digests of `scripts/check.sh`.
+  - ShellCheck and shfmt, by the image digests of `scripts/check.sh`;
+  - OSV-Scanner, by the image digest of `.github/workflows/vulnerability-scan.yml`.
 
   The rest is pinned by version, commit or tag, or checked as it downloads, and never loosened further: the Android SDK
   packages by version, which the Android CLI checks, and its command-line tools, the latest, against the SHA-1 Google
   publishes; the Gradle wrapper's jar against the SHA-256 Gradle publishes; the OCR sandbox's engines by version, in
   `ocr/setup/requirements-paddle.in` and `ocr/setup/requirements-vllm.in` (their own dependencies as they resolve, and
   `safetensors` as it resolves), its models by Hugging Face commit, in `ocr/setup/install.sh`, the uv of its image by
-  version, and the base images by tag; the Debian packages of the OCR image are the release's current ones. No setting
-  lets an install bypass or override a pin, such as another registry or index, or `--no-verify`.
+  version, and so the uv that the vulnerability scan resolves them with, and the base images by tag; the Debian
+  packages of the OCR image are the release's current ones. No setting lets an install bypass or override a pin, such
+  as another registry or index, or `--no-verify`.
 - **A lock is regenerated, never edited by hand,** so that every hash comes from the file it pins: the api's locks with
   the `uv pip compile` command of `server/README.md`, the tools' lock with the one of `README.md` > Development, the web
   UI's lockfile with `npm install --package-lock-only --ignore-scripts`, the app's verification metadata with
@@ -86,8 +88,12 @@ paths:
 
 - **Actions are pinned to full commit SHAs,** each with its version label beside it, because a tag can move to other
   code.
-- **Permissions stay read-only.** `.github/workflows/release.yml` is the one exception: it publishes a release, with
-  `contents: write` and the run's own token, and runs nothing but `scripts/release.py` and the runner's `git` and `gh`.
+- **Permissions stay read-only,** with two exceptions, each with the run's own token:
+  - `.github/workflows/release.yml` publishes a release, with `contents: write`, and runs nothing but
+    `scripts/release.py` and the runner's `git` and `gh`;
+  - the upload job of `.github/workflows/vulnerability-scan.yml` writes the scan's results to code scanning, with
+    `security-events: write` and `contents: read` for its checkout. It runs no command and no action but GitHub's own
+    that check out, download and upload, so that no code the scan resolves, builds or runs holds a token that writes.
 - **Event data reaches a `run:` script only through `env:`,** never through `${{ }}` inside the script, where it would
   be spliced into shell code.
 - **No `pull_request_target` workflow checks out untrusted code, and no secret reaches a run from a fork,** since either

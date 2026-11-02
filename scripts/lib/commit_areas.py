@@ -35,6 +35,9 @@ PATH_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
     # scripts/tests/test_workflows.py reads the workflows.
     (".github/workflows/", ("lint", "scripts")),
     ("android/", ("android",)),
+    # scripts/tests/test_workflows.py reads them, and the lint area checks the code of ocr/setup/.
+    ("ocr/setup/", ("lint", "scripts", "ocr")),
+    ("ocr/Dockerfile", ("scripts", "ocr")),
     ("ocr/", ("lint", "ocr")),
     ("server/scanmylib/web/", ("lint", "web", "server")),
     ("server/", ("lint", "server")),

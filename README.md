@@ -331,6 +331,12 @@ before running what it changed. Each commit of a pull request passes the areas t
 (`scripts/check.sh --last-commit`), its last commit the whole gate, and every pull request runs it in the continuous
 integration (`.github/workflows/ci.yml`, one job per area). Pull requests are merged when it is green.
 
+Every Monday, and on a push to `main` that changes what it scans, `.github/workflows/vulnerability-scan.yml` runs
+Google's OSV-Scanner on what Dependabot cannot see: the OCR sandbox's environments, resolved as a new installation would
+resolve them that day, the packages of the api's and the sandbox's images, and the locks of the gate's Python tools and
+of the app's libraries. Its results appear in the repository's Security tab, under Code scanning, next to the Dependabot
+alerts, and `gh workflow run vulnerability-scan.yml` runs it at any time. It reports and never blocks a pull request.
+
 The tools of the gate are pinned. `scripts/lint/requirements.lock`, the Python tools with their hashes, is regenerated
 from `scripts/lint/requirements.in` in a container, and the web UI's `server/scanmylib/web/package-lock.json` the same
 way:

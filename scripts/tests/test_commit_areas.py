@@ -34,6 +34,8 @@ AREAS_OF_EACH_PATH = {
     ".github/pull_request_template.md": [],
     ".github/workflows/ci.yml": ["lint", "scripts"],
     "android/app/build.gradle.kts": ["android"],
+    "ocr/setup/requirements-vllm.in": ["lint", "scripts", "ocr"],
+    "ocr/Dockerfile": ["scripts", "ocr"],
     "ocr/scanmylib_ocr/manager.py": ["lint", "ocr"],
     "server/scanmylib/web/static/js/main.js": ["lint", "web", "server"],
     "server/README.md": ["lint", "server"],

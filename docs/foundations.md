@@ -59,15 +59,25 @@ These constraints drive the choices in this document:
 | ktlint | 1.8.0 | Formatting and lint of the app's Kotlin, in Android Studio's style with trailing commas |
 | Biome | 2.5.15 | Formatting and lint of the web UI |
 | zizmor | 1.30.1 | Audit of the GitHub workflows |
+| OSV-Scanner | 2.7.0 | The weekly report of the known vulnerabilities of what GitHub's dependency graph cannot read |
 | GitHub CLI (`gh`) | — | The pull requests, and the listing that comes before their screenshots are cleaned up; the release workflow's tag and release |
 
 Notes:
 
 - **CI runs on GitHub Actions** (`.github/workflows/ci.yml`):
   - `scripts/check.sh` runs on every pull request and every push to `main`, one job per area;
-  - actions are pinned to full commit SHAs, and the jobs may only read the repository;
+  - actions are pinned to full commit SHAs, and every job but the two below may only read the repository;
   - `.github/workflows/release.yml` publishes a release once its pull request is merged, and is the only workflow that
-    writes to the repository: its tag and its GitHub release.
+    writes to the repository's contents: its tag and its GitHub release;
+  - `.github/workflows/vulnerability-scan.yml` runs OSV-Scanner every week, by hand, and on a push to `main` that
+    changes what it scans, and reports to the repository's code scanning what Dependabot cannot see: GitHub's
+    dependency graph reads only the api's direct dependencies in `pyproject.toml`, the web UI's lockfile and the
+    actions. It scans the OCR sandbox's two environments, which it resolves from their requirements as a new
+    installation would that day, the Debian and Python packages of the api's and the sandbox's images, and the locks of
+    the gate's Python tools and of the app's libraries. Its upload job alone writes, the security events of code
+    scanning, and runs no command, so that no code the scan resolves, builds or runs holds a token that writes. It
+    reports and never blocks a pull request. Its resolution is the day's, while an installation holds what resolved the
+    day it was installed.
 - **The web UI has no build step:** the browser loads its modules as they are, and the api serves them. Its move to
   TypeScript and React, built by a bundler whose output names carry a hash of their content, is planned: those files can
   then be cached for good, and only the page that names them is revalidated, so a browser never mixes the modules of two
@@ -197,7 +207,7 @@ scanmylib/
 ├── .claude/                     # Claude Code: settings, rules, skills and the expert reviewers
 ├── .github/
 │   ├── pull_request_template.md # The body of every pull request, with its checklist
-│   └── workflows/               # CI (the gate on every pull request and every push to main), and the release
+│   └── workflows/               # CI (the gate on every pull request and every push to main), the release, and the weekly vulnerability scan
 ├── android/                     # The app: Kotlin, Compose, Gradle
 ├── docs/
 │   ├── foundations.md           # This document
@@ -243,7 +253,7 @@ Each row names a rule, the rules file that states it, and what enforces it.
 | Production is operated by hand only through `scripts/prod.sh compose` (`.claude/rules/sandbox.md` > Development stacks and production) | `scripts/lib/stack.py check-compose-command --production`, through `scripts/prod.sh` |
 | The dev app keeps its own application id (`.claude/rules/sandbox.md` > Development stacks and production) | The signing container of `scripts/build-apk.sh` |
 | Production runs published releases only (`.claude/rules/releases.md`) | `scripts/deploy.sh`, `scripts/setup.sh`, `scripts/prod.sh` and `scripts/build-apk.sh` |
-| Never weaken what the lockfile or the registry settings guarantee (`.claude/rules/configuration.md` > Dependencies) | `pip --require-hashes`, `npm ci`'s integrity check, Gradle's dependency verification, the image digests of `scripts/check.sh`, the checksums of `scripts/build-apk.sh` and `scripts/vendor-katex.sh` |
+| Never weaken what the lockfile or the registry settings guarantee (`.claude/rules/configuration.md` > Dependencies) | `pip --require-hashes`, `npm ci`'s integrity check, Gradle's dependency verification, the image digests of `scripts/check.sh` and of the scanner in `.github/workflows/vulnerability-scan.yml`, the checksums of `scripts/build-apk.sh` and `scripts/vendor-katex.sh` |
 | The French translation lives only in the catalogs (`CLAUDE.md` > Language) | The web UI's unit tests; Android lint for missing translations |
 | Part of the rules of the Python: PEP 8 at 120 columns, imports, typed signatures with no bare `Any`, no blind `except`, no mutable defaults (`.claude/rules/python.md`), no shell or SQL string built from input (`.claude/rules/conventions.md` > Input from outside the program), and, in part, no character a reader cannot see written as such (`.claude/rules/conventions.md` > Characters a reader cannot see) | Ruff and mypy `--strict`, in `scripts/check.sh lint` |
 | Part of the rules of the shell scripts: quoting and `[[ … ]]` (ShellCheck), indentation (shfmt) (`.claude/rules/bash.md`) | ShellCheck and shfmt, in `scripts/check.sh lint` |
@@ -252,7 +262,7 @@ Each row names a rule, the rules file that states it, and what enforces it.
 | Part of the rules of the api's tests: a broad exception asserted with its message, its raising call alone in its block, no assertion in an `except` (`.claude/rules/tests.md` > pytest) | Ruff's PT011, PT012 and PT017, in `scripts/check.sh lint` |
 | The hook that runs once in the api's tests is a fixture of `scope="class"` written as a `@classmethod` (`.claude/rules/tests.md` > pytest) | `filterwarnings = ["error::pytest.PytestRemovedIn10Warning"]` in `server/pyproject.toml`, in `scripts/check.sh server` |
 | Part of the rules of the web UI's tests: assertions in tests only, no test focused or skipped by its name, no hook twice in a group, five levels at most (`.claude/rules/tests.md` > node:test) | Biome, in `scripts/check.sh lint` |
-| Part of the rules of continuous integration: actions pinned to commits, the jobs' permissions and credentials, no template injection (`.claude/rules/configuration.md` > Continuous integration) | zizmor, in `scripts/check.sh lint`; the unit tests of the workflows, in `scripts/check.sh scripts`, for the actions they may use, their permissions, their secrets, `pull_request_target` and what the release workflow runs |
+| Part of the rules of continuous integration: actions pinned to commits, the jobs' permissions and credentials, no template injection (`.claude/rules/configuration.md` > Continuous integration) | zizmor, in `scripts/check.sh lint`; the unit tests of the workflows, in `scripts/check.sh scripts`, for the actions they may use, their permissions, their secrets, `pull_request_target`, what the release workflow runs, and the vulnerability scan's split between the job that scans and the one that uploads, its triggers, the exact options of its containers, and the sandbox's image, uv, requirements and Paddle's version that it follows |
 | A commit footer holds only what tools read (`CLAUDE.md` > Workflow) | `attribution` in `.claude/settings.json`, which keeps Claude Code's own commit trailers and pull request line out |
 | Part of the layers of the api: every file of the api lies in a layer's directory, but the composition roots at its top and the test support; the domain imports only the domain and libraries of plain values, reads no wall clock and calls no input or output function; the application imports only the inner layers, libraries of plain values, Python's runtime and `PurePath`, reads the wall clock only through its port and calls no input or output function itself; the adapters import no composition root and no test support; a file in a layer imports none still outside the layers; no import cycle between the api's files (`.claude/rules/architecture.md` > Layers, > Ports and wiring and > Responsibilities, `.claude/rules/python.md`, "Plain data is a frozen dataclass", `.claude/rules/tests.md` > Test support) | `server/tests/test_layers.py`, in `scripts/check.sh server` |
 | Every rule no tool can check: architecture, conventions, tests as specification… | `/expert-review` ([Code review](#code-review)), before every pull request |

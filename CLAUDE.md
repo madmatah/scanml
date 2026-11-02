@@ -200,8 +200,9 @@ read the file before you do what its line says.
   dependencies and what pins them, continuous integration, checks and Claude Code automation, the model and the effort
   of each agent, its worktree and its web requests included.
 - `sandbox.md`, for the OCR sandbox, `compose.yaml`, a Dockerfile, `.env.example`, the scripts, the `running-tests`
-  skill, the app's manifest, and the api's code that reads the sandbox's results: the sandbox's isolation, wherever its
-  image runs, containers and the host, and what keeps development stacks from production.
+  skill, the app's manifest, the vulnerability scan's workflow, and the api's code that reads the sandbox's results: the
+  sandbox's isolation, wherever its image runs, containers and the host, and what keeps development stacks from
+  production.
 - `releases.md`, for `VERSION`, `CHANGELOG.md`, and the release and deployment scripts and workflow: what a release is,
   who changes `VERSION`, what a release is tested on, and what production runs.
 - `tests.md`, for any test, test support or test framework configuration, and before fixing a bug, since the fix starts

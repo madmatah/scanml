@@ -5,8 +5,8 @@
 # between the commit they were written on and the release commit, or whose section is empty; the
 # release is then completed (scripts/release.py, run again).
 #
-# The only workflow that writes to the repository: to its contents, with the token GitHub gives each
-# run (no secret). It runs on main only, uses no action but GitHub's checkout (pinned), and
+# The only workflow that writes to the repository's contents, with the token GitHub gives each run
+# (no secret). It runs on main only, uses no action but GitHub's checkout (pinned), and
 # downloads, builds and runs nothing but the runner's git, gh and python3, and scripts/release.py
 # (standard library) as merged on main.
 name: Release

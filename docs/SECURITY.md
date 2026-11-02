@@ -281,3 +281,39 @@ data or library; an `--api` URL without an explicit port is refused) without
   runs it with `--no-metrics`. During the very first installation, on October
   12, 2026, before this setting, it most likely sent a usage report to Google
   (commands and options, no files).
+
+## Known vulnerabilities of the dependencies
+
+- **Dependabot** reports the known vulnerabilities of what GitHub's dependency graph reads: the api's direct
+  dependencies in `server/pyproject.toml`, the web UI's lockfile and the actions of the workflows.
+- **Code scanning** shows the rest, which `.github/workflows/vulnerability-scan.yml` reads with Google's OSV-Scanner
+  every Monday, on demand, and on a push to `main` that changes what it scans, in four scans:
+  - `sandbox-environments`: the OCR sandbox's two environments, resolved from `ocr/setup/requirements-paddle.in` and
+    `ocr/setup/requirements-vllm.in` in the sandbox's base image, with its uv, as a new installation would resolve them
+    that day, without installing them;
+  - `repository-locks`: the gate's Python tools (`scripts/lint/requirements.lock`) and the app's libraries and Gradle
+    plugins (`android/gradle/verification-metadata.xml`);
+  - `api-image` and `sandbox-image`: the Debian and Python packages of the api's image, as production runs it, and of
+    the sandbox's image.
+
+  The scan only reports: it runs on no pull request, and fails only when a scan itself fails. The container that
+  resolves the sandbox's environments mounts nothing of the runner but the read-only requirements and a work directory
+  that the runner never reads back; the runner writes the resolution's standard output into the results itself, and
+  the scanner writes only into a scratch directory of its own, outside the upload, so that the build code of a source
+  distribution can plant no file or link in what the run uploads. The scan's job that writes to code scanning runs no
+  command, so that no code the scan resolves, builds or runs holds a token that writes.
+- **Limits:**
+  - the scans of the images hold most of the results, mostly Debian packages, many of which have no fix in the
+    distribution;
+  - an installation holds what resolved the day it was installed (`SANDBOX_DIR/MANIFEST.json` lists its main
+    versions), and a deployed image the packages of its deployment day, where the scan reads the day's; the artifact of
+    each run keeps the environments it resolved, to compare;
+  - Paddle's GPU build comes from Paddle's own CDN, and its advisories are published under `paddlepaddle`: it is scanned
+    under both names, at the version of its wheel;
+  - not scanned: the CPython of the base images, built from source; the packages of `server/requirements-test.lock`
+    that the api's image lacks, such as pytest; the Gradle distribution; the Android SDK; the vendored KaTeX; the
+    models; the images of the gate's tools;
+  - the test of the workflow's calls to docker (`scripts/tests/test_workflows.py`) guards against mistakes in a branch,
+    as the scripts' guards do ([Threat model of the development guards](#threat-model-of-the-development-guards)): it
+    reads only the calls written in the workflow's scripts, and sees neither one assembled on purpose from fragments,
+    such as `${d}er run`, nor one that a script of the repository makes when a step runs it; review covers those.

@@ -165,9 +165,9 @@ them. The last row lists the scripts that the skills keep, which belong to no un
 | api | `adapters/sqlite/database`, `adapters/sqlite/rows`, `adapters/sqlite/catalog`, `adapters/sqlite/web_sessions` | SQLite state, its rows read into records, the summary of a document's layout written as JSON, and the catalog of documents and pages and the web sessions over them | Adapters |
 | api | `adapters/system_clock` | The wall clock, in the server's time zone | Adapters |
 | api | `adapters/pillow_images` | Pillow: the checks of an upload, thumbnails, the image sent to the OCR, re-encoded illustrations | Adapters |
-| api | `adapters/filesystem/library_files`, `adapters/filesystem/thumbnails`, `adapters/filesystem/token_file`, `export` | The library's files, atomic writes and trash; the thumbnails, a cache in the state directory; the API token, in a file of the state directory that only its owner reads; zip archives | Adapters |
+| api | `adapters/filesystem/library_files`, `adapters/filesystem/thumbnails`, `adapters/filesystem/token_file`, `adapters/filesystem/published_apk` | The library's files, atomic writes and trash; the thumbnails, a cache in the state directory; the API token, in a file of the state directory that only its owner reads; the published APK's metadata | Adapters |
 | api | `adapters/ocr_sandbox/client`, `adapters/ocr_sandbox/results`, `adapters/ocr_sandbox/sanitize`, `adapters/ocr_sandbox/engine` | The OCR sandbox: the client of its protocol, the validation of its untrusted results, the sanitizer of their Markdown, and the OCR engine over them, which times the reading of a page and validates the untrusted status of the sandbox | Adapters |
-| api | `qr`, `published_apk` | QR codes, the published APK's metadata | Adapters |
+| api | `adapters/zip_archives`, `adapters/qr_codes` | Zip archives, QR codes | Adapters |
 | api | `api/`, `adapters/http_api/authentication`, `middleware` | HTTP routes, the times that clients send, the credential of each request, security headers and body limits | Adapters |
 | api | `devtools/fake_ocr` | The fake OCR sandbox of the development stack and the tests | Test support |
 | web UI | `main.js` | Entry point | Composition root |

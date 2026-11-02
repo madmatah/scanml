@@ -7,13 +7,13 @@ from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
+from ..adapters.filesystem.published_apk import APK_DOWNLOAD_PATH, published_apk
 from ..adapters.http_api.authentication import SESSION_COOKIE
+from ..adapters.qr_codes import qr_svg
 from ..application.catalog import QueueCounts
 from ..application.ocr_engine import EngineStatus, GpuStatus
 from ..application.status import report_ocr_status
 from ..domain.web_sessions import SESSION_LIFETIME
-from ..published_apk import APK_DOWNLOAD_PATH, published_apk
-from ..qr import qr_svg
 from .deps import Services, ServicesDep, public_url, require_auth
 from .schemas import SessionBody
 

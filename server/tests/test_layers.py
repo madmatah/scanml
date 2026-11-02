@@ -1,4 +1,5 @@
-"""The layers of the api: what the modules of each layer import and call, read from their source."""
+"""The layers of the api: that every file lies in one, but the composition roots and the test support, and what the
+files of each layer import and call, read from their source."""
 
 from __future__ import annotations
 
@@ -134,6 +135,7 @@ class LayerFindings:
     outer_imports_of_the_adapters: list[str]
     imports_of_unrestructured_modules: list[str]
     modules_on_an_import_cycle: list[str]
+    files_outside_the_layers: list[str]
     domain_module_count: int
     application_module_count: int
     adapter_module_count: int
@@ -377,6 +379,10 @@ def find_modules_on_an_import_cycle(package: Mapping[str, SourceModule]) -> list
     return sorted(name for name in imports if is_on_an_import_cycle(name, imports))
 
 
+def find_files_outside_the_layers(package: Mapping[str, SourceModule]) -> list[str]:
+    return sorted(name for name in package if find_layer(name) is Layer.NOT_RESTRUCTURED)
+
+
 def check_layers(package: Mapping[str, SourceModule]) -> LayerFindings:
     return LayerFindings(
         imports_outside_the_domain=find_imports_outside_the_domain(package),
@@ -388,6 +394,7 @@ def check_layers(package: Mapping[str, SourceModule]) -> LayerFindings:
         outer_imports_of_the_adapters=find_outer_imports_of_the_adapters(package),
         imports_of_unrestructured_modules=find_imports_of_unrestructured_modules(package),
         modules_on_an_import_cycle=find_modules_on_an_import_cycle(package),
+        files_outside_the_layers=find_files_outside_the_layers(package),
         domain_module_count=len(select_modules(package, {Layer.DOMAIN})),
         application_module_count=len(select_modules(package, {Layer.APPLICATION})),
         adapter_module_count=len(select_modules(package, {Layer.ADAPTERS})),
@@ -606,6 +613,8 @@ class TestTheLayersOfTheApi:
                         "from .domain import chapters, impure, numbers, pages, paragraphs, sections, titles\n",
                     ),
                     "scanmylib.library": (False, "class LibraryService:\n    pass\n"),
+                    "scanmylib.routes": (True, ""),
+                    "scanmylib.routes.documents": (False, ""),
                     "scanmylib.devtools": (True, ""),
                     "scanmylib.devtools.fake_ocr": (False, "class FakeOcrServer:\n    pass\n"),
                     "scanmylib.domain": (True, ""),
@@ -793,6 +802,15 @@ class TestTheLayersOfTheApi:
                     "scanmylib.domain.sections",
                 ]
 
+            def test_should_name_each_file_that_is_neither_in_a_layer_nor_a_composition_root_nor_test_support(
+                self, findings: LayerFindings
+            ) -> None:
+                assert findings.files_outside_the_layers == [
+                    "scanmylib.library",
+                    "scanmylib.routes",
+                    "scanmylib.routes.documents",
+                ]
+
     class TestWhenTheModulesOfTheApiAreRead:
         @pytest.fixture(scope="class")
         @classmethod
@@ -860,3 +878,10 @@ class TestTheLayersOfTheApi:
             assert layers.package_file_count > 0
             assert layers.findings.package_module_count == layers.package_file_count
             assert layers.findings.modules_on_an_import_cycle == []
+
+        def test_should_leave_no_file_outside_the_layers_but_the_composition_roots_and_the_test_support(
+            self, layers: PackageLayers
+        ) -> None:
+            assert layers.package_file_count > 0
+            assert layers.findings.package_module_count == layers.package_file_count
+            assert layers.findings.files_outside_the_layers == []

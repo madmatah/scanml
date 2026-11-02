@@ -76,9 +76,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         images = PillowImages()
         files = FilesystemLibrary(settings.library_dir, clock)
         thumbnails = FilesystemThumbnails(settings.thumbs_dir)
-        # The service's writes run inside the catalog's transactions, which are
-        # atomic only on the catalog's own Database: never give it another one.
-        library = LibraryService(settings, catalog, db, files, thumbnails, Publisher(files, clock), clock, images)
+        library = LibraryService(settings, catalog, files, thumbnails, Publisher(files, clock), clock, images)
         auth = Authenticator(load_or_create_token(settings.token_path, settings.token), db, clock)
         ocr_client = OcrClient(settings.ocr_socket, settings.ocr_timeout_s)
         ocr_engine = SandboxOcrEngine(ocr_client)

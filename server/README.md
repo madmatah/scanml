@@ -13,7 +13,7 @@ Everything runs in Docker; nothing is installed on the host.
 |---|---|
 | `config.py` | `SCANMYLIB_*` environment variables |
 | `application/catalog.py`, `adapters/sqlite/catalog.py`, `adapters/sqlite/database.py`, `adapters/sqlite/rows.py`, `domain/records.py` | the port of the catalog of documents and pages, and the SQLite state behind it (`/state/scanmylib.db`, WAL): its transactions, queries and changes, the queue of pages to read and its claims, its rows read into typed records, and the summary of a document's layout written as JSON; an older schema is upgraded in place at start, after a copy is saved as `scanmylib.db.v<N>.bak` |
-| `library.py` | all mutations: documents, pages, OCR results; keeps DB and files in sync |
+| `library.py` | all mutations: documents, pages, OCR results; keeps the catalog and the files in sync |
 | `domain/ordering.py` | page numbers (arabic, roman, spreads), inference, duplicates, placement and reading order, positions for a manual order, coverage |
 | `domain/documents.py` | a document's rules: what a new one takes, the slug of its folder, the summary of its layout |
 | `domain/pages.py` | a page's rules: its key, its OCR attempts and the summary of its OCR, the orientation the sandbox detects |

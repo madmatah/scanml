@@ -16,6 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from . import __version__
 from .adapters.filesystem.library_files import FilesystemLibrary
 from .adapters.filesystem.thumbnails import FilesystemThumbnails
+from .adapters.filesystem.token_file import load_or_create_token
 from .adapters.ocr_sandbox.client import OcrClient
 from .adapters.ocr_sandbox.engine import SandboxOcrEngine
 from .adapters.pillow_images import MAX_UPLOAD_BYTES, PillowImages
@@ -25,7 +26,7 @@ from .adapters.system_clock import SystemClock
 from .api import documents, pages, system, web
 from .api.deps import Services
 from .application.scan_images import ImageRejected, ImageTooLarge
-from .auth import Authenticator, load_or_create_token
+from .auth import Authenticator
 from .config import Settings
 from .domain.records import Conflict, InvalidRequest, NotFound
 from .library import LibraryService

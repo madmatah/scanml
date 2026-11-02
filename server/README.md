@@ -27,6 +27,7 @@ Everything runs in Docker; nothing is installed on the host.
 | `adapters/pillow_images.py`, `application/scan_images.py` | Pillow: upload checks, thumbnails, image sent to the sandbox, re-encoded illustrations; the ports through which the application handles them, and their errors |
 | `application/ocr_engine.py`, `adapters/ocr_sandbox/` | the OCR ports, with a page's output, its errors and the engine's status; the sandbox behind them: its client, the validation of its responses, untrusted OCR Markdown → safe Markdown, and the engine that times a page's reading and validates its `/health` |
 | `ocr_loop.py` | the single OCR loop |
+| `adapters/filesystem/token_file.py` | the API token: `SCANMYLIB_TOKEN`, else the state directory's `token`, generated on first start, readable by its owner only |
 | `auth.py`, `middleware.py` | token / cookie session / CSRF header, security headers, body limits |
 | `api/` | HTTP routes |
 | `devtools/fake_ocr.py` | fake sandbox for tests and UI development |

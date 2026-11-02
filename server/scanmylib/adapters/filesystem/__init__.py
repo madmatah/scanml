@@ -1,1 +1,1 @@
-"""The files the api keeps on disk: the library's, and the thumbnails of the state directory."""
+"""The files the api keeps on disk: the library's, and the thumbnails and the token of the state directory."""

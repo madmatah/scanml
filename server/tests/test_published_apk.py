@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from scanmylib.published_apk import metadata_path, published_apk
+from scanmylib.adapters.filesystem.published_apk import metadata_path, published_apk
 from support import running_api
 
 SHA256 = "0123456789abcdef" * 4

@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse, Response
 
-from ..published_apk import APK_DOWNLOAD_PATH
+from ..adapters.filesystem.published_apk import APK_DOWNLOAD_PATH
 from .deps import ServicesDep
 
 router = APIRouter()

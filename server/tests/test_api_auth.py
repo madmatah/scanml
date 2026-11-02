@@ -6,6 +6,7 @@ import contextlib
 import dataclasses
 import errno
 import functools
+import hmac
 import json
 import os
 from collections.abc import Callable, Mapping, Sequence
@@ -490,6 +491,31 @@ class TestTheAuthentication:
 
         def test_should_accept_a_change_from_the_phone_without_the_csrf_header(self, answers: BearerAnswers) -> None:
             assert answers.change_status == 201
+
+    class TestWhenARequestOrALoginCarriesAWrongToken:
+        WRONG_BEARER_TOKEN = "wrong-bearer-token"
+        WRONG_LOGIN_TOKEN = "wrong-login-token"
+
+        @pytest.fixture(scope="class")
+        @classmethod
+        def compared_candidates(cls, tmp_path_factory: pytest.TempPathFactory) -> list[bytes]:
+            comparisons: list[tuple[bytes, bytes]] = []
+            compare_digest = hmac.compare_digest
+
+            def recording_compare_digest(candidate: bytes, token: bytes) -> bool:
+                comparisons.append((candidate, token))
+                return compare_digest(candidate, token)
+
+            with pytest.MonkeyPatch.context() as patch, running_api(tmp_path_factory.mktemp("api")) as api:
+                patch.setattr(hmac, "compare_digest", recording_compare_digest)
+                api.client.get("/api/documents", headers=build_bearer_header(cls.WRONG_BEARER_TOKEN))
+                api.client.post("/api/session", json={"token": cls.WRONG_LOGIN_TOKEN})
+            return [candidate for candidate, token in comparisons if token == TOKEN.encode()]
+
+        def test_should_compare_each_with_the_token_in_constant_time_so_that_no_timing_reveals_the_token(
+            self, compared_candidates: list[bytes]
+        ) -> None:
+            assert compared_candidates == [self.WRONG_BEARER_TOKEN.encode(), self.WRONG_LOGIN_TOKEN.encode()]
 
     class TestWhenTheWebUiLogsInWithAWrongToken:
         def test_should_refuse_it(self, web_session: WebSession) -> None:

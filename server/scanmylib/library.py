@@ -1,8 +1,8 @@
-"""Documents and pages: the SQLite state kept in sync with the library folder.
+"""Documents and pages: the catalog kept in sync with the library folder.
 
 Every mutation goes through `LibraryService`:
 
-* database changes happen in one transaction, without awaiting inside it, and
+* changes to the catalog happen in one transaction, without awaiting inside it, and
   end with `_refresh_layout`, which recomputes page numbers, duplicates,
   reading order and coverage (ordering.py) and stores them;
 * file changes in a document folder happen under that document's lock, so a
@@ -20,7 +20,6 @@ from dataclasses import replace
 from datetime import datetime
 from pathlib import PurePath
 
-from .adapters.sqlite.database import Database
 from .application.catalog import Catalog, NewPage, QueueCounts
 from .application.clock import Clock
 from .application.library_files import LibraryFiles
@@ -58,7 +57,6 @@ class LibraryService:
         self,
         settings: Settings,
         catalog: Catalog,
-        db: Database,
         files: LibraryFiles,
         thumbnails: Thumbnails,
         publisher: Publisher,
@@ -67,7 +65,6 @@ class LibraryService:
     ) -> None:
         self._settings = settings
         self._catalog = catalog
-        self._db = db
         self._files = files
         self._thumbnails = thumbnails
         self._clock = clock

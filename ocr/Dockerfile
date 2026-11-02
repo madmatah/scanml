@@ -6,14 +6,14 @@
 # model weights are NOT baked in: the one-shot `ocr-setup` service installs
 # them into SANDBOX_DIR, which the `ocr` service then mounts read-only while
 # running without any network interface (see compose.yaml).
-FROM python:3.12-slim-bookworm
+FROM python:3.12-slim-trixie
 
 ARG UID=1000
 ARG GID=1000
 
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
-      gcc libc6-dev libgomp1 libgl1 libglib2.0-0 \
+      gcc libc6-dev libgomp1 libgl1 libglib2.0-0t64 \
  && rm -rf /var/lib/apt/lists/*
 
 # uv is only used by the setup container to build the venvs quickly.

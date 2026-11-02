@@ -1,4 +1,4 @@
-"""The project version: the repository's VERSION file, copied into the api image."""
+"""The project version (version.py): the repository's VERSION file, copied into the api image."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 import scanmylib
-from scanmylib import VERSION_FILE, read_version
+from scanmylib.version import VERSION_FILE, read_version
 
 UNKNOWN = "unknown"
 PACKAGE_DIRECTORY = Path(scanmylib.__file__).resolve().parent

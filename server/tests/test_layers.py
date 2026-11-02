@@ -36,7 +36,13 @@ LAYER_DIRECTORIES = MappingProxyType(
     }
 )
 COMPOSITION_ROOTS = frozenset(
-    {PACKAGE_NAME, f"{PACKAGE_NAME}.__main__", f"{PACKAGE_NAME}.app", f"{PACKAGE_NAME}.config"}
+    {
+        PACKAGE_NAME,
+        f"{PACKAGE_NAME}.__main__",
+        f"{PACKAGE_NAME}.app",
+        f"{PACKAGE_NAME}.config",
+        f"{PACKAGE_NAME}.version",
+    }
 )
 LAYERS = frozenset({Layer.DOMAIN, Layer.APPLICATION, Layer.ADAPTERS})
 INNER_LAYERS_OF_THE_APPLICATION = frozenset({Layer.DOMAIN, Layer.APPLICATION})

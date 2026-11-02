@@ -5,10 +5,13 @@ pages in each status, zero for a status that no page has. Requeueing the interru
 reading was under way, and returns how many there were. Storing a layout gives each page of the document its placement,
 which the layout holds for every one of them, and the document its summary. Adding a document records it as created and
 last updated at the moment given, touching it records the moment of its last update, and removing it removes its pages
-with it. Updating a document sets the fields its changes hold, at least one, and keeps the others. A transaction's
+with it. Adding a page records it queued for reading. Updating a document or a page raises ValueError when its changes
+hold no field, and otherwise sets the fields they hold, at
+least one, and keeps the others; a manual number of None clears the page's. Setting the positions of pages gives each
+its own, None clearing it, and clearing those of a document returns how many of its pages had one. A transaction's
 changes take effect together when its block ends, or none of them when it raises, and a transaction opened inside
 another joins it. The catalog is called from the event loop's thread only, and nothing is awaited inside a transaction,
-so that a transaction is atomic for the other coroutines. An update whose changes hold no field raises ValueError.
+so that a transaction is atomic for the other coroutines.
 """
 
 from __future__ import annotations
@@ -21,7 +24,8 @@ from typing import Protocol
 
 from ..domain.documents import LayoutSummary, NewDocument
 from ..domain.ordering import Placement
-from ..domain.records import DocumentChanges, DocumentRecord, PageRecord
+from ..domain.records import DocumentChanges, DocumentRecord, PageChanges, PageRecord
+from .scan_images import ScanInfo
 
 
 @dataclass(frozen=True)
@@ -30,6 +34,19 @@ class QueueCounts:
     processing_count: int
     error_count: int
     done_count: int
+
+
+@dataclass(frozen=True)
+class NewPage:
+    id: str
+    document_id: str
+    key: str
+    scan: ScanInfo
+    session_id: str | None
+    seq: int | None
+    hint_number: int | None
+    captured_at: datetime
+    uploaded_at: datetime
 
 
 class Catalog(Protocol):
@@ -49,3 +66,8 @@ class Catalog(Protocol):
     def update_document(self, document_id: str, changes: DocumentChanges) -> None: ...
     def touch_document(self, document_id: str, updated_at: datetime) -> None: ...
     def remove_document(self, document_id: str) -> None: ...
+    def add_page(self, page: NewPage) -> None: ...
+    def update_page(self, page_id: str, changes: PageChanges) -> None: ...
+    def set_page_positions(self, positions: Mapping[str, float | None]) -> None: ...
+    def clear_page_positions(self, document_id: str) -> int: ...
+    def remove_page(self, page_id: str) -> None: ...

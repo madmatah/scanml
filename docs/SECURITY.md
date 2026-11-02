@@ -306,8 +306,12 @@ data or library; an `--api` URL without an explicit port is refused) without
   - the scans of the images hold most of the results, mostly Debian packages, many of which have no fix in the
     distribution;
   - an installation holds what resolved the day it was installed (`SANDBOX_DIR/MANIFEST.json` lists its main
-    versions), and a deployed image the packages of its deployment day, where the scan reads the day's; the artifact of
-    each run keeps the environments it resolved, to compare;
+    versions), and a deployed image its base as Docker Hub served it on its deployment day, with the Debian packages of
+    the first build on that base, where the scan reads the day's; the artifact of each run keeps the environments it
+    resolved, to compare;
+  - production trusts what the base tag names at each deployment: an image published under it, broken or compromised,
+    reaches production's containers at the next deployment, the api's included, which mounts the library and the
+    state; the deployment's checks catch a broken image, not a compromised one that behaves;
   - Paddle's GPU build comes from Paddle's own CDN, and its advisories are published under `paddlepaddle`: it is scanned
     under both names, at the version of its wheel;
   - not scanned: the CPython of the base images, built from source; the packages of `server/requirements-test.lock`

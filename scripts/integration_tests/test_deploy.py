@@ -60,6 +60,7 @@ RELEASE_TAGS_ALONE = Tags(f"v{VERSION}\n", (f"refs/tags/v{VERSION}", f"refs/tags
 REHEARSAL_PROJECT = "scanmylib-review-test"
 REHEARSAL_ENVIRONMENT = MappingProxyType({"SCANMYLIB_DEPLOY_REHEARSAL": REHEARSAL_PROJECT})
 REHEARSED_APP_VERSION = "0.2.4-dev+g1a2b3c4d5e6f.dirty"
+COMPOSE_BUILD = r"^compose .* build (--[a-z-]+ )*api ocr$"
 RUNNING_IMAGES_TAGGED_DEPLOYED: list[Rule] = [
     {"match": r"^image inspect --format \{\{\.Id\}\} scanmylib-(api|ocr):deployed$", "stdout": "sha256:good\n"},
     {"match": r"^inspect --format \{\{\.Image\}\} (api|ocr)id$", "stdout": "sha256:good\n"},
@@ -129,6 +130,12 @@ def find_command(commands: list[str], fragment: str) -> str:
     return next(command for command in commands if fragment in command)
 
 
+def find_compose_build(commands: list[str]) -> str:
+    """Raises StopIteration when no command builds the images, as find_command does, so that a test of a build that
+    never ran fails rather than finds nothing wrong with it."""
+    return next(command for command in commands if re.search(COMPOSE_BUILD, command))
+
+
 def read_option_value(command: str, option: str) -> str:
     return "".join(command.partition(f"{option} ")[2].split()[:1])
 
@@ -162,7 +169,7 @@ def prepare_rehearsal(installation: Installation, api_port: int, export_copy: Pa
     (installation.worktree / "untracked.txt").write_text("x")
     installation.answer_docker(
         [
-            {"match": r"^compose .* build api ocr$", "snapshot": str(export_copy)},
+            {"match": COMPOSE_BUILD, "snapshot": str(export_copy)},
             *build_running_sandbox_rules(
                 f"{installation.production_data}/sandbox", str(rehearsal_data), kind="ocr-fake"
             ),
@@ -288,6 +295,7 @@ class WhenTheReleaseIsDeployedWithTheApp(InstallationTestCase):
     production_data: ClassVar[Path]
     deploy_run: ClassVar[ScriptRun]
     commands: ClassVar[list[str]]
+    compose_builds: ClassVar[list[str]]
     gradle_tasks: ClassVar[list[str]]
     temporary_entries: ClassVar[list[str]]
     built_files: ClassVar[list[str]]
@@ -305,10 +313,9 @@ class WhenTheReleaseIsDeployedWithTheApp(InstallationTestCase):
         cls.production_checkout = installation.production_checkout
         cls.production_data = installation.production_data
         export_copy = installation.directory / "built"
-        cls.deploy_run = deploy(
-            installation, "--apk", rules=[{"match": r"^compose .* build api ocr$", "snapshot": str(export_copy)}]
-        )
+        cls.deploy_run = deploy(installation, "--apk", rules=[{"match": COMPOSE_BUILD, "snapshot": str(export_copy)}])
         cls.commands = installation.read_docker_commands()
+        cls.compose_builds = [command for command in cls.commands if re.search(r"^compose .* build ", command)]
         cls.gradle_tasks = read_gradle_tasks(installation.read_docker_calls())
         cls.temporary_entries = sorted(path.name for path in installation.directory.iterdir())
         built_paths = [path for path in export_copy.rglob("*") if path.is_file()]
@@ -321,7 +328,7 @@ class WhenTheReleaseIsDeployedWithTheApp(InstallationTestCase):
         cls.logs = read_logs(installation)
 
     def find_build(self) -> str:
-        return find_command([command for command in self.commands if command.startswith("compose")], " build api ocr")
+        return find_compose_build(self.commands)
 
     def find_export(self) -> Path:
         return Path(read_option_value(self.find_build(), "--project-directory"))
@@ -343,6 +350,12 @@ class WhenTheReleaseIsDeployedWithTheApp(InstallationTestCase):
         self.assertTrue(
             str(self.find_export()).startswith(f"{self.temporary_directory}/scanmylib-deploy."), self.find_build()
         )
+
+    def test_should_build_the_images_once_on_the_current_image_of_their_base_tag_since_a_local_copy_can_lack_its_fixes(
+        self,
+    ) -> None:
+        self.assertEqual(len(self.compose_builds), 1)
+        self.assertRegex(self.compose_builds[0], r" build --pull api ocr$")
 
     def test_should_remove_the_export(self) -> None:
         export = self.find_export()
@@ -490,7 +503,7 @@ class WhenTheBuildFails(InstallationTestCase):
     def setUpClass(cls) -> None:
         installation = make_installation(cls)
         start_fake_api(cls, installation.production_api_port)
-        cls.deploy_run = deploy(installation, rules=[{"match": r"^compose .* build api ocr$", "exit": 1}])
+        cls.deploy_run = deploy(installation, rules=[{"match": COMPOSE_BUILD, "exit": 1}])
         cls.commands = installation.read_docker_commands()
         cls.backups = list_backups(installation)
 
@@ -662,7 +675,7 @@ class WhenDeployedLagsBehindWhatRuns(InstallationTestCase):
                 "match": r"^image inspect --format \{\{\.Id\}\} scanmylib-(api|ocr):deployed$",
                 "stdout": "sha256:older\n",
             },
-            {"match": r"^compose .* build api ocr$", "exit": 1},
+            {"match": COMPOSE_BUILD, "exit": 1},
         ]
         cls.deploy_run = deploy(installation, rules=lagging)
         cls.commands = installation.read_docker_commands()
@@ -678,7 +691,7 @@ class WhenDeployedLagsBehindWhatRuns(InstallationTestCase):
         )
 
     def test_should_tag_deployed_what_runs_before_the_build_since_it_is_the_truth_to_roll_back_to(self) -> None:
-        build_index = self.commands.index(find_command(self.commands, " build api ocr"))
+        build_index = self.commands.index(find_compose_build(self.commands))
         self.assertLess(self.commands.index("tag sha256:oldapi scanmylib-api:deployed"), build_index)
 
     def test_should_roll_back_to_what_ran(self) -> None:

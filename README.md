@@ -270,7 +270,8 @@ scripts/deploy.sh --apk        # deploys, and publishes the new app
 a release published on GitHub (the commit of its tag on `origin`), on a release older than the one production runs
 (unless `--allow-downgrade`), or when `.env` is not production's. It then:
 
-1. builds the images from the commit (`git archive HEAD`); if the build fails, production is unchanged;
+1. builds the images from the commit (`git archive HEAD`), on the current image of each base tag, which it pulls from
+   Docker Hub; if the build fails, Docker Hub out of reach included, production is unchanged;
 2. copies the state into `DATA_DIR/backups/state-<date>-v<version>/` (a consistent copy of the database; the last 10
    are kept);
 3. restarts `api` and `ocr`, checks their health, the sandbox's isolation, and that the engine's libraries import in

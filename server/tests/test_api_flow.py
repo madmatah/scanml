@@ -22,11 +22,10 @@ from fastapi.testclient import TestClient
 from markdown_it import MarkdownIt
 from PIL import Image
 
+from scanmylib import preview
 from scanmylib.adapters.filesystem.library_files import FilesystemLibrary
 from scanmylib.devtools.fake_ocr import ParseRequest
-from scanmylib.domain.records import DocumentRecord, PageRecord
 from scanmylib.library import LibraryService
-from scanmylib.publisher import Publisher
 from support import (
     AUTH,
     BROKEN_EXIF,
@@ -1461,23 +1460,23 @@ class TestAPage:
         @classmethod
         def concurrent_previews(cls, tmp_path_factory: pytest.TempPathFactory) -> ConcurrentPreviews:
             counter_lock, active, peak = threading.Lock(), [0], [0]
-            page_html = Publisher.page_html
+            render_markdown = preview.render_markdown
 
-            def slow_page_html(self: Publisher, document: DocumentRecord, page: PageRecord) -> str:
+            def render_markdown_slowly(markdown: str, files_url: str) -> str:
                 with counter_lock:
                     active[0] += 1
                     peak[0] = max(peak[0], active[0])
                 time.sleep(0.2)
                 with counter_lock:
                     active[0] -= 1
-                return page_html(self, document, page)
+                return render_markdown(markdown, files_url)
 
             with pytest.MonkeyPatch.context() as patch, running_api(tmp_path_factory.mktemp("api")) as api:
                 client = api.client
                 document_id = create_document(client)
                 page = upload(client, document_id, page_image(1)).json()
                 wait_until_processed(client, document_id)
-                patch.setattr(Publisher, "page_html", slow_page_html)
+                patch.setattr(preview, "render_markdown", render_markdown_slowly)
                 statuses: list[int] = []
                 requests = [
                     threading.Thread(
@@ -1502,6 +1501,101 @@ class TestAPage:
             # Rendering is CPU-bound: parallel renders of a hostile page used to take every worker thread, stalling
             # uploads and thumbnails for minutes.
             assert concurrent_previews.peak_renders == 1
+
+    class TestWhenPreviewsOfItAndOfItsDocumentAreRequestedAtOnce:
+        @pytest.fixture(scope="class")
+        @classmethod
+        def concurrent_previews(cls, tmp_path_factory: pytest.TempPathFactory) -> ConcurrentPreviews:
+            counter_lock, active, peak = threading.Lock(), [0], [0]
+            render_markdown = preview.render_markdown
+
+            def render_markdown_slowly(markdown: str, files_url: str) -> str:
+                with counter_lock:
+                    active[0] += 1
+                    peak[0] = max(peak[0], active[0])
+                time.sleep(0.2)
+                with counter_lock:
+                    active[0] -= 1
+                return render_markdown(markdown, files_url)
+
+            with pytest.MonkeyPatch.context() as patch, running_api(tmp_path_factory.mktemp("api")) as api:
+                client = api.client
+                document_id = create_document(client)
+                page = upload(client, document_id, page_image(1)).json()
+                wait_until_processed(client, document_id)
+                patch.setattr(preview, "render_markdown", render_markdown_slowly)
+                statuses: list[int] = []
+
+                def request_preview(url: str) -> None:
+                    statuses.append(client.get(url, headers=AUTH).status_code)
+
+                preview_urls = [f"/api/pages/{page['id']}/html", f"/api/documents/{document_id}/html"] * 2
+                requests = [threading.Thread(target=request_preview, args=(url,)) for url in preview_urls]
+                for thread in requests:
+                    thread.start()
+                for thread in requests:
+                    thread.join()
+                return ConcurrentPreviews(list(statuses), peak[0])
+
+        def test_should_answer_each(self, concurrent_previews: ConcurrentPreviews) -> None:
+            assert concurrent_previews.statuses == [200] * 4
+
+        def test_should_render_a_page_and_a_document_one_at_a_time_so_that_no_hostile_page_takes_every_thread(
+            self, concurrent_previews: ConcurrentPreviews
+        ) -> None:
+            assert concurrent_previews.peak_renders == 1
+
+    class TestWhenItsPreviewsAreBeingRendered:
+        HOLD_LIMIT_SECONDS = 10.0
+        PREVIEW_ROWS = ("the-page-preview", "the-document-preview")
+
+        @pytest.fixture(scope="class")
+        @classmethod
+        def answered_while_rendering(cls, tmp_path_factory: pytest.TempPathFactory) -> dict[str, bool]:
+            render_started, render_released, render_finished = threading.Event(), threading.Event(), threading.Event()
+            render_markdown = preview.render_markdown
+
+            def hold_render(markdown: str, files_url: str) -> str:
+                render_started.set()
+                try:
+                    render_released.wait(cls.HOLD_LIMIT_SECONDS)
+                    return render_markdown(markdown, files_url)
+                finally:
+                    render_finished.set()
+
+            with pytest.MonkeyPatch.context() as patch, running_api(tmp_path_factory.mktemp("api")) as api:
+                client = api.client
+                document_id = create_document(client)
+                page = upload(client, document_id, page_image(1)).json()
+                wait_until_processed(client, document_id)
+                patch.setattr(preview, "render_markdown", hold_render)
+                preview_urls = dict(
+                    zip(
+                        cls.PREVIEW_ROWS,
+                        (f"/api/pages/{page['id']}/html", f"/api/documents/{document_id}/html"),
+                        strict=True,
+                    )
+                )
+                answered: dict[str, bool] = {}
+                for row, url in preview_urls.items():
+                    for event in (render_started, render_released, render_finished):
+                        event.clear()
+                    request = threading.Thread(target=client.get, args=(url,), kwargs={"headers": AUTH})
+                    request.start()
+                    try:
+                        render_started.wait(cls.HOLD_LIMIT_SECONDS)
+                        client.get("/api/health")
+                        answered[row] = render_started.is_set() and not render_finished.is_set()
+                    finally:
+                        render_released.set()
+                        request.join()
+                return answered
+
+        def test_should_answer_other_requests_meanwhile_so_that_a_long_render_never_stalls_the_api(
+            self, answered_while_rendering: dict[str, bool]
+        ) -> None:
+            mismatches = {row: answered for row, answered in answered_while_rendering.items() if not answered}
+            assert (mismatches, len(answered_while_rendering)) == ({}, len(self.PREVIEW_ROWS))
 
     class TestWhenItIsScannedSideways:
         def test_should_find_no_number(self, rotated_page: RotatedPage) -> None:

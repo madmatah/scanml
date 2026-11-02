@@ -180,7 +180,7 @@ check_integration() {
 }
 
 check_web() {
-    run_tool -v "$ROOT/server/scanmylib/web:/web:ro" node:22-bookworm-slim node --test '/web/tests/*.test.js'
+    run_tool -v "$ROOT/server/scanmylib/web:/web:ro" node:22-trixie-slim node --test '/web/tests/*.test.js'
 }
 
 check_server() {

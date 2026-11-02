@@ -13,7 +13,6 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import __version__
 from .adapters.filesystem.library_files import FilesystemLibrary
 from .adapters.filesystem.thumbnails import FilesystemThumbnails
 from .adapters.filesystem.token_file import load_or_create_token
@@ -35,6 +34,7 @@ from .application.scan_images import ImageRejected, ImageTooLarge
 from .config import Settings
 from .domain.records import Conflict, InvalidRequest, NotFound
 from .middleware import BodySizeLimitMiddleware, SecurityHeadersMiddleware, body_limit
+from .version import __version__
 
 log = logging.getLogger(__name__)
 

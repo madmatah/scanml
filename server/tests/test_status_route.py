@@ -13,7 +13,7 @@ from typing import Any, ClassVar
 import pytest
 
 import scanmylib.app
-from scanmylib import __version__
+from scanmylib.version import __version__
 from support import (
     AUTH,
     build_client,

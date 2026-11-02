@@ -22,11 +22,11 @@ from starlette.datastructures import FormData
 from starlette.formparsers import MultiPartParser
 from starlette.routing import BaseRoute, Mount
 
-from scanmylib import __version__
 from scanmylib.adapters.filesystem.token_file import load_or_create_token
 from scanmylib.adapters.pillow_images import MAX_UPLOAD_BYTES
 from scanmylib.app import create_app
 from scanmylib.middleware import CONTENT_SECURITY_POLICY
+from scanmylib.version import __version__
 from support import (
     AUTH,
     TOKEN,

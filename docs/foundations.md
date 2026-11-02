@@ -150,7 +150,7 @@ them. The last row lists the scripts that the skills keep, which belong to no un
 
 | Unit | Source files | Responsibility | Layer |
 |---|---|---|---|
-| api | `__main__`, `app`, `config` | Entry point, wiring of the services and routes, settings from the environment | Composition root |
+| api | `__main__`, `app`, `config`, `version` | Entry point, wiring of the services and routes, settings from the environment, the version of the build | Composition root |
 | api | `domain/ordering` | Page numbering, reading order, duplicates and coverage of a document | Domain |
 | api | `domain/documents` | A document's rules: what a new one takes, the slug of its folder, the summary of its layout | Domain |
 | api | `domain/pages` | A page's rules: its key, its OCR attempts and the summary of its OCR, the orientation the sandbox detects | Domain |

@@ -11,7 +11,7 @@ Everything runs in Docker; nothing is installed on the host.
 
 | Files | Role |
 |---|---|
-| `config.py` | `SCANMYLIB_*` environment variables |
+| `config.py`, `version.py` | `SCANMYLIB_*` environment variables; the version the api reports, from the `VERSION` file beside the package |
 | `application/catalog.py`, `adapters/sqlite/catalog.py`, `adapters/sqlite/database.py`, `adapters/sqlite/rows.py`, `domain/records.py` | the port of the catalog of documents and pages, and the SQLite state behind it (`/state/scanmylib.db`, WAL): its transactions, queries and changes, the queue of pages to read and its claims, its rows read into typed records, and the summary of a document's layout written as JSON; an older schema is upgraded in place at start, after a copy is saved as `scanmylib.db.v<N>.bak` |
 | `application/library.py` | all mutations: documents, pages, OCR results; keeps the catalog and the files in sync |
 | `application/status.py` | the status of the OCR: its engine's, and how many pages of its queue are in each status |
@@ -49,7 +49,7 @@ Pass pytest options after the image name, e.g. `... scanmylib-dev-api:test pytho
 The runtime image (default target) is built by docker compose (`scripts/dev.sh build api`
 in a worktree, `scripts/deploy.sh` in production), which also
 passes the repository root as the build context `project`: the image gets the
-repository's `VERSION`, the version the api reports (`scanmylib/__init__.py`). `scripts/dev.sh`
+repository's `VERSION`, the version the api reports (`scanmylib/version.py`). `scripts/dev.sh`
 passes the version of a development build instead, derived from git (build argument
 `DEV_VERSION`, `scripts/lib/version.py`). A plain `docker build` of this directory reports
 `unknown`.

@@ -8,13 +8,12 @@ verbatim.
 
 ### The base of the images
 
-The api's image and the OCR sandbox's are built on the official `python:3.12-slim-trixie` image: CPython 3.12
-(PSF-2.0, https://www.python.org) on Debian 13 "trixie" (its packages under their own free-software licenses,
-https://www.debian.org). The api's image adds the Debian package `tzdata-legacy` (public domain), which keeps the former
-names of the time zones. The sandbox's image adds the Debian packages `gcc`, `libc6-dev`, `libgomp1`, `libgl1` and
-`libglib2.0-0t64`, which the engine's wheels need, and uv 0.13.4 (MIT or Apache-2.0, https://github.com/astral-sh/uv),
-which installs the engine's environments. The image of the gate's Python tools is built on the official
-`python:3.12-slim-bookworm` image: CPython 3.12 on Debian 12 "bookworm".
+The api's image, the OCR sandbox's and the image of the gate's Python tools are built on the official
+`python:3.12-slim-trixie` image: CPython 3.12 (PSF-2.0, https://www.python.org) on Debian 13 "trixie" (its packages
+under their own free-software licenses, https://www.debian.org). The api's image adds the Debian package
+`tzdata-legacy` (public domain), which keeps the former names of the time zones. The sandbox's image adds the Debian
+packages `gcc`, `libc6-dev`, `libgomp1`, `libgl1` and `libglib2.0-0t64`, which the engine's wheels need, and uv 0.13.4
+(MIT or Apache-2.0, https://github.com/astral-sh/uv), which installs the engine's environments.
 
 ### The api's image
 
@@ -111,7 +110,7 @@ Tools that build and test the project, run in containers and never shipped.
 | Tool | Role | License | Source |
 |---|---|---|---|
 | pytest | The api's tests | MIT | https://github.com/pytest-dev/pytest |
-| Node.js (`node:22-bookworm-slim`) | The web UI's unit tests; the image of Biome (`scripts/lint/Dockerfile.web`), and the regeneration of its lockfile | MIT | https://nodejs.org |
+| Node.js (`node:22-trixie-slim`) | The web UI's unit tests; the image of Biome (`scripts/lint/Dockerfile.web`), and the regeneration of its lockfile | MIT | https://nodejs.org |
 | Eclipse Temurin JDK 21 (`eclipse-temurin:21-jdk`) | The app's build | GPL-2.0 with the Classpath Exception | https://adoptium.net |
 | Gradle, Android Gradle Plugin | The app's build | Apache-2.0 | https://gradle.org, https://developer.android.com/build |
 | Android SDK | The app's build and signing tools | Android Software Development Kit License | https://developer.android.com/studio |

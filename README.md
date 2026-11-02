@@ -343,10 +343,10 @@ way:
 
 ```bash
 docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD/scripts/lint:/work" -w /work \
-    python:3.12-slim-bookworm sh -c 'pip install --quiet --target /tmp/uv uv==0.13.0 && /tmp/uv/bin/uv pip compile \
+    python:3.12-slim-trixie sh -c 'pip install --quiet --target /tmp/uv uv==0.13.0 && /tmp/uv/bin/uv pip compile \
     requirements.in --generate-hashes --python-version 3.12 --no-header -o requirements.lock'
 docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm \
-    -v "$PWD/server/scanmylib/web:/web" -w /web node:22-bookworm-slim npm install --package-lock-only --ignore-scripts
+    -v "$PWD/server/scanmylib/web:/web" -w /web node:22-trixie-slim npm install --package-lock-only --ignore-scripts
 ```
 
 ## Releasing

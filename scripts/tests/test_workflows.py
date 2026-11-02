@@ -761,13 +761,13 @@ class TheFindDockerDeviationsFunctionWhenTheWorkflowDeviatesFromTheAllowlist(uni
         WorkflowMutation(
             "a scan job that runs in a container",
             "    timeout-minutes: 65\n",
-            "    timeout-minutes: 65\n    container: python:3.12-slim-bookworm\n",
+            "    timeout-minutes: 65\n    container: python:3.12-slim-trixie\n",
             "job_containers",
         ),
         WorkflowMutation(
             "a scan job that starts a service",
             "    timeout-minutes: 65\n",
-            "    timeout-minutes: 65\n    services:\n      resolver:\n        image: python:3.12-slim-bookworm\n",
+            "    timeout-minutes: 65\n    services:\n      resolver:\n        image: python:3.12-slim-trixie\n",
             "job_containers",
         ),
         WorkflowMutation(
@@ -810,7 +810,7 @@ class TheFindDockerDeviationsFunctionWhenTheWorkflowDeviatesFromTheAllowlist(uni
             "      - name: Resolve the sandbox's environments as a new installation would, without installing them\n",
             "      - name: Resolve the sandbox's environments as a new installation would, without installing them\n"
             "        env:\n"
-            "          SANDBOX_PYTHON_IMAGE: python:3.13-slim-bookworm\n",
+            "          SANDBOX_PYTHON_IMAGE: python:3.13-slim-trixie\n",
             "pinned_names",
         ),
         WorkflowMutation(

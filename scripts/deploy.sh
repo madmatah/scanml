@@ -14,7 +14,8 @@
 # assume-unchanged or skip-worktree, which git status would not compare), on a published release:
 # HEAD is the commit of the tag vVERSION on origin (git ls-remote), which .github/workflows/release.yml
 # created (git checkout vX.Y.Z); production's .env, in the strict format of scripts/lib/stack.py,
-# with production's identity (COMPOSE_PROJECT_NAME=scanmylib, the OCR sandbox, the release app),
+# with production's identity (COMPOSE_PROJECT_NAME=scanmylib, the OCR sandbox run by a user and a
+# group other than root's, the release app),
 # an existing DATA_DIR holding production's database (unless --first-install), an existing
 # LIBRARY_DIR and an installed OCR sandbox; in a real run, the running api (/api/health) not on a
 # newer release, unless --allow-downgrade. It never tags: releases are published on GitHub, and
@@ -32,23 +33,30 @@
 #      e.g. on the first run, or after a deploy that failed once the containers were recreated):
 #      rebuilding moves :latest, and docker then forgets the previous image unless a tag still
 #      names it
-#   2. backup of DATA_DIR/state (without its thumbnail cache) into
+#   2. with the OCR sandbox (OCR_SERVICE=ocr): the new ocr image, named by its id (a failure puts
+#      :latest back on the previous image), imports the engine's libraries from SANDBOX_DIR
+#      (python3 -m scanmylib_ocr.engine_environment), in a container of its own with the
+#      isolation of the ocr service (scripts/lib/engine_check.sh), its environment and its limits,
+#      SANDBOX_DIR mounted read-only, bounded in time, its output discarded: an image that cannot run
+#      the sandbox is refused before production changes, and the failure prints the same command,
+#      to run by hand
+#   3. backup of DATA_DIR/state (without its thumbnail cache) into
 #      DATA_DIR/backups/state-<time>-v<version>/, the database copied with SQLite's online backup
 #      (consistent while the api runs) and checked, right before the restart (what changes in the
 #      seconds between the two is not in it); the 10 most recent backups are kept. If anything
 #      fails before the restart, :latest goes back to :deployed: production is unchanged
-#   3. restart: docker compose up -d api ocr, waiting until both are healthy and the api reports
+#   4. restart: docker compose up -d api ocr, waiting until both are healthy and the api reports
 #      VERSION
-#   4. scripts/verify-sandbox.sh; if it fails, the OCR service is stopped
-#   5. with the OCR sandbox (OCR_SERVICE=ocr): python3 -m scanmylib_ocr.engine_environment in the new
+#   5. scripts/verify-sandbox.sh; if it fails, the OCR service is stopped
+#   6. with the OCR sandbox (OCR_SERVICE=ocr): python3 -m scanmylib_ocr.engine_environment in the new
 #      ocr container, which imports the engine's libraries with the GPU hidden and no model loaded,
 #      bounded in time, its output discarded: only its exit status counts. If it fails, the OCR
-#      service is stopped. Once it passes (once step 4 passes on the fake OCR, which skips it), the
+#      service is stopped. Once it passes (once step 5 passes on the fake OCR, which skips it), the
 #      new images become :deployed: production runs them
-#   6. with --apk: scripts/build-apk.sh (the release build, signing, publication), then a check that
+#   7. with --apk: scripts/build-apk.sh (the release build, signing, publication), then a check that
 #      /api/health offers the published APK
 # It runs no test suite: the code of a release was tested before it was published
-# (.claude/rules/releases.md).
+# (.claude/rules/releases.md); its checks of the sandbox only import the engine's libraries.
 # A real run ignores SIGHUP (a lost terminal does not stop it halfway) and is also logged to
 # DATA_DIR/logs/deploy-<time>.log. On failure, it says what state production is in after the
 # step that failed, and how to roll back (the :deployed images, the backup of the state).
@@ -57,7 +65,7 @@
 # checkout instead, when its COMPOSE_PROJECT_NAME is <project> and the export passes the isolation
 # check of scripts/dev.sh. The git checks are then only reported, and HEAD need not be a release
 # (it is still what is checked, built and started: commit first), the fake OCR is allowed
-# (OCR_SERVICE=ocr-fake), and the app is the dev one.
+# (OCR_SERVICE=ocr-fake, which skips the checks of the engine), and the app is the dev one.
 set -euo pipefail
 
 ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
@@ -152,6 +160,7 @@ else
 fi
 
 declare -A STACK=()
+service_options='' are_service_options_read=0
 env_read=0
 if [[ ! -f $ENV_FILE ]]; then
     fail "no $ENV_FILE (scripts/setup.sh writes production's)"
@@ -222,11 +231,19 @@ if ((env_read)); then
         fail "LIBRARY_DIR $LIBRARY_DIR is not a directory"
     fi
     if [[ $OCR_SERVICE == ocr ]]; then
-        if [[ -f $SANDBOX_DIR/MANIFEST.json ]]; then
+        # docker run --mount reads a comma as the start of another of its settings.
+        if [[ $SANDBOX_DIR != /* || $SANDBOX_DIR == *,* ]]; then
+            fail "SANDBOX_DIR in .env must be an absolute path without a comma, not '$SANDBOX_DIR'"
+        elif [[ -f $SANDBOX_DIR/MANIFEST.json ]]; then
             pass "OCR sandbox installed in $SANDBOX_DIR"
         else
             fail "no OCR sandbox in SANDBOX_DIR ('$SANDBOX_DIR'): scripts/setup.sh installs it"
         fi
+        # The check before the restart runs engine code ahead of any isolation check, as this user and group.
+        for id_setting in SCANMYLIB_UID SCANMYLIB_GID; do
+            [[ ${STACK[$id_setting]:-1000} =~ ^[1-9][0-9]*$ ]] || fail "$id_setting in .env must be a number other \
+than root's 0, not '${STACK[$id_setting]}'"
+        done
     fi
 fi
 
@@ -291,6 +308,16 @@ elif ((env_read)); then
                 info "$service: the restart applies a new configuration (config hash ${current:0:12} -> ${hash:0:12})"
             fi
         done < <(compose config --hash "api,$OCR_SERVICE" 2> /dev/null || true)
+        # Read here rather than at the check, which comes after the build and an installation.
+        if [[ $OCR_SERVICE == ocr ]]; then
+            if service_options=$(compose config --format json | python3 "$SCRIPTS_LIB/stack.py" sandbox-check-options \
+                2>&1); then
+                are_service_options_read=1
+                pass "the check of the sandbox takes the environment and the limits of the ocr service"
+            else
+                fail "the check of the sandbox cannot take the settings of the ocr service: ${service_options#error: }"
+            fi
+        fi
     else
         fail "docker compose cannot resolve the stack: $(tail -n 1 <<< "$config_error")"
     fi
@@ -309,6 +336,8 @@ fi
 
 STAMP=$(date +%Y%m%d-%H%M%S)
 STEP=preconditions BACKUP='' previous_version='' tee_pid=''
+# The check of the sandbox before the restart, which a failure prints to run by hand.
+SANDBOX_CHECK=()
 # The images that can be put back: those production runs, tagged :deployed.
 deployed_images=()
 # How the failure messages name the stack and docker compose: production through scripts/prod.sh
@@ -384,10 +413,14 @@ on_exit() {
         printf '\nDEPLOY FAILED during the step "%s" (exit %s).\n' "$STEP" "$status"
         case $STEP in
             preconditions) ;;
-            images | backup)
+            images | check | backup)
                 restore_deployed_images
                 echo "$WHO is unchanged: the previous containers still run, and the image tags point to the"
                 echo "previous images again. Fix the problem, then deploy again."
+                if [[ $STEP == check ]] && ((${#SANDBOX_CHECK[@]})); then
+                    echo "The new image could not import the engine's libraries from $SANDBOX_DIR. To see why:"
+                    print_sandbox_check_diagnostic "${SANDBOX_CHECK[@]}"
+                fi
                 ;;
             restart)
                 echo "$WHO may be down or running the new version $VERSION: the restart did not complete, or"
@@ -451,9 +484,39 @@ failed once the containers were recreated: it names the running image again"
 done
 echo "  the commit ${head_commit:0:12}, exported to $EXPORT"
 COMPOSE_ROOT=$EXPORT run compose build --pull api ocr
+# A failure puts :latest back on the previous image before it prints the check to run by hand: both name the new one.
+NEW_OCR_IMAGE=$IMAGE_PREFIX-ocr:latest
+if [[ $OCR_SERVICE == ocr ]] && ! ((DRY_RUN)); then
+    NEW_OCR_IMAGE=$(docker image inspect --format '{{.Id}}' "$IMAGE_PREFIX-ocr:latest") \
+        || die "cannot read the id of the new image $IMAGE_PREFIX-ocr:latest (above)"
+    [[ -n $NEW_OCR_IMAGE ]] || die "docker gave no id for the new image $IMAGE_PREFIX-ocr:latest"
+fi
+
+# Before the backup and the restart, so that production still runs when the new image cannot run the sandbox.
+STEP=check
+say "2. The new image against the sandbox"
+if [[ $OCR_SERVICE != ocr ]]; then
+    echo "  skipped (the fake OCR runs no engine)"
+elif ! ((are_service_options_read)); then
+    echo "  skipped: the settings of the ocr service could not be read (see the preconditions)"
+else
+    sandbox_check_options=()
+    [[ -z $service_options ]] || mapfile -t sandbox_check_options <<< "$service_options"
+    sandbox_check_name=$IMAGE_PREFIX-sandbox-check-$STAMP
+    build_sandbox_check SANDBOX_CHECK "$sandbox_check_name" "$NEW_OCR_IMAGE" "$SANDBOX_DIR" \
+        "${STACK[SCANMYLIB_UID]:-1000}:${STACK[SCANMYLIB_GID]:-1000}" "${sandbox_check_options[@]}"
+    if ((DRY_RUN)); then
+        print_command timeout --kill-after=10 "$ENGINE_CHECK_BOUND_SECONDS" "${SANDBOX_CHECK[@]}"
+    else
+        sandbox_check_status=0
+        run_sandbox_check "$sandbox_check_name" "${SANDBOX_CHECK[@]}" || sandbox_check_status=$?
+        ((sandbox_check_status == 0)) || die "the new image failed the check of the sandbox (exit $sandbox_check_status)"
+        echo "  the new image imports the engine's libraries from $SANDBOX_DIR"
+    fi
+fi
 
 STEP=backup
-say "2. Backup of the state"
+say "3. Backup of the state"
 BACKUP_NAME=state-$(date +%Y%m%d-%H%M%S.%N)-v$VERSION
 backup_state() {
     local state=$DATA_DIR/state backups=$DATA_DIR/backups
@@ -522,9 +585,15 @@ if ((DRY_RUN)); then
 else
     backup_state
 fi
+# The restart starts :latest: it must still be the image that the check passed.
+if [[ $OCR_SERVICE == ocr ]] && ! ((DRY_RUN)); then
+    latest_ocr_image=$(docker image inspect --format '{{.Id}}' "$IMAGE_PREFIX-ocr:latest" 2> /dev/null || true)
+    [[ $latest_ocr_image == "$NEW_OCR_IMAGE" ]] || die "$IMAGE_PREFIX-ocr:latest is now ${latest_ocr_image:-no image}, \
+not the image checked against the sandbox ($NEW_OCR_IMAGE): deploy again"
+fi
 
 STEP=restart
-say "3. Restart"
+say "4. Restart"
 if ((DRY_RUN)); then
     echo "  would read the version of the running api (http://127.0.0.1:$API_PORT/api/health)"
 else
@@ -551,7 +620,7 @@ else
 fi
 
 STEP=isolation
-say "4. Sandbox isolation"
+say "5. Sandbox isolation"
 ocr_container=
 if ((DRY_RUN)); then
     echo "  would run: scripts/verify-sandbox.sh on the $OCR_SERVICE container (and stop it if it fails)"
@@ -563,7 +632,7 @@ fi
 
 # After the isolation check, so that no engine code runs in a sandbox that failed it.
 STEP=engine
-say "5. Engine's environment"
+say "6. Engine's environment"
 if [[ $OCR_SERVICE != ocr ]]; then
     echo "  skipped (the fake OCR runs no engine)"
 elif ((DRY_RUN)); then
@@ -578,14 +647,30 @@ else
             "the check of the engine's environment failed (python3 -m scanmylib_ocr.engine_environment)"
     fi
 fi
-# Production runs the new images: they are now the ones to put back.
+# Production runs the new images: those of its containers, which :latest may no longer name, are now the ones to put
+# back. With the fake OCR, no container runs the ocr image, and :latest names the one built.
 for service in api ocr; do
-    run docker tag "$IMAGE_PREFIX-$service:latest" "$IMAGE_PREFIX-$service:deployed" \
-        || echo "  warning: $IMAGE_PREFIX-$service:deployed still names the previous image"
+    image=$IMAGE_PREFIX-$service
+    running_image=$image:latest
+    if [[ $service == api || $OCR_SERVICE == ocr ]]; then
+        if ((DRY_RUN)); then
+            echo "  would tag $image:deployed on the image that $service runs"
+            continue
+        fi
+        container=$(compose ps -q "$service" 2> /dev/null | head -n 1 || true)
+        running_image=
+        [[ -z $container ]] || running_image=$(docker inspect --format '{{.Image}}' "$container" 2> /dev/null || true)
+        if [[ -z $running_image ]]; then
+            echo "  warning: cannot read the image that $service runs: $image:deployed still names the previous image"
+            continue
+        fi
+    fi
+    run docker tag "$running_image" "$image:deployed" \
+        || echo "  warning: $image:deployed still names the previous image"
 done
 
 STEP=apk
-say "6. Android app"
+say "7. Android app"
 if ((BUILD_APK)); then
     run scripts/build-apk.sh
     # The app offers the update from what /api/health reports of the published APK: the release,

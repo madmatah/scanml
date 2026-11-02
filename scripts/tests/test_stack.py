@@ -1433,5 +1433,111 @@ class TheComposeCommandProblemsFunctionWhenProductionWouldChangeOtherwiseThanThr
                 self.assertIn(expected, "".join(self.problems[row][:1]), self.problems[row])
 
 
+def build_sandbox_service(**settings: object) -> stack.JsonObject:
+    return {"services": {"api": {"environment": {"API_ONLY": "1"}}, "ocr": settings}}
+
+
+class TheBuildSandboxCheckOptionsFunctionWhenTheServiceSetsVariablesAndLimits(unittest.TestCase):
+    def setUp(self) -> None:
+        configuration = build_sandbox_service(
+            environment={"HOME": "/tmp/home", "OCR_VLLM_GPU_MEM": "0.15", "EMPTY": "", "SPACED": "a b --privileged"},
+            mem_limit="17179869184",
+            pids_limit=4096,
+        )
+        self.options = stack.build_sandbox_check_options(configuration)
+
+    def test_should_give_each_variable_and_limit_of_the_ocr_service_as_one_argument_so_that_no_value_reads_as_an_option(
+        self,
+    ) -> None:
+        self.assertEqual(
+            self.options,
+            [
+                "--env=HOME=/tmp/home",
+                "--env=OCR_VLLM_GPU_MEM=0.15",
+                "--env=EMPTY=",
+                "--env=SPACED=a b --privileged",
+                "--memory=17179869184",
+                "--pids-limit=4096",
+            ],
+        )
+
+
+class TheBuildSandboxCheckOptionsFunctionWhenTheServiceSetsNoLimit(unittest.TestCase):
+    def setUp(self) -> None:
+        self.options = stack.build_sandbox_check_options(build_sandbox_service(environment={"HOME": "/tmp/home"}))
+
+    def test_should_give_only_its_variables(self) -> None:
+        self.assertEqual(self.options, ["--env=HOME=/tmp/home"])
+
+
+class TheBuildSandboxCheckOptionsFunctionWhenASettingCannotBePassedOnAsDockerComposeGivesIt(unittest.TestCase):
+    configurations: ClassVar[Mapping[str, tuple[stack.JsonObject, str]]] = types.MappingProxyType(
+        {
+            "a variable without a value, which would come from the caller's environment": (
+                build_sandbox_service(environment={"HOME": None}),
+                "the variable HOME of the ocr service has no value",
+            ),
+            "a line break in a value": (
+                build_sandbox_service(environment={"HOME": "/tmp\n--privileged"}),
+                "holds a line break",
+            ),
+            "a carriage return in a value": (
+                build_sandbox_service(environment={"HOME": "/tmp\r"}),
+                "holds a line break",
+            ),
+            "a NUL in a value": (build_sandbox_service(environment={"HOME": "/tmp\x00"}), "holds a line break"),
+            "a line break in a name": (build_sandbox_service(environment={"A\nB": "1"}), "holds a line break"),
+            "a memory limit that is not a number": (
+                build_sandbox_service(mem_limit="16g --privileged"),
+                "the mem_limit of the ocr service is not a number",
+            ),
+            "a pids limit that is not a number": (
+                build_sandbox_service(pids_limit="4096\n"),
+                "the pids_limit of the ocr service is not a number",
+            ),
+            "no ocr service": ({"services": {"api": {}}}, "docker compose resolves no ocr service"),
+            "no service at all": ({}, "docker compose resolves no ocr service"),
+        }
+    )
+
+    def setUp(self) -> None:
+        self.reading_acts = {
+            row: functools.partial(stack.build_sandbox_check_options, configuration)
+            for row, (configuration, _) in self.configurations.items()
+        }
+
+    def test_should_refuse_it_saying_why(self) -> None:
+        for row, (_, reason) in self.configurations.items():
+            with self.subTest(row):
+                self.assertRaisesRegex(stack.ServiceOptionsRefused, re.escape(reason), self.reading_acts[row])
+
+
+class TheMainFunctionWhenAskedForTheOptionsOfTheSandboxCheck(unittest.TestCase):
+    def setUp(self) -> None:
+        configuration = json.dumps(build_sandbox_service(environment={"HOME": "/tmp/home"}, pids_limit=4096))
+        output = io.StringIO()
+        with mock.patch("sys.stdin", io.StringIO(configuration)), redirect_stdout(output):
+            self.exit_code = stack.main(["sandbox-check-options"])
+        self.printed = output.getvalue()
+
+    def test_should_print_one_option_per_line(self) -> None:
+        self.assertEqual((self.exit_code, self.printed), (0, "--env=HOME=/tmp/home\n--pids-limit=4096\n"))
+
+
+class TheMainFunctionWhenTheSandboxCheckCannotTakeASetting(unittest.TestCase):
+    def setUp(self) -> None:
+        configuration = json.dumps(build_sandbox_service(environment={"HOME": None}))
+        output, errors = io.StringIO(), io.StringIO()
+        with mock.patch("sys.stdin", io.StringIO(configuration)), redirect_stdout(output), redirect_stderr(errors):
+            self.exit_code = stack.main(["sandbox-check-options"])
+        self.printed, self.error_text = output.getvalue(), errors.getvalue()
+
+    def test_should_fail_printing_no_option_and_saying_why(self) -> None:
+        self.assertEqual(
+            (self.exit_code, self.printed, self.error_text),
+            (1, "", "error: the variable HOME of the ocr service has no value\n"),
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

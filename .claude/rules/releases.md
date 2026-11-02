@@ -30,7 +30,13 @@ chooses.
   sandbox's unit tests that need an engine's environment, which CI does not have, in the sandbox's image with the
   machine's sandbox, read-only and without network. `scripts/deploy.sh` runs no test suite, and the release build of
   `scripts/build-apk.sh` only assembles, signs and publishes the app, whose tests and lint every development build runs.
-  After its restart, `scripts/deploy.sh` checks the installation, not the code:
+  `scripts/deploy.sh` checks the installation, not the code. Before its backup and its restart, while production still
+  runs, with the sandbox (`OCR_SERVICE=ocr`):
+  - the new `ocr` image imports the engine's libraries from the sandbox it will run
+    (`python3 -m scanmylib_ocr.engine_environment`), in a container of its own, isolated as the `ocr` service is, with
+    the sandbox read-only, bounded in time, its output discarded; a failure leaves production unchanged.
+
+  After its restart:
   - the api is healthy and reports the release's version;
   - `ocr` passes `scripts/verify-sandbox.sh`;
   - the engine's worker imports its libraries in the new `ocr` container

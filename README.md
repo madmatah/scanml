@@ -272,12 +272,15 @@ a release published on GitHub (the commit of its tag on `origin`), on a release 
 
 1. builds the images from the commit (`git archive HEAD`), on the current image of each base tag, which it pulls from
    Docker Hub; if the build fails, Docker Hub out of reach included, production is unchanged;
-2. copies the state into `DATA_DIR/backups/state-<date>-v<version>/` (a consistent copy of the database; the last 10
+2. checks that the new sandbox image imports the engine's libraries from the sandbox it will run, in a container of
+   its own, isolated as the sandbox is; if it cannot, production is unchanged, and the deployment prints the
+   `docker run` that shows why;
+3. copies the state into `DATA_DIR/backups/state-<date>-v<version>/` (a consistent copy of the database; the last 10
    are kept);
-3. restarts `api` and `ocr`, checks their health, the sandbox's isolation, and that the engine's libraries import in
+4. restarts `api` and `ocr`, checks their health, the sandbox's isolation, and that the engine's libraries import in
    the new sandbox (the sandbox is stopped if the isolation check or the engine check fails), and tags the images that
    now run `:deployed`, the rollback target;
-4. with `--apk`, builds and publishes the new app, which the phones then offer to install (without it, phones keep
+5. with `--apk`, builds and publishes the new app, which the phones then offer to install (without it, phones keep
    their app).
 
 It runs no tests: a release is tested before it is published, and the deployment checks the installation, not the code.

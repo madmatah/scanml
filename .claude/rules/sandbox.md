@@ -29,10 +29,12 @@ production runs next to the development stack on the same machine. These rules k
   its cache directory. `scripts/verify-sandbox.sh` must pass on it.
 - **The sandbox's image keeps that isolation wherever a script or a procedure starts it outside the service,** apart
   from `ocr-setup`, which "Untrusted components are downloaded only by the `ocr-setup` container" allows: such a
-  container, like the run of the sandbox's tests in the `running-tests` skill and in `scripts/check.sh`, has no network
-  (`--network none`), a read-only root filesystem, with a tmpfs for what it must write such as `/tmp`, no capabilities
-  (`--cap-drop ALL`), `no-new-privileges`, a non-root user, and no host mount besides the read-only `SANDBOX_DIR`, the
-  code it runs, read-only, and a working directory of its own, never the library or production's state.
+  container, like the run of the sandbox's tests in the `running-tests` skill and in `scripts/check.sh`, and the check
+  of a sandbox before a deployment's restart, has no network (`--network none`), a read-only root filesystem, with a
+  tmpfs for what it must write such as `/tmp`, no capabilities (`--cap-drop ALL`), `no-new-privileges`, a non-root
+  user, and no host mount besides a sandbox directory, read-only, the code it runs, read-only, and a working directory
+  of its own, never the library or production's state. It may use the GPU through CDI only (`nvidia.com/gpu=all`), as
+  the service does.
 - **Untrusted components are downloaded only by the `ocr-setup` container,** pinned by version or commit, and no Paddle
   code runs with network access. `ocr-setup` writes the sandbox through `SANDBOX_SETUP_DIR`, which only production's
   `.env` sets; every other container mounts `SANDBOX_DIR` read-only. On GitHub's runners, outside the user's machine,

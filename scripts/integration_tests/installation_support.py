@@ -80,8 +80,15 @@ REAL_DOCKER = shutil.which("docker")
 PASSWD_HOME = pwd.getpwuid(os.getuid()).pw_dir
 #: The call of production_containers() (scripts/lib/common.sh) that the stand-in answers.
 PRODUCTION_PS = r"^ps --all --quiet --filter label=com\.docker\.compose\.project=scanmylib$"
+#: The images that the api and the ocr containers run once a deploy restarted them: the new ones. No :latest names
+#: them, so that a test tells the image a container runs from the one that :latest names.
+NEW_API_IMAGE_ID = "sha256:newapi"
+RUNNING_OCR_IMAGE_ID = "sha256:runningocr"
+#: The ocr image that a deploy builds, which :latest names.
+NEW_OCR_IMAGE_ID = "sha256:newocr"
 ENGINE_CHECK = "exec ocrid python3 -m scanmylib_ocr.engine_environment"
 ENGINE_CHECK_MODULE = "scanmylib_ocr.engine_environment"
+ENGINE_CHECK_MODULE_COMMAND = ("python3", "-m", ENGINE_CHECK_MODULE)
 BOUNDED_ENGINE_CHECK = re.compile(
     r"\$ timeout --kill-after=10 \d+ docker exec ocrid python3 -m scanmylib_ocr\.engine_environment$", re.MULTILINE
 )
@@ -373,12 +380,17 @@ def build_running_sandbox_rules(
             f"bind|{sandbox}|/opt/sandbox|ro\nbind|{stack_data}/run|/run/scanmylib|rw\n"
             f"bind|{stack_data}/ocr-cache|/var/cache/ocr|rw\n"
         )
-        found: list[Rule] = [{"match": r" ps -q ocr$", "stdout": "ocrid\n"}]
+        found: list[Rule] = [
+            {"match": r" ps -q ocr$", "stdout": "ocrid\n"},
+            {"match": r"^inspect --format \{\{\.Image\}\} ocrid$", "stdout": f"{RUNNING_OCR_IMAGE_ID}\n"},
+        ]
     else:
         mounts = f"bind|{stack_data}/run|/run/scanmylib|rw\n"
         found = [{"match": r" ps -q ocr$", "stdout": ""}, {"match": r" ps -q ocr-fake$", "stdout": "fakeid\n"}]
     return [
         *found,
+        {"match": r" ps -q api$", "stdout": "apiid\n"},
+        {"match": r"^inspect --format \{\{\.Image\}\} apiid$", "stdout": f"{NEW_API_IMAGE_ID}\n"},
         {"match": r"\{\{\.State\.Running\}\}", "stdout": "true\n"},
         {"match": r"com\.docker\.compose\.service", "stdout": f"{kind}\n"},
         {"match": r"\{\{\.Name\}\}", "stdout": f"/stack-{kind}-1\n"},

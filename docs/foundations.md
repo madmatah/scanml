@@ -195,7 +195,7 @@ them. The last row lists the scripts that the skills keep, which belong to no un
 | OCR sandbox | `protocol`, `engines/base` | Messages between supervisor and worker, the interface of an engine | Application |
 | OCR sandbox | `manager`, `runtime`, `config`, `gpu`, `client` | Engine lifecycle and page queue, engine processes, settings, GPU readings, a client of the socket | Application and adapters |
 | OCR sandbox | `engines/paddleocr_vl`, `engines/images` | PaddleOCR-VL-1.6, and its image handling | Adapters |
-| scripts | `lib/stack.py`, `lib/version.py`, `lib/formatting.py`, `lib/parallel_tests.py`, `lib/commit_areas.py`, `lib/common.sh`, `lib/engine_check.sh` | The `.env` format, production's checkout and the isolation of a stack; the version of a build; what the gate hands to its formatters and linters, and what comes back; the gate's parallel run of the tests of the scripts; the areas a commit touches; shared shell functions; the check of the engine's environment in a new `ocr` container | Tools |
+| scripts | `lib/stack.py`, `lib/version.py`, `lib/formatting.py`, `lib/parallel_tests.py`, `lib/commit_areas.py`, `lib/common.sh`, `lib/engine_check.sh` | The `.env` format, production's checkout and the isolation of a stack; the version of a build; what the gate hands to its formatters and linters, and what comes back; the gate's parallel run of the tests of the scripts; the areas a commit touches; shared shell functions; the check of the engine's environment in a new `ocr` container, and of a sandbox with a new image before a restart | Tools |
 | scripts | `setup.sh`, `dev-env.sh`, `dev.sh`, `build-apk.sh`, `check.sh`, `deploy.sh`, `prod.sh`, `release.py`, `e2e_test.py`, `verify-sandbox.sh`, `vendor-katex.sh` | Install, develop, build the app, check, deploy, operate, release, test end to end, verify the sandbox, vendor KaTeX | Tools |
 | — (the skills) | `pull-request/scripts/pr_screenshots.py` in `.claude/skills/` | Publish the screenshots of a pull request, copy them without their hidden data, and clean the branch that holds them | Tools |
 
@@ -406,6 +406,12 @@ checks, and how production's images are built. The reasons:
   holds. So its checks look at what it installed, not at the code. They stop short of loading a model, which would
   take the shared GPU for a check: a model that fails to load, or a page the engine cannot read, shows at the first
   page, in the engine's state.
+- **The new image imports the engine's libraries from the sandbox before the restart,** so that an image that cannot
+  run the sandbox, such as one built on a new base that the sandbox's environments do not suit, is refused while
+  production still runs, where the check after the restart could only stop `ocr` and leave the pages waiting. It is the
+  same import as the check after the restart, not a test suite, and it costs a deployment the seconds of that import.
+  It runs in a `docker run` container of its own, isolated as the service is, rather than through `compose run ocr`,
+  which would run engine code in a container that no isolation check has looked at.
 - **A deployment pulls its base images and keeps the build's cache.** Without the pull, the builder may keep building
   on a copy of a tag that the machine pulled long before, or fall back to it when Docker Hub does not answer, while the
   official images are rebuilt regularly, and sooner for a critical fix. A new base invalidates every layer above it, so

@@ -1,4 +1,4 @@
-"""Test helpers: images, uploads, a fixed clock, the api on a fake OCR sandbox, waiting for the OCR loop."""
+"""Test helpers: images, uploads, clocks, the api on a fake OCR sandbox, waiting for the OCR loop."""
 
 from __future__ import annotations
 
@@ -124,6 +124,21 @@ class FixedClock:
 
     def now(self) -> datetime:
         return self.moment
+
+
+class AdjustableClock:
+    _moment: datetime
+
+    def __init__(self, moment: datetime) -> None:
+        self.move_to(moment)
+
+    def now(self) -> datetime:
+        return self._moment
+
+    def move_to(self, moment: datetime) -> None:
+        if moment.utcoffset() is None:
+            raise ValueError("an adjustable clock needs a moment with its offset")
+        self._moment = moment
 
 
 @dataclass(frozen=True)

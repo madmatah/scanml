@@ -1,4 +1,5 @@
-"""The authenticator (auth.py): the token it requires, and the web sessions it opens, stores and ends."""
+"""The access to the api (application/access.py): the token it requires, and the web sessions it opens, stores and
+ends."""
 
 from __future__ import annotations
 
@@ -14,8 +15,8 @@ import pytest
 
 from scanmylib.adapters.sqlite.database import Database
 from scanmylib.adapters.sqlite.web_sessions import SqliteWebSessions
-from scanmylib.auth import Authenticator
-from support import TOKEN, FixedClock
+from scanmylib.application.access import Access
+from support import TOKEN, AdjustableClock, FixedClock
 
 OPENED_AT = datetime.fromisoformat("2026-10-12T20:00:00+02:00")
 ONE_YEAR = timedelta(days=365)
@@ -48,41 +49,26 @@ class SessionsAfterClosing:
     is_other_session_open: bool
 
 
-class AdjustableClock:
-    _moment: datetime
-
-    def __init__(self, moment: datetime) -> None:
-        self.move_to(moment)
-
-    def now(self) -> datetime:
-        return self._moment
-
-    def move_to(self, moment: datetime) -> None:
-        if moment.utcoffset() is None:
-            raise ValueError("an adjustable clock needs a moment with its offset")
-        self._moment = moment
-
-
-class TestTheAuthenticator:
+class TestTheAccess:
     class TestTheConstructor:
         class TestWhenItIsGivenAnEmptyToken:
             @pytest.fixture
-            def create_authenticator(self, tmp_path: Path) -> Iterator[Callable[[], Authenticator]]:
+            def create_access(self, tmp_path: Path) -> Iterator[Callable[[], Access]]:
                 with contextlib.closing(Database(tmp_path / "scanmylib.db")) as database:
-                    yield functools.partial(Authenticator, "", SqliteWebSessions(database), FixedClock(OPENED_AT))
+                    yield functools.partial(Access, "", SqliteWebSessions(database), FixedClock(OPENED_AT))
 
             def test_should_refuse_it_so_that_an_empty_login_never_opens_a_session(
-                self, create_authenticator: Callable[[], Authenticator]
+                self, create_access: Callable[[], Access]
             ) -> None:
                 with pytest.raises(ValueError, match="empty API token"):
-                    create_authenticator()
+                    create_access()
 
     class TestTheOpenSessionMethod:
         class TestWhenASessionIsOpened:
             @pytest.fixture
             def opened_session(self, tmp_path: Path) -> OpenedSession:
                 with contextlib.closing(Database(tmp_path / "scanmylib.db")) as database:
-                    session_id = Authenticator(TOKEN, SqliteWebSessions(database), FixedClock(OPENED_AT)).open_session()
+                    session_id = Access(TOKEN, SqliteWebSessions(database), FixedClock(OPENED_AT)).open_session()
                     return OpenedSession(session_id, read_stored_sessions(database))
 
             def test_should_give_it_an_id_of_at_least_43_characters_as_hard_to_guess_as_the_token(
@@ -107,13 +93,13 @@ class TestTheAuthenticator:
             @pytest.fixture
             def sessions_after_closing(self, tmp_path: Path) -> SessionsAfterClosing:
                 with contextlib.closing(Database(tmp_path / "scanmylib.db")) as database:
-                    authenticator = Authenticator(TOKEN, SqliteWebSessions(database), FixedClock(OPENED_AT))
-                    closed_session_id = authenticator.open_session()
-                    other_session_id = authenticator.open_session()
-                    authenticator.close_session(closed_session_id)
+                    access = Access(TOKEN, SqliteWebSessions(database), FixedClock(OPENED_AT))
+                    closed_session_id = access.open_session()
+                    other_session_id = access.open_session()
+                    access.close_session(closed_session_id)
                     return SessionsAfterClosing(
-                        is_closed_session_open=authenticator.session_valid(closed_session_id),
-                        is_other_session_open=authenticator.session_valid(other_session_id),
+                        is_closed_session_open=access.is_session_valid(closed_session_id),
+                        is_other_session_open=access.is_session_valid(other_session_id),
                     )
 
             def test_should_end_it(self, sessions_after_closing: SessionsAfterClosing) -> None:
@@ -122,16 +108,16 @@ class TestTheAuthenticator:
             def test_should_keep_the_other_open(self, sessions_after_closing: SessionsAfterClosing) -> None:
                 assert sessions_after_closing.is_other_session_open is True
 
-    class TestTheSessionValidMethod:
+    class TestTheIsSessionValidMethod:
         class TestWhenItsSessionOpenedJustUnderAYearAgo:
             @pytest.fixture
             def is_open(self, tmp_path: Path) -> bool:
                 with contextlib.closing(Database(tmp_path / "scanmylib.db")) as database:
                     clock = AdjustableClock(OPENED_AT)
-                    authenticator = Authenticator(TOKEN, SqliteWebSessions(database), clock)
-                    session_id = authenticator.open_session()
+                    access = Access(TOKEN, SqliteWebSessions(database), clock)
+                    session_id = access.open_session()
                     clock.move_to(OPENED_AT + ONE_YEAR - ONE_SECOND)
-                    return authenticator.session_valid(session_id)
+                    return access.is_session_valid(session_id)
 
             def test_should_hold_it_open(self, is_open: bool) -> None:
                 assert is_open is True
@@ -141,10 +127,10 @@ class TestTheAuthenticator:
             def is_open(self, tmp_path: Path) -> bool:
                 with contextlib.closing(Database(tmp_path / "scanmylib.db")) as database:
                     clock = AdjustableClock(OPENED_AT)
-                    authenticator = Authenticator(TOKEN, SqliteWebSessions(database), clock)
-                    session_id = authenticator.open_session()
+                    access = Access(TOKEN, SqliteWebSessions(database), clock)
+                    session_id = access.open_session()
                     clock.move_to(OPENED_AT + ONE_YEAR)
-                    return authenticator.session_valid(session_id)
+                    return access.is_session_valid(session_id)
 
             def test_should_end_it_a_year_after_it_opened(self, is_open: bool) -> None:
                 assert is_open is False
@@ -153,9 +139,9 @@ class TestTheAuthenticator:
             @pytest.fixture
             def is_open(self, tmp_path: Path) -> bool:
                 with contextlib.closing(Database(tmp_path / "scanmylib.db")) as database:
-                    authenticator = Authenticator(TOKEN, SqliteWebSessions(database), FixedClock(OPENED_AT))
-                    authenticator.open_session()
-                    return authenticator.session_valid(FORGED_SESSION_ID)
+                    access = Access(TOKEN, SqliteWebSessions(database), FixedClock(OPENED_AT))
+                    access.open_session()
+                    return access.is_session_valid(FORGED_SESSION_ID)
 
             def test_should_refuse_it_so_that_a_forged_cookie_opens_no_session(self, is_open: bool) -> None:
                 assert is_open is False
@@ -165,9 +151,9 @@ class TestTheAuthenticator:
             @pytest.fixture
             def is_open(self, tmp_path: Path) -> bool:
                 with contextlib.closing(Database(tmp_path / "scanmylib.db")) as database:
-                    session_id = Authenticator(TOKEN, SqliteWebSessions(database), FixedClock(OPENED_AT)).open_session()
-                    second = Authenticator(TOKEN, SqliteWebSessions(database), FixedClock(OPENED_AT + ONE_DAY))
-                    return second.session_valid(session_id)
+                    session_id = Access(TOKEN, SqliteWebSessions(database), FixedClock(OPENED_AT)).open_session()
+                    second = Access(TOKEN, SqliteWebSessions(database), FixedClock(OPENED_AT + ONE_DAY))
+                    return second.is_session_valid(session_id)
 
             def test_should_keep_it_open_so_that_a_restart_logs_no_one_out(self, is_open: bool) -> None:
                 assert is_open is True
@@ -176,8 +162,8 @@ class TestTheAuthenticator:
             @pytest.fixture
             def stored_sessions(self, tmp_path: Path) -> list[tuple[str, str]]:
                 with contextlib.closing(Database(tmp_path / "scanmylib.db")) as database:
-                    Authenticator(TOKEN, SqliteWebSessions(database), FixedClock(OPENED_AT)).open_session()
-                    Authenticator(TOKEN, SqliteWebSessions(database), FixedClock(OPENED_AT + ONE_YEAR + ONE_DAY))
+                    Access(TOKEN, SqliteWebSessions(database), FixedClock(OPENED_AT)).open_session()
+                    Access(TOKEN, SqliteWebSessions(database), FixedClock(OPENED_AT + ONE_YEAR + ONE_DAY))
                     return read_stored_sessions(database)
 
             def test_should_forget_it(self, stored_sessions: list[tuple[str, str]]) -> None:

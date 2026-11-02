@@ -16,8 +16,13 @@ RUN apt-get update \
       gcc libc6-dev libgomp1 libgl1 libglib2.0-0t64 \
  && rm -rf /var/lib/apt/lists/*
 
-# uv is only used by the setup container to build the venvs quickly.
-RUN pip install --no-cache-dir uv==0.10.9
+# uv is only used by the setup container to build the venvs quickly. Nothing
+# runs pip once uv is in: left in, it would only add its advisories to the
+# vulnerability scan, and so would the wheel of pip that ensurepip keeps to
+# install it again.
+RUN pip install --no-cache-dir uv==0.10.9 \
+ && python3 -m pip uninstall --yes pip \
+ && rm /usr/local/lib/python3.12/ensurepip/_bundled/pip-*.whl
 
 RUN groupadd -g "${GID}" ocr \
  && useradd -u "${UID}" -g "${GID}" -m -d /home/ocr -s /usr/sbin/nologin ocr \

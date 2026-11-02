@@ -313,10 +313,14 @@ The development stack has its own web UI (`http://localhost:8770`), its own data
 `DATA_DIR` followed by `-dev`), and its own app, "ScanMyLib (dev)" with an orange icon, tagged "dev" where the phone
 themes its icons, which installs next to the production app from the Pairing tab of the development web UI. Its first
 app build downloads its own Android toolchain. The fake OCR answers instantly with sample pages; the real one
-(`--real-ocr`) runs a second engine next to production's (~4.4 GB of VRAM while it works). One development stack runs at
-a time. Development builds are versioned from git, after the last release: `0.2.4-dev.27+g1a2b3c4d5e6f` is 27 commits
-after `v0.2.3`, and the development app's version code is the time of its build, so that each build installs over the
-previous one, whatever its branch.
+(`--real-ocr`) runs a second engine next to production's (~4.4 GB of VRAM while it works), on production's sandbox,
+read-only. `scripts/dev-env.sh --own-sandbox` gives the stack a sandbox of its own instead, `DATA_DIR/sandbox` (created
+empty, and mounted read-only too), where a new sandbox is installed and tested without production's, and makes
+`scripts/dev.sh up` start the real engine on it; to start from production's, copy it there first
+(`cp -a --reflink=auto <production's SANDBOX_DIR>/. <DATA_DIR>/sandbox/`). `scripts/dev-env.sh` without the option goes
+back to production's sandbox and the fake OCR. One development stack runs at a time. Development builds are versioned
+from git, after the last release: `0.2.4-dev.27+g1a2b3c4d5e6f` is 27 commits after `v0.2.3`, and the development app's
+version code is the time of its build, so that each build installs over the previous one, whatever its branch.
 
 In a worktree, `scripts/dev.sh` replaces `docker compose` (`scripts/dev.sh build ocr`, `scripts/dev.sh compose exec api
 sh`…): it refuses any setting that would reach production or leave the stack's own `DATA_DIR`, and the docker compose

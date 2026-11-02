@@ -26,7 +26,9 @@ On the machine, downloads (packages, models) are made **only once** by
 `ocr-setup`, which has network access but only sees the sandbox directory,
 read-write: `SANDBOX_SETUP_DIR`, which only production's `.env` sets
 (`scripts/setup.sh`). A development stack mounts production's `SANDBOX_DIR`
-read-only and cannot run `ocr-setup` (its bind source does not exist). Pinned
+read-only, or with `scripts/dev-env.sh --own-sandbox` a sandbox of its own
+inside its `DATA_DIR`, read-only too, and cannot run `ocr-setup` (its bind
+source does not exist). Pinned
 versions: `paddlepaddle-gpu==3.2.1`, `paddleocr==3.7.0` and `vllm==0.31.0`, in
 `ocr/setup/requirements-paddle.in` and `ocr/setup/requirements-vllm.in`, and
 the models by Hugging Face commit, in `ocr/setup/install.sh` (what is installed:

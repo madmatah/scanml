@@ -8,10 +8,13 @@
 #                                        (LIBRARY_DIR=$DATA_DIR/library), never the user's library
 #   ANDROID_DIR=$DATA_DIR/android        its own Android SDK, Gradle caches and Android home, which
 #                                        the first scripts/build-apk.sh downloads (and verifies)
-#   SANDBOX_DIR                          production's OCR venvs and models, mounted read-only
+#   SANDBOX_DIR                          production's OCR venvs and models, mounted read-only; with
+#                                        --own-sandbox, $DATA_DIR/sandbox, the stack's own (created
+#                                        empty), mounted read-only too
 #   ANDROID_KEYSTORE_DIR                 production's signing key, mounted read-only by the signing
 #                                        container only (never by a build)
-#   OCR_SERVICE=ocr-fake                 canned OCR results (scripts/dev.sh up --real-ocr: the sandbox)
+#   OCR_SERVICE=ocr-fake                 canned OCR results (scripts/dev.sh up --real-ocr: the sandbox);
+#                                        with --own-sandbox, ocr: scripts/dev.sh up starts the sandbox
 #   APP_VARIANT=dev                      scripts/build-apk.sh builds "ScanMyLib (dev)", fr.scanmylib.dev
 #   PUBLIC_URL=http://<LAN IP>:8770      what the dev app on the phone connects to
 #
@@ -20,14 +23,21 @@
 # are kept. Production's paths come from the .env of production's checkout. The result must pass
 # the isolation check of scripts/dev.sh. Next: scripts/dev.sh up.
 #
-# Usage: scripts/dev-env.sh
+# Usage: scripts/dev-env.sh [--own-sandbox]
+#   --own-sandbox  give the stack a sandbox of its own, $DATA_DIR/sandbox, to install and test a new
+#                  sandbox without production's; without it, the stack reads production's again
 set -euo pipefail
 
 ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 # shellcheck source=lib/common.sh
 source "$ROOT/scripts/lib/common.sh"
 
-(($# == 0)) || die "usage: scripts/dev-env.sh (no arguments)"
+has_own_sandbox=0
+case "$#:${1:-}" in
+    0:) ;;
+    1:--own-sandbox) has_own_sandbox=1 ;;
+    *) die "usage: scripts/dev-env.sh [--own-sandbox]" ;;
+esac
 
 PRODUCTION_CHECKOUT=$(production_checkout) || exit 1
 if is_production_checkout "$ROOT" "$PRODUCTION_CHECKOUT"; then
@@ -53,6 +63,13 @@ production_android=${PRODUCTION[ANDROID_DIR]:-$production_data/android}
 keystore_dir=${PRODUCTION[ANDROID_KEYSTORE_DIR]:-$production_android/keystore}
 data_dir=$(realpath -m -- "$production_data")-dev
 library_dir=$data_dir/library
+ocr_service=ocr-fake
+sandbox_comment="Production's OCR venvs and models: mounted read-only."
+if ((has_own_sandbox)); then
+    sandbox_dir=$data_dir/sandbox
+    ocr_service=ocr
+    sandbox_comment="The stack's own OCR venvs and models (scripts/dev-env.sh --own-sandbox): mounted read-only."
+fi
 
 # The port: free, or already published by the development stack itself.
 foreign=$(docker ps --filter "publish=$DEV_API_PORT" --format '{{.Label "com.docker.compose.project"}}|{{.Names}}' \
@@ -90,7 +107,7 @@ trap 'rm -f "$tmp"' EXIT
     echo "SCANMYLIB_UID=$(id -u)"
     echo "SCANMYLIB_GID=$(id -g)"
     echo "DATA_DIR=$data_dir"
-    echo "# Production's OCR venvs and models: mounted read-only."
+    echo "# $sandbox_comment"
     echo "SANDBOX_DIR=$sandbox_dir"
     echo "# The development slot's own Android SDK, Gradle caches and Android home."
     echo "ANDROID_DIR=$data_dir/android"
@@ -100,7 +117,7 @@ trap 'rm -f "$tmp"' EXIT
     echo "LIBRARY_DIR=$library_dir"
     echo "API_PORT=$DEV_API_PORT"
     echo "PUBLIC_URL=http://${lan_ip:-127.0.0.1}:$DEV_API_PORT"
-    echo "OCR_SERVICE=ocr-fake"
+    echo "OCR_SERVICE=$ocr_service"
     echo "APP_VARIANT=dev"
     if ((${#kept[@]})); then
         echo "# Kept from the previous .env."
@@ -110,6 +127,9 @@ trap 'rm -f "$tmp"' EXIT
 # The result must not share anything with production, as docker compose resolves it.
 assert_isolated_from_production "$tmp"
 mkdir -p "$data_dir"/{state,run,ocr-cache,app,logs} "$library_dir"
+if ((has_own_sandbox)); then
+    mkdir -p "$sandbox_dir"
+fi
 chmod 644 "$tmp"
 mv -f "$tmp" "$ENV_FILE"
 trap - EXIT
@@ -121,4 +141,9 @@ if [[ -n $running_from && $running_from != "$ROOT" ]]; then
     echo "The development stack currently runs from $running_from: scripts/dev.sh up replaces it with this worktree's."
 fi
 echo
-echo "Next: scripts/dev.sh up (fake OCR) or scripts/dev.sh up --real-ocr; the dev app: scripts/build-apk.sh."
+if ((has_own_sandbox)); then
+    echo "Next: install a sandbox in $sandbox_dir, then scripts/dev.sh up (the sandbox)."
+    echo "The dev app: scripts/build-apk.sh."
+else
+    echo "Next: scripts/dev.sh up (fake OCR) or scripts/dev.sh up --real-ocr; the dev app: scripts/build-apk.sh."
+fi

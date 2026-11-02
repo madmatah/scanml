@@ -7,14 +7,14 @@ from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
-from ..adapters.filesystem.published_apk import APK_DOWNLOAD_PATH, published_apk
-from ..adapters.http_api.authentication import SESSION_COOKIE
-from ..adapters.qr_codes import qr_svg
-from ..application.catalog import QueueCounts
-from ..application.ocr_engine import EngineStatus, GpuStatus
-from ..application.status import report_ocr_status
-from ..domain.web_sessions import SESSION_LIFETIME
-from .deps import Services, ServicesDep, public_url, require_auth
+from ...application.catalog import QueueCounts
+from ...application.ocr_engine import EngineStatus, GpuStatus
+from ...application.status import report_ocr_status
+from ...domain.web_sessions import SESSION_LIFETIME
+from ..filesystem.published_apk import APK_DOWNLOAD_PATH, published_apk
+from ..qr_codes import qr_svg
+from .authentication import SESSION_COOKIE
+from .dependencies import Services, ServicesDep, public_url, require_auth
 from .schemas import SessionBody
 
 #: Version of the HTTP API contract (docs/API.md), reported by /api/health.

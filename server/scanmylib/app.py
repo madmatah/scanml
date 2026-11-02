@@ -16,6 +16,9 @@ from fastapi.staticfiles import StaticFiles
 from .adapters.filesystem.library_files import FilesystemLibrary
 from .adapters.filesystem.thumbnails import FilesystemThumbnails
 from .adapters.filesystem.token_file import load_or_create_token
+from .adapters.http_api import documents, pages, system, web
+from .adapters.http_api.dependencies import HttpApiSettings, Services
+from .adapters.http_api.middleware import BodySizeLimitMiddleware, SecurityHeadersMiddleware, body_limit
 from .adapters.http_api.preview import HtmlPreviews
 from .adapters.ocr_sandbox.client import OcrClient
 from .adapters.ocr_sandbox.engine import SandboxOcrEngine
@@ -24,8 +27,6 @@ from .adapters.sqlite.catalog import SqliteCatalog
 from .adapters.sqlite.database import Database
 from .adapters.sqlite.web_sessions import SqliteWebSessions
 from .adapters.system_clock import SystemClock
-from .api import documents, pages, system, web
-from .api.deps import HttpApiSettings, Services
 from .application.access import Access
 from .application.library import LibraryService
 from .application.ocr_loop import OcrLoop
@@ -33,7 +34,6 @@ from .application.publisher import Publisher
 from .application.scan_images import ImageRejected, ImageTooLarge
 from .config import Settings
 from .domain.records import Conflict, InvalidRequest, NotFound
-from .middleware import BodySizeLimitMiddleware, SecurityHeadersMiddleware, body_limit
 from .version import __version__
 
 log = logging.getLogger(__name__)

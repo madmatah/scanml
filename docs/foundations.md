@@ -159,7 +159,7 @@ them. The last row lists the scripts that the skills keep, which belong to no un
 | api | `library`, `ocr_loop`, `publisher`, `debounce` | Documents and pages kept in sync with the library; the single OCR loop; publication of the library files | Application |
 | api | `application/clock`, `application/scan_images`, `application/ocr_engine`, `application/library_files`, `application/thumbnails`, `application/catalog` | The ports of the clock, of the images of the scans, of the OCR engine, of the library's files, of the pages' thumbnails and of the catalog of documents and pages | Application |
 | api | `domain/assemble` | Rendering of the library files | Domain |
-| api | `preview` | Rendering of the HTML previews | Adapters |
+| api | `adapters/http_api/preview` | Rendering of the HTML previews | Adapters |
 | api | `adapters/sqlite/database`, `adapters/sqlite/rows`, `adapters/sqlite/catalog` | SQLite state, its rows read into records, the summary of a document's layout written as JSON, and the catalog of documents and pages over them | Adapters |
 | api | `adapters/system_clock` | The wall clock, in the server's time zone | Adapters |
 | api | `adapters/pillow_images` | Pillow: the checks of an upload, thumbnails, the image sent to the OCR, re-encoded illustrations | Adapters |

@@ -1,4 +1,4 @@
-"""The HTML previews of untrusted OCR Markdown (preview.py)."""
+"""The HTML previews of untrusted OCR Markdown (adapters/http_api/preview.py)."""
 
 from __future__ import annotations
 
@@ -17,8 +17,8 @@ from hostile_markup import (
     parse_markup,
     sanitize_page,
 )
+from scanmylib.adapters.http_api.preview import MAX_RENDERED_LENGTH, render_document, render_markdown
 from scanmylib.domain.assemble import GapSection, PageSection, Section, UnnumberedHeading
-from scanmylib.preview import MAX_RENDERED_LENGTH, render_document, render_markdown
 
 FILES_URL = "/api/documents/d0c/files"
 TAGS_NO_PREVIEW_HOLDS = frozenset(

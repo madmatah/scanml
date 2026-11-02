@@ -4,8 +4,9 @@
  *
  * The server marks formulas as <div class="math-display"> and
  * <span class="math-inline"> elements holding the TeX as text
- * (scanmylib/preview.py). KaTeX replaces that text with the formula; one it
- * cannot parse shows its source in the error color, the reason as tooltip.
+ * (scanmylib/adapters/http_api/preview.py). KaTeX replaces that text with
+ * the formula; one it cannot parse shows its source in the error color, the
+ * reason as tooltip.
  * Without KaTeX (file not loaded), the source stays as it is.
  *
  * An inline formula written against a word or a punctuation mark, like the

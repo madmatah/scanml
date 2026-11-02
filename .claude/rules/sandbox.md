@@ -10,7 +10,7 @@ paths:
   - "server/scanmylib/application/ocr_engine.py"
   - "server/scanmylib/adapters/ocr_sandbox/**"
   - "server/scanmylib/adapters/pillow_images.py"
-  - "server/scanmylib/preview.py"
+  - "server/scanmylib/adapters/http_api/preview.py"
   - "server/scanmylib/domain/assemble.py"
   - "server/scanmylib/devtools/**"
   - "android/app/src/main/AndroidManifest.xml"

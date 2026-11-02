@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from . import preview
+from .adapters.http_api import preview
 from .application.clock import Clock
 from .application.library_files import PublishedFiles
 from .domain import assemble, timestamps

@@ -11,7 +11,7 @@
 #   1. writes .env from .env.example with production's identity (COMPOSE_PROJECT_NAME=scanmylib...),
 #      unless it exists, and checks it (strict format of scripts/lib/stack.py: never sourced);
 #   2. creates the folders (DATA_DIR, ANDROID_DIR, LIBRARY_DIR);
-#   3. builds the `scanmylib-api` and `scanmylib-ocr` images;
+#   3. builds the `scanmylib-api` and `scanmylib-ocr` images, on the current image of their base tag;
 #   4. installs the OCR sandbox (packages + models) with the `ocr-setup` container, the only OCR
 #      container with network access, which only sees SANDBOX_SETUP_DIR;
 #   5. creates the app's signing key and builds the APK in throwaway containers (unless --no-apk);
@@ -113,7 +113,7 @@ echo "DATA_DIR=$DATA_DIR  LIBRARY_DIR=$LIBRARY_DIR  PUBLIC_URL=${STACK[PUBLIC_UR
 
 # --- 2. Images --------------------------------------------------------------
 say "Building the Docker images"
-compose build api ocr
+compose build --pull api ocr
 
 # --- 3. OCR sandbox ---------------------------------------------------------
 if [[ -f $SANDBOX_DIR/MANIFEST.json ]]; then

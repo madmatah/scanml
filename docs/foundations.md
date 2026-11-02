@@ -393,18 +393,25 @@ same place in every file; `.claude/rules/tests.md` says how tests are written.
 
 ### Releases and deployments
 
-`.claude/rules/releases.md` says which tests a release passes before its pull request opens, and what a deployment
-checks. The reasons:
+`.claude/rules/releases.md` says which tests a release passes before its pull request opens, what a deployment
+checks, and how production's images are built. The reasons:
 
 - **A test validates a commit,** and a published release is a commit that CI and the release procedure have tested,
   including the sandbox's tests that need the engine's environment, which CI lacks. Testing it again at each deployment
   would test the same commit again, slow each deployment, and build an image of the api's tests on the machine that runs
   production.
 - **A deployment can still get the installation wrong, where no test of the commit looks:** it builds the images that
-  day, from base images pinned by tag and, for the sandbox and the api, the Debian packages of the day, runs them with
-  production's `.env`, and starts the engine's environment that the machine's sandbox holds. So its checks look at what
-  it installed, not at the code. They stop short of loading a model, which would take the shared GPU for a check: a
-  model that fails to load, or a page the engine cannot read, shows at the first page, in the engine's state.
+  day, on the current image of each base tag and, for the sandbox and the api, the Debian packages of the first build
+  on that image, runs them with production's `.env`, and starts the engine's environment that the machine's sandbox
+  holds. So its checks look at what it installed, not at the code. They stop short of loading a model, which would
+  take the shared GPU for a check: a model that fails to load, or a page the engine cannot read, shows at the first
+  page, in the engine's state.
+- **A deployment pulls its base images and keeps the build's cache.** Without the pull, the builder may keep building
+  on a copy of a tag that the machine pulled long before, or fall back to it when Docker Hub does not answer, while the
+  official images are rebuilt regularly, and sooner for a critical fix. A new base invalidates every layer above it, so
+  the packages an image adds are fetched again with each new base and are never older than it; rebuilding every layer
+  at each deployment would download them, the api's Python packages and uv each time, for packages only a little
+  fresher than the base's own. Each deployment therefore needs Docker Hub.
 
 ### Budgets
 

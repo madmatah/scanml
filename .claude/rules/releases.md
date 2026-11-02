@@ -38,6 +38,11 @@ chooses.
 
   `scripts/setup.sh`, the first installation, runs the isolation check, then the engine check, once it starts the
   services. A failed isolation or engine check stops `ocr`, and a deploy then leaves its images untagged `:deployed`.
+- **Production's images are built on the current image of each base tag:** `scripts/deploy.sh` and `scripts/setup.sh`
+  build with `--pull`, since the builder may otherwise keep using a copy of the tag that the machine pulled long before.
+  They keep the build's cache, which a new base invalidates above it, so that the Debian packages an image adds are
+  never older than its base. Development builds keep the builder's default, since they run at every
+  `scripts/dev.sh up`, offline included, and never serve the library.
 - **Tags and GitHub releases come only from `.github/workflows/release.yml`,** once the release pull request is merged.
   No script and no session tags.
 - **Production runs published releases only, from a clean checkout:** `scripts/deploy.sh`, `scripts/setup.sh` and the

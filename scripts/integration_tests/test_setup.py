@@ -143,16 +143,24 @@ class WhenAChangeIsHiddenFromGitStatus(InstallationTestCase):
 class WhenTheFirstInstallationCompletes(InstallationTestCase):
     setup_run: ClassVar[ScriptRun]
     commands: ClassVar[list[str]]
+    compose_builds: ClassVar[list[str]]
 
     @classmethod
     def setUpClass(cls) -> None:
         installation = make_installation(cls)
         cls.setup_run = install_for_the_first_time(installation, [])
         cls.commands = installation.read_docker_commands()
+        cls.compose_builds = [command for command in cls.commands if re.search(r"^compose .* build ", command)]
 
     def test_should_succeed(self) -> None:
         self.assertEqual(self.setup_run.returncode, 0, self.setup_run.output)
         self.assertIn("==> Ready", self.setup_run.stdout)
+
+    def test_should_build_the_images_once_on_the_current_image_of_their_base_tag_since_a_local_copy_can_lack_its_fixes(
+        self,
+    ) -> None:
+        self.assertEqual(len(self.compose_builds), 1)
+        self.assertRegex(self.compose_builds[0], r" build --pull api ocr$")
 
     def test_should_check_the_engine_s_environment_in_the_new_sandbox(self) -> None:
         self.assertIn(ENGINE_CHECK, self.commands)

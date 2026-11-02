@@ -26,11 +26,12 @@
 # checkout as project directory (production's containers record it: scripts/lib/stack.py).
 #
 # Steps:
-#   1. images: api and ocr built from the export; the running containers are not touched. The
-#      images production runs keep the tag <prefix>-<service>:deployed (the images of its
-#      containers get it whenever it names another, e.g. on the first run, or after a deploy that
-#      failed once the containers were recreated): rebuilding moves :latest, and docker then
-#      forgets the previous image unless a tag still names it
+#   1. images: api and ocr built from the export, on the current image of each base tag (--pull);
+#      the running containers are not touched. The images production runs keep the tag
+#      <prefix>-<service>:deployed (the images of its containers get it whenever it names another,
+#      e.g. on the first run, or after a deploy that failed once the containers were recreated):
+#      rebuilding moves :latest, and docker then forgets the previous image unless a tag still
+#      names it
 #   2. backup of DATA_DIR/state (without its thumbnail cache) into
 #      DATA_DIR/backups/state-<time>-v<version>/, the database copied with SQLite's online backup
 #      (consistent while the api runs) and checked, right before the restart (what changes in the
@@ -140,7 +141,7 @@ $(tr '\n' ' ' <<< "$hidden")(git update-index --no-assume-unchanged --no-skip-wo
 fi
 
 if [[ -n $REHEARSAL ]]; then
-    printf '  skip  the release on origin (rehearsal: no network, and any commit)\n'
+    printf '  skip  the release on origin (rehearsal: any commit)\n'
 elif ! ((read_origin)); then
     printf '  skip  the release on origin (not production'"'"'s checkout)\n'
 # Read on origin itself, in a dry run as in a real one: nothing local is trusted or updated.
@@ -449,7 +450,7 @@ failed once the containers were recreated: it names the running image again"
     fi
 done
 echo "  the commit ${head_commit:0:12}, exported to $EXPORT"
-COMPOSE_ROOT=$EXPORT run compose build api ocr
+COMPOSE_ROOT=$EXPORT run compose build --pull api ocr
 
 STEP=backup
 say "2. Backup of the state"

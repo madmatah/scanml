@@ -26,7 +26,7 @@ The api's Python packages, pinned with their hashes in `server/requirements.lock
 | Uvicorn | 0.54.0 | HTTP server | BSD-3-Clause | https://github.com/Kludex/uvicorn |
 | Pydantic, pydantic-core | 2.14.1, 2.50.1 | Validation of request bodies | MIT | https://github.com/pydantic/pydantic |
 | python-multipart | 0.0.32 | Uploads | Apache-2.0 | https://github.com/Kludex/python-multipart |
-| Pillow | 12.3.0 | Images | MIT-CMU | https://github.com/python-pillow/Pillow |
+| Pillow | 13.0.0 | Images | MIT-CMU | https://github.com/python-pillow/Pillow |
 | HTTPX, httpcore, h11 | 0.28.1, 1.0.9, 0.16.0 | The client of the OCR sandbox | BSD-3-Clause, BSD-3-Clause, MIT | https://github.com/encode/httpx |
 | markdown-it-py, mdurl | 4.2.0, 0.1.2 | Markdown to HTML, for the previews | MIT | https://github.com/executablebooks/markdown-it-py |
 | nh3 | 0.3.7 | Allowlist sanitizer of HTML | MIT | https://github.com/messense/nh3 |

@@ -13,7 +13,7 @@ import time
 import zipfile
 from collections.abc import Mapping
 from contextlib import closing
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, cast
 
@@ -917,6 +917,22 @@ class TestADocument:
             self, previewed_parts: list[str]
         ) -> None:
             assert previewed_parts == ["Page 1", "Chapter 1", "Missing page: 2", "Page 3", "Chapter 3"]
+
+    class TestWhenTheHostPathOfTheLibraryEndsWithASlash:
+        HOST_PATH_ENDING_WITH_A_SLASH = "/home/user/Documents/ScanMyLib/"
+
+        @pytest.fixture(scope="class")
+        @classmethod
+        def folder(cls, tmp_path_factory: pytest.TempPathFactory) -> str:
+            with (
+                preparing_settings(tmp_path_factory.mktemp("api")) as settings,
+                build_client(replace(settings, library_host_path=cls.HOST_PATH_ENDING_WITH_A_SLASH)) as client,
+            ):
+                folder: str = read_document(client, create_document(client))["folder"]
+            return folder
+
+        def test_should_show_its_folder_with_a_single_slash_before_its_slug(self, folder: str) -> None:
+            assert folder == f"/home/user/Documents/ScanMyLib/{SLUG}"
 
 
 class TestTheDocumentsOfALibrary:

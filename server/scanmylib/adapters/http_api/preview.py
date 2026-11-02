@@ -23,15 +23,17 @@ dollars is not a formula when the inside of only one of them is blank
 
 from __future__ import annotations
 
+import asyncio
 import html
 import re
-from collections.abc import Callable, Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 import nh3
 from markdown_it import MarkdownIt
 
 from ...domain.assemble import GapSection, PageSection, Section, UnnumberedHeading
+from ...domain.records import DocumentRecord
 
 _markdown = MarkdownIt("commonmark", {"html": True}).enable(["table", "strikethrough"])
 
@@ -253,7 +255,7 @@ def _insert_formulas(rendered: str, formulas: list[_Formula]) -> str:
 def render_document(
     title: str,
     sections: Sequence[Section],
-    page_markdown: Callable[[str], str],
+    markdown_by_page_key: Mapping[str, str],
     files_url: str,
 ) -> str:
     """Safe HTML of a whole document, page by page.
@@ -270,7 +272,7 @@ def render_document(
         if isinstance(section, PageSection):
             label = section.label or ""
             marker = f"Page {label}" if label else "Unnumbered page"
-            body = render_markdown(page_markdown(section.key), files_url)
+            body = render_markdown(markdown_by_page_key[section.key], files_url)
             parts.append(
                 f'<section class="page" data-key="{html.escape(section.key)}">'
                 f'<p class="page-marker" data-label="{html.escape(label)}">{html.escape(marker)}</p>{body}</section>'
@@ -283,3 +285,26 @@ def render_document(
         elif isinstance(section, UnnumberedHeading):
             parts.append(f'<h2 class="unnumbered">{html.escape(section.text)}</h2>')
     return "\n".join(parts)
+
+
+def _build_files_url(document_id: str) -> str:
+    return f"/api/documents/{document_id}/files"
+
+
+class HtmlPreviews:
+    def __init__(self) -> None:
+        # HTML previews are rendered one at a time: rendering is CPU-bound, and
+        # parallel renders of a hostile page would occupy every worker thread.
+        self._render_lock = asyncio.Lock()
+
+    async def render_page_preview(self, document_id: str, markdown: str) -> str:
+        async with self._render_lock:
+            return await asyncio.to_thread(render_markdown, markdown, _build_files_url(document_id))
+
+    async def render_document_preview(
+        self, document: DocumentRecord, sections: Sequence[Section], markdown_by_page_key: Mapping[str, str]
+    ) -> str:
+        async with self._render_lock:
+            return await asyncio.to_thread(
+                render_document, document.title, sections, markdown_by_page_key, _build_files_url(document.id)
+            )

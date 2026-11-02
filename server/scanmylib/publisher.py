@@ -1,4 +1,4 @@
-"""Turns records into the library files read by agents, and into HTML previews.
+"""Turns records into the library files read by agents, and into the sections a document's preview shows.
 
 Methods doing file I/O are meant to run in a worker thread: they only use the
 records they are given, never the database.
@@ -6,18 +6,13 @@ records they are given, never the database.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 
-from .adapters.http_api import preview
 from .application.clock import Clock
 from .application.library_files import PublishedFiles
 from .domain import assemble, timestamps
 from .domain.records import DocumentRecord, PageRecord
-
-
-def files_url(document_id: str) -> str:
-    """URL of the endpoint serving the files of a document folder."""
-    return f"/api/documents/{document_id}/files"
 
 
 def _meta(document: DocumentRecord) -> assemble.DocumentMeta:
@@ -57,6 +52,12 @@ def _entry(page: PageRecord) -> assemble.PageEntry:
 def _reading_order(pages: Sequence[PageRecord]) -> list[assemble.PageEntry]:
     """Entries of the pages of document.md; `pages` must be in the API order (by rank)."""
     return [_entry(page) for page in pages if page.in_document]
+
+
+@dataclass(frozen=True)
+class DocumentSections:
+    sections: tuple[assemble.Section, ...]
+    markdown_by_page_key: Mapping[str, str]
 
 
 class Publisher:
@@ -99,16 +100,14 @@ class Publisher:
             assemble.render_index_metadata(entries, generated_at),
         )
 
-    def page_html(self, document: DocumentRecord, page: PageRecord) -> str:
-        markdown = self._files.read_page_markdown(document.slug, page.key)
-        return preview.render_markdown(markdown, files_url(document.id))
-
-    def document_html(self, document: DocumentRecord, pages: Sequence[PageRecord]) -> str:
+    def read_document_sections(self, document: DocumentRecord, pages: Sequence[PageRecord]) -> DocumentSections:
         reading = _reading_order(pages)
         sections = assemble.document_sections(reading, numbered=any(e.number for e in reading))
-        return preview.render_document(
-            document.title,
-            sections,
-            lambda key: self._files.read_page_markdown(document.slug, key),
-            files_url(document.id),
+        return DocumentSections(
+            sections=tuple(sections),
+            markdown_by_page_key={
+                section.key: self._files.read_page_markdown(document.slug, section.key)
+                for section in sections
+                if isinstance(section, assemble.PageSection)
+            },
         )

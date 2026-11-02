@@ -8,6 +8,7 @@ from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request
 
+from ..adapters.http_api.preview import HtmlPreviews
 from ..application.ocr_engine import OcrEngineMonitor
 from ..auth import Authenticator
 from ..config import Settings
@@ -23,6 +24,7 @@ class Services:
     library: LibraryService
     auth: Authenticator
     ocr: OcrEngineMonitor
+    previews: HtmlPreviews
 
 
 # Dependencies are coroutines so that they run on the event loop thread, the

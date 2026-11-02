@@ -17,13 +17,13 @@ Everything runs in Docker; nothing is installed on the host.
 | `domain/ordering.py` | page numbers (arabic, roman, spreads), inference, duplicates, placement and reading order, positions for a manual order, coverage |
 | `domain/documents.py` | a document's rules: what a new one takes, the slug of its folder, the summary of its layout |
 | `domain/pages.py` | a page's rules: its key, its OCR attempts and the summary of its OCR, the orientation the sandbox detects |
-| `domain/assemble.py`, `publisher.py` | `document.md`, `document.json`, `INDEX.md`, `library.json` |
+| `domain/assemble.py`, `publisher.py` | `document.md`, `document.json`, `INDEX.md`, `library.json`; the sections and page Markdown of a document's preview |
 | `domain/text.py` | user-entered text, slugs, collation |
 | `domain/timestamps.py` | moments written as text, in the API and in the names of keys and folders |
 | `application/clock.py`, `adapters/system_clock.py` | the clock the application reads, and the wall clock behind it, in the container's `TZ` |
 | `application/library_files.py`, `adapters/filesystem/library_files.py` | the ports of the library's files, and the library folder behind them: atomic writes, `.trash/`, safe file resolution |
 | `application/thumbnails.py`, `adapters/filesystem/thumbnails.py` | the port of the pages' thumbnails, and their cache behind it in the state directory's `thumbs/` |
-| `adapters/http_api/preview.py` | Markdown → allowlisted HTML |
+| `adapters/http_api/preview.py` | Markdown → allowlisted HTML, rendered one at a time in a worker thread |
 | `adapters/pillow_images.py`, `application/scan_images.py` | Pillow: upload checks, thumbnails, image sent to the sandbox, re-encoded illustrations; the ports through which the application handles them, and their errors |
 | `application/ocr_engine.py`, `adapters/ocr_sandbox/` | the OCR ports, with a page's output, its errors and the engine's status; the sandbox behind them: its client, the validation of its responses, untrusted OCR Markdown → safe Markdown, and the engine that times a page's reading and validates its `/health` |
 | `ocr_loop.py` | the single OCR loop |

@@ -119,7 +119,8 @@ async def get_page(page_id: str, services: ServicesDep) -> dict[str, object]:
 @router.get("/api/pages/{page_id}/html")
 async def page_html(page_id: str, services: ServicesDep) -> dict[str, object]:
     page = services.library.require_page(page_id)
-    return {"html": await services.library.page_html(page)}
+    markdown = await services.library.page_markdown(page)
+    return {"html": await services.previews.render_page_preview(page.document_id, markdown)}
 
 
 @router.patch("/api/pages/{page_id}")

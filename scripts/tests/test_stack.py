@@ -723,6 +723,19 @@ class TheIsolationProblemsFunctionWhenABindMountSharesProductionsModelsReadOnly(
         self.assertEqual(self.problems, [])
 
 
+class TheIsolationProblemsFunctionWhenTheStackHasASandboxOfItsOwn(unittest.TestCase):
+    def setUp(self) -> None:
+        layout = make_layout(self)
+        own_sandbox = f"{layout.development_data_dir}/sandbox"
+        config = build_resolved_compose_config(layout)
+        config["services"]["ocr"]["volumes"][0]["source"] = own_sandbox
+        env = {**layout.env, "SANDBOX_DIR": own_sandbox, "OCR_SERVICE": "ocr"}
+        self.problems = find_problems(layout, config=config, env=env)
+
+    def test_should_find_none_since_it_lies_inside_the_stack_s_data_dir(self) -> None:
+        self.assertEqual(self.problems, [])
+
+
 class TheIsolationProblemsFunctionWhenABindMountSharesProductionsDataDirReadOnly(unittest.TestCase):
     def setUp(self) -> None:
         layout = make_layout(self)

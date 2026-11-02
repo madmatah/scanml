@@ -166,8 +166,9 @@ Production runs on this machine, from the main checkout, `~/Dev/scanmylib`, and 
 - `scripts/check.sh --fix`: formats every language and applies the linters' safe fixes: ktlint formats the app in
   place, the other formatters only the files git tracks (`git add` a new file first); read `git diff` before running
   what it changed.
-- `scripts/dev-env.sh`, then `scripts/dev.sh up [--real-ocr]`, `status`, `logs`, `down`, `build [api|ocr]` and
-  `compose COMMAND...`: the development stack of a worktree.
+- `scripts/dev-env.sh [--own-sandbox]`, then `scripts/dev.sh up [--real-ocr]`, `status`, `logs`, `down`,
+  `build [api|ocr]` and `compose COMMAND...`: the development stack of a worktree, on production's sandbox, read-only,
+  or on a sandbox of its own, which `dev.sh up` runs.
 - `scripts/build-apk.sh [TASK...]`: the dev app (tests, build, lint and signing), or the Gradle tasks given.
 - `scripts/e2e_test.py IMAGE...`: the end-to-end test, which acts like the phone against the stack of the checkout's
   `.env`, and refuses production without `--production`.

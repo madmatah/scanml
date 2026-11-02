@@ -82,8 +82,10 @@ production runs next to the development stack on the same machine. These rules k
 - **A setting that a change needs goes into the allowlist of `scripts/lib/stack.py` in the same pull request,** with the
   reason it is safe, and a test of `scripts/tests/` that shows what it allows.
 - **A development stack writes only inside its own `DATA_DIR`,** and reads production's OCR models and signing key
-  read-only, nothing else of production's. That `DATA_DIR` lies outside the system directories and the home directory,
-  and neither is nor contains `/tmp`; every other host path the stack uses lies inside it.
+  read-only, nothing else of production's. A sandbox of its own (`scripts/dev-env.sh --own-sandbox`) lies inside that
+  `DATA_DIR`, and its services mount it read-only, as they would mount production's. That `DATA_DIR` lies outside the
+  system directories and the home directory, and neither is nor contains `/tmp`; every other host path the stack uses
+  lies inside it.
 - **The dev app keeps its own application id,** `fr.scanmylib.dev`, so that it installs next to the production app and a
   build of a branch never replaces it.
 - **The production app trusts nothing on its signature:** no signature-level permission, no exported component protected

@@ -96,6 +96,89 @@ class WhenRunInAWorktree(InstallationTestCase):
         self.assertEqual(self.writing_calls, [])
 
 
+@unittest.skipIf(is_port_listened_on(DEVELOPMENT_PORT), f"port {DEVELOPMENT_PORT} is in use (a development stack runs)")
+class WhenAskedForASandboxOfItsOwn(InstallationTestCase):
+    dev_env_run: ClassVar[ScriptRun]
+    env_text: ClassVar[str | None]
+    production_data: ClassVar[Path]
+    is_sandbox_created: ClassVar[bool]
+    writing_calls: ClassVar[list[list[str]]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        installation = make_installation(cls)
+        cls.production_data = installation.production_data
+        cls.dev_env_run = installation.run_script(installation.worktree, "dev-env.sh", "--own-sandbox")
+        cls.env_text = read_text_if_present(installation.worktree / ".env")
+        cls.is_sandbox_created = Path(f"{installation.production_data}-dev/sandbox").is_dir()
+        cls.writing_calls = list_writing_calls(installation.read_docker_calls())
+
+    def test_should_succeed(self) -> None:
+        self.assertEqual(self.dev_env_run.returncode, 0, self.dev_env_run.stderr)
+
+    def test_should_give_the_stack_a_sandbox_inside_its_own_data(self) -> None:
+        self.assertEqual(parse_env(self.env_text)["SANDBOX_DIR"], f"{self.production_data}-dev/sandbox")
+
+    def test_should_create_the_sandbox_s_directory(self) -> None:
+        self.assertTrue(self.is_sandbox_created)
+
+    def test_should_run_the_sandbox_so_that_dev_sh_up_starts_the_real_engine(self) -> None:
+        self.assertEqual(parse_env(self.env_text)["OCR_SERVICE"], "ocr")
+
+    def test_should_still_never_write_the_sandbox_through_ocr_setup(self) -> None:
+        self.assertNotIn("SANDBOX_SETUP_DIR", parse_env(self.env_text))
+
+    def test_should_only_read_from_docker(self) -> None:
+        self.assertEqual(self.writing_calls, [])
+
+
+@unittest.skipIf(is_port_listened_on(DEVELOPMENT_PORT), f"port {DEVELOPMENT_PORT} is in use (a development stack runs)")
+class WhenRunAgainWithoutASandboxOfItsOwn(InstallationTestCase):
+    own_sandbox_env_text: ClassVar[str | None]
+    dev_env_run: ClassVar[ScriptRun]
+    env_text: ClassVar[str | None]
+    production_data: ClassVar[Path]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        installation = make_installation(cls)
+        cls.production_data = installation.production_data
+        installation.run_script(installation.worktree, "dev-env.sh", "--own-sandbox")
+        cls.own_sandbox_env_text = read_text_if_present(installation.worktree / ".env")
+        cls.dev_env_run = installation.run_script(installation.worktree, "dev-env.sh")
+        cls.env_text = read_text_if_present(installation.worktree / ".env")
+
+    def test_should_have_had_a_sandbox_of_its_own_before(self) -> None:
+        self.assertEqual(parse_env(self.own_sandbox_env_text)["SANDBOX_DIR"], f"{self.production_data}-dev/sandbox")
+
+    def test_should_succeed(self) -> None:
+        self.assertEqual(self.dev_env_run.returncode, 0, self.dev_env_run.stderr)
+
+    def test_should_read_production_s_sandbox_again(self) -> None:
+        self.assertEqual(parse_env(self.env_text)["SANDBOX_DIR"], f"{self.production_data}/sandbox")
+
+    def test_should_run_the_fake_ocr_again(self) -> None:
+        self.assertEqual(parse_env(self.env_text)["OCR_SERVICE"], "ocr-fake")
+
+
+class WhenGivenAnUnknownArgument(InstallationTestCase):
+    dev_env_run: ClassVar[ScriptRun]
+    env_text: ClassVar[str | None]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        installation = make_installation(cls)
+        cls.dev_env_run = installation.run_script(installation.worktree, "dev-env.sh", "--own-sandbox", "--extra")
+        cls.env_text = read_text_if_present(installation.worktree / ".env")
+
+    def test_should_refuse_it_with_the_usage(self) -> None:
+        self.assertNotEqual(self.dev_env_run.returncode, 0)
+        self.assertIn("usage: scripts/dev-env.sh [--own-sandbox]", self.dev_env_run.stderr)
+
+    def test_should_write_no_env(self) -> None:
+        self.assertIsNone(self.env_text)
+
+
 class WhenRunInProductionsCheckout(InstallationTestCase):
     dev_env_run: ClassVar[ScriptRun]
 

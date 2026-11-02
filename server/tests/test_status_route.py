@@ -12,6 +12,7 @@ from typing import Any, ClassVar
 
 import pytest
 
+import scanmylib.app
 from scanmylib import __version__
 from support import (
     AUTH,
@@ -43,6 +44,12 @@ class UnreachableSandbox:
 class StatusAnswer:
     status: int
     ocr_status: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class ReportedVersions:
+    health_version: str
+    status_version: str
 
 
 class TestTheStatusRoute:
@@ -86,6 +93,27 @@ class TestTheStatusRoute:
 
             def test_should_report_the_version_of_the_api(self, status: dict[str, Any]) -> None:
                 assert status["version"] == __version__
+
+        class TestWhenTheApiWasBuiltWithAVersion:
+            VERSION_THE_API_WAS_BUILT_WITH = "9.8.7-dev.6+g5a4b3c2d1e0f"
+
+            @pytest.fixture(scope="class")
+            @classmethod
+            def reported_versions(cls, tmp_path_factory: pytest.TempPathFactory) -> ReportedVersions:
+                with pytest.MonkeyPatch.context() as patch:
+                    patch.setattr(scanmylib.app, "__version__", cls.VERSION_THE_API_WAS_BUILT_WITH)
+                    with running_api(tmp_path_factory.mktemp("api")) as api:
+                        return ReportedVersions(
+                            health_version=api.client.get("/api/health").json()["version"],
+                            status_version=api.client.get("/api/status", headers=AUTH).json()["version"],
+                        )
+
+            def test_should_report_that_version_in_its_health_and_its_status_so_that_a_deploy_can_check_it(
+                self, reported_versions: ReportedVersions
+            ) -> None:
+                assert reported_versions == ReportedVersions(
+                    self.VERSION_THE_API_WAS_BUILT_WITH, self.VERSION_THE_API_WAS_BUILT_WITH
+                )
 
         class TestWhenTheSandboxReportsItsGpu:
             REPORTED_HEALTH_BODY = (

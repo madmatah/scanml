@@ -5,9 +5,6 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-#: Version of the HTTP API contract (docs/API.md), reported by /api/health.
-API_LEVEL = 1
-
 #: The repository's VERSION file, which the image build copies next to the package (/app/VERSION).
 VERSION_FILE = Path(__file__).resolve().parent.parent / "VERSION"
 

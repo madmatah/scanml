@@ -7,7 +7,6 @@ from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
-from .. import API_LEVEL, __version__
 from ..adapters.http_api.authentication import SESSION_COOKIE
 from ..application.catalog import QueueCounts
 from ..application.ocr_engine import EngineStatus, GpuStatus
@@ -17,6 +16,9 @@ from ..published_apk import APK_DOWNLOAD_PATH, published_apk
 from ..qr import qr_svg
 from .deps import Services, ServicesDep, public_url, require_auth
 from .schemas import SessionBody
+
+#: Version of the HTTP API contract (docs/API.md), reported by /api/health.
+API_LEVEL = 1
 
 public = APIRouter()
 protected = APIRouter(dependencies=[Depends(require_auth)])
@@ -36,7 +38,7 @@ def health(services: ServicesDep) -> dict[str, object]:
     # The published APK: the app offers it as an update when its version code is higher.
     return {
         "name": "ScanMyLib",
-        "version": __version__,
+        "version": services.settings.version,
         "api": API_LEVEL,
         "apk": published_apk(services.settings.apk_path),
     }
@@ -103,7 +105,7 @@ def _build_queue_counts_json(queue_counts: QueueCounts) -> dict[str, int]:
 async def status(services: ServicesDep) -> dict[str, object]:
     ocr_status = await report_ocr_status(services.ocr, services.library)
     return {
-        "version": __version__,
+        "version": services.settings.version,
         "ocr": _build_engine_status_json(ocr_status.engine_status),
         "queue": _build_queue_counts_json(ocr_status.queue_counts),
         "library_dir": services.settings.library_host_path,

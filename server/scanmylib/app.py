@@ -23,6 +23,7 @@ from .adapters.ocr_sandbox.engine import SandboxOcrEngine
 from .adapters.pillow_images import MAX_UPLOAD_BYTES, PillowImages
 from .adapters.sqlite.catalog import SqliteCatalog
 from .adapters.sqlite.database import Database
+from .adapters.sqlite.web_sessions import SqliteWebSessions
 from .adapters.system_clock import SystemClock
 from .api import documents, pages, system, web
 from .api.deps import Services
@@ -87,7 +88,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             images,
             assembly_delay_seconds=settings.assemble_delay_s,
         )
-        auth = Authenticator(load_or_create_token(settings.token_path, settings.token), db, clock)
+        auth = Authenticator(load_or_create_token(settings.token_path, settings.token), SqliteWebSessions(db), clock)
         ocr_client = OcrClient(settings.ocr_socket, settings.ocr_timeout_s)
         ocr_engine = SandboxOcrEngine(ocr_client)
         ocr_loop = OcrLoop(

@@ -34,7 +34,7 @@ The api's Python packages, pinned with their hashes in `server/requirements.lock
 | qrcode | 8.2 | QR codes of pairing | BSD | https://github.com/lincolnloop/python-qrcode |
 | AnyIO | 4.15.1 | Async I/O under Starlette and HTTPX | MIT | https://github.com/agronholm/anyio |
 | click | 8.5.0 | Uvicorn's command line | BSD-3-Clause | https://github.com/pallets/click |
-| idna, certifi | 3.20, 2026.7.22 | Host names and certificates for HTTPX | BSD-3-Clause, MPL-2.0 | https://github.com/kjd/idna, https://github.com/certifi/python-certifi |
+| idna, certifi | 3.20, 2026.10.18 | Host names and certificates for HTTPX | BSD-3-Clause, MPL-2.0 | https://github.com/kjd/idna, https://github.com/certifi/python-certifi |
 | annotated-types, annotated-doc, typing-extensions, typing-inspection | 0.8.0, 0.0.5, 4.16.0, 0.4.4 | Typing support of Pydantic and FastAPI | MIT, MIT, PSF-2.0, MIT | https://github.com/annotated-types/annotated-types |
 | opentelemetry-api | 1.45.1 | A dependency of FastAPI | Apache-2.0 | https://github.com/open-telemetry/opentelemetry-python |
 

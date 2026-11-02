@@ -35,7 +35,7 @@ These constraints drive the choices in this document:
 | Python | 3.12 | The api, the OCR sandbox and the scripts (the host's `python3`, standard library only, for the scripts) |
 | FastAPI, Uvicorn | 0.143.0, 0.54.0 | The api's HTTP server and routes |
 | SQLite | the Python build's | The api's state: documents, pages, web sessions |
-| Pillow | 12.3.0 | Decoding, re-encoding and thumbnails of scans and illustrations |
+| Pillow | 13.0.0 | Decoding, re-encoding and thumbnails of scans and illustrations |
 | markdown-it-py, nh3 | 4.2.0, 0.3.7 | HTML previews of the Markdown, and their allowlist sanitizer |
 | HTTPX | 0.28.1 | The api's client of the sandbox, over its Unix socket |
 | qrcode | 8.2 | The QR codes of pairing |

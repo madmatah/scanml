@@ -77,8 +77,8 @@ paths:
   `ocr/setup/requirements-paddle.in` and `ocr/setup/requirements-vllm.in` (their own dependencies as they resolve, and
   `safetensors` as it resolves), its models by Hugging Face commit, in `ocr/setup/install.sh`, the uv of its image by
   version, and so the uv that the vulnerability scan resolves them with, and the base images by tag; the Debian
-  packages of the OCR image are the release's current ones. No setting lets an install bypass or override a pin, such
-  as another registry or index, or `--no-verify`.
+  packages of the OCR image, and the api's `tzdata-legacy`, are the release's current ones. No setting lets an install
+  bypass or override a pin, such as another registry or index, or `--no-verify`.
 - **A lock is regenerated, never edited by hand,** so that every hash comes from the file it pins: the api's locks with
   the `uv pip compile` command of `server/README.md`, the tools' lock with the one of `README.md` > Development, the web
   UI's lockfile with `npm install --package-lock-only --ignore-scripts`, the app's verification metadata with

@@ -9,12 +9,17 @@
 #
 # Wheels only: building a package from its source would fetch its build
 # dependencies without checking their hashes.
-FROM python:3.12-slim-bookworm AS base
+FROM python:3.12-slim-trixie AS base
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_NO_CACHE_DIR=1 \
     PATH=/opt/venv/bin:$PATH
+# The former time-zone names, such as US/Eastern, which SCANMYLIB_TZ may hold:
+# without them, the C library falls back to UTC without a word.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends tzdata-legacy \
+ && rm -rf /var/lib/apt/lists/*
 
 
 FROM base AS deps

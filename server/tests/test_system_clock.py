@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+import time
+from datetime import datetime, timedelta
 
 import pytest
 
@@ -20,3 +21,20 @@ class TestTheSystemClock:
                 self, moment: datetime
             ) -> None:
                 assert moment.utcoffset() is not None
+
+        class TestWhenTheTimeZoneIsAFormerAliasSuchAsUsEastern:
+            former_zone_name = "US/Eastern"
+            eastern_offsets = (timedelta(hours=-5), timedelta(hours=-4))
+
+            @pytest.fixture
+            def moment(self, request: pytest.FixtureRequest) -> datetime:
+                request.addfinalizer(time.tzset)
+                with pytest.MonkeyPatch.context() as environment:
+                    environment.setenv("TZ", self.former_zone_name)
+                    time.tzset()
+                    return SystemClock().now()
+
+            def test_should_give_the_offset_of_eastern_time_so_that_a_former_name_never_falls_back_to_utc(
+                self, moment: datetime
+            ) -> None:
+                assert moment.utcoffset() in self.eastern_offsets

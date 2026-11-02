@@ -61,7 +61,7 @@ Dependencies are pinned with hashes in `requirements.lock` / `requirements-test.
 generated from `pyproject.toml` in a throwaway container:
 
 ```sh
-docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD:/work" -w /work python:3.12-slim-bookworm sh -c '
+docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD:/work" -w /work python:3.12-slim-trixie sh -c '
   pip install --quiet --target /tmp/uv uv==0.13.0 && for extra in "" test; do
     /tmp/uv/bin/uv pip compile pyproject.toml ${extra:+--extra $extra} --generate-hashes --python-version 3.12 \
       --python-platform x86_64-manylinux_2_36 --no-header --annotation-style line \

@@ -20,10 +20,10 @@ class DebouncedBatch:
     """Collects keys (document ids) and runs the action after `delay` seconds of calm.
 
     Under continuous activity the action still runs at least every `max_delay`
-    seconds. `flush` runs pending work immediately (e.g. before serving a file).
-    The action runs for each key on its own: a key whose action fails stays
-    pending and is retried later (with a growing delay), without holding up
-    the others.
+    seconds. `flush` runs pending work immediately (e.g. before a file it
+    rewrites is read). The action runs for each key on its own: a key whose
+    action fails stays pending and is retried later (with a growing delay),
+    without holding up the others.
     """
 
     def __init__(self, action: BatchAction, delay: float, max_delay: float | None = None) -> None:

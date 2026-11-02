@@ -70,7 +70,7 @@ class LibraryService:
         self._scan_images = scan_images
         self._publisher = publisher
         self._locks: dict[str, asyncio.Lock] = {}
-        #: Ids of the pages whose upload is being stored (their row does not exist yet).
+        #: Ids of the pages whose upload is being stored (the catalog does not hold them yet).
         self._storing: set[str] = set()
         self._assembly = DebouncedBatch(self._assemble, assembly_delay_seconds)
         self._work_listeners: list[Callable[[], None]] = []
@@ -124,7 +124,7 @@ class LibraryService:
         return document
 
     def list_pages(self, document_id: str) -> list[PageRecord]:
-        """Pages of a document in the API order (reading order first)."""
+        """Pages of a document in the catalog's order (reading order first)."""
         return self._catalog.list_pages(document_id)
 
     def get_page(self, page_id: str) -> PageRecord | None:
@@ -330,7 +330,7 @@ class LibraryService:
         return self.require_page(page_id)
 
     def reorder_pages(self, document_id: str, page_ids: Sequence[str]) -> DocumentRecord:
-        """Put the pages of the reading order in the given order (PUT /api/documents/{id}/order).
+        """Put the pages of the reading order in the given order.
 
         `page_ids` must be exactly the pages of the current reading order:
         otherwise the client worked on an outdated list (Conflict). Only the

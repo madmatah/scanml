@@ -6,17 +6,21 @@ reading was under way, and returns how many there were. Storing a layout gives e
 which the layout holds for every one of them, and the document its summary. Adding a document records it as created and
 last updated at the moment given, touching it records the moment of its last update, and removing it removes its pages
 with it. Adding a page records it queued for reading. Updating a document or a page raises ValueError when its changes
-hold no field, and otherwise sets the fields they hold, at
-least one, and keeps the others; a manual number of None clears the page's. Setting the positions of pages gives each
-its own, None clearing it, and clearing those of a document returns how many of its pages had one. A transaction's
-changes take effect together when its block ends, or none of them when it raises, and a transaction opened inside
-another joins it. The catalog is called from the event loop's thread only, and nothing is awaited inside a transaction,
-so that a transaction is atomic for the other coroutines.
+hold no field, and otherwise sets the fields they hold, at least one, and keeps the others; a manual number of None
+clears the page's. Setting the positions of pages gives each its own, None clearing it, and clearing those of a document
+returns how many of its pages had one. Claiming takes the queued page uploaded first, then the one of smallest id, marks
+it as being read, and returns its claim, or None when no page is queued. A claim is current while its page is being read
+under the claim's generation: only then does ending its attempt record the outcome, or completing its page mark the page
+read, with its attempts cleared, the numbers detected on it and the summary of its OCR, and each says whether it did.
+Requeueing a page queues it for reading again, with its error and its attempts cleared, under a new generation, so that
+no claim taken before is current. A transaction's changes take effect together when its block ends, or none of them when
+it raises, and a transaction opened inside another joins it. The catalog is called from the event loop's thread only,
+and nothing is awaited inside a transaction, so that a transaction is atomic for the other coroutines.
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from datetime import datetime
@@ -24,7 +28,8 @@ from typing import Protocol
 
 from ..domain.documents import LayoutSummary, NewDocument
 from ..domain.ordering import Placement
-from ..domain.records import DocumentChanges, DocumentRecord, PageChanges, PageRecord
+from ..domain.pages import AttemptOutcome
+from ..domain.records import DocumentChanges, DocumentRecord, OcrSummary, PageChanges, PageClaim, PageRecord
 from .scan_images import ScanInfo
 
 
@@ -71,3 +76,7 @@ class Catalog(Protocol):
     def set_page_positions(self, positions: Mapping[str, float | None]) -> None: ...
     def clear_page_positions(self, document_id: str) -> int: ...
     def remove_page(self, page_id: str) -> None: ...
+    def claim_next_page(self) -> PageClaim | None: ...
+    def end_attempt(self, claim: PageClaim, outcome: AttemptOutcome) -> bool: ...
+    def complete_page(self, claim: PageClaim, detected_numbers: Sequence[str], ocr: OcrSummary) -> bool: ...
+    def requeue_page(self, page_id: str) -> None: ...

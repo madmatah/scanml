@@ -26,7 +26,7 @@ _PLACEHOLDER = """<!doctype html>
 
 @router.get("/", include_in_schema=False)
 async def index(services: ServicesDep) -> Response:
-    page = services.settings.web_dir / "index.html"
+    page = services.settings.web_directory / "index.html"
     if page.is_file():
         return FileResponse(page, media_type="text/html; charset=utf-8")
     return HTMLResponse(_PLACEHOLDER)

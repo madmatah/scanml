@@ -26,7 +26,7 @@ from .adapters.sqlite.database import Database
 from .adapters.sqlite.web_sessions import SqliteWebSessions
 from .adapters.system_clock import SystemClock
 from .api import documents, pages, system, web
-from .api.deps import Services
+from .api.deps import HttpApiSettings, Services
 from .application.access import Access
 from .application.library import LibraryService
 from .application.ocr_loop import OcrLoop
@@ -70,6 +70,13 @@ async def _validation_error(request: Request, exc: Exception) -> JSONResponse:
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings.from_env()
+    http_api_settings = HttpApiSettings(
+        public_url=settings.public_url,
+        apk_path=settings.apk_path,
+        web_directory=settings.web_dir,
+        library_host_path=settings.library_host_path,
+        version=__version__,
+    )
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -98,7 +105,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         requeued = library.start()
         ocr_loop.start()
         app.state.services = Services(
-            settings=settings, library=library, access=access, ocr=ocr_engine, previews=HtmlPreviews()
+            settings=http_api_settings, library=library, access=access, ocr=ocr_engine, previews=HtmlPreviews()
         )
         log.info(
             "ScanMyLib %s: library %s, OCR socket %s, %d interrupted page(s) re-queued",

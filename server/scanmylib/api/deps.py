@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request
@@ -13,15 +14,23 @@ from ..adapters.http_api.preview import HtmlPreviews
 from ..application.access import Access
 from ..application.library import LibraryService
 from ..application.ocr_engine import OcrEngineMonitor
-from ..config import Settings
 
 UUID_PATTERN = r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
 _UUID = re.compile(UUID_PATTERN)
 
 
 @dataclass(frozen=True)
+class HttpApiSettings:
+    public_url: str
+    apk_path: Path
+    web_directory: Path
+    library_host_path: str
+    version: str
+
+
+@dataclass(frozen=True)
 class Services:
-    settings: Settings
+    settings: HttpApiSettings
     library: LibraryService
     access: Access
     ocr: OcrEngineMonitor

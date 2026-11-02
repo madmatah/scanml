@@ -886,6 +886,22 @@ class TestTheBodySizeLimits:
         ) -> None:
             assert oversized_upload.content_security_policy == CONTENT_SECURITY_POLICY
 
+    class TestWhenAnUploadIsAsLargeAsTheLargestScan:
+        JPEG_START = b"\xff\xd8"
+
+        @pytest.fixture(scope="class")
+        @classmethod
+        def status(cls, tmp_path_factory: pytest.TempPathFactory) -> int:
+            with running_api(tmp_path_factory.mktemp("api")) as api:
+                document_id = create_document(api.client)
+                image = cls.JPEG_START + b"\x00" * (MAX_UPLOAD_BYTES - len(cls.JPEG_START))
+                return upload(api.client, document_id, image).status_code
+
+        def test_should_let_it_through_to_the_image_checks_so_that_a_scan_of_40_mebibytes_is_never_refused_as_too_large(
+            self, status: int
+        ) -> None:
+            assert status == 415
+
 
 class TestTheValidationErrors:
     class TestWhenTheJsonOfARequestCannotBeEncodedBack:

@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 from ..domain.records import DocumentRecord, PageRecord
-from ..library import LibraryService
 
 _OCR_FIELDS = ("engine", "duration_s", "at", "images", "chars")
 
 
-def document_json(document: DocumentRecord, library: LibraryService) -> dict[str, object]:
+def document_json(document: DocumentRecord, library_host_path: str) -> dict[str, object]:
     return {
         "id": document.id,
         "slug": document.slug,
@@ -30,7 +29,7 @@ def document_json(document: DocumentRecord, library: LibraryService) -> dict[str
         },
         "coverage": document.coverage.to_json(),
         "cover_thumb_url": f"/api/pages/{document.cover_page_id}/thumb" if document.cover_page_id else None,
-        "folder": library.folder(document),
+        "folder": f"{library_host_path.rstrip('/')}/{document.slug}",
     }
 
 

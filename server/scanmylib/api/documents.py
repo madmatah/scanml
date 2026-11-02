@@ -30,7 +30,7 @@ def _document(services: Services, document_id: str) -> DocumentRecord:
 
 def _document_with_pages(services: Services, document: DocumentRecord) -> dict[str, object]:
     return {
-        **document_json(document, services.library),
+        **document_json(document, services.settings.library_host_path),
         "pages": [page_json(page) for page in services.library.list_pages(document.id)],
     }
 
@@ -38,7 +38,8 @@ def _document_with_pages(services: Services, document: DocumentRecord) -> dict[s
 @router.get("")
 async def list_documents(services: ServicesDep) -> dict[str, object]:
     library = services.library
-    return {"documents": [document_json(d, library) for d in library.list_documents()]}
+    library_host_path = services.settings.library_host_path
+    return {"documents": [document_json(document, library_host_path) for document in library.list_documents()]}
 
 
 @router.put("/{document_id}")
@@ -48,7 +49,7 @@ async def put_document(
     require_uuid(document_id, "document id")
     document, created = await services.library.put_document(document_id, body.changes())
     response.status_code = 201 if created else 200
-    return document_json(document, services.library)
+    return document_json(document, services.settings.library_host_path)
 
 
 @router.get("/{document_id}")
@@ -59,7 +60,7 @@ async def get_document(document_id: str, services: ServicesDep) -> dict[str, obj
 @router.patch("/{document_id}")
 async def patch_document(document_id: str, body: DocumentBody, services: ServicesDep) -> dict[str, object]:
     document = services.library.update_document(document_id, body.changes())
-    return document_json(document, services.library)
+    return document_json(document, services.settings.library_host_path)
 
 
 @router.delete("/{document_id}", status_code=204)

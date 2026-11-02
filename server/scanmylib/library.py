@@ -26,7 +26,6 @@ from .application.library_files import LibraryFiles
 from .application.ocr_engine import PageOcrOutput
 from .application.scan_images import ImageRejected, ScanImages
 from .application.thumbnails import Thumbnails
-from .config import Settings
 from .debounce import DebouncedBatch
 from .domain import ordering
 from .domain.documents import check_document_changes, prepare_new_document, propose_slugs, summarize_layout
@@ -55,15 +54,15 @@ log = logging.getLogger(__name__)
 class LibraryService:
     def __init__(
         self,
-        settings: Settings,
         catalog: Catalog,
         files: LibraryFiles,
         thumbnails: Thumbnails,
         publisher: Publisher,
         clock: Clock,
         scan_images: ScanImages,
+        *,
+        assembly_delay_seconds: float,
     ) -> None:
-        self._settings = settings
         self._catalog = catalog
         self._files = files
         self._thumbnails = thumbnails
@@ -73,7 +72,7 @@ class LibraryService:
         self._locks: dict[str, asyncio.Lock] = {}
         #: Ids of the pages whose upload is being stored (their row does not exist yet).
         self._storing: set[str] = set()
-        self._assembly = DebouncedBatch(self._assemble, settings.assemble_delay_s)
+        self._assembly = DebouncedBatch(self._assemble, assembly_delay_seconds)
         self._work_listeners: list[Callable[[], None]] = []
 
     # -- lifecycle -----------------------------------------------------------
@@ -139,10 +138,6 @@ class LibraryService:
 
     def count_queue(self) -> QueueCounts:
         return self._catalog.count_queue()
-
-    def folder(self, document: DocumentRecord) -> str:
-        """Host path of a document folder (display only)."""
-        return f"{self._settings.library_host_path.rstrip('/')}/{document.slug}"
 
     def scan_path(self, page: PageRecord, document: DocumentRecord) -> PurePath:
         return self._files.locate_scan(document.slug, page.key, page.scan_ext)

@@ -77,7 +77,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         images = PillowImages()
         files = FilesystemLibrary(settings.library_dir, clock)
         thumbnails = FilesystemThumbnails(settings.thumbs_dir)
-        library = LibraryService(settings, catalog, files, thumbnails, Publisher(files, clock), clock, images)
+        library = LibraryService(
+            catalog,
+            files,
+            thumbnails,
+            Publisher(files, clock),
+            clock,
+            images,
+            assembly_delay_seconds=settings.assemble_delay_s,
+        )
         auth = Authenticator(load_or_create_token(settings.token_path, settings.token), db, clock)
         ocr_client = OcrClient(settings.ocr_socket, settings.ocr_timeout_s)
         ocr_engine = SandboxOcrEngine(ocr_client)

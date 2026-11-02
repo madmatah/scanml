@@ -32,6 +32,7 @@ These constraints drive the choices in this document:
 |---|---|---|
 | Docker Engine, Docker Compose v2 | — | Every service, build and test; the stacks are compose projects |
 | NVIDIA Container Toolkit (CDI) | — | The GPU in the sandbox, as a CDI device |
+| Debian | 13 "trixie" | The base of every Python and Node.js image of the project: the stable release, whose packages Debian's security team fixes |
 | Python | 3.12 | The api, the OCR sandbox and the scripts (the host's `python3`, standard library only, for the scripts) |
 | FastAPI, Uvicorn | 0.143.0, 0.54.0 | The api's HTTP server and routes |
 | SQLite | the Python build's | The api's state: documents, pages, web sessions |

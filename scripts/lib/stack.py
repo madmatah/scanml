@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""The .env of a ScanMyLib stack, production's checkout, and the isolation of a stack from production.
+"""The .env of a ScanMyLib stack, production's checkout, the isolation of a stack from production, and the settings
+that the check of a sandbox before a restart takes from the ocr service.
 
 Shared by the scripts: scripts/lib/common.sh runs it, scripts/e2e_test.py imports it. Standard
 library only, so that it runs with the host's python3.
@@ -79,6 +80,10 @@ Usage:
         directory except inside DIR (GitHub Actions' RUNNER_TEMP) (exit status 1)
     stack.py check-compose-command [--production] -- COMMAND [ARGS...]
         print why scripts/dev.sh (or scripts/prod.sh) refuses this docker compose command
+    stack.py sandbox-check-options  < configuration
+        print, one per line, the docker run options that give the check of the sandbox before the
+        restart (scripts/deploy.sh) the environment and the limits of the ocr service
+        (configuration: `docker compose config --format json`)
 (containers: `docker inspect` of production's containers, a JSON array.)
 """
 
@@ -653,6 +658,42 @@ def isolation_problems(
     return list(dict.fromkeys(problems))
 
 
+# -- the check of a sandbox before the restart --------------------------------
+
+#: The service whose environment and limits the check before the restart takes.
+SANDBOX_SERVICE = "ocr"
+_LINE_BREAK = re.compile(r"[\n\r\x00]")
+
+
+class ServiceOptionsRefused(ValueError):
+    pass
+
+
+def build_sandbox_check_options(config: JsonObject) -> list[str]:
+    """One argument each, written with "=", so that no value reads as another option."""
+    service = (config.get("services") or {}).get(SANDBOX_SERVICE)
+    if not isinstance(service, dict):
+        raise ServiceOptionsRefused(f"docker compose resolves no {SANDBOX_SERVICE} service")
+    options = []
+    for key, value in (service.get("environment") or {}).items():
+        if value is None:
+            # docker compose would pass on the caller's own value, which the check must not read.
+            raise ServiceOptionsRefused(f"the variable {key} of the {SANDBOX_SERVICE} service has no value")
+        if not key or "=" in key or _LINE_BREAK.search(key) or _LINE_BREAK.search(str(value)):
+            raise ServiceOptionsRefused(
+                f"the variable {key!r} of the {SANDBOX_SERVICE} service holds a line break, a NUL or an '=' in its name"
+            )
+        options.append(f"--env={key}={value}")
+    for setting, option in (("mem_limit", "--memory"), ("pids_limit", "--pids-limit")):
+        limit = service.get(setting)
+        if limit is None:
+            continue
+        if not re.fullmatch(r"-?\d+", str(limit)):
+            raise ServiceOptionsRefused(f"the {setting} of the {SANDBOX_SERVICE} service is not a number: {limit!r}")
+        options.append(f"{option}={limit}")
+    return options
+
+
 # -- docker compose command lines ----------------------------------------------
 
 #: The docker compose commands that scripts/dev.sh passes on: they only work on the stack's own
@@ -887,12 +928,19 @@ def main(argv: list[str] | None = None) -> int:
     compose = commands.add_parser("check-compose-command", help="a docker compose command of dev.sh or prod.sh")
     compose.add_argument("--production", action="store_true", help="the rules of scripts/prod.sh")
     compose.add_argument("argv", nargs=argparse.REMAINDER)
+    commands.add_parser(
+        "sandbox-check-options", help="the docker run options of the check before the restart (configuration on stdin)"
+    )
     args = parser.parse_args(argv)
 
     try:
         if args.command == "env":
             for key, value in read_env(args.file).items():
                 print(f"{key}={value}")
+            return 0
+        if args.command == "sandbox-check-options":
+            for option in build_sandbox_check_options(json.load(sys.stdin)):
+                print(option)
             return 0
         if args.command == "production-checkout":
             print(production_checkout(_read_containers()))
@@ -925,7 +973,7 @@ def main(argv: list[str] | None = None) -> int:
             problems = isolation_problems(
                 env, state.get("config") or {}, state.get("raw") or {}, production, args.project_dir, args.compose_file
             )
-    except EnvError as exc:
+    except (EnvError, ServiceOptionsRefused) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
     for problem in problems:

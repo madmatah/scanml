@@ -34,6 +34,14 @@ the models by Hugging Face commit, in `ocr/setup/install.sh` (what is installed:
 No Paddle code runs during this network phase: the models are fetched with
 `huggingface_hub`.
 
+Before its restart, a deployment imports the engine's libraries in a container
+of its own, from the new image and the sandbox mounted read-only: no service
+isolation check has looked at that container, so `scripts/deploy.sh` gives it
+the service's isolation itself (no network, a read-only file system with tmpfs
+for `/tmp` and the caches, no capabilities, `no-new-privileges`, a non-root
+user, the GPU through CDI only, the service's limits), bounds it in time and
+discards its output.
+
 The script `scripts/verify-sandbox.sh` (53 checks) verifies these properties on
 the running container (network interfaces, DNS resolution, outbound
 connections, visible files, capabilities, read-only file system). On a

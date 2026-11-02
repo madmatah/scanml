@@ -197,7 +197,13 @@ supervisor (python3, stdlib)          HTTP on the Unix socket, FIFO queue, lifec
   `scripts/deploy.sh`, and `scripts/setup.sh` at the first installation, run it
   in the new `ocr` container, once the container has passed
   `scripts/verify-sandbox.sh`, bounded in time, and keep only its exit status:
-  nothing the sandbox prints reaches the terminal or a log.
+  nothing the sandbox prints reaches the terminal or a log. Before its backup and
+  its restart, `scripts/deploy.sh` also runs it with the new image, in a
+  container of its own (`docker run`), with the `ocr` service's isolation,
+  environment and limits, the GPU through CDI, and the sandbox it will run
+  mounted read-only: an image that cannot run the sandbox is refused while
+  production still runs, and the deployment prints that `docker run`, through
+  `cat -v`, to show why.
 
 ## Engines
 

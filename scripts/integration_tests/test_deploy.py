@@ -11,6 +11,7 @@ import fcntl
 import json
 import os
 import re
+import shlex
 import sqlite3
 import unittest
 from collections.abc import Callable, Mapping
@@ -26,7 +27,11 @@ from installation_support import (
     COPIED,
     ENGINE_CHECK,
     ENGINE_CHECK_MODULE,
+    ENGINE_CHECK_MODULE_COMMAND,
+    NEW_API_IMAGE_ID,
+    NEW_OCR_IMAGE_ID,
     PRODUCTION_ENGINE_CHECK_STEPS,
+    RUNNING_OCR_IMAGE_ID,
     SANDBOX_OUTPUT,
     SANDBOX_TEXTS,
     TIMED_OUT_STATUS,
@@ -61,9 +66,28 @@ REHEARSAL_PROJECT = "scanmylib-review-test"
 REHEARSAL_ENVIRONMENT = MappingProxyType({"SCANMYLIB_DEPLOY_REHEARSAL": REHEARSAL_PROJECT})
 REHEARSED_APP_VERSION = "0.2.4-dev+g1a2b3c4d5e6f.dirty"
 COMPOSE_BUILD = r"^compose .* build (--[a-z-]+ )*api ocr$"
+SANDBOX_CHECK = rf"^run .* python3 -m {re.escape(ENGINE_CHECK_MODULE)}$"
+SANDBOX_CHECK_NAME = re.compile(r"scanmylib-sandbox-check-\d{8}-\d{6}")
+#: What keeps the check of the sandbox before the restart as isolated as the ocr service, after its --name.
+ISOLATED_SANDBOX_CHECK = (
+    "--network", "none", "--read-only", "--tmpfs", "/tmp", "--tmpfs", "/var/cache/ocr:mode=1777", "--cap-drop", "ALL",
+    "--security-opt", "no-new-privileges:true", "--user", f"{os.getuid()}:{os.getgid()}",
+    "--device", "nvidia.com/gpu=all",
+)  # fmt: skip
+#: The options of the ocr service's own settings that the check takes from compose.yaml.
+SERVICE_SETTINGS_OF_THE_CHECK = ("--env=HOME=/tmp/home", "--env=HF_HUB_OFFLINE=1", "--memory=17179869184",
+                                 "--pids-limit=4096")  # fmt: skip
+#: The ocr image that the deploy builds, which :latest names until a failure puts it back on :deployed.
+NEW_OCR_IMAGE: Rule = {
+    "match": r"^image inspect --format \{\{\.Id\}\} [a-z0-9-]+-ocr:latest$",
+    "stdout": f"{NEW_OCR_IMAGE_ID}\n",
+}
+#: What a successful deploy tags :deployed: the images that the containers it started run (build_running_sandbox_rules).
+NEW_API_IMAGE_TAGGED_DEPLOYED = f"tag {NEW_API_IMAGE_ID} scanmylib-api:deployed"
+NEW_OCR_IMAGE_TAGGED_DEPLOYED = f"tag {RUNNING_OCR_IMAGE_ID} scanmylib-ocr:deployed"
 RUNNING_IMAGES_TAGGED_DEPLOYED: list[Rule] = [
     {"match": r"^image inspect --format \{\{\.Id\}\} scanmylib-(api|ocr):deployed$", "stdout": "sha256:good\n"},
-    {"match": r"^inspect --format \{\{\.Image\}\} (api|ocr)id$", "stdout": "sha256:good\n"},
+    {"match": r"^inspect --format \{\{\.Image\}\} previous(api|ocr)id$", "stdout": "sha256:good\n"},
 ]
 
 
@@ -75,14 +99,16 @@ def build_running_images_never_tagged_deployed() -> list[Rule]:
                 "match": rf"^ps --all --quiet --filter label=com\.docker\.compose\.project=scanmylib "
                 rf"--filter label=com\.docker\.compose\.service={service} "
                 rf"--filter label=com\.docker\.compose\.oneoff=False$",
-                "stdout": f"{service}id\n",
+                "stdout": f"previous{service}id\n",
             },
-            {"match": rf"^inspect --format \{{\{{\.Image\}}\}} {service}id$", "stdout": f"sha256:old{service}\n"},
             {
-                "match": rf"^image inspect --format \{{\{{\.Id\}}\}} scanmylib-{service}:latest$",
+                "match": rf"^inspect --format \{{\{{\.Image\}}\}} previous{service}id$",
                 "stdout": f"sha256:old{service}\n",
             },
         ]
+    # The sandbox's :latest names the new image whenever it is read (NEW_OCR_IMAGE), since the deploy reads it again
+    # before the restart.
+    rules.append({"match": r"^image inspect --format \{\{\.Id\}\} scanmylib-api:latest$", "stdout": "sha256:oldapi\n"})
     return rules
 
 
@@ -94,10 +120,16 @@ def deploy(
 ) -> ScriptRun:
     production_data = installation.production_data
     sandbox = build_running_sandbox_rules(f"{production_data}/sandbox", str(production_data))
-    installation.answer_docker((rules or []) + build_running_images_never_tagged_deployed() + sandbox)
+    installation.answer_docker((rules or []) + build_running_images_never_tagged_deployed() + [NEW_OCR_IMAGE] + sandbox)
     return installation.run_script(
         checkout or installation.production_checkout, "deploy.sh", *arguments, timeout_seconds=120
     )
+
+
+def find_sandbox_check(calls: list[LoggedCall]) -> list[str]:
+    """The arguments of the check of the sandbox before the restart: raises StopIteration when it never ran, as
+    find_command does."""
+    return next(call["argv"] for call in calls if re.search(SANDBOX_CHECK, " ".join(call["argv"])))
 
 
 def list_backups(installation: Installation) -> list[str]:
@@ -225,6 +257,21 @@ def remove_the_sandbox_manifest(installation: Installation) -> None:
     (installation.production_data / "sandbox" / "MANIFEST.json").unlink()
 
 
+def put_a_comma_in_the_sandbox_path(installation: Installation) -> None:
+    sandbox = installation.production_data / "sand,box"
+    (installation.production_data / "sandbox").rename(sandbox)
+    env = installation.build_production_env(SANDBOX_DIR=str(sandbox), SANDBOX_SETUP_DIR=str(sandbox))
+    (installation.production_checkout / ".env").write_text(env)
+
+
+def run_the_sandbox_as_root(installation: Installation) -> None:
+    (installation.production_checkout / ".env").write_text(installation.build_production_env(SCANMYLIB_UID="0"))
+
+
+def run_the_sandbox_in_a_group_named_by_its_name(installation: Installation) -> None:
+    (installation.production_checkout / ".env").write_text(installation.build_production_env(SCANMYLIB_GID="root"))
+
+
 class WhenItIsADryRun(InstallationTestCase):
     production_checkout: ClassVar[Path]
     deploy_run: ClassVar[ScriptRun]
@@ -264,6 +311,10 @@ class WhenItIsADryRun(InstallationTestCase):
     def test_should_say_which_images_it_would_tag_deployed(self) -> None:
         self.assertIn("would run: docker tag sha256:oldapi scanmylib-api:deployed", self.deploy_run.stdout)
 
+    def test_should_say_that_it_would_tag_deployed_the_images_that_the_restarted_containers_run(self) -> None:
+        self.assertIn("would tag scanmylib-api:deployed on the image that api runs", self.deploy_run.stdout)
+        self.assertIn("would tag scanmylib-ocr:deployed on the image that ocr runs", self.deploy_run.stdout)
+
     def test_should_say_that_it_would_check_the_engine_s_environment_bounded_in_time_and_without_its_output(
         self,
     ) -> None:
@@ -271,6 +322,13 @@ class WhenItIsADryRun(InstallationTestCase):
             self.deploy_run.stdout,
             rf"would run: timeout --kill-after=10 \d+ docker exec <the ocr container> python3 -m "
             rf"{re.escape(ENGINE_CHECK_MODULE)}, its output discarded",
+        )
+
+    def test_should_say_that_it_would_check_the_new_image_against_the_sandbox_before_the_restart(self) -> None:
+        self.assertRegex(
+            self.deploy_run.stdout,
+            rf"would run: timeout --kill-after=10 \d+ docker run --rm --init --name {SANDBOX_CHECK_NAME.pattern} .* "
+            rf"scanmylib-ocr:latest python3 -m {re.escape(ENGINE_CHECK_MODULE)}\n",
         )
 
     def test_should_only_read_from_docker(self) -> None:
@@ -295,6 +353,7 @@ class WhenTheReleaseIsDeployedWithTheApp(InstallationTestCase):
     production_data: ClassVar[Path]
     deploy_run: ClassVar[ScriptRun]
     commands: ClassVar[list[str]]
+    sandbox_check: ClassVar[list[str]]
     compose_builds: ClassVar[list[str]]
     gradle_tasks: ClassVar[list[str]]
     temporary_entries: ClassVar[list[str]]
@@ -315,6 +374,7 @@ class WhenTheReleaseIsDeployedWithTheApp(InstallationTestCase):
         export_copy = installation.directory / "built"
         cls.deploy_run = deploy(installation, "--apk", rules=[{"match": COMPOSE_BUILD, "snapshot": str(export_copy)}])
         cls.commands = installation.read_docker_commands()
+        cls.sandbox_check = find_sandbox_check(installation.read_docker_calls())
         cls.compose_builds = [command for command in cls.commands if re.search(r"^compose .* build ", command)]
         cls.gradle_tasks = read_gradle_tasks(installation.read_docker_calls())
         cls.temporary_entries = sorted(path.name for path in installation.directory.iterdir())
@@ -377,7 +437,53 @@ class WhenTheReleaseIsDeployedWithTheApp(InstallationTestCase):
             command for command in before_the_restart if command.startswith(("run ", "build "))
         ]
         self.assertIn(self.find_build(), before_the_restart)
-        self.assertEqual(containers_and_image_builds, [])
+        self.assertEqual(containers_and_image_builds, [" ".join(self.sandbox_check)])
+
+    def test_should_check_the_new_image_against_the_sandbox_in_a_container_as_isolated_as_the_ocr_service(
+        self,
+    ) -> None:
+        self.assertEqual(
+            self.sandbox_check[: 5 + len(ISOLATED_SANDBOX_CHECK)],
+            ["run", "--rm", "--init", "--name", self.sandbox_check[4], *ISOLATED_SANDBOX_CHECK],
+        )
+
+    def test_should_name_the_container_of_the_check_after_the_stack_and_the_deploy(self) -> None:
+        self.assertRegex(self.sandbox_check[4], rf"^{SANDBOX_CHECK_NAME.pattern}$")
+
+    def test_should_mount_only_the_sandbox_read_only_and_import_the_engine_s_libraries_in_the_new_image(
+        self,
+    ) -> None:
+        self.assertEqual(
+            self.sandbox_check[-6:],
+            [
+                "--mount",
+                f"type=bind,src={self.production_data}/sandbox,dst=/opt/sandbox,readonly",
+                NEW_OCR_IMAGE_ID,
+                *ENGINE_CHECK_MODULE_COMMAND,
+            ],
+        )
+
+    def test_should_give_the_check_the_environment_and_the_limits_of_the_ocr_service(self) -> None:
+        service_options = self.sandbox_check[5 + len(ISOLATED_SANDBOX_CHECK) : -6]
+        self.assertEqual([option for option in SERVICE_SETTINGS_OF_THE_CHECK if option not in service_options], [])
+
+    def test_should_give_the_check_nothing_but_the_environment_and_the_limits_of_the_ocr_service(self) -> None:
+        service_options = self.sandbox_check[5 + len(ISOLATED_SANDBOX_CHECK) : -6]
+        self.assertNotEqual(service_options, [])
+        self.assertEqual(
+            [option for option in service_options if not option.startswith(("--env=", "--memory=", "--pids-limit="))],
+            [],
+        )
+
+    def test_should_check_the_sandbox_once_the_new_images_are_built(self) -> None:
+        self.assertGreater(self.commands.index(" ".join(self.sandbox_check)), self.commands.index(self.find_build()))
+
+    def test_should_check_the_sandbox_before_the_backup_so_that_a_failure_leaves_production_as_it_was(self) -> None:
+        stdout = self.deploy_run.stdout
+        self.assertLess(stdout.index("$ timeout --kill-after=10 "), stdout.index("Backup of the state"))
+
+    def test_should_show_that_it_bounds_the_check_of_the_sandbox_in_time(self) -> None:
+        self.assertRegex(self.deploy_run.stdout, r"\$ timeout --kill-after=10 \d+ docker run --rm --init ")
 
     def test_should_build_the_release_app_without_its_tests_and_lint_since_ci_ran_them_on_the_release(self) -> None:
         self.assertEqual(self.gradle_tasks, ["assembleRelease"])
@@ -431,11 +537,17 @@ class WhenTheReleaseIsDeployedWithTheApp(InstallationTestCase):
         self.assertLess(tag_index, self.commands.index(self.find_build()))
 
     def test_should_tag_the_new_api_image_deployed_once(self) -> None:
-        self.assertEqual(self.commands.count("tag scanmylib-api:latest scanmylib-api:deployed"), 1)
+        self.assertEqual(self.commands.count(NEW_API_IMAGE_TAGGED_DEPLOYED), 1)
+
+    def test_should_tag_deployed_the_images_its_containers_run_whatever_latest_names_by_then(self) -> None:
+        tagged = [
+            command for command in self.commands if re.fullmatch(r"tag \S+ scanmylib-(api|ocr):deployed", command)
+        ]
+        self.assertEqual(tagged[-2:], [NEW_API_IMAGE_TAGGED_DEPLOYED, NEW_OCR_IMAGE_TAGGED_DEPLOYED])
 
     def test_should_tag_the_new_images_deployed_once_they_pass_the_isolation_check(self) -> None:
         last_check_index = max(self.find_isolation_check_indexes())
-        tag_index = self.commands.index("tag scanmylib-api:latest scanmylib-api:deployed")
+        tag_index = self.commands.index(NEW_API_IMAGE_TAGGED_DEPLOYED)
         self.assertGreater(tag_index, last_check_index)
 
     def test_should_check_the_engine_s_environment_in_the_new_sandbox(self) -> None:
@@ -449,8 +561,7 @@ class WhenTheReleaseIsDeployedWithTheApp(InstallationTestCase):
 
     def test_should_tag_the_new_images_deployed_once_the_engine_s_environment_passed(self) -> None:
         tag_indexes = [
-            self.commands.index(f"tag scanmylib-{service}:latest scanmylib-{service}:deployed")
-            for service in ("api", "ocr")
+            self.commands.index(command) for command in (NEW_API_IMAGE_TAGGED_DEPLOYED, NEW_OCR_IMAGE_TAGGED_DEPLOYED)
         ]
         self.assertGreater(min(tag_indexes), self.commands.index(ENGINE_CHECK))
 
@@ -458,12 +569,12 @@ class WhenTheReleaseIsDeployedWithTheApp(InstallationTestCase):
         app_build_index = min(
             index for index, command in enumerate(self.commands) if "scanmylib-android-build" in command
         )
-        tag_index = self.commands.index("tag scanmylib-api:latest scanmylib-api:deployed")
+        tag_index = self.commands.index(NEW_API_IMAGE_TAGGED_DEPLOYED)
         self.assertLess(tag_index, app_build_index)
 
     def test_should_tag_the_new_sandbox_image_deployed_once_it_runs(self) -> None:
         up_index = self.find_command_index(" up -d --no-build --wait")
-        self.assertIn("tag scanmylib-ocr:latest scanmylib-ocr:deployed", self.commands[up_index:])
+        self.assertIn(NEW_OCR_IMAGE_TAGGED_DEPLOYED, self.commands[up_index:])
 
     def test_should_write_one_log(self) -> None:
         self.assertEqual(len(self.logs), 1)
@@ -492,6 +603,41 @@ class WhenLatestWasRebuiltSinceTheContainersStarted(InstallationTestCase):
 
     def test_should_tag_deployed_the_image_that_the_containers_run(self) -> None:
         self.assertIn("would run: docker tag sha256:oldapi scanmylib-api:deployed", self.deploy_run.stdout)
+
+
+class WhenTheImageThatTheRestartedApiRunsCannotBeRead(InstallationTestCase):
+    deploy_run: ClassVar[ScriptRun]
+    commands_after_the_restart: ClassVar[list[str]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        installation = make_installation(cls)
+        start_fake_api(cls, installation.production_api_port)
+        no_api_container: list[Rule] = [{"match": r" ps -q api$", "stdout": ""}]
+        cls.deploy_run = deploy(installation, rules=no_api_container)
+        commands = installation.read_docker_commands()
+        up_index = commands.index(find_command(commands, " up -d --no-build --wait"))
+        cls.commands_after_the_restart = commands[up_index:]
+
+    def test_should_succeed_since_the_new_release_runs(self) -> None:
+        self.assertEqual(self.deploy_run.returncode, 0, self.deploy_run.output)
+
+    def test_should_warn_that_deployed_still_names_the_previous_api_image(self) -> None:
+        self.assertIn(
+            "warning: cannot read the image that api runs: scanmylib-api:deployed still names the previous image",
+            self.deploy_run.stdout,
+        )
+
+    def test_should_never_tag_the_api_image_deployed_once_restarted(self) -> None:
+        tagged = [
+            command
+            for command in self.commands_after_the_restart
+            if re.fullmatch(r"tag \S+ scanmylib-api:deployed", command)
+        ]
+        self.assertEqual(tagged, [])
+
+    def test_should_still_tag_deployed_the_image_that_the_sandbox_runs(self) -> None:
+        self.assertIn(NEW_OCR_IMAGE_TAGGED_DEPLOYED, self.commands_after_the_restart)
 
 
 class WhenTheBuildFails(InstallationTestCase):
@@ -603,7 +749,7 @@ class WhenTheApiReportsAnotherVersionAfterTheRestart(InstallationTestCase):
         self.assertIn(f"mv {production_data}/state {production_data}/state.failed-", self.deploy_run.stdout)
 
     def test_should_never_tag_the_new_images_deployed(self) -> None:
-        self.assertNotIn("tag scanmylib-api:latest scanmylib-api:deployed", self.commands)
+        self.assertNotIn(NEW_API_IMAGE_TAGGED_DEPLOYED, self.commands)
 
     def test_should_never_tag_the_release(self) -> None:
         self.assertEqual(self.tags, RELEASE_TAGS_ALONE)
@@ -626,7 +772,7 @@ class WhenDeployedNamesWhatRunsAndTheRestartFails(InstallationTestCase):
         self.assertIn('DEPLOY FAILED during the step "restart"', self.deploy_run.stdout)
 
     def test_should_keep_deployed_on_the_images_that_ran_for_a_rollback(self) -> None:
-        self.assertNotIn("tag scanmylib-api:latest scanmylib-api:deployed", self.commands)
+        self.assertNotIn(NEW_API_IMAGE_TAGGED_DEPLOYED, self.commands)
 
     def test_should_tag_no_image_by_its_id(self) -> None:
         self.assertEqual([command for command in self.commands if command.startswith("tag sha256:")], [])
@@ -654,11 +800,11 @@ class WhenDeployedNamesWhatRunsAndADeploySucceedsAfterAFailedOne(InstallationTes
         self.assertEqual(self.deploy_run.returncode, 0, self.deploy_run.output)
 
     def test_should_tag_the_new_api_image_deployed_once(self) -> None:
-        self.assertEqual(self.commands.count("tag scanmylib-api:latest scanmylib-api:deployed"), 1)
+        self.assertEqual(self.commands.count(NEW_API_IMAGE_TAGGED_DEPLOYED), 1)
 
     def test_should_tag_the_new_images_deployed_only_once_they_run(self) -> None:
         up_index = self.commands.index(find_command(self.commands, " up -d --no-build"))
-        self.assertGreater(self.commands.index("tag scanmylib-api:latest scanmylib-api:deployed"), up_index)
+        self.assertGreater(self.commands.index(NEW_API_IMAGE_TAGGED_DEPLOYED), up_index)
 
 
 class WhenDeployedLagsBehindWhatRuns(InstallationTestCase):
@@ -722,7 +868,7 @@ class WhenTheAppFailsToBuild(InstallationTestCase):
         self.assertIn("its images tagged :deployed", self.deploy_run.stdout)
 
     def test_should_have_tagged_the_new_images_deployed_since_they_run(self) -> None:
-        self.assertIn("tag scanmylib-api:latest scanmylib-api:deployed", self.commands)
+        self.assertIn(NEW_API_IMAGE_TAGGED_DEPLOYED, self.commands)
 
     def test_should_never_tag_the_release(self) -> None:
         self.assertEqual(self.tags, RELEASE_TAGS_ALONE)
@@ -762,6 +908,155 @@ class WhenTheApiDoesNotOfferTheNewApp(InstallationTestCase):
         self.assertEqual(self.tags, dict.fromkeys(self.offered_apps, RELEASE_TAGS_ALONE))
 
 
+class WhenLatestNamesAnotherImageOnceTheNewImageIsChecked(InstallationTestCase):
+    deploy_run: ClassVar[ScriptRun]
+    commands: ClassVar[list[str]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        installation = make_installation(cls)
+        start_fake_api(cls, installation.production_api_port)
+        latest_moved: list[Rule] = [
+            *RUNNING_IMAGES_TAGGED_DEPLOYED,
+            {**NEW_OCR_IMAGE, "max_calls": 1},
+            {"match": NEW_OCR_IMAGE["match"], "stdout": "sha256:rebuilt\n"},
+        ]
+        cls.deploy_run = deploy(installation, rules=latest_moved)
+        cls.commands = installation.read_docker_commands()
+
+    def test_should_refuse_to_restart_on_an_image_that_the_sandbox_s_check_did_not_pass(self) -> None:
+        self.assertNotEqual(self.deploy_run.returncode, 0)
+        self.assertIn("not the image checked against the sandbox", self.deploy_run.stdout)
+
+    def test_should_say_that_production_is_unchanged(self) -> None:
+        self.assertIn("Production is unchanged", self.deploy_run.stdout)
+
+    def test_should_start_nothing(self) -> None:
+        self.assertEqual([command for command in self.commands if " up " in command], [])
+
+    def test_should_never_tag_the_new_images_deployed(self) -> None:
+        self.assertNotIn(NEW_OCR_IMAGE_TAGGED_DEPLOYED, self.commands)
+
+
+class WhenTheCheckOfTheSandboxCannotTakeASettingOfTheOcrService(InstallationTestCase):
+    deploy_run: ClassVar[ScriptRun]
+    writing_calls: ClassVar[list[list[str]]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        installation = make_installation(cls)
+        start_fake_api(cls, installation.production_api_port)
+        # What docker compose resolves for a variable listed without a value, which it would take from the caller.
+        variable_without_a_value = {"services": {"ocr": {"environment": {"HOME": None}}}}
+        resolved: list[Rule] = [
+            {"match": r"^compose .* config --format json$", "stdout": json.dumps(variable_without_a_value)}
+        ]
+        cls.deploy_run = deploy(installation, rules=resolved)
+        cls.writing_calls = list_writing_calls(installation.read_docker_calls())
+
+    def test_should_refuse_and_say_why(self) -> None:
+        self.assertNotEqual(self.deploy_run.returncode, 0)
+        self.assertIn("the variable HOME of the ocr service has no value", self.deploy_run.output)
+
+    def test_should_refuse_before_the_hour_of_a_build_or_an_installation(self) -> None:
+        self.assertEqual(self.writing_calls, [])
+
+
+class WhenTheNewImageFailsTheCheckOfTheSandbox(InstallationTestCase):
+    deploy_run: ClassVar[ScriptRun]
+    commands: ClassVar[list[str]]
+    sandbox_check: ClassVar[list[str]]
+    backups: ClassVar[list[str]]
+    logs: ClassVar[list[str]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        installation = make_installation(cls)
+        start_fake_api(cls, installation.production_api_port)
+        broken_sandbox: list[Rule] = [
+            {"match": SANDBOX_CHECK, "exit": 1, "stdout": SANDBOX_OUTPUT, "stderr": SANDBOX_OUTPUT}
+        ]
+        cls.deploy_run = deploy(installation, rules=broken_sandbox)
+        cls.commands = installation.read_docker_commands()
+        cls.sandbox_check = find_sandbox_check(installation.read_docker_calls())
+        cls.backups = list_backups(installation)
+        cls.logs = read_logs(installation)
+
+    def find_diagnostic(self) -> list[str]:
+        line = next(line for line in self.deploy_run.stdout.splitlines() if line.startswith("  docker run "))
+        return shlex.split(line)
+
+    def test_should_fail_at_the_check_of_the_sandbox(self) -> None:
+        self.assertNotEqual(self.deploy_run.returncode, 0)
+        self.assertIn('DEPLOY FAILED during the step "check"', self.deploy_run.stdout)
+
+    def test_should_say_that_production_is_unchanged(self) -> None:
+        self.assertIn("Production is unchanged", self.deploy_run.stdout)
+
+    def test_should_tag_latest_the_images_that_production_runs_again(self) -> None:
+        self.assertIn("tag scanmylib-api:deployed scanmylib-api:latest", self.commands)
+        self.assertIn("tag scanmylib-ocr:deployed scanmylib-ocr:latest", self.commands)
+
+    def test_should_back_up_nothing(self) -> None:
+        self.assertEqual(self.backups, [])
+
+    def test_should_start_nothing(self) -> None:
+        self.assertEqual([command for command in self.commands if " up " in command], [])
+
+    def test_should_never_tag_the_new_images_deployed(self) -> None:
+        self.assertNotIn(NEW_OCR_IMAGE_TAGGED_DEPLOYED, self.commands)
+
+    def test_should_print_the_check_it_ran_as_one_command_that_shows_why_through_cat_v(self) -> None:
+        self.assertEqual(self.find_diagnostic(), ["docker", *self.sandbox_check, "2>&1", "|", "cat", "-v"])
+
+    def test_should_name_the_refused_image_by_its_id_since_latest_names_the_previous_one_again_by_then(self) -> None:
+        diagnostic = self.find_diagnostic()
+        self.assertEqual(diagnostic[diagnostic.index("python3") - 1], NEW_OCR_IMAGE_ID)
+
+    def test_should_show_nothing_the_sandbox_printed_since_it_is_untrusted(self) -> None:
+        self.assertEqual([text[:40] for text in SANDBOX_TEXTS if text in self.deploy_run.output], [])
+
+    def test_should_log_nothing_the_sandbox_printed(self) -> None:
+        self.assertEqual(len(self.logs), 1)
+        self.assertEqual([text[:40] for text in SANDBOX_TEXTS if text in self.logs[0]], [])
+
+
+class WhenTheCheckOfTheSandboxDoesNotFinishInTime(InstallationTestCase):
+    deploy_run: ClassVar[ScriptRun]
+    commands: ClassVar[list[str]]
+    sandbox_check: ClassVar[list[str]]
+    backups: ClassVar[list[str]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        installation = make_installation(cls)
+        start_fake_api(cls, installation.production_api_port)
+        cls.deploy_run = deploy(installation, rules=[{"match": SANDBOX_CHECK, "exit": TIMED_OUT_STATUS}])
+        cls.commands = installation.read_docker_commands()
+        cls.sandbox_check = find_sandbox_check(installation.read_docker_calls())
+        cls.backups = list_backups(installation)
+
+    def test_should_fail_at_the_check_of_the_sandbox(self) -> None:
+        self.assertNotEqual(self.deploy_run.returncode, 0)
+        self.assertIn('DEPLOY FAILED during the step "check"', self.deploy_run.stdout)
+
+    def test_should_remove_the_container_that_the_timeout_left_by_its_name(self) -> None:
+        removal_index = self.commands.index(f"rm -f {self.sandbox_check[4]}")
+        self.assertGreater(removal_index, self.commands.index(" ".join(self.sandbox_check)))
+
+    def test_should_say_that_production_is_unchanged(self) -> None:
+        self.assertIn("Production is unchanged", self.deploy_run.stdout)
+
+    def test_should_tag_latest_the_images_that_production_runs_again(self) -> None:
+        self.assertIn("tag scanmylib-ocr:deployed scanmylib-ocr:latest", self.commands)
+
+    def test_should_back_up_nothing(self) -> None:
+        self.assertEqual(self.backups, [])
+
+    def test_should_start_nothing(self) -> None:
+        self.assertEqual([command for command in self.commands if " up " in command], [])
+
+
 class WhenTheSandboxIsNotIsolated(InstallationTestCase):
     deploy_run: ClassVar[ScriptRun]
     commands: ClassVar[list[str]]
@@ -786,13 +1081,14 @@ class WhenTheSandboxIsNotIsolated(InstallationTestCase):
         self.assertTrue(any(command.endswith(" stop ocr") for command in compose_commands), compose_commands)
 
     def test_should_never_tag_the_new_images_deployed(self) -> None:
-        self.assertNotIn("tag scanmylib-api:latest scanmylib-api:deployed", self.commands)
+        self.assertNotIn(NEW_API_IMAGE_TAGGED_DEPLOYED, self.commands)
 
     def test_should_never_tag_the_release(self) -> None:
         self.assertEqual(self.tags, RELEASE_TAGS_ALONE)
 
-    def test_should_not_check_the_engine_of_a_sandbox_that_is_not_isolated(self) -> None:
-        self.assertEqual([command for command in self.commands if ENGINE_CHECK_MODULE in command], [])
+    def test_should_not_check_the_engine_in_the_sandbox_that_is_not_isolated(self) -> None:
+        execs = [command for command in self.commands if command.startswith("exec ")]
+        self.assertEqual([command for command in execs if ENGINE_CHECK_MODULE in command], [])
 
 
 class WhenTheEngineEnvironmentIsBroken(InstallationTestCase):
@@ -835,8 +1131,8 @@ class WhenTheEngineEnvironmentIsBroken(InstallationTestCase):
         self.assertTrue(any(command.endswith(" stop ocr") for command in compose_commands), compose_commands)
 
     def test_should_never_tag_the_new_images_deployed(self) -> None:
-        self.assertNotIn("tag scanmylib-api:latest scanmylib-api:deployed", self.commands)
-        self.assertNotIn("tag scanmylib-ocr:latest scanmylib-ocr:deployed", self.commands)
+        self.assertNotIn(NEW_API_IMAGE_TAGGED_DEPLOYED, self.commands)
+        self.assertNotIn(NEW_OCR_IMAGE_TAGGED_DEPLOYED, self.commands)
 
     def test_should_say_how_to_tag_latest_the_images_that_production_ran(self) -> None:
         self.assertIn("docker tag scanmylib-api:deployed scanmylib-api:latest", self.deploy_run.stdout)
@@ -871,8 +1167,8 @@ class WhenTheCheckOfTheEngineEnvironmentDoesNotFinishInTime(InstallationTestCase
         self.assertTrue(any(command.endswith(" stop ocr") for command in compose_commands), compose_commands)
 
     def test_should_never_tag_the_new_images_deployed(self) -> None:
-        self.assertNotIn("tag scanmylib-api:latest scanmylib-api:deployed", self.commands)
-        self.assertNotIn("tag scanmylib-ocr:latest scanmylib-ocr:deployed", self.commands)
+        self.assertNotIn(NEW_API_IMAGE_TAGGED_DEPLOYED, self.commands)
+        self.assertNotIn(NEW_OCR_IMAGE_TAGGED_DEPLOYED, self.commands)
 
     def test_should_never_tag_the_release(self) -> None:
         self.assertEqual(self.tags, RELEASE_TAGS_ALONE)
@@ -925,6 +1221,11 @@ class WhenAPreconditionDoesNotHold(InstallationTestCase):
             "a development .env": BrokenPrecondition(write_a_development_env, "not production's"),
             "an empty .env": BrokenPrecondition(empty_the_env, "not production's"),
             "no OCR sandbox": BrokenPrecondition(remove_the_sandbox_manifest, "no OCR sandbox in SANDBOX_DIR"),
+            "a sandbox path with a comma": BrokenPrecondition(put_a_comma_in_the_sandbox_path, "without a comma"),
+            "the sandbox run as root": BrokenPrecondition(run_the_sandbox_as_root, "SCANMYLIB_UID in .env must be"),
+            "a group named by its name": BrokenPrecondition(
+                run_the_sandbox_in_a_group_named_by_its_name, "SCANMYLIB_GID in .env must be"
+            ),
         }
     )
     deploy_runs: ClassVar[dict[str, ScriptRun]]
@@ -1262,7 +1563,10 @@ class WhenRehearsedOnAThrowawayStack(InstallationTestCase):
         self.assertEqual([command for command in production_images if "scanmylib-review" not in command], [])
 
     def test_should_tag_the_images_of_the_stack_deployed(self) -> None:
-        self.assertIn(f"tag {REHEARSAL_PROJECT}-api:latest {REHEARSAL_PROJECT}-api:deployed", self.commands)
+        self.assertIn(f"tag {NEW_API_IMAGE_ID} {REHEARSAL_PROJECT}-api:deployed", self.commands)
+
+    def test_should_tag_deployed_the_sandbox_image_it_built_since_the_fake_ocr_runs_none(self) -> None:
+        self.assertIn(f"tag {REHEARSAL_PROJECT}-ocr:latest {REHEARSAL_PROJECT}-ocr:deployed", self.commands)
 
     def test_should_print_its_commands_as_those_of_dev_sh(self) -> None:
         self.assertIn("$ scripts/dev.sh compose up -d --no-build", self.rehearsal.stdout)

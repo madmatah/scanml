@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from .. import API_LEVEL, __version__
 from ..application.catalog import QueueCounts
 from ..application.ocr_engine import EngineStatus, GpuStatus
+from ..application.status import report_ocr_status
 from ..auth import SESSION_COOKIE, SESSION_MAX_AGE_S
 from ..published_apk import APK_DOWNLOAD_PATH, published_apk
 from ..qr import qr_svg
@@ -99,10 +100,11 @@ def _build_queue_counts_json(queue_counts: QueueCounts) -> dict[str, int]:
 
 @protected.get("/api/status")
 async def status(services: ServicesDep) -> dict[str, object]:
+    ocr_status = await report_ocr_status(services.ocr, services.library)
     return {
         "version": __version__,
-        "ocr": _build_engine_status_json(await services.ocr.read_status()),
-        "queue": _build_queue_counts_json(services.library.count_queue()),
+        "ocr": _build_engine_status_json(ocr_status.engine_status),
+        "queue": _build_queue_counts_json(ocr_status.queue_counts),
         "library_dir": services.settings.library_host_path,
     }
 

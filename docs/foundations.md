@@ -156,7 +156,7 @@ them. The last row lists the scripts that the skills keep, which belong to no un
 | api | `domain/pages` | A page's rules: its key, its OCR attempts and the summary of its OCR, the orientation the sandbox detects | Domain |
 | api | `domain/records`, `domain/text` | Typed records and the inputs of library operations; slugs and collation | Domain |
 | api | `domain/timestamps` | Moments written as text, in the API and in the names of keys and folders | Domain |
-| api | `application/library`, `application/ocr_loop`, `application/publisher`, `application/debounce` | Documents and pages kept in sync with the library; the single OCR loop; publication of the library files, and the sections of a document's preview | Application |
+| api | `application/library`, `application/ocr_loop`, `application/publisher`, `application/debounce`, `application/status` | Documents and pages kept in sync with the library; the single OCR loop; publication of the library files, and the sections of a document's preview; the status of the OCR, its engine's and its queue's | Application |
 | api | `application/clock`, `application/scan_images`, `application/ocr_engine`, `application/library_files`, `application/thumbnails`, `application/catalog` | The ports of the clock, of the images of the scans, of the OCR engine, of the library's files, of the pages' thumbnails and of the catalog of documents and pages | Application |
 | api | `domain/assemble` | Rendering of the library files | Domain |
 | api | `adapters/http_api/preview` | The HTML previews: their rendering, one at a time in a worker thread, and the URL of a document's files | Adapters |

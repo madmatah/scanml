@@ -149,7 +149,7 @@ def build_resolved_compose_config(layout: Layout, **changes: object) -> stack.Js
                 ],
             },
             "ocr": {
-                "build": {"context": f"{worktree}/ocr", "dockerfile": "Dockerfile"},
+                "build": {"context": f"{worktree}/ocr", "dockerfile": "Dockerfile", "target": "runtime"},
                 "image": "scanmylib-dev-ocr:latest",
                 "network_mode": "none",
                 "devices": [{"source": "nvidia.com/gpu=all", "target": "nvidia.com/gpu=all", "permissions": "rwm"}],
@@ -182,8 +182,8 @@ def build_resolved_compose_config(layout: Layout, **changes: object) -> stack.Js
                 "network_mode": "none",
             },
             "ocr-setup": {
-                "build": {"context": f"{worktree}/ocr", "dockerfile": "Dockerfile"},
-                "image": "scanmylib-dev-ocr:latest",
+                "build": {"context": f"{worktree}/ocr", "dockerfile": "Dockerfile", "target": "setup"},
+                "image": "scanmylib-dev-ocr-setup:latest",
                 "volumes": [
                     {
                         "type": "bind",
@@ -545,6 +545,9 @@ class TheIsolationProblemsFunctionWhenTheStackTakesWhatProductionOwns(unittest.T
         configs = {
             "production's project": build_resolved_compose_config(layout, name="scanmylib"),
             "an image of production's": build_resolved_compose_config_with_settings(layout, image="scanmylib-api:dev"),
+            "production's setup image": build_resolved_compose_config_with_settings(
+                layout, service="ocr-setup", image="scanmylib-ocr-setup:latest"
+            ),
             "a port range that holds production's port": build_resolved_compose_config_with_settings(
                 layout, ports=[{"target": 8765, "published": "8760-8770"}]
             ),
@@ -552,6 +555,7 @@ class TheIsolationProblemsFunctionWhenTheStackTakesWhatProductionOwns(unittest.T
         self.expected_problems = {
             "production's project": "the project is production's",
             "an image of production's": "the image scanmylib-api:dev is production's",
+            "production's setup image": "the image scanmylib-ocr-setup:latest is production's",
             "a port range that holds production's port": "publishes port 8765",
         }
         self.problems = {row: find_problems(layout, config=config) for row, config in configs.items()}

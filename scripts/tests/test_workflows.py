@@ -48,7 +48,7 @@ SCANNER_CONTAINER = (
 )  # fmt: skip
 IMAGE_COMMANDS = (
     ("build", "--iidfile", "$RUNNER_TEMP/api-image-id", "--target", "runtime", "server"),
-    ("build", "--iidfile", "$RUNNER_TEMP/sandbox-image-id", "ocr"),
+    ("build", "--iidfile", "$RUNNER_TEMP/sandbox-image-id", "--target", "runtime", "ocr"),
     ("save", "-o", "$images/api-image.tar", "$(< $RUNNER_TEMP/api-image-id)"),
     ("save", "-o", "$images/sandbox-image.tar", "$(< $RUNNER_TEMP/sandbox-image-id)"),
 )  # fmt: skip
@@ -855,7 +855,11 @@ class TheVulnerabilityScanWorkflowWhenItResolvesTheEnvironmentsOfTheSandbox(unit
         paddle_requirements = (OCR / "setup" / "requirements-paddle.in").read_text()
         self.workflow = workflow
         self.resolution_images = re.findall(r"^  SANDBOX_PYTHON_IMAGE: (\S+)$", workflow, re.MULTILINE)
-        self.sandbox_images = re.findall(r"^FROM (\S+)$", dockerfile, re.MULTILINE)
+        stages = re.findall(r"^FROM (\S+)(?: AS (\S+))?$", dockerfile, re.MULTILINE)
+        self.stage_count = len(stages)
+        self.sandbox_images = [
+            image for index, (image, _) in enumerate(stages) if image not in {name for _, name in stages[:index]}
+        ]
         self.resolution_uv_versions = re.findall(r"^  SANDBOX_UV_VERSION: (\S+)$", workflow, re.MULTILINE)
         self.sandbox_uv_versions = re.findall(r"\buv==(\S+)", dockerfile)
         self.installations = re.findall(r"^\s*uv pip install .*$", installer, re.MULTILINE)
@@ -870,13 +874,17 @@ class TheVulnerabilityScanWorkflowWhenItResolvesTheEnvironmentsOfTheSandbox(unit
             if line.strip() and not line.lstrip().startswith("#")
         ]
 
-    def test_should_resolve_in_the_base_image_of_the_sandbox(self) -> None:
+    def test_should_resolve_in_the_base_image_of_the_sandbox_the_one_stage_that_names_no_earlier_stage(self) -> None:
+        self.assertGreater(self.stage_count, 1)
         self.assertEqual(len(self.sandbox_images), 1)
         self.assertEqual(self.resolution_images, self.sandbox_images)
 
-    def test_should_resolve_with_the_uv_version_of_the_sandbox_s_image(self) -> None:
+    def test_should_resolve_with_the_uv_version_of_the_sandbox_s_setup_image(self) -> None:
         self.assertEqual(len(self.sandbox_uv_versions), 1)
         self.assertEqual(self.resolution_uv_versions, self.sandbox_uv_versions)
+
+    def test_should_scan_that_uv_by_its_version_since_the_scanned_image_of_the_sandbox_no_longer_holds_it(self) -> None:
+        self.assertIn('printf \'uv==%s\\n\' "$SANDBOX_UV_VERSION" > "$environments/uv.txt"', self.workflow)
 
     def test_should_resolve_every_requirements_file_of_the_sandbox_s_setup(self) -> None:
         self.assertIn('for requirements in "$GITHUB_WORKSPACE"/ocr/setup/requirements-*.in; do', self.workflow)

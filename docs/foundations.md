@@ -71,14 +71,14 @@ Notes:
   - `.github/workflows/release.yml` publishes a release once its pull request is merged, and is the only workflow that
     writes to the repository's contents: its tag and its GitHub release;
   - `.github/workflows/vulnerability-scan.yml` runs OSV-Scanner every week, by hand, and on a push to `main` that
-    changes what it scans, and reports to the repository's code scanning what Dependabot cannot see: GitHub's
-    dependency graph reads only the api's direct dependencies in `pyproject.toml`, the web UI's lockfile and the
-    actions. It scans the OCR sandbox's two environments, which it resolves from their requirements as a new
-    installation would that day, the Debian and Python packages of the api's and the sandbox's images, and the locks of
-    the gate's Python tools and of the app's libraries. Its upload job alone writes, the security events of code
-    scanning, and runs no command, so that no code the scan resolves, builds or runs holds a token that writes. It
-    reports and never blocks a pull request. Its resolution is the day's, while an installation holds what resolved the
-    day it was installed.
+    changes what it scans, and reports to the repository's code scanning what Dependabot cannot see: GitHub's dependency
+    graph reads only the api's direct dependencies in `pyproject.toml`, the web UI's lockfile and the actions. It scans
+    the OCR sandbox's two environments, which it resolves from their requirements as a new installation would that day,
+    and the uv that installs them, the Debian and Python packages of the api's image and of the image the sandbox runs,
+    and the locks of the gate's Python tools and of the app's libraries. Its upload job alone writes, the security
+    events of code scanning, and runs no command, so that no code the scan resolves, builds or runs holds a token that
+    writes. It reports and never blocks a pull request. Its resolution is the day's, while an installation holds what
+    resolved the day it was installed.
 - **The web UI has no build step:** the browser loads its modules as they are, and the api serves them. Its move to
   TypeScript and React, built by a bundler whose output names carry a hash of their content, is planned: those files can
   then be cached for good, and only the page that names them is revalidated, so a browser never mixes the modules of two
@@ -151,6 +151,7 @@ states the rules, and `docs/SECURITY.md` the threat model, the guarantees and th
 | Brand mark | the project's own drawing, an open book in scan corners: in teal on paper cream wherever the product's icon shows, and alone, in the theme's primary (app) or accent (web UI), on its screens; each unit holds its own copies, with the same path data, since a unit builds and tests only from its own tree |
 | Pairing and access | a random bearer token, shared by QR code; plain HTTP on the local network; remote use through a VPN |
 | Deployment | Docker Compose (`api`, `ocr`), restarted automatically with Docker; no official instance: each installation deploys the releases it chooses, with `scripts/deploy.sh` |
+| Sandbox images | two images on one base, built from `ocr/Dockerfile`: the setup image, which `ocr-setup` runs, holds uv and the installer, and the runtime image, which `ocr` runs, holds neither, so that the image that runs the untrusted engine all day carries no tool that only an installation needs, nor its advisories; the vulnerability scan watches uv by its version on PyPI, since it scans the runtime image only. uv's own image would be a new source, and leave the scan no PyPI version to read; uv mounted from the host would be a host install |
 | Sandbox upgrades | a release that needs a new sandbox is deployed with `scripts/deploy.sh --new-sandbox`, which installs it next to the running one while production runs, checks the new image against it, and swaps the two by renaming them at the restart, keeping the replaced one for a rollback: installing in place would leave production without OCR for the hour of downloads and with nothing to go back to; switching through `.env` would make a new writer of production's `.env`; a symbolic link would not recreate the container, and a later restart would switch silently; a separate script would be a second way to change production, while the image and the sandbox must switch at the same restart |
 | Releases | one version for the api and the app (`VERSION`), so that the app a PC offers always matches its api; a release is a pull request of its own, whose notes are drafted from the Conventional Commits since the last release (`scripts/release.py`) in the Keep a Changelog format, and a workflow publishes it once it is merged, so that a release is reviewed like any change and published by nothing but its merge |
 | Development | changes are made in worktrees and tried on a development stack and app (`fr.scanmylib.dev`) beside production; the scripts' guards protect production from misconfiguration, mistakes in a branch and compromised build dependencies, not from a deliberately malicious branch (`docs/SECURITY.md`) |
@@ -218,7 +219,7 @@ scanmylib/
 │   ├── API.md                   # The HTTP API of the app and the web UI
 │   ├── OCR_SANDBOX.md           # The protocol between the api and the sandbox
 │   └── SECURITY.md              # Threat model, guarantees, residual risks
-├── ocr/                         # The OCR sandbox: its image, its setup, its supervisor and engines, benchmarks
+├── ocr/                         # The OCR sandbox: its images, its setup, its supervisor and engines, benchmarks
 ├── scripts/                     # Install, develop, check, release and deploy; their tests
 ├── server/                      # The api, and the web UI it serves (scanmylib/web/)
 ├── .env.example                 # The settings of a stack, with their defaults

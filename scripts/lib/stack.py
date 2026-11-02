@@ -44,8 +44,8 @@ the first merges them into the settings) together with the .env of the stack, an
 * production's project, images and published ports. Image names are compared as Docker reads
   them ("scanmylib-api", "docker.io/library/scanmylib-api" and
   "index.docker.io/library/scanmylib-api:latest" are the same image), and every image must be the
-  stack's own, <IMAGE_PREFIX>-api:latest or <IMAGE_PREFIX>-ocr:latest, with IMAGE_PREFIX made of
-  lowercase letters, digits and "-";
+  stack's own, <IMAGE_PREFIX>-api:latest, <IMAGE_PREFIX>-ocr:latest or
+  <IMAGE_PREFIX>-ocr-setup:latest, with IMAGE_PREFIX made of lowercase letters, digits and "-";
 * any service setting outside SERVICE_KEYS (privileged, cap_add, volumes_from, use_api_socket,
   pid, ipc, uts, userns_mode, cgroup, labels, env_file, label_file...), devices other than the
   GPU (CDI nvidia.com/gpu=...), security options other than no-new-privileges, any network_mode
@@ -150,7 +150,7 @@ SYSTEM_DIRS = (
 SHARED_DIRS = ("/tmp",)
 
 #: The images a stack builds: <IMAGE_PREFIX>-<name>:latest.
-STACK_IMAGES = ("api", "ocr")
+STACK_IMAGES = ("api", "ocr", "ocr-setup")
 #: The service settings a stack other than production may use, as `docker compose config
 #: --format json` writes them. Anything else is refused: privileged, cap_add, volumes_from,
 #: use_api_socket, pid, ipc, uts, userns_mode, cgroup, labels, env_file, label_file, sysctls,

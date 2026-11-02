@@ -5,7 +5,8 @@
 #   test     deps + pytest + the test suite:  docker build --target test ...
 #   project  the repository's VERSION file (see below)
 #   runtime  the production image (default, last stage): non-root, no build
-#            tools, runs with a read-only root filesystem and a tmpfs /tmp.
+#            tools and no pip, runs with a read-only root filesystem and a
+#            tmpfs /tmp.
 #
 # Wheels only: building a package from its source would fetch its build
 # dependencies without checking their hashes.
@@ -63,6 +64,12 @@ RUN groupadd --gid "${GID}" scanmylib \
  && mkdir -p /library /state /run/scanmylib /app-dist \
  && chown "${UID}:${GID}" /library /state /run/scanmylib
 COPY --from=deps /opt/venv /opt/venv
+# Nothing runs pip once the packages are in: left in, it would only add its
+# advisories to the vulnerability scan, and so would the wheel of pip that
+# ensurepip keeps to install it again.
+RUN python -m pip uninstall --yes pip \
+ && /usr/local/bin/python3 -m pip uninstall --yes pip \
+ && rm /usr/local/lib/python3.12/ensurepip/_bundled/pip-*.whl
 COPY scanmylib /app/scanmylib
 RUN python -m compileall -q /app/scanmylib
 COPY --from=project /VERSION /app/VERSION

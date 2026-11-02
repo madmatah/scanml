@@ -150,7 +150,7 @@ them. The last row lists the scripts that the skills keep, which belong to no un
 
 | Unit | Source files | Responsibility | Layer |
 |---|---|---|---|
-| api | `__main__`, `app`, `config`, `version` | Entry point, wiring of the services and routes, settings from the environment, the version of the build | Composition root |
+| api | `__main__`, `app`, `config`, `version` | Entry point, wiring of the services into the HTTP API, settings from the environment, the version of the build | Composition root |
 | api | `domain/ordering` | Page numbering, reading order, duplicates and coverage of a document | Domain |
 | api | `domain/documents` | A document's rules: what a new one takes, the slug of its folder, the summary of its layout | Domain |
 | api | `domain/pages` | A page's rules: its key, its OCR attempts and the summary of its OCR, the orientation the sandbox detects | Domain |
@@ -168,7 +168,7 @@ them. The last row lists the scripts that the skills keep, which belong to no un
 | api | `adapters/filesystem/library_files`, `adapters/filesystem/thumbnails`, `adapters/filesystem/token_file`, `adapters/filesystem/published_apk` | The library's files, atomic writes and trash; the thumbnails, a cache in the state directory; the API token, in a file of the state directory that only its owner reads; the published APK's metadata | Adapters |
 | api | `adapters/ocr_sandbox/client`, `adapters/ocr_sandbox/results`, `adapters/ocr_sandbox/sanitize`, `adapters/ocr_sandbox/engine` | The OCR sandbox: the client of its protocol, the validation of its untrusted results, the sanitizer of their Markdown, and the OCR engine over them, which times the reading of a page and validates the untrusted status of the sandbox | Adapters |
 | api | `adapters/zip_archives`, `adapters/qr_codes` | Zip archives, QR codes | Adapters |
-| api | `adapters/http_api/documents`, `adapters/http_api/pages`, `adapters/http_api/system`, `adapters/http_api/web`, `adapters/http_api/schemas`, `adapters/http_api/serializers`, `adapters/http_api/dependencies`, `adapters/http_api/authentication`, `adapters/http_api/middleware` | HTTP routes, the times that clients send, the credential of each request, security headers and body limits | Adapters |
+| api | `adapters/http_api/documents`, `adapters/http_api/pages`, `adapters/http_api/system`, `adapters/http_api/web`, `adapters/http_api/schemas`, `adapters/http_api/serializers`, `adapters/http_api/dependencies`, `adapters/http_api/authentication`, `adapters/http_api/middleware`, `adapters/http_api/error_answers`, `adapters/http_api/fastapi_application` | HTTP routes, the times that clients send, the credential of each request, security headers and body limits, the answers to errors, and the FastAPI application that assembles them | Adapters |
 | api | `devtools/fake_ocr` | The fake OCR sandbox of the development stack and the tests | Test support |
 | web UI | `main.js` | Entry point | Composition root |
 | web UI | `lib/order.js`, `lib/reading.js`, `lib/math.js`, `lib/format.js`, `lib/labels.js` | Ordering, reading view, formulas, formatting and labels | Domain |

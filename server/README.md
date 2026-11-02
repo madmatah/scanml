@@ -35,6 +35,7 @@ Everything runs in Docker; nothing is installed on the host.
 | `application/access.py`, `application/web_sessions.py`, `adapters/sqlite/web_sessions.py` | who may use the api: the token, compared in constant time, and the web sessions opened with it, which end on logout, after a year, or when the token changes; the port of the web sessions, and their table in the SQLite state, which holds the hash of each session's id, never the id |
 | `adapters/http_api/authentication.py`, `adapters/http_api/middleware.py` | the credential of a request: the bearer token, or the session cookie with the CSRF header on a change; security headers, body limits |
 | `adapters/http_api/documents.py`, `adapters/http_api/pages.py`, `adapters/http_api/system.py`, `adapters/http_api/web.py`, `adapters/http_api/schemas.py`, `adapters/http_api/serializers.py`, `adapters/http_api/dependencies.py` | HTTP routes, their request bodies and JSON, and the services and settings they share |
+| `adapters/http_api/error_answers.py`, `adapters/http_api/fastapi_application.py` | the answers to errors: a domain error as its status, an invalid request without the input it holds; the FastAPI application: its routes, its static files and its middlewares, in their order, without generated documentation |
 | `devtools/fake_ocr.py` | fake sandbox for tests and UI development |
 
 ## Build and test

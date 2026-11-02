@@ -1,7 +1,7 @@
 """Turns records into the library files read by agents, and into the sections a document's preview shows.
 
 Methods doing file I/O are meant to run in a worker thread: they only use the
-records they are given, never the database.
+records they are given, never the catalog.
 """
 
 from __future__ import annotations
@@ -50,7 +50,7 @@ def _entry(page: PageRecord) -> assemble.PageEntry:
 
 
 def _reading_order(pages: Sequence[PageRecord]) -> list[assemble.PageEntry]:
-    """Entries of the pages of document.md; `pages` must be in the API order (by rank)."""
+    """Entries of the pages of document.md; `pages` must be in the catalog's order (by rank)."""
     return [_entry(page) for page in pages if page.in_document]
 
 
@@ -66,7 +66,7 @@ class Publisher:
         self._clock = clock
 
     def write_document(self, document: DocumentRecord, pages: Sequence[PageRecord]) -> None:
-        """Rewrite document.md and document.json (`pages` in the API order, by rank)."""
+        """Rewrite document.md and document.json (`pages` in the catalog's order, by rank)."""
         reading = _reading_order(pages)
         sections = assemble.document_sections(reading, numbered=any(e.number for e in reading))
         source = assemble.source_label([e.engine for e in reading if e.engine])

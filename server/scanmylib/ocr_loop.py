@@ -1,12 +1,4 @@
-"""The single background OCR loop: queued pages → sandbox → library.
-
-Behavior (docs/API.md): pages are processed FIFO by upload time; when the
-sandbox is unavailable (no socket, 503) the page goes back to the queue
-without counting a failure and the loop waits with exponential backoff;
-processing errors (500) are retried at most MAX_OCR_RETRIES times; refused
-pages (400/413/415) and invalid results fail immediately. New work wakes the
-loop and pre-warms the engine with POST /v1/load.
-"""
+"""The single background OCR loop: queued pages → OCR engine → library."""
 
 from __future__ import annotations
 

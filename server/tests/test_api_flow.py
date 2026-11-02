@@ -24,8 +24,8 @@ from PIL import Image
 
 from scanmylib.adapters.filesystem.library_files import FilesystemLibrary
 from scanmylib.adapters.http_api import preview
+from scanmylib.application.library import LibraryService
 from scanmylib.devtools.fake_ocr import ParseRequest
-from scanmylib.library import LibraryService
 from support import (
     AUTH,
     BROKEN_EXIF,

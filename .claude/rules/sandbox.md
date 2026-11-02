@@ -6,7 +6,7 @@ paths:
   - ".env.example"
   - "scripts/**"
   - ".claude/skills/running-tests/SKILL.md"
-  - "server/scanmylib/ocr_loop.py"
+  - "server/scanmylib/application/ocr_loop.py"
   - "server/scanmylib/application/ocr_engine.py"
   - "server/scanmylib/adapters/ocr_sandbox/**"
   - "server/scanmylib/adapters/pillow_images.py"

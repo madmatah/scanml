@@ -13,11 +13,11 @@ Everything runs in Docker; nothing is installed on the host.
 |---|---|
 | `config.py` | `SCANMYLIB_*` environment variables |
 | `application/catalog.py`, `adapters/sqlite/catalog.py`, `adapters/sqlite/database.py`, `adapters/sqlite/rows.py`, `domain/records.py` | the port of the catalog of documents and pages, and the SQLite state behind it (`/state/scanmylib.db`, WAL): its transactions, queries and changes, the queue of pages to read and its claims, its rows read into typed records, and the summary of a document's layout written as JSON; an older schema is upgraded in place at start, after a copy is saved as `scanmylib.db.v<N>.bak` |
-| `library.py` | all mutations: documents, pages, OCR results; keeps the catalog and the files in sync |
+| `application/library.py` | all mutations: documents, pages, OCR results; keeps the catalog and the files in sync |
 | `domain/ordering.py` | page numbers (arabic, roman, spreads), inference, duplicates, placement and reading order, positions for a manual order, coverage |
 | `domain/documents.py` | a document's rules: what a new one takes, the slug of its folder, the summary of its layout |
 | `domain/pages.py` | a page's rules: its key, its OCR attempts and the summary of its OCR, the orientation the sandbox detects |
-| `domain/assemble.py`, `publisher.py` | `document.md`, `document.json`, `INDEX.md`, `library.json`; the sections and page Markdown of a document's preview |
+| `domain/assemble.py`, `application/publisher.py` | `document.md`, `document.json`, `INDEX.md`, `library.json`; the sections and page Markdown of a document's preview |
 | `domain/text.py` | user-entered text, slugs, collation |
 | `domain/timestamps.py` | moments written as text, in the API and in the names of keys and folders |
 | `application/clock.py`, `adapters/system_clock.py` | the clock the application reads, and the wall clock behind it, in the container's `TZ` |
@@ -26,7 +26,7 @@ Everything runs in Docker; nothing is installed on the host.
 | `adapters/http_api/preview.py` | Markdown → allowlisted HTML, rendered one at a time in a worker thread |
 | `adapters/pillow_images.py`, `application/scan_images.py` | Pillow: upload checks, thumbnails, image sent to the sandbox, re-encoded illustrations; the ports through which the application handles them, and their errors |
 | `application/ocr_engine.py`, `adapters/ocr_sandbox/` | the OCR ports, with a page's output, its errors and the engine's status; the sandbox behind them: its client, the validation of its responses, untrusted OCR Markdown → safe Markdown, and the engine that times a page's reading and validates its `/health` |
-| `ocr_loop.py` | the single OCR loop |
+| `application/ocr_loop.py` | the single OCR loop |
 | `auth.py`, `middleware.py` | token / cookie session / CSRF header, security headers, body limits |
 | `api/` | HTTP routes |
 | `devtools/fake_ocr.py` | fake sandbox for tests and UI development |

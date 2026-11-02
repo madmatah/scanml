@@ -20,23 +20,16 @@ from dataclasses import replace
 from datetime import datetime
 from pathlib import PurePath
 
-from .application.catalog import Catalog, NewPage, QueueCounts
-from .application.clock import Clock
-from .application.library_files import LibraryFiles
-from .application.ocr_engine import PageOcrOutput
-from .application.scan_images import ImageRejected, ScanImages
-from .application.thumbnails import Thumbnails
-from .debounce import DebouncedBatch
-from .domain import ordering
-from .domain.documents import check_document_changes, prepare_new_document, propose_slugs, summarize_layout
-from .domain.pages import (
+from ..domain import ordering
+from ..domain.documents import check_document_changes, prepare_new_document, propose_slugs, summarize_layout
+from ..domain.pages import (
     AttemptOutcome,
     conclude_failed_attempt,
     conclude_released_attempt,
     propose_page_keys,
     summarize_ocr,
 )
-from .domain.records import (
+from ..domain.records import (
     Conflict,
     DocumentChanges,
     DocumentRecord,
@@ -46,7 +39,14 @@ from .domain.records import (
     PageRecord,
     PageUpload,
 )
+from .catalog import Catalog, NewPage, QueueCounts
+from .clock import Clock
+from .debounce import DebouncedBatch
+from .library_files import LibraryFiles
+from .ocr_engine import PageOcrOutput
 from .publisher import DocumentSections, Publisher
+from .scan_images import ImageRejected, ScanImages
+from .thumbnails import Thumbnails
 
 log = logging.getLogger(__name__)
 

@@ -47,7 +47,7 @@ from .domain.records import (
     PageRecord,
     PageUpload,
 )
-from .publisher import Publisher
+from .publisher import DocumentSections, Publisher
 
 log = logging.getLogger(__name__)
 
@@ -73,9 +73,6 @@ class LibraryService:
         self._locks: dict[str, asyncio.Lock] = {}
         #: Ids of the pages whose upload is being stored (their row does not exist yet).
         self._storing: set[str] = set()
-        # HTML previews are rendered one at a time: rendering is CPU-bound, and
-        # parallel renders of a hostile page would occupy every worker thread.
-        self._render_lock = asyncio.Lock()
         self._assembly = DebouncedBatch(self._assemble, settings.assemble_delay_s)
         self._work_listeners: list[Callable[[], None]] = []
 
@@ -161,15 +158,9 @@ class LibraryService:
         document = self.require_document(page.document_id)
         return await asyncio.to_thread(self._files.read_page_markdown, document.slug, page.key)
 
-    async def page_html(self, page: PageRecord) -> str:
-        document = self.require_document(page.document_id)
-        async with self._render_lock:
-            return await asyncio.to_thread(self._publisher.page_html, document, page)
-
-    async def document_html(self, document: DocumentRecord) -> str:
+    async def read_document_sections(self, document: DocumentRecord) -> DocumentSections:
         pages = self.list_pages(document.id)
-        async with self._render_lock:
-            return await asyncio.to_thread(self._publisher.document_html, document, pages)
+        return await asyncio.to_thread(self._publisher.read_document_sections, document, pages)
 
     async def document_markdown(self, document: DocumentRecord) -> str:
         """Current document.md (written now if a rewrite is pending or the file is missing)."""

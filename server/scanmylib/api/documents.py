@@ -91,7 +91,11 @@ async def document_markdown(document_id: str, services: ServicesDep) -> Response
 @router.get("/{document_id}/html")
 async def document_html(document_id: str, services: ServicesDep) -> dict[str, object]:
     document = _document(services, document_id)
-    return {"html": await services.library.document_html(document)}
+    document_sections = await services.library.read_document_sections(document)
+    html = await services.previews.render_document_preview(
+        document, document_sections.sections, document_sections.markdown_by_page_key
+    )
+    return {"html": html}
 
 
 @router.get("/{document_id}/export.zip")

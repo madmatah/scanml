@@ -16,6 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from . import __version__
 from .adapters.filesystem.library_files import FilesystemLibrary
 from .adapters.filesystem.thumbnails import FilesystemThumbnails
+from .adapters.http_api.preview import HtmlPreviews
 from .adapters.ocr_sandbox.client import OcrClient
 from .adapters.ocr_sandbox.engine import SandboxOcrEngine
 from .adapters.pillow_images import MAX_UPLOAD_BYTES, PillowImages
@@ -86,7 +87,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         library.add_work_listener(ocr_loop.notify)
         requeued = library.start()
         ocr_loop.start()
-        app.state.services = Services(settings=settings, library=library, auth=auth, ocr=ocr_engine)
+        app.state.services = Services(
+            settings=settings, library=library, auth=auth, ocr=ocr_engine, previews=HtmlPreviews()
+        )
         log.info(
             "ScanMyLib %s: library %s, OCR socket %s, %d interrupted page(s) re-queued",
             __version__,

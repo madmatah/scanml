@@ -686,7 +686,7 @@ class TestThePreview:
                     UnnumberedHeading(),
                     PageSection("k3", None),
                 ]
-                return render_document("Title <i>", sections, pages.__getitem__, FILES_URL)
+                return render_document("Title <i>", sections, pages, FILES_URL)
 
             def test_should_open_with_the_title_escaped(self, html: str) -> None:
                 assert html.startswith("<h1>Title &lt;i&gt;</h1>")

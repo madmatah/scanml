@@ -22,6 +22,7 @@ from .adapters.ocr_sandbox.engine import SandboxOcrEngine
 from .adapters.pillow_images import MAX_UPLOAD_BYTES, PillowImages
 from .adapters.sqlite.catalog import SqliteCatalog
 from .adapters.sqlite.database import Database
+from .adapters.sqlite.web_sessions import SqliteWebSessions
 from .adapters.system_clock import SystemClock
 from .api import documents, pages, system, web
 from .api.deps import Services
@@ -80,7 +81,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         # The service's writes run inside the catalog's transactions, which are
         # atomic only on the catalog's own Database: never give it another one.
         library = LibraryService(settings, catalog, db, files, thumbnails, Publisher(files, clock), clock, images)
-        auth = Authenticator(load_or_create_token(settings.token_path, settings.token), db, clock)
+        auth = Authenticator(load_or_create_token(settings.token_path, settings.token), SqliteWebSessions(db), clock)
         ocr_client = OcrClient(settings.ocr_socket, settings.ocr_timeout_s)
         ocr_engine = SandboxOcrEngine(ocr_client)
         ocr_loop = OcrLoop(

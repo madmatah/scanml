@@ -13,12 +13,12 @@ from __future__ import annotations
 import hashlib
 import hmac
 import secrets
+from datetime import timedelta
 
 from fastapi import HTTPException, Request, status
 
-from .adapters.sqlite.database import Database
 from .application.clock import Clock
-from .domain import timestamps
+from .application.web_sessions import WebSessions
 
 SESSION_COOKIE = "scanmylib_session"
 SESSION_MAX_AGE_S = 365 * 24 * 3600
@@ -31,18 +31,14 @@ def _digest(value: str) -> str:
 
 
 class Authenticator:
-    def __init__(self, token: str, db: Database, clock: Clock) -> None:
+    def __init__(self, token: str, web_sessions: WebSessions, clock: Clock) -> None:
         if not token:
             raise ValueError("empty API token")  # it would match an empty login
         self.token = token
-        self._db = db
+        self._web_sessions = web_sessions
         self._token_fingerprint = _digest("scanmylib-token:" + token)
         self._clock = clock
-        with db.transaction():
-            db.execute(
-                "DELETE FROM sessions WHERE expires_ts < ? OR token_fingerprint != ?",
-                (self._clock.now().timestamp(), self._token_fingerprint),
-            )
+        web_sessions.forget_ended(self._token_fingerprint, clock.now())
 
     def token_matches(self, candidate: str) -> bool:
         return hmac.compare_digest(candidate.encode("utf-8"), self.token.encode("utf-8"))
@@ -50,28 +46,17 @@ class Authenticator:
     def open_session(self) -> str:
         """Create a web session; returns the cookie value."""
         session_id = secrets.token_urlsafe(32)
-        with self._db.transaction():
-            self._db.execute(
-                "INSERT INTO sessions (id_hash, token_fingerprint, created_at, expires_ts) VALUES (?, ?, ?, ?)",
-                (
-                    _digest(session_id),
-                    self._token_fingerprint,
-                    timestamps.iso(self._clock.now()),
-                    self._clock.now().timestamp() + SESSION_MAX_AGE_S,
-                ),
-            )
+        moment = self._clock.now()
+        self._web_sessions.add(
+            _digest(session_id), self._token_fingerprint, moment, moment + timedelta(seconds=SESSION_MAX_AGE_S)
+        )
         return session_id
 
     def close_session(self, session_id: str) -> None:
-        with self._db.transaction():
-            self._db.execute("DELETE FROM sessions WHERE id_hash = ?", (_digest(session_id),))
+        self._web_sessions.remove(_digest(session_id))
 
     def session_valid(self, session_id: str) -> bool:
-        row = self._db.one(
-            "SELECT 1 FROM sessions WHERE id_hash = ? AND token_fingerprint = ? AND expires_ts > ?",
-            (_digest(session_id), self._token_fingerprint, self._clock.now().timestamp()),
-        )
-        return row is not None
+        return self._web_sessions.is_valid(_digest(session_id), self._token_fingerprint, self._clock.now())
 
     def check(self, request: Request) -> None:
         """Raise 401 unless the request carries a valid credential (403: CSRF header missing)."""

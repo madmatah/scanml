@@ -10,11 +10,10 @@ verbatim.
 
 The api's image, the OCR sandbox's and the image of the gate's Python tools are built on the official
 `python:3.12-slim-trixie` image: CPython 3.12 (PSF-2.0, https://www.python.org) on Debian 13 "trixie" (its packages
-under their own free-software licenses, https://www.debian.org). The api's image adds the Debian package
-`tzdata-legacy` (public domain), which keeps the former names of the time zones. The sandbox's image adds the Debian
-packages `gcc`, `libc6-dev`, `libgomp1`, `libgl1` and `libglib2.0-0t64`, which the engine's wheels need, and its setup
-image, which `ocr-setup` runs, adds uv 0.13.4 (MIT or Apache-2.0, https://github.com/astral-sh/uv), which installs the
-engine's environments.
+under their own free-software licenses, https://www.debian.org). The api's image adds the Debian package `tzdata-legacy`
+(public domain), which keeps the former names of the time zones. The sandbox's image adds the Debian packages `gcc`,
+`libc6-dev` and `libgomp1`, which the engine's wheels need, and its setup image, which `ocr-setup` runs, adds uv 0.13.4
+(MIT or Apache-2.0, https://github.com/astral-sh/uv), which installs the engine's environments.
 
 ### The api's image
 

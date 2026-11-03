@@ -1,7 +1,8 @@
 # ScanMyLib OCR sandbox image.
 #
 # The image is deliberately tiny: a Python interpreter, a C compiler (Triton,
-# used by vLLM, compiles small launchers at runtime) and a few shared libs.
+# used by vLLM, compiles small launchers at runtime) and OpenMP's runtime, which
+# Paddle uses. OpenCV is its headless build, so no OpenGL, X or GLib library.
 # The heavy, untrusted dependencies (PaddlePaddle, PaddleOCR, vLLM) and the
 # model weights are NOT baked in: the one-shot `ocr-setup` service installs
 # them into SANDBOX_DIR, which the `ocr` service then mounts read-only while
@@ -17,7 +18,7 @@ ARG GID=1000
 
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
-      gcc libc6-dev libgomp1 libgl1 libglib2.0-0t64 \
+      gcc libc6-dev libgomp1 \
  && rm -rf /var/lib/apt/lists/*
 
 RUN groupadd -g "${GID}" ocr \

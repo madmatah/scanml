@@ -192,7 +192,11 @@ supervisor (python3, stdlib)          HTTP on the Unix socket, FIFO queue, lifec
   stops the worker's whole process group after 300 s, prints the last 50 lines
   of its output, escaped by the relay, each line cut between two escapes,
   and exits 0 once the worker has imported the engine's libraries, which
-  `GET /health` never needs while the engine is idle. It covers the worker's
+  `GET /health` never needs while the engine is idle. For PaddleOCR-VL, they
+  include OpenCV (`cv2`), and PaddleX must also accept its `ocr` extra, which it
+  checks by distribution name when it builds the pipeline: an environment whose
+  modules all import but whose distributions differ from PaddleX's
+  requirements fails the check rather than the first page. It covers the worker's
   environment (`venv-paddle`), not vLLM's (`venv-vllm`), the models or a page.
   `scripts/deploy.sh`, and `scripts/setup.sh` at the first installation, run it
   in the new `ocr` container, once the container has passed

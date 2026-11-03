@@ -115,7 +115,11 @@ class PaddleOCRVLEngine(PageEngine):
         # PaddleOCR imports Paddle, and its native libraries, only once it builds a pipeline.
         importlib.import_module("paddle")
         importlib.import_module("numpy")
+        importlib.import_module("cv2")
         importlib.import_module(f"{__package__}.images")
+        # Building the pipeline requires PaddleX's "ocr" extra, which it checks by distribution name, whatever imports:
+        # https://github.com/PaddlePaddle/PaddleX/blob/develop/paddlex/utils/deps.py
+        importlib.import_module("paddlex.utils.deps").require_extra("ocr")
 
     def load(self) -> None:
         pipeline_class = _import_pipeline_class()

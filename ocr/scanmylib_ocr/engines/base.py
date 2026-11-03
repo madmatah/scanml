@@ -74,8 +74,9 @@ class PageEngine(abc.ABC):
 
     @abc.abstractmethod
     def import_libraries(self) -> None:
-        """Import what ``load()`` and ``parse()`` need, but load no model: a deployment checks a new image with it,
-        before any page and without the GPU, which ``load()`` would take."""
+        """Import what ``load()`` and ``parse()`` need, and fail where a library would refuse its environment at
+        ``load()``, such as one that checks its requirements by distribution name, but load no model: a deployment
+        checks a new image with it, before any page and without the GPU, which ``load()`` would take."""
 
     @abc.abstractmethod
     def load(self) -> None:

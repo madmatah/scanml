@@ -32,11 +32,16 @@ step_done() { [[ -f "$SANDBOX/.done-$1" ]]; }
 mark_done() { date -Is > "$SANDBOX/.done-$1"; }
 
 # 1. PaddlePaddle + PaddleOCR (layout detection and the document-parsing pipeline).
+#    PaddleX requires OpenCV's GUI build, which brings libGL, by name: an alias of that name, which requires the
+#    headless build at its pin in requirements-paddle.in, takes its place (distribution_alias.py).
+#    The vulnerability scan cannot build the alias, and leaves out the names of aliases.txt instead.
 if ! step_done venv-paddle; then
     echo "--- [1/4] venv-paddle"
     rm -rf "$SANDBOX/venv-paddle"
+    alias_wheel=$(python3 "$SETUP_DIR/distribution_alias.py" --requirements "$SETUP_DIR/requirements-paddle.in" \
+        --alias opencv-contrib-python --target opencv-contrib-python-headless --output "$SANDBOX/cache/alias")
     uv venv --python /usr/local/bin/python3.12 "$SANDBOX/venv-paddle"
-    uv pip install --python "$SANDBOX/venv-paddle/bin/python" -r "$SETUP_DIR/requirements-paddle.in"
+    uv pip install --python "$SANDBOX/venv-paddle/bin/python" -r "$SETUP_DIR/requirements-paddle.in" "$alias_wheel"
     mark_done venv-paddle
 fi
 
@@ -89,7 +94,8 @@ def versions(py, pkgs):
     return json.loads(out)
 manifest = {
     "generated_at": datetime.datetime.now().isoformat(timespec="seconds"),
-    "venv-paddle": versions("$SANDBOX/venv-paddle/bin/python", ["paddlepaddle-gpu", "paddleocr", "paddlex"]),
+    "venv-paddle": versions("$SANDBOX/venv-paddle/bin/python",
+                            ["paddlepaddle-gpu", "paddleocr", "paddlex", "opencv-contrib-python-headless"]),
     "venv-vllm": versions("$SANDBOX/venv-vllm/bin/python", ["vllm", "torch", "transformers"]),
     "model": {"repo": "$MODEL_REPO", "revision": "$MODEL_REVISION"},
     "paddlex_models": sorted(p.name for p in pathlib.Path("$PADDLE_PDX_CACHE_HOME/official_models").iterdir()),

@@ -38,7 +38,12 @@ untrusted: it runs without a terminal and its output goes through `cat -v`.
 Pinned versions: `paddlepaddle-gpu==3.2.1`, `paddleocr==3.7.0` and
 `vllm==0.31.0`, in `ocr/setup/requirements-paddle.in` and
 `ocr/setup/requirements-vllm.in`, and the models by Hugging Face commit, in
-`ocr/setup/install.sh` (what is installed: `SANDBOX_DIR/MANIFEST.json`).
+`ocr/setup/install.sh` (what is installed: `SANDBOX_DIR/MANIFEST.json`). OpenCV
+is its headless build, `opencv-contrib-python-headless==4.10.0.84`, which
+brings no libGL, Mesa or X libraries: PaddleX requires the GUI build by name,
+and gets an alias of that name instead, a wheel without code that
+`ocr/setup/install.sh` builds from our pin with the standard library, before any
+downloaded code runs.
 No Paddle code runs during this network phase: the models are fetched with
 `huggingface_hub`.
 
@@ -306,7 +311,9 @@ data or library; an `--api` URL without an explicit port is refused) without
   every Monday, on demand, and on a push to `main` that changes what it scans, in four scans:
   - `sandbox-environments`: the OCR sandbox's two environments, resolved from `ocr/setup/requirements-paddle.in` and
     `ocr/setup/requirements-vllm.in` in the sandbox's base image, with the uv of its setup image, as a new installation
-    would resolve them that day, without installing them, and that uv, by its version;
+    would resolve them that day, without installing them, and that uv, by its version; the aliases the installation
+    builds, which the scan cannot, are left out of the resolution of the environment it installs them in
+    (`ocr/setup/aliases.txt`), and the distributions they require are scanned in their place;
   - `repository-locks`: the gate's Python tools (`scripts/lint/requirements.lock`) and the app's libraries and Gradle
     plugins (`android/gradle/verification-metadata.xml`);
   - `api-image` and `sandbox-image`: the Debian and Python packages of the api's image, as production runs it, and of

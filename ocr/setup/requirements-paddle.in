@@ -3,3 +3,6 @@
 paddlepaddle-gpu @ https://paddle-whl.cdn.bcebos.com/stable/cu126/paddlepaddle-gpu/paddlepaddle_gpu-3.2.1-cp312-cp312-linux_x86_64.whl
 paddleocr[doc-parser]==3.7.0
 safetensors
+# OpenCV without its GUI, and so without libGL: PaddleX pins the GUI build at this version, and install.sh gives it an
+# alias of the GUI build's name that requires this one.
+opencv-contrib-python-headless==4.10.0.84

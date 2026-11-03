@@ -363,7 +363,7 @@ class WhenGivenTheLint(InstallationTestCase):
         "ruff format --check .",
         "ruff check .",
         "mypy --config-file ../mypy.ini scanmylib tests",
-        "mypy --config-file ../mypy.ini scanmylib_ocr tests bench",
+        "mypy --config-file ../mypy.ini scanmylib_ocr tests bench setup",
         "mypy --config-file ../mypy.ini lib release.py e2e_test.py tests integration_tests",
         "zizmor --offline",
         "koalaman/shellcheck:",

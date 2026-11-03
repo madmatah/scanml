@@ -1,0 +1,5 @@
+# The distributions that ocr/setup/install.sh installs as aliases (ocr/setup/distribution_alias.py) in the environment
+# of requirements-paddle.in, which the vulnerability scan leaves out of that environment's resolution with uv's
+# --excludes, since it cannot build them: each is a wheel without code that requires another distribution, which the
+# scan resolves and scans in its place.
+opencv-contrib-python

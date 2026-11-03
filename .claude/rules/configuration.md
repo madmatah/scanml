@@ -74,12 +74,14 @@ paths:
   The rest is pinned by version, commit or tag, or checked as it downloads, and never loosened further: the Android SDK
   packages by version, which the Android CLI checks, and its command-line tools, the latest, against the SHA-1 Google
   publishes; the Gradle wrapper's jar against the SHA-256 Gradle publishes; the OCR sandbox's engines by version, in
-  `ocr/setup/requirements-paddle.in` and `ocr/setup/requirements-vllm.in` (their own dependencies as they resolve, and
-  `safetensors` as it resolves), its models by Hugging Face commit, in `ocr/setup/install.sh`, the uv of its setup
-  image by version, and so the uv that the vulnerability scan resolves them with and scans, and the base images by tag;
-  the Debian packages of the OCR image, and the api's `tzdata-legacy`, are the release's current ones as of the first
-  build on each base image. No setting lets an install bypass or override a pin, such as another registry or index, or
-  `--no-verify`.
+  `ocr/setup/requirements-paddle.in` and `ocr/setup/requirements-vllm.in` (their own dependencies as they resolve,
+  `safetensors` as it resolves, and OpenCV's headless build at the version PaddleX pins, which `ocr/setup/install.sh`
+  installs under the GUI build's name through an alias distribution built from that pin, and which the vulnerability
+  scan, unable to build the alias, resolves with the names of `ocr/setup/aliases.txt` left out), its models by Hugging
+  Face commit, in `ocr/setup/install.sh`, the uv of its setup image by version, and so the uv that the vulnerability
+  scan resolves them with and scans, and the base images by tag; the Debian packages of the OCR image, and the api's
+  `tzdata-legacy`, are the release's current ones as of the first build on each base image. No setting lets an install
+  bypass or override a pin, such as another registry or index, or `--no-verify`.
 - **A lock is regenerated, never edited by hand,** so that every hash comes from the file it pins: the api's locks with
   the `uv pip compile` command of `server/README.md`, the tools' lock with the one of `README.md` > Development, the web
   UI's lockfile with `npm install --package-lock-only --ignore-scripts`, the app's verification metadata with

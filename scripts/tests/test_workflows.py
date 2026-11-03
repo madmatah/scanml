@@ -510,6 +510,7 @@ class TheVulnerabilityScanWorkflow(unittest.TestCase):
             "      - .github/workflows/vulnerability-scan.yml\n"
             "      - android/gradle/verification-metadata.xml\n"
             "      - ocr/Dockerfile\n"
+            "      - ocr/setup/aliases.txt\n"
             "      - ocr/setup/requirements-*.in\n"
             "      - scripts/lint/requirements.lock\n"
             "      - server/Dockerfile\n"
@@ -862,7 +863,20 @@ class TheVulnerabilityScanWorkflowWhenItResolvesTheEnvironmentsOfTheSandbox(unit
         ]
         self.resolution_uv_versions = re.findall(r"^  SANDBOX_UV_VERSION: (\S+)$", workflow, re.MULTILINE)
         self.sandbox_uv_versions = re.findall(r"\buv==(\S+)", dockerfile)
-        self.installations = re.findall(r"^\s*uv pip install .*$", installer, re.MULTILINE)
+        self.installations = [line.strip() for line in re.findall(r"^\s*uv pip install .*$", installer, re.MULTILINE)]
+        self.aliased_names = sorted(re.findall(r"--alias (\S+)", installer))
+        self.aliased_environments = re.findall(r'--requirements "\$SETUP_DIR/(requirements-[^"]+)\.in"', installer)
+        self.excluding_environments = re.findall(
+            r'if \[ "\$requirements_name" = (\S+) \]; then\n\s*set -- --excludes /requirements/aliases\.txt\n', workflow
+        )
+        self.exclusion_count = workflow.count("--excludes")
+        alias_lines = [
+            line.strip()
+            for line in (OCR / "setup" / "aliases.txt").read_text().splitlines()
+            if line.strip() and not line.lstrip().startswith("#")
+        ]
+        self.excluded_names = sorted(alias_lines)
+        self.alias_option_lines = [line for line in alias_lines if line.startswith("-")]
         self.installed_requirements = sorted(set(re.findall(r'"\$SETUP_DIR/(requirements-[^"]+\.in)"', installer)))
         self.setup_requirements = sorted(path.name for path in (OCR / "setup").glob("requirements-*.in"))
         self.scanned_paddle_versions = re.findall(r"^  PADDLE_VERSION: (\S+)$", workflow, re.MULTILINE)
@@ -895,17 +909,46 @@ class TheVulnerabilityScanWorkflowWhenItResolvesTheEnvironmentsOfTheSandbox(unit
         self.assertEqual(len(self.setup_requirements), 2)
         self.assertEqual(self.installed_requirements, self.setup_requirements)
 
-    def test_should_find_the_installer_installing_each_environment_from_one_requirements_file_and_nothing_else(
+    def test_should_find_the_installer_installing_vllm_s_environment_from_its_requirements_file_and_nothing_else(
         self,
     ) -> None:
-        installation_from_one_file = re.compile(
-            r'^\s*uv pip install --python "\$SANDBOX/venv-[a-z]+/bin/python" -r "\$SETUP_DIR/requirements-[a-z]+\.in"$'
+        self.assertIn(
+            'uv pip install --python "$SANDBOX/venv-vllm/bin/python" -r "$SETUP_DIR/requirements-vllm.in"',
+            self.installations,
         )
+
+    def test_should_find_the_installer_installing_paddle_s_environment_from_its_requirements_file_and_the_alias_alone(
+        self,
+    ) -> None:
+        self.assertIn(
+            'uv pip install --python "$SANDBOX/venv-paddle/bin/python" -r "$SETUP_DIR/requirements-paddle.in" '
+            '"$alias_wheel"',
+            self.installations,
+        )
+
+    def test_should_find_no_other_installation_so_that_the_scan_resolves_all_the_installer_installs(self) -> None:
         self.assertEqual(len(self.installations), 2)
-        self.assertEqual(
-            [installation for installation in self.installations if not installation_from_one_file.match(installation)],
-            [],
-        )
+
+    def test_should_leave_the_aliases_out_of_the_resolution_of_the_environment_that_installs_them(self) -> None:
+        self.assertGreater(len(self.aliased_environments), 0)
+        self.assertEqual(self.excluding_environments, self.aliased_environments)
+
+    def test_should_leave_them_out_of_no_other_resolution_so_that_it_scans_a_distribution_of_that_name_there(
+        self,
+    ) -> None:
+        self.assertEqual(self.exclusion_count, 1)
+
+    def test_should_pass_the_exclusion_of_its_environment_to_the_resolution(self) -> None:
+        self.assertIn('"$@" "/requirements/$requirements_name.in"', self.workflow)
+
+    def test_should_leave_out_exactly_the_names_the_installer_aliases_so_that_it_scans_every_other_distribution(
+        self,
+    ) -> None:
+        self.assertGreater(len(self.aliased_names), 0)
+        self.assertEqual(self.excluded_names, self.aliased_names)
+
+    def test_should_find_no_option_in_the_aliases_so_that_the_resolution_reads_names_only(self) -> None:
+        self.assertEqual(self.alias_option_lines, [])
 
     def test_should_find_no_option_in_the_requirements_files_so_that_neither_install_nor_scan_uses_another_index(
         self,

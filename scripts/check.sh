@@ -112,7 +112,7 @@ check_lint() {
     run_python_tool "$python_tools" CHECKED_SOURCES server env MYPYPATH=tests mypy --config-file ../mypy.ini \
         scanmylib tests
     run_python_tool "$python_tools" CHECKED_SOURCES ocr env MYPYPATH=bench mypy --config-file ../mypy.ini \
-        scanmylib_ocr tests bench
+        scanmylib_ocr tests bench setup
     run_python_tool "$python_tools" CHECKED_SOURCES scripts env MYPYPATH=lib:tests:integration_tests mypy \
         --config-file ../mypy.ini lib release.py e2e_test.py tests integration_tests
     # As the shell scripts: new ones included, deleted ones left out.

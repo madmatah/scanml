@@ -100,6 +100,7 @@ this repository.
 |---|---|---|---|---|
 | PaddlePaddle (GPU build) | 3.2.1 | The framework of the layout and recognition models | Apache-2.0 | https://github.com/PaddlePaddle/Paddle |
 | PaddleOCR, and PaddleX | 3.7.0 for PaddleOCR; PaddleX as PaddleOCR requires it, unpinned | The document-parsing pipeline | Apache-2.0 | https://github.com/PaddlePaddle/PaddleOCR |
+| OpenCV, its headless build with the contributed modules (`opencv-contrib-python-headless`) | 4.10.0.84 | The pipeline's image processing, installed under the name `opencv-contrib-python` that PaddleX requires | Apache-2.0 | https://github.com/opencv/opencv-python |
 | vLLM | 0.31.0 | Serves the recognition model | Apache-2.0 | https://github.com/vllm-project/vllm |
 | PaddleOCR-VL-1.6 | Hugging Face commit pinned in `ocr/setup/install.sh` | The recognition model (0.9B) | Apache-2.0 | https://huggingface.co/PaddlePaddle/PaddleOCR-VL-1.6 |
 | PP-DocLayoutV3, PP-LCNet_x1_0_doc_ori, UVDoc | Hugging Face commits pinned in `ocr/setup/install.sh` | Layout analysis, page orientation, unwarping of curved pages | Apache-2.0 | https://huggingface.co/PaddlePaddle |

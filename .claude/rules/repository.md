@@ -16,7 +16,9 @@ pull request, is published.
   - the task markers `TODO`, `FIXME`, `XXX` and `HACK`, in a comment or a document.
 - **No secret, credential, `.env` file or personal data,** as [No personal information](#no-personal-information)
   details: a stack's `.env`, the access token, the signing key and its password belong to one machine, and live outside
-  the repository.
+  the repository. What credits a work is the exception: a license notice where its license asks to keep it,
+  `CREDITS.md` ([External work](#external-work)) and `docs/foundations.md` > References, which name the works the
+  project draws on and their authors.
 - **No file committed by accident:** build output, logs, temporary captures, an APK.
 - **A change updates every document that describes what it changes, in the same change:** the rules file of a rule,
   `docs/foundations.md` for the design and its reasons, the references of `docs/` (`ARCHITECTURE.md`, `API.md`,
@@ -33,10 +35,11 @@ pull request, is published.
 ## No personal information
 
 - **Nothing personal about the maintainer, a contributor or a user is committed or written in a pull request,** apart
-  from the author name and email of the commits and the copyright holder in `LICENSE` (the maintainer's GitHub handle).
-  This covers usernames, the paths of an installation (`/home/<name>`, `/data/<name>`), IP and MAC addresses, hostnames,
-  other projects found on a machine, devices tied to someone (naming the GPU a measurement was made on is fine), and
-  anything that locates a person, such as a time zone or a city.
+  from the author name and email of the commits, the copyright holder in `LICENSE` (the maintainer's GitHub handle), and
+  what credits a work, as [What belongs in the repository](#what-belongs-in-the-repository) says. This covers usernames,
+  the paths of an installation (`/home/<name>`, `/data/<name>`), IP and MAC addresses, hostnames, other projects found
+  on a machine, devices tied to someone (naming the GPU a measurement was made on is fine), and anything that locates a
+  person, such as a time zone or a city.
 - **Write placeholders instead:** `/home/user`, `/data/USER/scanmylib`, `~/Dev/scanmylib`, `192.168.1.10`,
   `example.invalid`, a fixed offset (`+02:00`) or `UTC` for a time zone.
 - **A value read on the machine never becomes a default or an example:** a path, an address or a time zone found there
@@ -48,5 +51,7 @@ pull request, is published.
   code or algorithms ported or adapted from another project, data taken from someone else's work, models, assets such as
   fonts or images, and libraries shipped in a build: the api's image, the app, the web UI or the OCR sandbox.
 - **Each entry says** what is reused, where it lives in the repository or where the project installs it, where it comes
-  from and under which terms. When a license asks for its notice to be kept, copy the notice verbatim.
+  from and under which terms. Guidance that draws on another work's ideas or wording here and there, rather than copying
+  a file or a passage, is credited as a whole, such as "parts of the agent guidance in `.claude/` draw on …", without
+  listing each borrowing. When a license asks for its notice to be kept, copy the notice verbatim.
 - **The works the design comes from are named,** with their links, in `docs/foundations.md` > References.

@@ -5,15 +5,15 @@ description: Takes a piece of work in ScanMyLib from a new branch to a merged pu
 
 # Develop
 
-`CLAUDE.md` > Workflow holds the rules of every session, and this skill those of planning, beside the steps that apply
-them. Below, `<base>` is `origin/main`, or the unmerged branch the work is stacked on, and `<worktree>` the branch's
-worktree, `~/Dev/scanmylib/.claude/worktrees/<topic>`. Every command of the branch below starts with `cd <worktree> &&`,
-as `.claude/rules/configuration.md` > Claude Code automation, "An agent given a worktree works only there" says, which a
-session that did not start in the branch's worktree reads before its first command. Write each file whose text you
-write, such as a plan, the findings of a round or a commit message, with the Write tool, never through a shell: in a
-heredoc, or in `git commit -m "…"`, the backquoted text that findings, plans and messages quote runs as commands. A
-command's output goes to its file by redirection. Give git a message from a file in a directory that `mktemp -d` creates
-outside the worktree, with `git commit -F <file>`.
+`CLAUDE.md` > Workflow holds the rules of every session, and this skill those of planning and review, beside the steps
+that apply them. Below, `<base>` is `origin/main`, or the unmerged branch the work is stacked on, and `<worktree>` the
+branch's worktree, `~/Dev/scanmylib/.claude/worktrees/<topic>`. Every command of the branch below starts with
+`cd <worktree> &&`, as `.claude/rules/configuration.md` > Claude Code automation, "An agent given a worktree works only
+there" says, which a session that did not start in the branch's worktree reads before its first command. Write each
+file whose text you write, such as a plan, the findings that the fixes answer or a commit message, with the Write tool,
+never through a shell: in a heredoc, or in `git commit -m "…"`, the backquoted text that findings, plans and messages
+quote runs as commands. A command's output goes to its file by redirection. Give git a message from a file in a
+directory that `mktemp -d` creates outside the worktree, with `git commit -F <file>`.
 
 ## Start a branch
 
@@ -50,8 +50,7 @@ outside the worktree, with `git commit -F <file>`.
   `plan-critic` agent checks it. The critic did not write the plan: it checks it against the code and the rules before
   any code is written, and names a simpler design where one would do. Only these changes go without a plan: a typo, a
   rename inside one file, a dependency bump, a bug fix inside one function. A review fix stays within the plan: only a
-  change of design, or the change of method that `CLAUDE.md` > Workflow, "Rounds of review converge, or the user
-  decides" calls for, goes back to it. The plan cuts the work into vertical slices, and each slice goes to a new agent.
+  change of design goes back to it. The plan cuts the work into vertical slices, and each slice goes to a new agent.
   The code follows the plan: an implementation that finds it wrong stops and says why, and the plan is revised and
   checked again as its size calls for before the work goes on.
 - **A mock comes before the plan of an output a person reads:** when planned work adds or changes something whose layout
@@ -202,6 +201,17 @@ plan, the commits so far and that report.
 
 ## Review
 
+- **Review before pushing:** run `/expert-review` on the branch once, and fix each finding in the commit it belongs to,
+  or answer it in the pull request. The review itself changes no code. Only the fixes of blocking findings are checked
+  again, on their own diff and against those findings, and that check starts no further round: a defect it finds is
+  fixed without another check, and so is a blocking finding whose first fix failed its check. The fixes of should-fix
+  and nit findings go in without another review. The pull request names the fixes that no expert checked. A finding
+  that calls for a change of design, or of the output that the mock settles, goes back to the plan, as [Plan the
+  work](#plan-the-work), "Plan before writing code" says, and, for that output, to the user, as "A mock comes before the
+  plan of an output a person reads" says, and the revised branch gets one full review again. When the revised branch
+  needs a change of design, or of that output, again, from its review or from a fixer, the work stops and goes to the
+  user, or, when the user does not follow it, to the final report, rather than to the plan a third time.
+
 1. Check a visible change, as `CLAUDE.md` > Workflow, "Check a visible change" says: of the web UI in a browser, on the
    development stack; of the app in its screenshot tests, with `cd <worktree> && scripts/build-apk.sh
    testDebugUnitTest`, then a look at the pictures under `android/app/build/outputs/roborazzi/`. Run the tests that the
@@ -217,29 +227,39 @@ plan, the commits so far and that report.
    fixes it with its own definitions, and one started there with the branch's own. When the branch changes the skills
    or agents that review or fix it, the pull request names the definitions that reviewed it, and says when they are not
    the branch's.
-3. Settle each finding as `CLAUDE.md` > Workflow, "Review before pushing" says. Give the findings to fix to a new
-   `fixer` agent, with its brief: the worktree and its base, the purpose of the branch, each verified finding, and the
-   commit each fix belongs to. It commits each fix as a `fixup!` commit, or as an `amend!` commit for a commit message,
-   as [Fold review fixes](#fold-review-fixes) shows. A fix commit whose check failed is a finding of the round, given
-   to a new fixer like the others, even when its fix brought it, and never answered in the pull request. Before you
-   fold them, review the fixes alone, against the findings they answer: write those findings, as the review reported
-   them, and each failed check with its output, with the Write tool, to a file in a directory that `mktemp -d` creates
-   outside the worktree, and run
-   `/expert-review <the commit before the first fix of the round>...<branch> --fixes <file>`. Remove the directory once
-   the review of the fixes has handed back its report and you have settled each of its findings: given to a fixer,
-   answered in the pull request, or carried into a revised plan. A finding that needs a change of design, or that a fix
-   brought into the code it fixed, other than a failed check, ends the round instead: revise the plan of the branch
-   with all the findings of the round, as [Plan the work](#plan-the-work) says, give the change to a new agent, as
-   [Write the code](#write-the-code) says, shape the history again, as [Shape the history](#shape-the-history) says,
-   and review the whole branch again, as the first round does. Keep the cost of each round, from its report, for the
-   decision that `CLAUDE.md` > Workflow, "Rounds of review converge, or the user decides" leaves to the user. Go on
-   round by round as `CLAUDE.md` > Workflow, "Review before pushing" and "Rounds of review converge, or the user
-   decides" say, then fold the fixes.
-4. **A review that hands back too soon:** if the review hands back a report that says its triage or an expert still
+3. Settle each finding as "Review before pushing" says. A finding that needs a change of design, a departure from a
+   decision of the plan included, or a change of the output that the mock settles, goes back to the plan, with all the
+   findings of the review: revise the plan of the branch, as [Plan the work](#plan-the-work) says, give its remaining
+   slices to new agents, as [Write the code](#write-the-code) says, shape the history again, as [Shape the
+   history](#shape-the-history) says, and review the whole branch once again, as the first review does. When the
+   revised branch needs a change of design, or of the output that the mock settles, again, from its review or from a
+   fixer, stop: tell the user, or, when the user does not follow the work, say in your final report, with the findings,
+   as "Review before pushing" says. Otherwise, give the findings to fix to a new `fixer` agent, with its brief: the
+   worktree and its base, the purpose of the branch, each verified finding with its severity, and the commit each fix
+   belongs to. It fixes the blocking findings first, and commits each fix as a `fixup!` commit, or as an `amend!` commit
+   for a commit message, as [Fold review fixes](#fold-review-fixes) shows. The brief names no check: the fixer runs
+   those its definition gives, and the commits are checked again once the fixes are folded, as [Fold review
+   fixes](#fold-review-fixes) says.
+4. Before you fold them, check the fixes of blocking findings, when the fixer fixed any: write the blocking findings
+   that the fixer fixed, as the review reported them, to a file in a directory that `mktemp -d` creates outside the
+   worktree, and run `/expert-review <the commit before the first fix>...<end> --fixes <file>`, where `<end>` is, among
+   the commits that the fixer's report gives for blocking findings, the one that
+   `cd <worktree> && git log --format=%h <base>..<branch>` lists first. A fix of a should-fix or nit finding that lies
+   inside that range is checked with them. Remove the directory once you have settled each finding of its report, as
+   the next step says, unless the check handed back too soon. The check starts no further round.
+5. When anything remains, give it to a new `fixer` agent, with the same brief, and, for a finding whose fix failed its
+   check, that check's output: each defect the check found, each blocking finding it reports `open`, and each finding
+   that the first fixer left `not fixed` after undoing a commit whose check failed, when the finding is blocking or the
+   failure came from an earlier fix, and, when it came from an earlier fix, that fix, as a finding to fix in its own
+   commit. Its fixes are not checked. A finding that a fixer leaves goes back to the plan when its fix needs a change of
+   design, as a finding of the review does, and is answered in the pull request otherwise. Name in the pull request
+   every fix that no expert checked: the fixes of should-fix and nit findings outside the checked range, and this
+   fixer's. Then fold them, as [Fold review fixes](#fold-review-fixes) says.
+6. **A review that hands back too soon:** if the review hands back a report that says its triage or an expert still
    runs, or an answer of its triage or of an expert reaches you rather than the review, the review handed back too
    soon: set its report aside and act on none of it. Stop, and tell the user, or, when the user does not follow the
    work, say in your final report: the answers that reached you, what you already started from that report, such as a
-   fixer and its commits, in a round of fixes the path of its `--fixes` file, and the detached worktrees outside the
+   fixer and its commits, in a check of fixes the path of its `--fixes` file, and the detached worktrees outside the
    repository that `cd <worktree> && git worktree list` shows, which this review or another one still running may use.
    Remove none of them and run no review again: the review's agents may still be running, and only the user decides
    what happens next.

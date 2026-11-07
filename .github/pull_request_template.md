@@ -31,7 +31,7 @@
 
 ### Quality
 
-- [ ] Each commit passes `scripts/check.sh --last-commit`, and the last one `scripts/check.sh`, every area.
+- [ ] Each commit passes `scripts/check.sh --last-commit`, and the whole gate, `scripts/check.sh`, ran locally too when the change touches the gate itself, as `CLAUDE.md` > Workflow, "Run each check once, at its level" says.
 - [ ] A visible change of the web UI was checked in a browser, one of the app in its screenshot tests, and a change to the `ocr` service passes `scripts/verify-sandbox.sh` on the development stack.
 - [ ] `/expert-review` ran once on the completed branch, with its plan, when it has one, and again on the fixes of its blocking findings, when the first fixer fixed any, and this pull request names the fixes no expert checked; every finding is fixed or answered here, and the review section says what was not reviewed; when the branch changes the skills or agents that review or fix it, this pull request names the definitions that reviewed it, and says when they are not the branch's.
 

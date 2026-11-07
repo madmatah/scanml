@@ -92,9 +92,23 @@ Production runs on this machine, from the main checkout, `~/Dev/scanmylib`, and 
   of the screens it changes in its pull request, after the change and before it when the base can show the screen, so
   that the reviewer sees it without running it, as the `pull-request` skill > Show a visible change says.
 - **Commits:** commit as you like while the work is in progress. Before pushing, rewrite the branch into atomic commits
-  that each hold one reason to change, with its tests and documents, and pass `scripts/check.sh --last-commit`, the
-  areas it touches; the last one passes `scripts/check.sh`. Write each message with the `writing-commits` skill, which
-  holds the rules of a commit message.
+  that each hold one reason to change, with its tests and documents, and pass `scripts/check.sh --last-commit`: the
+  areas that read what it changes, the integration tests of the scripts included when it changes a script they run.
+  Write each message with the `writing-commits` skill, which holds the rules of a commit message.
+- **Run each check once, at its level:**
+  - while you write code, a fix included, run only the tests of what you change, as the `running-tests` skill picks
+    them;
+  - when the history is shaped, `scripts/check.sh --last-commit` runs once on every commit, as
+    `.claude/skills/develop/SKILL.md` > Shape the history says, and skips a commit that already passed it
+    (`.claude/rules/configuration.md` > Checks);
+  - the CI runs `scripts/check.sh`, the whole gate, one job per area, on every pull request, which merges only once it
+    passes. Run it yourself, beyond what the per-commit check runs, only when the change touches the gate itself, such
+    as `scripts/check.sh` and what it runs, the tools' configuration or the CI workflow, and run the tests that the CI
+    skips when the change calls for them, as the `running-tests` skill says: the sandbox's unit tests with the engine's
+    environment, `scripts/verify-sandbox.sh` and the end-to-end test. A gate that the change broke would otherwise
+    first show on the pull request, and a test that the CI skips would run nowhere. A failure of the gate in the CI is
+    fixed by a new `fixer` and pushed without an expert check; the pull request names that fix among those no expert
+    checked.
 - **Releases** are pull requests of their own, which the `release` skill prepares (`.claude/rules/releases.md`).
 - **A branch reaches `main` only through a pull request whose CI passes.** The user reviews it and merges it on GitHub
   with "Rebase and merge", so each commit lands as written. Never merge into `main` yourself.
@@ -111,7 +125,9 @@ Production runs on this machine, from the main checkout, `~/Dev/scanmylib`, and 
 - `scripts/check.sh [AREA...]`: the gate, in this order: `lint` (Ruff, mypy, zizmor, ShellCheck, shfmt and Biome),
   `scripts` (unit tests of the scripts), `web` (the web UI's unit tests), `server` (the api's tests), `ocr` (the
   sandbox's unit tests, no models), `android` (the app's tests, lint and ktlint), `integration` (integration tests
-  of the scripts). Given areas, it checks only those; `--last-commit`, those that read what the last commit changes.
+  of the scripts). Given areas, it checks only those; `--last-commit`, those that read what the last commit changes,
+  unless the commit already passed them. The CI runs it on every pull request; run it yourself only as "Run each check
+  once, at its level" says.
 - `scripts/check.sh --fix`: formats every language and applies the linters' safe fixes: ktlint formats the app in
   place, the other formatters only the files git tracks (`git add` a new file first); read `git diff` before running
   what it changed.

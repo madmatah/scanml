@@ -129,7 +129,8 @@ The section of each test framework below gives its own words for them, and how i
 - **Unit tests of the web UI:** `server/scanmylib/web/tests/`, with `node --test`, on what needs no DOM: the files of
   the UI that hold none, the constants of the others, its translation catalog and its icons.
 - **Unit tests of the OCR sandbox:** `ocr/tests/`, with `unittest`, in the sandbox's image, without network or models;
-  the tests that need an engine's environment skip without it.
+  the tests that need an engine's environment skip without it, as in the gate and so in the CI, and run apart, with
+  that environment, when the `running-tests` skill says.
 - **Unit tests of the app:** `android/app/src/test/`, with JUnit on the JVM: view models, the upload queue and the
   client of the PC, against fakes and a mock web server, where Android's framework only answers with defaults
   (`unitTests.isReturnDefaultValues` in `android/app/build.gradle.kts`).
@@ -153,8 +154,9 @@ The section of each test framework below gives its own words for them, and how i
   the processes it starts, and they have an area of their own in the gate, `integration`, which a commit runs only when
   it changes a script they run (`CLAUDE.md` > Workflow, "Commits").
 - **End to end:** `scripts/e2e_test.py`, which acts like the phone against a running stack, the development stack by
-  default.
-- **Isolation of the sandbox:** `scripts/verify-sandbox.sh`, against the running `ocr` service.
+  default, outside the gate and so outside the CI: a change that the `running-tests` skill names runs it.
+- **Isolation of the sandbox:** `scripts/verify-sandbox.sh`, against the running `ocr` service, outside the gate and so
+  outside the CI: a change that the `running-tests` skill names runs it.
 - **Benchmarks:** `ocr/bench/`, on the real engine and the GPU, outside the gate.
 - **A test that needs a real adapter** outside the test's own process and files, such as the GPU, the network, a running
   stack or the Docker daemon, has a level of its own, apart from the unit tests, so that the unit tests stay fast and

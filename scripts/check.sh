@@ -24,7 +24,7 @@
 # documents and agent guidance, and skips a fixup, which is checked once folded into its commit, and a commit whose tree
 # and parent's tree already passed on a clean working tree (scripts/lib/passed_commit_check.py, whose record lies in the
 # common git directory: delete it after a change outside the repository that the areas depend on). CLAUDE.md >
-# Workflow, "Commits" says when each mode runs.
+# Workflow, "Run each check once, at its level" says when each mode runs.
 #
 # Usage: scripts/check.sh [AREA...]
 #        scripts/check.sh --last-commit

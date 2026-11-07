@@ -142,7 +142,7 @@ The section of each test framework below gives its own words for them, and how i
   tests of `android/app/src/test/` cannot build. Such a component keeps its tests in one file there, under Robolectric,
   rather than in two of one name, which clash since both directories compile into the debug variant's tests. The
   pictures stay out of the code's history: they show the screens to whoever checks a change, and a pull request
-  publishes those of a visible change (`.claude/skills/pull-request/SKILL.md` > Show a visible change).
+  publishes those of a visible change (`.claude/skills/develop/SKILL.md` > Show a visible change).
 - **Unit tests of the scripts:** `scripts/tests/`, with `unittest` and the host's `python3`, on the files of
   `scripts/lib/`, on `scripts/release.py` and on the workflows of `.github/workflows/`, against throwaway repositories
   where git is needed.

@@ -294,7 +294,7 @@ against the domain. `.claude/rules/conventions.md` states them, and a rules file
 
 ### Git
 
-`CLAUDE.md` > Workflow says how a session works, and the `pull-request` and `writing-commits` skills hold the
+`CLAUDE.md` > Workflow says how a session works, and the `develop` and `writing-commits` skills hold the
 procedures. The reasons behind them:
 
 - **A worktree per piece of work** keeps parallel sessions from changing each other's files, and keeps work in progress
@@ -328,7 +328,7 @@ procedures. The reasons behind them:
 
 ### Plans
 
-`CLAUDE.md` > Workflow, "Plan before writing code" says when a plan is due, and the `pull-request` skill how it is made.
+`CLAUDE.md` > Workflow, "Plan before writing code" says when a plan is due, and the `develop` skill how it is made.
 The reasons:
 
 - **A mistake in a plan costs every step after it:** the code built on it, its review and the rounds of fixes. A plan is

@@ -35,7 +35,7 @@ For each finding:
 3. Make the smallest change that solves the finding. The suggested fix is a lead, not an order: when it would break a
    rule of `CLAUDE.md` or of a rules file, solve the finding within the rule, or leave it and cite the rule in your
    report.
-4. Commit it as `.claude/skills/pull-request/SKILL.md` > Fold review fixes shows: a `fixup!` commit for a change to the
+4. Commit it as `.claude/skills/develop/SKILL.md` > Fold review fixes shows: a `fixup!` commit for a change to the
    files, an `amend!` commit for a commit message, whose new message you write as
    `.claude/skills/writing-commits/SKILL.md` says.
 5. Run `cd <worktree> && scripts/check.sh --last-commit` on that commit.

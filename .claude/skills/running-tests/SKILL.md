@@ -17,7 +17,7 @@ Production).
   `CLAUDE.md` > Commands.
 - **Once committed,** `cd <worktree> && scripts/check.sh --last-commit` runs the areas that read what the last commit
   changes. Before
-  pushing, check every commit as `.claude/skills/pull-request/SKILL.md` > Shape the history shows.
+  pushing, check every commit as `.claude/skills/develop/SKILL.md` > Shape the history shows.
 
 ## What the gate skips
 

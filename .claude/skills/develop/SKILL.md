@@ -1,9 +1,9 @@
 ---
-name: pull-request
-description: Takes a change to ScanMyLib from a new branch to a merged pull request, in a worktree with its own development stack, and reviews someone else's pull request. Use when starting a piece of work, planning it, writing its code, before pushing a branch, when opening or updating a pull request, when showing screenshots of a change in its pull request, after its base branch changes or is merged, or when the user asks to review a pull request. A release is prepared by the release skill instead.
+name: develop
+description: Takes a piece of work in ScanMyLib from a new branch to a merged pull request, in a worktree with its own development stack, and reviews someone else's pull request. Use when starting a feature, a fix or any piece of work, planning it, writing its code, before pushing a branch, when dealing with review findings, opening or updating a pull request, showing screenshots of a change in its pull request, after its base branch changes or is merged, or when the user asks to review a pull request. A release is prepared by the release skill instead.
 ---
 
-# Pull request
+# Develop
 
 `CLAUDE.md` > Workflow holds the rules this procedure applies. Below, `<base>` is `origin/main`, or the unmerged branch
 the work is stacked on, and `<worktree>` the branch's worktree, `~/Dev/scanmylib/.claude/worktrees/<topic>`. Every
@@ -171,15 +171,16 @@ what it does without building it.
    the "Screenshots" section: a branch that changes the database's schema, for instance, since `<base>`'s api refuses
    the development stack's newer database.
 3. Once the pull request is open, publish them:
-   `cd <worktree> && python3 ${CLAUDE_SKILL_DIR}/scripts/pr_screenshots.py publish <number> <picture>...`. It refuses a
-   picture that holds anything other than its pixels, such as text, a time or a color profile, which capture tools often
-   add: on that refusal, run `python3 ${CLAUDE_SKILL_DIR}/scripts/pr_screenshots.py strip <dir> <picture>...`, where
-   `<dir>` is a path that does not exist yet, such as `stripped` inside the directory that holds the pictures; it
-   creates that directory, writes there a copy of each picture with its image only, leaves the pictures as they are and
-   prints the path of each copy: publish the copies. It refuses a `<dir>` that exists, so that it never overwrites a
-   file. The publication commits the pictures on the `pr-screenshots` branch of origin, under `pr-<number>/`, without
-   touching the worktree, and prints a Markdown image for each, linked by that commit, so that a later publication
-   never changes what the description shows. Remove the directories of the pictures once they are published.
+   `cd <worktree> && python3 ${CLAUDE_SKILL_DIR}/../pull-request/scripts/pr_screenshots.py publish <number> <picture>...`.
+   It refuses a picture that holds anything other than its pixels, such as text, a time or a color profile, which
+   capture tools often add: on that refusal, run `python3 ${CLAUDE_SKILL_DIR}/../pull-request/scripts/pr_screenshots.py
+   strip <dir> <picture>...`, where `<dir>` is a path that does not exist yet, such as `stripped` inside the directory
+   that holds the pictures; it creates that directory, writes there a copy of each picture with its image only, leaves
+   the pictures as they are and prints the path of each copy: publish the copies. It refuses a `<dir>` that exists, so
+   that it never overwrites a file. The publication commits the pictures on the `pr-screenshots` branch of origin, under
+   `pr-<number>/`, without touching the worktree, and prints a Markdown image for each, linked by that commit, so that a
+   later publication never changes what the description shows. Remove the directories of the pictures once they are
+   published.
 4. Put the images in the body's "Screenshots", and update the pull request as [Update the body](#update-the-body)
    says.
 5. If the script warns that the branch is heavy, tell the user: the maintainer cleans it with `/clean-pr-screenshots`.

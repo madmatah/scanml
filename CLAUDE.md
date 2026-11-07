@@ -61,9 +61,10 @@ Production runs on this machine, from the main checkout, `~/Dev/scanmylib`, and 
 ## Workflow
 
 - **Each piece of work has its own short-lived branch, `<type>/<topic>`, in its own worktree** under
-  `.claude/worktrees/`, started from `origin/main`, or from an unmerged branch whose work it needs; a release's branch
-  is `release/vX.Y.Z`. After the merge, remove both: `git worktree remove`, then `git branch -D`, since git does not see
-  a rebased branch as merged.
+  `.claude/worktrees/`, with the type that matches the intention of its main change, among `feat`, `fix`, `refactor`,
+  `perf`, `style`, `test`, `docs`, `build`, `ci` and `chore`, started from `origin/main`, or from an unmerged branch
+  whose work it needs; a release's branch is `release/vX.Y.Z`. After the merge, remove both: `git worktree remove`,
+  then `git branch -D`, since git does not see a rebased branch as merged.
 - **In a worktree, its own guidance prevails.** Claude Code also loads the `CLAUDE.md` and the rules of the main
   checkout, which encloses the worktree: those of production's release, which may be older. Where they differ, follow
   the worktree's, which describe the code you change.
@@ -99,32 +100,8 @@ Production runs on this machine, from the main checkout, `~/Dev/scanmylib`, and 
   that the reviewer sees it without running it, as the `pull-request` skill > Show a visible change says.
 - **Commits:** commit as you like while the work is in progress. Before pushing, rewrite the branch into atomic commits
   that each hold one reason to change, with its tests and documents, and pass `scripts/check.sh --last-commit`, the
-  areas it touches; the last one passes `scripts/check.sh`. The header of a message follows Conventional Commits,
-  `<type>(<scope>): <subject>`, with a type among `feat`, `fix`, `refactor`, `perf`, `style`, `test`, `docs`, `build`,
-  `ci` and `chore` (`style` for layout only, such as a formatter's): `fix(android): resume uploads once back online`.
-  A scope that would only repeat the type is left out, as in `ci: pin the checkout action`, and a breaking change adds
-  `!` before the colon: `feat(scripts)!: deploy only published releases`.
-- **A commit scope names where the change belongs:** the unit, as `docs/foundations.md` > Layers and modules names it,
-  `server` for the api, `web` for the web UI, `android` for the app, `ocr` for the OCR sandbox, and `scripts`; or else
-  the area: `build` for the build, the packaging and the tools' configuration, `ci` for the workflows, `docs` for
-  `README.md`, `CREDITS.md` and a document of `docs/` that belongs to no single unit, `rules` for `CLAUDE.md` and
-  `.claude/rules/`, a skill's name for that skill and the agents it runs, and `project` for the repository's own files,
-  such as the license, `.gitignore`, `.claude/settings.json` or the pull request template. A scope is in lowercase, and
-  never a file name, a path or two scopes. The documents that a change must update go in its commit, under its scope. A
-  change that spans two units is usually two commits, and one that cannot be split takes the scope of the unit or the
-  area that owns the decision.
-- **A commit message says why.** The subject says what the change achieves, in the reader's terms, and not the files it
-  touches, which the diff lists: in the imperative, in lowercase, acronyms and product names included, with a symbol
-  keeping its own casing, without a final period, in a header of around 70 characters, so that it reads whole in a log.
-  The body, after a blank line and wrapped at 72 columns, gives what the diff cannot show: the motivation and the
-  behavior it replaces, the constraint, the observation or the rejected alternative. It never lists the changes: a body
-  that restates the diff is noise. Only a change that speaks for itself goes without a body: a typo, a mechanical
-  rename, a dependency bump.
-- **A commit footer holds only what tools read:** a breaking change, as `BREAKING CHANGE:` followed by what breaks and
-  what its users must do, which `scripts/release.py` reads, the issues the commit closes, as `Closes #42`, which GitHub
-  reads, never one that is not true, and the `Release-Base:` trailer that `scripts/release.py` writes on a release's own
-  commit. No other trailer, such as `Co-Authored-By`, `Generated with` or `Signed-off-by`: who typed a change says
-  nothing of its reason.
+  areas it touches; the last one passes `scripts/check.sh`. Write each message with the `writing-commits` skill, which
+  holds the rules of a commit message.
 - **Review before pushing:** run `/expert-review` on the branch, and fix each finding in the commit it belongs to, or
   answer it in the pull request, except a failed check of a fix commit, which a new fixer takes. The review itself
   changes no code. Then review each round of fixes on its own diff, against the findings it answers, since a fix can
@@ -209,6 +186,7 @@ read the file before you do what its line says.
 - `expert-review`: `/expert-review [<pr#>|<branch>|<range>] [--fixes <file>] [--post] [focus]`, the review of a diff
   before `main`.
 - `release`: `/release [major|minor|patch]`, the pull request of a new release, which a workflow publishes once merged.
-- `writing-commits`: the message of a commit, from its type and its scope to its body and its footer.
+- `writing-commits`: the rules of a commit message and how to apply them, from its header and its scope to its body
+  and its footer.
 - `running-tests`: the tests a change needs, the gate's and those it skips, and how to run them.
 - `clean-pr-screenshots`: `/clean-pr-screenshots`, the maintainer's deletion of the published screenshots.

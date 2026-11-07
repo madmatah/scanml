@@ -1,15 +1,15 @@
 ---
 name: writing-commits
-description: Writes the commit messages of ScanMyLib, so that each one says what its change achieves and why it was made, with the type and the scope the repository's rules give it. Use when committing, amending or rewording a commit, splitting work into commits, shaping a branch's history before pushing it, or checking the commit messages of a branch before it is pushed.
+description: Holds the rules of ScanMyLib's commit messages and writes them, so that each one says what its change achieves and why it was made, with the type and the scope the rules give it. Use when committing, amending or rewording a commit, splitting work into commits, shaping a branch's history before pushing it, or checking the commit messages of a branch before it is pushed.
 ---
 
 # Writing commits
 
-`CLAUDE.md` > Workflow states the rules of a commit: "Commits", "A commit scope names where the change belongs", "A
-commit message says why" and "A commit footer holds only what tools read". This skill applies them to each commit that
-will be pushed, whether you write it at once or while you rewrite the branch before pushing. A work-in-progress commit
-or a `fixup!` commit needs none of it, since the rewrite replaces it, but the message that an `amend!` commit carries
-below its first line follows it all, since it replaces the message of its commit. A release's own commit,
+`CLAUDE.md` > Workflow, "Commits" says what a commit holds, and [The rules of a commit
+message](#the-rules-of-a-commit-message) below states the rules of its message. This skill applies them to each commit
+that will be pushed, whether you write it at once or while you rewrite the branch before pushing. A work-in-progress
+commit or a `fixup!` commit needs none of it, since the rewrite replaces it, but the message that an `amend!` commit
+carries below its first line follows it all, since it replaces the message of its commit. A release's own commit,
 `chore(release): X.Y.Z`, needs none of it either, since `scripts/release.py --commit` writes it whole. Where a rule
 leaves a choice, the sections below say how to make it. Write from the rules, not from `git log`, whose older messages
 may predate them.
@@ -17,10 +17,39 @@ may predate them.
 The examples below use this repository's own scopes, those of "A commit scope names where the change belongs", so that
 none shows a scope the rule refuses. The changes they tell are invented: none of them is a fact about this repository.
 
+## The rules of a commit message
+
+- **A commit header follows the commit style:** Conventional Commits, `<type>(<scope>): <subject>`, with a type among
+  those of `CLAUDE.md` > Workflow, "Each piece of work has its own short-lived branch, `<type>/<topic>`, in its own
+  worktree" (`style` for layout only, such as a formatter's): `fix(android): resume uploads once back online`. A scope
+  that would only repeat the type is left out, as in `ci: pin the checkout action`, and a breaking change adds `!`
+  before the colon: `feat(scripts)!: deploy only published releases`.
+- **A commit scope names where the change belongs:** the unit, as `docs/foundations.md` > Layers and modules names it,
+  `server` for the api, `web` for the web UI, `android` for the app, `ocr` for the OCR sandbox, and `scripts`; or else
+  the area: `build` for the build, the packaging and the tools' configuration, `ci` for the workflows, `docs` for
+  `README.md`, `CREDITS.md` and a document of `docs/` that belongs to no single unit, `rules` for `CLAUDE.md` and
+  `.claude/rules/`, a skill's name for that skill and the agents it runs, and `project` for the repository's own files,
+  such as the license, `.gitignore`, `.claude/settings.json` or the pull request template. A scope is in lowercase, and
+  never a file name, a path or two scopes. The documents that a change must update go in its commit, under its scope. A
+  change that spans two units is usually two commits, and one that cannot be split takes the scope of the unit or the
+  area that owns the decision.
+- **A commit message says why.** The subject says what the change achieves, in the reader's terms, and not the files it
+  touches, which the diff lists: in the imperative, in lowercase, acronyms and product names included, with a symbol
+  keeping its own casing, without a final period, in a header of around 70 characters, so that it reads whole in a log.
+  The body, after a blank line and wrapped at 72 columns, gives what the diff cannot show: the motivation and the
+  behavior it replaces, the constraint, the observation or the rejected alternative. It never lists the changes: a body
+  that restates the diff is noise. Only a change that speaks for itself goes without a body: a typo, a mechanical
+  rename, a dependency bump.
+- **A commit footer holds only what tools read:** a breaking change, as `BREAKING CHANGE:` followed by what breaks and
+  what its users must do, which `scripts/release.py` reads, the issues the commit closes, as `Closes #42`, which GitHub
+  reads, never one that is not true, and the `Release-Base:` trailer that `scripts/release.py` writes on a release's own
+  commit. No other trailer, such as `Co-Authored-By`, `Generated with` or `Signed-off-by`: who typed a change says
+  nothing of its reason.
+
 ## Draw the commits
 
-Each commit holds one reason to change ("Commits"), so that a reader can review it, revert it or find it with
-`git bisect` on its own.
+Each commit holds one reason to change (`CLAUDE.md` > Workflow, "Commits"), so that a reader can review it, revert it or
+find it with `git bisect` on its own.
 
 - **A subject that needs an "and"** usually holds two commits. Two unrelated fixes made the same afternoon are two
   commits.
@@ -48,13 +77,13 @@ Take the type of the commit's dominant intention. When two seem to fit:
 | Undoes an earlier commit | the type of what the undoing does, such as `fix` when the undone commit broke something | `chore` |
 | The repository's own files that are neither documents nor build, such as the license or `.gitignore` | `chore` | `build`, `docs` |
 
-A breaking change keeps the type of what it does, and "Commits" says how its header shows it. The type matters beyond
-the log: `scripts/release.py` drafts the release notes from the features, the fixes and the breaking changes, and
-chooses the next version from them, so a feature typed `refactor` never reaches the notes.
+A breaking change keeps the type of what it does, and "A commit header follows the commit style" says how its header
+shows it. The type matters beyond the log: `scripts/release.py` drafts the release notes from the features, the fixes
+and the breaking changes, and chooses the next version from them, so a feature typed `refactor` never reaches the notes.
 
 ## Choose the scope
 
-Take the scope as `CLAUDE.md` > Workflow, "A commit scope names where the change belongs" says. Where it leaves a doubt:
+Take the scope as "A commit scope names where the change belongs" says. Where it leaves a doubt:
 
 - **A document of one unit,** such as `docs/API.md` for the api, takes the unit's scope, not `docs`.
 - **A test** takes the scope of the code it pins.
@@ -134,8 +163,8 @@ duplicate rarer, never impossible.
 
 ## Add the footer
 
-Write it as `CLAUDE.md` > Workflow, "A commit footer holds only what tools read" says, and never on a guess: a breaking
-change only when its users will meet it, an issue only when this commit closes it.
+Write it as "A commit footer holds only what tools read" says, and never on a guess: a breaking change only when its
+users will meet it, an issue only when this commit closes it.
 
 ```
 feat(server)!: give the size of a page in bytes, as an integer
@@ -155,8 +184,8 @@ Closes #42
 
 Before committing, read the message against the rules:
 
-1. **The header** follows "Commits", with the type of [Choose the type](#choose-the-type) and the scope of
-   [Choose the scope](#choose-the-scope).
+1. **The header** follows "A commit header follows the commit style", with the type of [Choose the
+   type](#choose-the-type) and the scope of [Choose the scope](#choose-the-scope).
 2. **The subject** follows "A commit message says why", in its form as in what it says: what the change achieves, not
    the files it touches.
 3. **The body** follows the same rule: it says why, and lists nothing that the diff shows. Without one, the change
@@ -167,6 +196,6 @@ Before committing, read the message against the rules:
    nothing that `.claude/rules/repository.md` > What belongs in the repository, > No real document names or > No
    personal information forbids, from a pasted log or a command's output as much as from your own words.
 
-Once committed, the commit passes what "Commits" asks of it: `scripts/check.sh --last-commit`, which checks what the
-last commit changes. When you rewrite a branch, `.claude/skills/develop/SKILL.md` > Shape the history checks every
-commit at once, and the last one on every area.
+Once committed, the commit passes what `CLAUDE.md` > Workflow, "Commits" asks of it: `scripts/check.sh --last-commit`,
+which checks what the last commit changes. When you rewrite a branch, `.claude/skills/develop/SKILL.md` > Shape the
+history checks every commit at once, and the last one on every area.

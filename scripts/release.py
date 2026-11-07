@@ -2,7 +2,8 @@
 """Prepares the next release of ScanMyLib, from the commits since the last one.
 
 The last release is VERSION, tagged vVERSION. The commits since that tag follow Conventional
-Commits (CLAUDE.md > Workflow, "Commits"), which give the next version as SemVer reads them:
+Commits (.claude/skills/writing-commits/SKILL.md > The rules of a commit message), which give the
+next version as SemVer reads them:
   - a breaking change ("type!: ..." or a "BREAKING CHANGE:" footer): the next major version, or
     the next minor one while the major version is 0;
   - else a feature ("feat"): the next minor version;

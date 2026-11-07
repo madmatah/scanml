@@ -104,9 +104,9 @@ skill names, with no value but the ones checked here, and read and search with t
    A hit is a candidate. Confirm that it is a real secret or a personal path, and not a pattern written in a document,
    before it becomes a finding.
 5. **Check the commit messages:** write `git log --format='%h %s%n%n%b' <commits>` to `<dir>/commits.txt`, and read it
-   against `CLAUDE.md` > Workflow, "Commits", "A commit scope names where the change belongs", "A commit message says
-   why" and "A commit footer holds only what tools read", and a release's own commit, `chore(release): X.Y.Z`, against
-   `.claude/rules/releases.md`, "Pull requests never change `VERSION`", which gives it its header, instead:
+   against `CLAUDE.md` > Workflow, "Commits" and `.claude/skills/writing-commits/SKILL.md` > The rules of a commit
+   message, and a release's own commit, `chore(release): X.Y.Z`, against `.claude/rules/releases.md`, "Pull requests
+   never change `VERSION`", which gives it its header, instead:
    - in a round of fixes, which reviews the fixups before they are folded, check that each `fixup!` and `amend!` commit
      names a commit of the branch, by a first line that holds, after `fixup! ` or `amend! `, that commit's whole header,
      as `git log --format='%h %s' <main commit>..<start commit>` lists them, written to `<dir>/branch.txt`, where a
@@ -118,10 +118,10 @@ skill names, with no value but the ones checked here, and read and search with t
      document names or > No personal information forbids, is `blocking`, since a pushed commit cannot be taken back:
      search `<dir>/commits.txt` with the patterns of the scan above, and read it for what no pattern finds: document
      names, usernames, host names, time zones and places, and project-management material;
-   - a header that does not follow "Commits", or whose scope does not follow "A commit scope names where the change
-     belongs", is `should-fix`, and so are a subject that names the files instead of what the change achieves, a body
-     that restates the diff instead of giving its reason, and a footer that lacks what "A commit footer holds only what
-     tools read" requires or holds what it excludes.
+   - a header that does not follow "A commit header follows the commit style", or whose scope does not follow "A commit
+     scope names where the change belongs", is `should-fix`, and so are a subject that names the files instead of what
+     the change achieves, a body that restates the diff instead of giving its reason, and a footer that lacks what "A
+     commit footer holds only what tools read" requires or holds what it excludes.
 
 ## Classify
 

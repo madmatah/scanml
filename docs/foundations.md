@@ -500,30 +500,30 @@ Every branch goes through `/expert-review` before its pull request. It is a proj
   paths, nor documentation on an added file, whose content only it searches for a real document's name, nor narrows
   what they read, since a missed expert costs more than a needless one, and a triage that reads the
   diff can be steered by it.
-- **A round of fixes is reviewed against the findings it answers,** by their experts, by correctness, and by the
-  experts whose concerns the fixes newly touch, such as tests for a new test, rather than by every expert whose paths
-  they touch: a fix of three files can touch the paths of every domain, and only the experts it concerns have something
-  to check. Security and isolation still review every fix of their paths, since a fix can weaken a guard as well as add
-  one.
+- **The fixes of blocking findings are checked against the findings they answer,** by their experts, by correctness,
+  and by the experts whose concerns the fixes newly touch, such as tests for a new test, rather than by every expert
+  whose paths they touch: a fix of three files can touch the paths of every domain, and only the experts it concerns
+  have something to check. Security and isolation still check every fix of their paths, since a fix can weaken a guard
+  as well as add one.
 - **The orchestrator confirms every blocking and should-fix finding** before reporting it, and lists the findings it
   dropped with their counter-evidence, so the report makes no claim it has not checked. It also holds every suggested
   fix to the project's rules, since an expert reads only those of its domain.
-- **Rounds of fixes converge, or the user decides.** A fix can bring the bug that the next round finds, so each round
-  of fixes is reviewed. A defect that a fix brought into the code it fixed says the method is wrong: a test of the whole
-  input space, or a simpler design, ends the chase sooner than more rounds. A failed check is the exception: the gate
-  names what broke and checks the next patch, so the chase it starts has an end. Past a few rounds, the user weighs
-  what remains against what the rounds cost.
-- **A new agent fixes each round,** from a brief: an agent resumed round after round re-reads its whole, growing
+- **A branch is reviewed once.** A fix brings code of its own to review, and two runs of the same review judge
+  differently, so each new review of the fixes finds something new, and reviews repeated until none finds anything
+  never end. Only the fixes of blocking findings are checked again, since a defect there costs the most, and that check
+  starts no further round. A finding that calls for a change of design goes back to the plan, where the method is
+  cheapest to change, once: a second one shows that the plan cannot settle the design alone, and only the user can.
+- **A new agent fixes the findings,** from a brief: the agent that wrote the branch, resumed, re-reads its whole, grown
   context on every turn, which costs more than the review it answers.
-- **The report says what the review cost,** agent by agent, so that the cost of the rounds shows while it builds up,
-  and the decision to go on weighs it.
+- **The report says what the review cost,** agent by agent, so that it shows which agents a review spends on, such as
+  an expert that finds nothing on a large diff, and the triage and the experts can be tuned.
 - **A target other than the current branch is checked out outside the repository**, at the commits its range resolves
   once, so a reviewed `CLAUDE.md` never loads as an instruction, and nothing done to a branch while the review runs
   changes what it reads.
 - **Reviews can run at the same time, from the same checkout:** each one keeps its scope in a temporary directory of
   its own.
 - **The report ends the review.** It suggests a fix for each finding but applies none: the session that owns the branch
-  answers each one or has a fixer agent fix it, a failed check always, and the user decides at the merge.
+  answers each one or has a `fixer` agent fix it, and the user decides at the merge.
 
 ## References
 

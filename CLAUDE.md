@@ -69,10 +69,10 @@ Production runs on this machine, from the main checkout, `~/Dev/scanmylib`, and 
   checkout, which encloses the worktree: those of production's release, which may be older. Where they differ, follow
   the worktree's, which describe the code you change.
 - **Parallel sessions:** when several Claude sessions work at the same time, each owns one worktree and its pull
-  request, from its plan to its review fixes, and never works in another session's worktree. A round of review fixes
-  goes to a new `fixer` agent in that worktree, as the `develop` skill says, never back to the agent that wrote the
-  branch, whose context only grows. The coordinating session is the one that started the others, or the one the user
-  names.
+  request, from its plan to its review fixes, and never works in another session's worktree. Review fixes go to a new
+  `fixer` agent in that worktree, as `.claude/skills/develop/SKILL.md` > Review says, never back to the agent that wrote
+  the branch, whose context only grows. The coordinating session is the one that started the others, or the one the
+  user names.
 - **Give searches and explorations to cheaper agents,** on the model and at the effort that
   `.claude/rules/configuration.md` > Claude Code automation gives for the task, through the Agent tool's `model` and
   `effort`. An agent defined in `.claude/agents/` runs as its definition says, unless a procedure raises or lowers its
@@ -95,27 +95,14 @@ Production runs on this machine, from the main checkout, `~/Dev/scanmylib`, and 
   that each hold one reason to change, with its tests and documents, and pass `scripts/check.sh --last-commit`, the
   areas it touches; the last one passes `scripts/check.sh`. Write each message with the `writing-commits` skill, which
   holds the rules of a commit message.
-- **Review before pushing:** run `/expert-review` on the branch, and fix each finding in the commit it belongs to, or
-  answer it in the pull request, except a failed check of a fix commit, which a new fixer takes. The review itself
-  changes no code. Then review each round of fixes on its own diff, against the findings it answers, since a fix can
-  bring the bug the next round finds: a round whose blocking and should-fix findings are all answered in the pull
-  request, or that has none, ends the review, and the pull request names the fixes that no expert reviewed.
-- **Rounds of review converge, or the user decides:**
-  - a round that finds a defect, other than a failed check, that the previous fix brought into the same code calls for
-    another method, not another patch: a test that covers the whole input space, such as a conformance table, a
-    property test or the standard's own test data, a simpler design, or a library, planned and checked as
-    `.claude/skills/develop/SKILL.md` > Plan the work, "Plan before writing code" says. One round then reviews it;
-  - before a third round in all, weigh what remains against the risk of the code and the cost of the rounds so far: a
-    should-fix in code that handles only trusted input may be answered in the pull request instead;
-  - after four rounds in all, the review of the whole branch included, ask the user whether to go on, with what
-    remains, its severity and the cost so far.
 - **Releases** are pull requests of their own, which the `release` skill prepares (`.claude/rules/releases.md`).
 - **A branch reaches `main` only through a pull request whose CI passes.** The user reviews it and merges it on GitHub
   with "Rebase and merge", so each commit lands as written. Never merge into `main` yourself.
 - **The `develop` skill holds the procedure:** starting a branch, planning its work and writing its code, stacking it
   on another, shaping its history, reviewing it, pushing it and watching its CI, and folding its review fixes. It holds
-  the rules of planning too: read it before you start any change, since `.claude/skills/develop/SKILL.md` > Plan the
-  work, "Plan before writing code" says which changes go without a plan.
+  the rules of planning and review too: read it before you start any change, since `.claude/skills/develop/SKILL.md` >
+  Plan the work, "Plan before writing code" says which changes go without a plan, and its Review applies to every
+  branch.
 - **The `pull-request` skill holds the procedure:** opening and updating the pull request of a branch, showing the
   screens a change changes in it, and reviewing someone else's.
 

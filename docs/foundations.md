@@ -443,13 +443,18 @@ same place in every file; `.claude/rules/tests.md` says how tests are written.
 
 ### Releases and deployments
 
-`.claude/rules/releases.md` says which tests a release passes before its pull request opens, what a deployment
-checks, and how production's images are built. The reasons:
+`.claude/rules/releases.md` says which tests a release passes before its pull request opens, who merges that pull
+request, what a deployment checks, and how production's images are built. The reasons:
 
 - **A test validates a commit,** and a published release is a commit that CI and the release procedure have tested,
   including the sandbox's tests that need the engine's environment, which CI lacks. Testing it again at each deployment
   would test the same commit again, slow each deployment, and build an image of the api's tests on the machine that runs
   production.
+- **Claude merges the release pull request, and the user deploys.** The merge publishes a release, which changes no
+  installation: what it holds, the version and the notes, the user approved before the pull request opened, and every
+  change it releases went through the user's review in its own pull request, so waiting for the user to merge it would
+  only delay the publication, as long as the conditions of the rule hold, without which the user merges it. A deployment
+  changes production, the user's machine and library, so only the user runs it.
 - **A deployment can still get the installation wrong, where no test of the commit looks:** it builds the images that
   day, on the current image of each base tag and, for the sandbox and the api, the Debian packages of the first build
   on that image, runs them with production's `.env`, and starts the engine's environment that the machine's sandbox

@@ -432,7 +432,8 @@ nothing else while it is open. Once it is merged, `.github/workflows/release.yml
 (or on the last edit of its notes right after it; later commits belong to the next release) and publishes a GitHub
 release with that section as its notes. If a feature, fix or breaking change was merged in between, the notes miss it:
 the workflow publishes nothing and says so, and `scripts/release.py`, run again on `main`, completes the release with
-it in a new pull request. With Claude Code, the release skill (`.claude/skills/release/`) runs these steps.
+it in a new pull request. With Claude Code, the release skill (`.claude/skills/release/`) runs these steps, and merges
+the release pull request itself when `.claude/rules/releases.md` allows it.
 
 ## Technical documentation
 

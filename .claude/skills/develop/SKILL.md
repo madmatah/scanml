@@ -377,7 +377,8 @@ of its CI, a move onto its base or a revised design.
 ## Merge
 
 - **The user merges the pull request,** as `CLAUDE.md` > Workflow, "A branch reaches `main` only through a pull request
-  whose CI passes" says.
+  whose CI passes" says. A release pull request is the one exception: the `release` skill merges it, under the
+  conditions of `.claude/rules/releases.md`.
 - **After the merge,** keep the branch until the branches stacked on it have moved, as [Stack on an unmerged
   branch](#stack-on-an-unmerged-branch) says. Then stop its development stack if it still runs
   (`cd <worktree> && scripts/dev.sh down`), and remove the worktree and the branch from the main checkout:

@@ -46,7 +46,7 @@
 
 ### Hygiene
 
-- [ ] No secret, credential or `.env` file is committed, and no real document name or personal information is committed or written here.
+- [ ] No secret, credential or `.env` file is committed, and no real document name or personal information is committed or written here, apart from what credits a work.
 - [ ] No project-management material is committed: status, roadmap, decisions, plans, handoffs, notes, `TODO`, nor where that material lives.
 - [ ] No file is committed by accident: build output, logs, temporary captures, an APK.
 - [ ] `VERSION` is unchanged: only a release pull request changes it.

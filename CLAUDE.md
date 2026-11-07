@@ -111,7 +111,8 @@ Production runs on this machine, from the main checkout, `~/Dev/scanmylib`, and 
     checked.
 - **Releases** are pull requests of their own, which the `release` skill prepares (`.claude/rules/releases.md`).
 - **A branch reaches `main` only through a pull request whose CI passes.** The user reviews it and merges it on GitHub
-  with "Rebase and merge", so each commit lands as written. Never merge into `main` yourself.
+  with "Rebase and merge", so each commit lands as written. Never merge into `main` yourself, except a release pull
+  request, which the `release` skill merges under the conditions of `.claude/rules/releases.md`.
 - **The `develop` skill holds the procedure:** starting a branch, planning its work and writing its code, stacking it
   on another, shaping its history, reviewing it, pushing it and watching its CI, and folding its review fixes. It holds
   the rules of planning and review too: read it before you start any change, since `.claude/skills/develop/SKILL.md` >
@@ -169,8 +170,8 @@ read the file before you do what its line says.
   skill, the app's manifest, the vulnerability scan's workflow, and the api's code that reads the sandbox's results: the
   sandbox's isolation, wherever its image runs, containers and the host, and what keeps development stacks from
   production.
-- `releases.md`, for `VERSION`, `CHANGELOG.md`, and the release and deployment scripts and workflow: what a release is,
-  who changes `VERSION`, what a release is tested on, and what production runs.
+- `releases.md`, for `VERSION`, `CHANGELOG.md`, and the release and deployment scripts, workflow and skill: what a
+  release is, who changes `VERSION`, who merges its pull request, what a release is tested on, and what production runs.
 - `tests.md`, for any test, test support or test framework configuration, and before fixing a bug, since the fix starts
   with a test: the structure of a test file, writing a test, levels, test support and each test framework.
 - `documents.md`, for any document or agent guidance, and any reference to a document, tool messages included: present

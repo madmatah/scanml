@@ -1,15 +1,16 @@
 ---
 name: release
-description: Prepares a new ScanMyLib release for GitHub, from what main holds since the last one, as a pull request that the user merges and a workflow then publishes. Use when the user wants to release, ship or publish a new version, asks which version comes next, or a release could not be published and has to be completed. Not for deploying a release to an installation.
+description: Prepares a new ScanMyLib release for GitHub, from what main holds since the last one, as a pull request that it merges once its checks pass and a workflow then publishes. Use when the user wants to release, ship or publish a new version, asks which version comes next, or a release could not be published and has to be completed. Not for deploying a release to an installation.
 argument-hint: "[major|minor|patch]"
 ---
 
 # Prepare a release
 
 A release is the maintainer's work on GitHub: a pull request of its own, `chore(release): X.Y.Z`, with one commit that
-sets `VERSION` and adds the release's section to `CHANGELOG.md`. Once the user merges it,
-`.github/workflows/release.yml` tags `vX.Y.Z` on its release commit (or on the last edit of its notes right after it)
-and publishes a GitHub release with that section as its notes. This skill prepares that pull request and stops there.
+sets `VERSION` and adds the release's section to `CHANGELOG.md`. Once it is merged, `.github/workflows/release.yml`
+tags `vX.Y.Z` on its release commit (or on the last edit of its notes right after it) and publishes a GitHub release
+with that section as its notes. This skill prepares that pull request, merges it when `.claude/rules/releases.md`,
+"Claude merges the release pull request, and no other" allows it, and checks the publication.
 Deploying is not part of it: each installation deploys the releases it chooses (`scripts/deploy.sh`), when its owner
 asks. Its worktree is removed after the merge, as any other.
 
@@ -33,8 +34,9 @@ git branch --all --list 'release' 'release/*' 'origin/release' 'origin/release/*
 
 Stop and tell the user if CI is not green on the last commit of `main`, or if a release pull request is already open. A
 failed release run is not a reason to stop: its release could not be published, and this procedure completes it
-([Propose the version](#propose-the-version)). Name the other open pull requests: they are not in this release, and must
-not be merged while its pull request is open. A worktree `.claude/worktrees/release-…` or a branch `release` or
+([Propose the version](#propose-the-version)). Name the other open pull requests: they are not in this release, must
+not be merged while its pull request is open, and leave its merge to the user while one stays open ([Merge the release
+pull request](#merge-the-release-pull-request)). A worktree `.claude/worktrees/release-…` or a branch `release` or
 `release/…`, local or on `origin`, is a previous release's that was not removed after its merge: tell the user, and
 remove it with their agreement (a branch `release` also stands in the way of any `release/…` one).
 
@@ -156,7 +158,30 @@ The notes can also be edited on GitHub, as commits that change `CHANGELOG.md` on
 regenerate the description the same way. Remind the user to merge nothing else before the release: a feature, fix or
 breaking change merged in between is missing from the notes, and the workflow then publishes nothing.
 
-## Once the user says it is merged
+## Merge the release pull request
+
+Once the user approved the notes, and the last change to them is pushed, check the conditions of
+`.claude/rules/releases.md`, "Claude merges the release pull request, and no other":
+
+```bash
+cd ~/Dev/scanmylib/.claude/worktrees/release-vX.Y.Z && gh pr view <number> --json headRefOid,files   # its files
+gh pr checks <number> --watch                                                          # CI passes
+gh pr list --state open                                                                # this pull request alone
+```
+
+The sandbox's tests passed on its commit in [Test the sandbox with its engine](#test-the-sandbox-with-its-engine),
+since the release does not go on otherwise. When the files are not `VERSION` and `CHANGELOG.md` alone, CI fails or
+another pull request is open, tell the user which, and leave the merge to them: once they say it is merged, check the
+publication as below. Otherwise merge it, rebased, as "Rebase and merge" would, pinned to the `headRefOid` read above,
+so that a push after the check makes the merge fail rather than land a commit that was not checked:
+
+```bash
+cd ~/Dev/scanmylib/.claude/worktrees/release-vX.Y.Z && gh pr merge <number> --rebase --match-head-commit <headRefOid>
+```
+
+When the merge fails, tell the user why, and leave it to them.
+
+## Check the publication
 
 ```bash
 cd ~/Dev/scanmylib && gh run list --workflow release.yml --limit 1
@@ -171,7 +196,8 @@ other than edits of its notes, belong to the next release.
 ## Rules
 
 - This procedure applies `.claude/rules/releases.md`: what a release is tested on, what changes `VERSION`, what is
-  merged while a release pull request is open, and what tags.
-- It never merges, deploys, or changes production.
+  merged while a release pull request is open, who merges it, and what tags.
+- It merges only its own pull request, under the conditions of `.claude/rules/releases.md`, and never deploys or
+  changes production: deploying stays the user's.
 - An urgent fix follows the same path: its own pull request, then a release. A patch, unless `main` already holds
   unreleased features, which ship with it.

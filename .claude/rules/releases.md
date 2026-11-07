@@ -10,6 +10,7 @@ paths:
   - "scripts/build-apk.sh"
   - ".github/workflows/release.yml"
   - "android/app/build.gradle.kts"
+  - ".claude/skills/release/**"
 ---
 
 # Releases
@@ -25,6 +26,20 @@ chooses.
   format.
 - **Nothing else is merged while a release pull request is open,** since a feature, a fix or a breaking change merged in
   between is missing from its notes, and the release workflow then publishes nothing.
+- **Claude merges the release pull request, and no other:** the user approves the version and the notes before its pull
+  request opens, and every change it releases was reviewed and merged by the user in its own pull request, so a release
+  runs from its preparation to its publication without waiting for a merge. Claude merges it only when each of these
+  holds, and otherwise tells the user which one fails and leaves the merge to them:
+  - the release pull request changes only `VERSION` and `CHANGELOG.md`;
+  - CI passes on the release pull request;
+  - the OCR sandbox's unit tests that need an engine's environment passed on the commit of `main` it releases, as "A
+    release is tested before it is published, and a deployment only checks the installation" says;
+  - no other pull request is open, so that none merged at the same time lands between the notes and the release.
+
+  It merges with `gh pr merge --rebase`, as "Rebase and merge" would, so that the release's one commit lands as written,
+  pinned to the head commit it checked, so that a push after the check fails the merge, then checks that `.github/workflows/release.yml` published the release, and tells the user its link or what the
+  workflow reported. Deploying stays the user's: no session runs `scripts/deploy.sh`, and each installation deploys a
+  release when its owner chooses.
 - **A release is tested before it is published, and a deployment only checks the installation:** before its pull
   request opens, CI passes on the commit of `main` it releases, the app's tests and lint included, and so do the OCR
   sandbox's unit tests that need an engine's environment, which CI does not have, in the sandbox's image with the

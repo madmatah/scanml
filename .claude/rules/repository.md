@@ -6,7 +6,7 @@ pull request, is published.
 ## What belongs in the repository
 
 - **The repository holds the current state of the project, and nothing else.** Never commit project-management material,
-  which lives in `.pm/`, a separate private repository:
+  which lives outside it, nor say where it lives or how it is organized, which is each contributor's own business:
   - status or tracking files;
   - decision records;
   - roadmaps;

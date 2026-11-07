@@ -1,6 +1,3 @@
-# Private project-management repository (see CLAUDE.md)
-.pm/
-
 # The stack's configuration, never committed: written by scripts/setup.sh (production,
 # primary checkout) or scripts/dev-env.sh (a worktree's development stack); see .env.example.
 /.env

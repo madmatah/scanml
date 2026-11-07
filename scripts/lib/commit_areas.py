@@ -22,6 +22,9 @@ GATE_AREAS = ("lint", "scripts", "web", "server", "ocr", "android", "integration
 # A narrower prefix comes before the wider one it sits in, since the first that matches wins. A prefix is an fnmatch
 # pattern: its `*` matches any characters, `/` included.
 PATH_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
+    # The copy of a template's script, which no area reads: its tests live with the template
+    # (.claude/rules/conventions.md, "A script copied from a template is kept as it ships").
+    (".claude/skills/pull-request/scripts/pr_screenshots.py", ()),
     # The scripts that skills keep: the lint area checks them, and their tests are integration tests.
     (".claude/skills/*/scripts/", ("lint", "integration")),
     (".claude/", ()),

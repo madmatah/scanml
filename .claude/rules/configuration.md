@@ -118,6 +118,12 @@ paths:
   loosened, and no step dropped from the gate or from its CI run. The tests follow `tests.md`, where a loosened
   expectation states its reason. A change to the rule itself changes its rules file and its check together, and says
   why.
+- **The copy of a template's script is left out of the gate by its exact path,** which narrows no check: it follows
+  `conventions.md`, "A script copied from a template is kept as it ships", since no rule of the project governs that
+  copy, which changes only with its template, and its tests live with the template. So `ruff.toml`, the pathspecs of
+  the formatters and the list of the skills' scripts that mypy types in `scripts/check.sh` leave out
+  `.claude/skills/pull-request/scripts/pr_screenshots.py`, and `scripts/lib/commit_areas.py` picks no area for a change
+  of it. Only that path is left out: a script the project writes for a skill stays under every check.
 - **`scripts/check.sh --last-commit` skips a commit that already passed it:** `git rebase --exec` runs it on every
   commit of a branch each time the history is shaped again, while a reword, or a fix folded into a commit, leaves the
   commits before it as they were. A commit is known by its tree and its parent's tree, which fix both the files it holds

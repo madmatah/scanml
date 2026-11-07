@@ -150,8 +150,8 @@ read the file before you do what its line says.
 
 - `repository.md`, loaded in every session: what belongs in the repository, no real document names, no personal
   information, and how external work is credited.
-- `conventions.md`, loaded in every session: naming and the allowed acronyms, units, comments, characters a reader
-  cannot see, and input from outside the program.
+- `conventions.md`, loaded in every session: the scripts copied from a template, naming and the allowed acronyms,
+  units, comments, characters a reader cannot see, and input from outside the program.
 - `python.md`, for any Python file: layout, casing, typing, plain data, errors, internal names, async code, idioms and
   directives.
 - `kotlin.md`, for the app's Kotlin, Gradle scripts and resources: layout, casing, null safety, immutability, closed

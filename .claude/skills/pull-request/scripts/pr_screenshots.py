@@ -92,22 +92,30 @@ def check_picture(path: Path) -> bytes:
 def _walk_chunks(path: Path, content: bytes) -> Iterator[tuple[bytes, bytes]]:
     """The chunks of `content`, the PNG file at `path`, each as its type and its whole bytes, or a refusal.
 
-    Each chunk is yielded as soon as it is read, so that a reader that stops at one, such as `check_picture` at a
-    forbidden chunk, says so even when the file is cut further on.
+    A PNG file starts with IHDR and ends with IEND: a file cut between two chunks would otherwise read as whole, and
+    bytes after IEND, which a viewer never reads, could carry what the picture does not show. Each chunk is yielded as
+    soon as it is read, so that a reader that stops at one, such as `check_picture` at a forbidden chunk, says so even
+    when the file is cut further on.
     """
     if not content.startswith(_PNG_SIGNATURE):
         raise Refusal(f"{path} is not a PNG file")
     position = len(_PNG_SIGNATURE)
-    while position < len(content):
+    chunk_type = b""
+    while chunk_type != b"IEND":
         if position + 8 > len(content):
             raise Refusal(f"{path} is a truncated PNG file")
         length = int.from_bytes(content[position : position + 4], "big")
+        chunk_type = content[position + 4 : position + 8]
+        if position == len(_PNG_SIGNATURE) and chunk_type != b"IHDR":
+            raise Refusal(f"{path} does not start with an IHDR chunk")
         # Its length, its type, its data and its checksum.
         end = position + 12 + length
         if end > len(content):
             raise Refusal(f"{path} is a truncated PNG file")
-        yield content[position + 4 : position + 8], content[position:end]
+        yield chunk_type, content[position:end]
         position = end
+    if position != len(content):
+        raise Refusal(f"{path} holds data after its IEND chunk")
 
 
 def strip(directory: Path, paths: Sequence[Path]) -> list[Path]:
@@ -158,7 +166,8 @@ def parse_github_repository(remote_url: str) -> tuple[str, str]:
     """The owner and the name of the GitHub repository at `remote_url`, the URL of origin as configured."""
     match = _GITHUB_REMOTE.fullmatch(remote_url.strip())
     if match is None:
-        raise Refusal(f"origin is not a GitHub repository: {remote_url.strip()!r}")
+        # A URL may hold credentials, such as a token, in forms no pattern catches all of: it is never shown.
+        raise Refusal("origin is not a GitHub repository: `git remote -v` lists its URLs")
     return match["owner"], match["repository"]
 
 
@@ -246,16 +255,15 @@ def _fetch_branch() -> str | None:
     return _run_git("rev-parse", "--verify", f"{FETCHED_REF}^{{commit}}")
 
 
-def _commit(parent: str | None, number: int, pictures: Mapping[str, bytes]) -> str:
-    """A commit on `parent` that adds `pictures` under `pr-<number>/`, built in an index of its own."""
+def _commit(parent: str | None, number: int, blobs: Mapping[str, str]) -> str:
+    """A commit on `parent` that adds `blobs`, by name, under `pr-<number>/`, built in an index of its own."""
     with tempfile.TemporaryDirectory(prefix="pr-screenshots-") as directory:
         environment = {**os.environ, "GIT_INDEX_FILE": str(Path(directory) / "index")}
         if parent is None:
             _run_git("read-tree", "--empty", environment=environment)
         else:
             _run_git("read-tree", parent, environment=environment)
-        for name, content in pictures.items():
-            blob = _run_git("hash-object", "-w", "--stdin", input_bytes=content)
+        for name, blob in blobs.items():
             entry = f"100644,{blob},pr-{number}/{name}"
             _run_git("update-index", "--add", "--cacheinfo", entry, environment=environment)
         tree = _run_git("write-tree", environment=environment)
@@ -279,10 +287,11 @@ def publish(number: int, paths: Sequence[Path]) -> tuple[list[str], int]:
             raise Refusal(f"two pictures are named {path.name}")
         pictures[path.name] = check_picture(path)
     owner, repository = find_origin_repository()
+    blobs = {name: _run_git("hash-object", "-w", "--stdin", input_bytes=content) for name, content in pictures.items()}
     commit = None
     failure = ""
     for _ in range(PUSH_ATTEMPTS):
-        candidate = _commit(_fetch_branch(), number, pictures)
+        candidate = _commit(_fetch_branch(), number, blobs)
         pushed = subprocess.run(
             ["git", "push", "--quiet", "origin", f"{candidate}:{BRANCH_REF}"], capture_output=True, check=False
         )
@@ -321,11 +330,13 @@ def list_pull_requests_linking(owner: str, repository: str) -> list[int]:
     except ValueError as exc:
         raise Refusal(f"gh pr list printed no JSON: {exc}") from None
     # Anything but a list of pull requests would read as "no pull request links a picture", and the deletion go ahead.
-    if not isinstance(pull_requests, list) or not all(isinstance(each, dict) for each in pull_requests):
+    if not isinstance(pull_requests, list) or not all(
+        isinstance(each, dict) and type(each.get("number")) is int for each in pull_requests
+    ):
         raise Refusal("gh pr list printed no list of pull requests")
     link = compile_picture_link(owner, repository)
     return sorted(
-        int(pull_request["number"])
+        pull_request["number"]
         for pull_request in pull_requests
         if link.search(str(pull_request.get("body") or ""))
     )

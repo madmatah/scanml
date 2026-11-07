@@ -33,7 +33,7 @@
 
 - [ ] Each commit passes `scripts/check.sh --last-commit`, and the last one `scripts/check.sh`, every area.
 - [ ] A visible change of the web UI was checked in a browser, one of the app in its screenshot tests, and a change to the `ocr` service passes `scripts/verify-sandbox.sh` on the development stack.
-- [ ] `/expert-review` ran once on the completed branch, and again on the fixes of its blocking findings, when the first fixer fixed any, and this pull request names the fixes no expert checked; every finding is fixed or answered here, and the review section says what was not reviewed; when the branch changes the skills or agents that review or fix it, this pull request names the definitions that reviewed it, and says when they are not the branch's.
+- [ ] `/expert-review` ran once on the completed branch, with its plan, when it has one, and again on the fixes of its blocking findings, when the first fixer fixed any, and this pull request names the fixes no expert checked; every finding is fixed or answered here, and the review section says what was not reviewed; when the branch changes the skills or agents that review or fix it, this pull request names the definitions that reviewed it, and says when they are not the branch's.
 
 ### History
 

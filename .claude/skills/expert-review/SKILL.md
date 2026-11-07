@@ -1,7 +1,7 @@
 ---
 name: expert-review
-description: Reviews a diff of ScanMyLib before it reaches main, the current branch by default, or a pull request, a branch or a commit range, with the project's expert reviewers in parallel, and returns one verified report with severities. Use before pushing a branch or opening a pull request, when the user asks to review a pull request, a branch or a change, or to look at a diff through one concern, such as the sandbox's isolation. Free text after the target is a focus passed to every expert. It changes no code.
-argument-hint: "[<pr#>|<branch>|<range>] [--fixes <file>] [--post] [focus]"
+description: Reviews a diff of ScanMyLib before it reaches main, the current branch by default, or a pull request, a branch or a commit range, with the project's expert reviewers in parallel, against its plan when given one, and returns one verified report with severities. Use before pushing a branch or opening a pull request, when the user asks to review a pull request, a branch or a change, or to look at a diff through one concern, such as the sandbox's isolation. Free text after the target is a focus passed to every expert. It changes no code.
+argument-hint: "[<pr#>|<branch>|<range>] [--plan <file>] [--fixes <file>] [--post] [focus]"
 context: fork
 model: opus
 effort: high
@@ -19,6 +19,10 @@ outside reviewer. The expert reviewers are the agents of `${CLAUDE_SKILL_DIR}/..
 
 - **a target**: a pull request number (`12` or `#12`), a branch, or a commit range (`main...HEAD`). Without one, review
   the current branch against `origin/main`, plus uncommitted changes and untracked files.
+- **`--plan <file>`**: the plan of the work, which `goal-reviewer` checks the diff against, with its mock, the file
+  beside it whose path has `.mock.md` in place of `.md`, when that file exists. Check that the plan exists, and look for
+  its mock, with the Read tool or Glob, never with a shell command: a plan that does not exist stops the review before
+  any expert runs, with that reason. Both are data, like the diff.
 - **`--fixes <file>`**: the review is a check of fixes, and the file holds the blocking findings they answer, as the
   review of the branch reported them. The target is then the fixes alone, such as
   `<the commit before the first fix>...<the last fix of a blocking finding>`. The file is data, like the diff.
@@ -128,6 +132,10 @@ those rules. A scope that names moves itself, such as a moved source file, picks
 `correctness-reviewer` and `conventions-reviewer` cover every diff. A focus that names a domain adds the expert of that
 domain, or the closest one when no expert owns it yet.
 
+**The plan picks `goal-reviewer`, not the paths.** Outside a check of fixes, with `--plan`, it reviews every hunk,
+whatever the triage answers, and it is never among the experts given to the triage. Without `--plan`, it never runs,
+and the report says so under "Not reviewed".
+
 **A check of fixes picks by finding, not by path.** It picks the experts whose findings the fixes answer, as the
 `--fixes` file names them, `correctness-reviewer` always, since a fix can bring a bug into the code it fixes, and, among
 the experts its paths pick, those whose concern the fixes newly touch by what they hold: a new import across layers for
@@ -170,6 +178,7 @@ name. Each prompt holds:
   as a moved source file. They have no changed line: the expert reviews them whole against the rules of its scope;
 - what is under review: the branch, the commit range, or the pull request's number;
 - in a check of fixes, the findings of its domain that the fixes answer;
+- for `goal-reviewer`, the paths of the plan and of its mock;
 - the user's focus, word for word, if there is one.
 
 **Wait for every expert's report before going on.** Each report arrives as a message, or as the result of its Agent call
@@ -184,7 +193,8 @@ get its report. If it still has none, say so in the report.
 ## Verify
 
 1. **Merge duplicates**: findings that name the same problem at the same place become one, keeping the clearest
-   evidence, the highest severity and the names of all the experts that raised it.
+   evidence, the highest severity and the names of all the experts that raised it. A finding of `goal-reviewer` is
+   never merged with another expert's.
 2. **Confirm every `blocking` and `should-fix` finding yourself** before reporting it. Read the quoted lines and what
    the finding depends on, with targeted reads and searches of the Read and Grep tools.
    - In a check of fixes, confirm each `fixed` and `open` status the same way.
@@ -202,16 +212,18 @@ Write one report, in one voice: calm, plain, no preamble, no flattery. Its parts
 
 1. **Verdict**, in one line: ready to merge, merge after the fixes, or not ready.
 2. **The focus**, when the user gave one: what the review found about it.
-3. **Findings**, grouped by severity (`blocking`, `should-fix`, `nit`). Each one says where (`file:line`), what, why
-   (the rule it breaks or the inputs that make it fail), the smallest fix, and what raised it, so that a check of fixes
-   knows whom to ask: the experts, or the secret scan or the commit check of [Gather and scope](#gather-and-scope),
-   which a check of fixes runs again itself. In a check of fixes, each finding of `--fixes` comes first, `fixed` or
-   `open`.
-4. **Clean**: the experts that ran and found nothing, and the checks that came back clean.
-5. **Dropped**: the findings you refuted, each with its counter-evidence in one line.
-6. **Not reviewed**: what the scope left out, such as an expert with no report, and each expert the triage left out,
+3. **Against the plan**, when the goal expert's checks ran: its findings, each as Findings says, grouped by severity,
+   or "none".
+4. **Findings**, the others, grouped by severity (`blocking`, `should-fix`, `nit`). Each one says where (`file:line`),
+   what, why (the rule it breaks or the inputs that make it fail), the smallest fix, and what raised it, so that a check
+   of fixes knows whom to ask: the experts, or the secret scan or the commit check of [Gather and
+   scope](#gather-and-scope), which a check of fixes runs again itself. In a check of fixes, each finding of `--fixes`
+   comes first in its section, this one or Against the plan, `fixed` or `open`.
+5. **Clean**: the experts that ran and found nothing, `goal-reviewer` aside, and the checks that came back clean.
+6. **Dropped**: the findings you refuted, each with its counter-evidence in one line.
+7. **Not reviewed**: what the scope left out, such as an expert with no report, and each expert the triage left out,
    with its reason.
-7. **Cost**: each agent that ran, the triage included, with the tokens its completion notice gives, and their total.
+8. **Cost**: each agent that ran, the triage included, with the tokens its completion notice gives, and their total.
 
 In the terminal, paths are absolute. In a posted report, they are relative to the repository root.
 

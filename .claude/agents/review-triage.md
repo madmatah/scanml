@@ -39,7 +39,7 @@ concerns a secret, a real document name or personal information never quotes its
    `correctness-reviewer` always runs, and so do `security-reviewer` and `sandbox-reviewer` when a changed path falls in
    their scope, in a check of fixes too, and `documentation-reviewer` when the diff adds a file.
 4. Add an expert that is not a candidate when the diff falls in its scope by what it holds, or when the focus names its
-   domain.
+   domain, apart from `goal-reviewer`, which only the plan picks.
 5. For each expert to run, give the line ranges of `scope.diff` that hold the hunks of its concern.
    `correctness-reviewer` gets every hunk, `security-reviewer` and `sandbox-reviewer` every hunk of the files in their
    scope, and `documentation-reviewer` every added file.

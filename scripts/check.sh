@@ -5,15 +5,16 @@
 #
 #   lint        the formatters and linters, without network, on read-only sources: Ruff (format and lint) and
 #               mypy --strict for the Python, zizmor for the workflows, ShellCheck and shfmt for the shell scripts,
-#               Biome for the web UI (ktlint, for the app, runs in the android area)
+#               Biome for the web UI (ktlint, for the app, runs in the android area), and none of them on a script
+#               copied from a template, kept as it ships
 #   scripts     the unit tests of the scripts' files and of the workflows (scripts/tests/), on the host's python3
 #   web         the unit tests of the web UI (node --test, in a container without network)
 #   server      the api's tests, in its test image, without network, read-only
 #   ocr         the sandbox's unit tests, in its image, without network or models
 #   android     the app's unit and screenshot tests, lint and ktlint (scripts/build-apk.sh, never signed)
-#   integration the integration tests of the scripts (scripts/integration_tests/): the scripts themselves, those of the
-#               skills (.claude/skills/*/scripts/) included, on the host's python3, against throwaway repositories and a
-#               docker stand-in that builds and starts nothing
+#   integration the integration tests of the scripts (scripts/integration_tests/): the scripts themselves, those the
+#               project writes for its skills (.claude/skills/*/scripts/) included, on the host's python3, against
+#               throwaway repositories and a docker stand-in that builds and starts nothing
 #
 # --fix formats the code and applies the linters' safe fixes instead of checking. ktlint formats android/ in place.
 # The other formatters work on a copy of the tracked files they format in server/, ocr/, scripts/ and .claude/skills/
@@ -41,10 +42,13 @@ readonly SHELLCHECK_IMAGE=koalaman/shellcheck:v0.11.0@$SHELLCHECK_DIGEST
 readonly SHFMT_DIGEST=sha256:8c06884a35683d8763fba6c0d9484d11a61a96da65f8d497d6f625825a6043f2
 readonly SHFMT_IMAGE=mvdan/shfmt:v3.14.1@$SHFMT_DIGEST
 readonly FORMATTED_DIRECTORIES=(server ocr scripts .claude/skills)
+# The copy of a template's script, which no formatter or type checker reads (.claude/rules/conventions.md, "A script
+# copied from a template is kept as it ships").
+readonly TEMPLATE_SCRIPT=.claude/skills/pull-request/scripts/pr_screenshots.py
 # The files the formatters of the copy format, and nothing else: no other file comes back, such as a vendored file or a
 # lock, whose change git diff would not let a reader judge.
 readonly FORMATTED_PATHSPECS=('server/*.py' 'ocr/*.py' 'scripts/*.py' '.claude/skills/*.py' 'ocr/*.sh' 'scripts/*.sh'
-    '.claude/skills/*.sh'
+    '.claude/skills/*.sh' ":(exclude)$TEMPLATE_SCRIPT"
     'server/scanmylib/web/*.js' 'server/scanmylib/web/*.json' 'server/scanmylib/web/*.css'
     ':(exclude)server/scanmylib/web/static/vendor/' ':(exclude)server/scanmylib/web/package-lock.json')
 # Without .env (CI only), scripts/build-apk.sh reads its settings from the environment, which
@@ -121,7 +125,7 @@ check_lint() {
         --config-file ../mypy.ini lib release.py e2e_test.py tests integration_tests
     # As the shell scripts: new ones included, deleted ones left out.
     mapfile -d '' -t listed_scripts < <(git -C "$ROOT" ls-files -z --cached --others --exclude-standard -- \
-        '.claude/skills/*/scripts/*.py')
+        '.claude/skills/*/scripts/*.py' ":(exclude)$TEMPLATE_SCRIPT")
     wait "$!" || die "cannot list the scripts of the skills: see git's error above"
     skill_scripts=()
     for script in "${listed_scripts[@]}"; do

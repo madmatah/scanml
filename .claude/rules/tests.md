@@ -148,8 +148,8 @@ The section of each test framework below gives its own words for them, and how i
   `scripts/lib/`, on `scripts/release.py` and on the workflows of `.github/workflows/`, against throwaway repositories
   where git is needed.
 - **Integration tests of the scripts:** `scripts/integration_tests/`, with `unittest` and the host's `python3`, which
-  run the scripts themselves, such as `deploy.sh`, `dev.sh`, `build-apk.sh`, `prod.sh`, `check.sh` and the scripts of
-  the skills (`.claude/skills/*/scripts/`), against throwaway repositories and a docker stand-in
+  run the scripts themselves, such as `deploy.sh`, `dev.sh`, `build-apk.sh`, `prod.sh`, `check.sh` and the scripts that
+  the project writes for its skills (`.claude/skills/*/scripts/`), against throwaway repositories and a docker stand-in
   (`scripts/integration_tests/docker_shim.py`) that never reaches the Docker daemon. Each one runs a script whole, with
   the processes it starts, and they have an area of their own in the gate, `integration`, which a commit runs only when
   it changes a script they run (`CLAUDE.md` > Workflow, "Commits").

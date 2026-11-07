@@ -93,10 +93,10 @@ Notes:
   ktlint runs through Gradle in the app's build container, with its network and its writable `android/`, and Gradle's
   verification metadata checks it as it checks the app's dependencies. `scripts/check.sh --fix` runs the other
   formatters on a copy of the tracked files they format in `server/`, `ocr/`, `scripts/` and `.claude/skills/` (never a
-  vendored file or a lock), and brings back only their changes to those files, so that nothing they create reaches the
-  checkout, where the host would run it, and no change reaches a file whose diff a reader could not judge. Biome's
-  `noDescendingSpecificity` is off: the stylesheet orders its rules by component, and reordering them to satisfy it
-  would change which rule wins.
+  vendored file, a lock or the script copied from a template), and brings back only their changes to those files, so
+  that nothing they create reaches the checkout, where the host would run it, and no change reaches a file whose diff a
+  reader could not judge. Biome's `noDescendingSpecificity` is off: the stylesheet orders its rules by component, and
+  reordering them to satisfy it would change which rule wins.
 - **`CLAUDE.md` and `.claude/` are the agent guidance** ([Agent guidance](#agent-guidance)).
 
 ## Architecture
@@ -203,7 +203,7 @@ them. The last row lists the scripts that the skills keep, which belong to no un
 | OCR sandbox | `setup/install.sh`, `setup/distribution_alias.py` | The installation of the sandbox's environments and models, which only the setup image holds, and the alias distribution it installs in place of OpenCV's GUI build | Tools |
 | scripts | `lib/stack.py`, `lib/version.py`, `lib/formatting.py`, `lib/parallel_tests.py`, `lib/commit_areas.py`, `lib/passed_commit_check.py`, `lib/common.sh`, `lib/engine_check.sh` | The `.env` format and its copy with a setting changed, production's checkout and the isolation of a stack, where a deployment installs a new sandbox, and the settings that the check of a sandbox before a restart takes from the `ocr` service; the version of a build; what the gate hands to its formatters and linters, and what comes back; the gate's parallel run of the tests of the scripts; the areas a commit touches; the commits that already passed their per-commit check; shared shell functions; the check of the engine's environment in a new `ocr` container, and of a sandbox with a new image before a restart | Tools |
 | scripts | `setup.sh`, `dev-env.sh`, `dev.sh`, `build-apk.sh`, `check.sh`, `deploy.sh`, `prod.sh`, `release.py`, `e2e_test.py`, `verify-sandbox.sh`, `vendor-katex.sh` | Install, develop, build the app, check, deploy, operate, release, test end to end, verify the sandbox, vendor KaTeX | Tools |
-| — (the skills) | `pull-request/scripts/pr_screenshots.py` in `.claude/skills/` | Publish the screenshots of a pull request, copy them without their hidden data, and clean the branch that holds them | Tools |
+| — (the skills) | `pull-request/scripts/pr_screenshots.py` in `.claude/skills/` | Publish the screenshots of a pull request, copy them without their hidden data, and clean the branch that holds them: the copy of a template's script, kept as it ships, whose tests live with the template | Tools |
 
 ## Repository layout
 

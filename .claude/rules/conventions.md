@@ -1,8 +1,16 @@
 # Code conventions
 
-These rules apply to code, tests and configuration, in every part of the repository. Each language adds its own rules,
-and the idioms that override the naming rules below, in a rules file of its own: `python.md`, `kotlin.md`, `web.md`
-(TypeScript and React, and JavaScript until the web UI moves to them) and `bash.md`.
+These rules apply to code, tests and configuration, in every part of the repository, except a script copied from a
+template. Each language adds its own rules, and the idioms that override the naming rules below, in a rules file of its
+own: `python.md`, `kotlin.md`, `web.md` (TypeScript and React, and JavaScript until the web UI moves to them) and
+`bash.md`.
+
+- **A script copied from a template is kept as it ships:** `.claude/skills/pull-request/scripts/pr_screenshots.py` is a
+  copy of the template it comes from, so that each later version of that template replaces it whole. None of the
+  project's rules applies to it, its tests live with the template rather than in the repository, the linters, the
+  formatters and the type checker of `scripts/check.sh` leave it out by its exact path, and it changes only when a later
+  version of the template replaces it: a defect found in it is reported to the user, who brings it to the template it
+  comes from. A script the project writes for a skill is the project's code, under every rule.
 
 ## Naming
 

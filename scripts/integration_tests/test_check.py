@@ -31,6 +31,9 @@ _OPTIONS_WITH_ALLOWED_VALUES = {
 }
 _OPTIONS_GIVEN_ONCE = ("--network", "--read-only", "--cap-drop", "--security-opt", "--user")
 FIXER_COMMANDS = ("ruff check --fix .", "ruff format .", "-w -- ", "biome check --write", "ktlintFormat")
+#: The copy of a template's script, which no formatter or type checker reads (.claude/rules/conventions.md, "A script
+#: copied from a template is kept as it ships").
+TEMPLATE_SCRIPT = ".claude/skills/pull-request/scripts/pr_screenshots.py"
 
 
 @dataclass(frozen=True)
@@ -526,6 +529,28 @@ class WhenGivenTheLintAfterAScriptOfASkillIsAddedAndAnotherDeleted(InstallationT
         self.assertTrue(self.skills_type_checks[0].endswith(type_check), self.skills_type_checks)
 
 
+class WhenGivenTheLintWithTheScriptCopiedFromATemplate(InstallationTestCase):
+    project_script: ClassVar[str] = ".claude/skills/example/scripts/tool.py"
+    gate_run: ClassVar[ScriptRun]
+    skills_type_checks: ClassVar[list[str]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        installation = make_installation(cls)
+        commit_in_worktree(installation, TEMPLATE_SCRIPT, "print('as it ships')\n")
+        commit_in_worktree(installation, cls.project_script, "print('tool')\n")
+        cls.gate_run = check(installation, "lint")
+        tools = [" ".join(run) for run in list_tool_runs(installation.read_docker_calls())]
+        cls.skills_type_checks = [tool for tool in tools if "mypy --config-file mypy.ini --" in tool]
+
+    def test_should_succeed(self) -> None:
+        self.assertEqual(self.gate_run.returncode, 0, self.gate_run.output)
+
+    def test_should_type_only_the_scripts_the_project_writes(self) -> None:
+        self.assertEqual(len(self.skills_type_checks), 1)
+        self.assertEqual(self.skills_type_checks[0].split(" -- ")[-1], self.project_script)
+
+
 class WhenGivenTheLintAfterAShellScriptIsAddedAndAnotherDeleted(InstallationTestCase):
     gate_run: ClassVar[ScriptRun]
     shellcheck_runs: ClassVar[list[list[str]]]
@@ -898,6 +923,27 @@ class TheFixOptionWhenAFormatterChangesAFileThatTheFormattersDoNotFormat(Install
     def test_should_never_bring_it_back(self) -> None:
         self.assertEqual(sorted(self.texts_after), sorted(self.container_paths))
         self.assertEqual(self.texts_after, self.texts_before)
+
+
+class TheFixOptionWhenAFormatterChangesTheScriptCopiedFromATemplate(InstallationTestCase):
+    shipped_text: ClassVar[str] = "print('as it ships')\n"
+    fix_run: ClassVar[ScriptRun]
+    text_after: ClassVar[str]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        installation = make_installation(cls)
+        commit_in_worktree(installation, TEMPLATE_SCRIPT, cls.shipped_text)
+        formatted: Rule = {"match": r" ruff format \.$", "files": {f"/src/{TEMPLATE_SCRIPT}": "# formatted\n"}}
+        installation.answer_docker([formatted])
+        cls.fix_run = fix(installation)
+        cls.text_after = (installation.worktree / TEMPLATE_SCRIPT).read_text()
+
+    def test_should_succeed(self) -> None:
+        self.assertEqual(self.fix_run.returncode, 0, self.fix_run.output)
+
+    def test_should_never_bring_a_change_of_it_back_so_that_it_stays_as_it_ships(self) -> None:
+        self.assertEqual(self.text_after, self.shipped_text)
 
 
 class TheFixOptionWhenAFormatterChangesAnUntrackedFile(InstallationTestCase):

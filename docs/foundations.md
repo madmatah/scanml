@@ -289,6 +289,8 @@ against the domain. `.claude/rules/conventions.md` states them, and a rules file
   capitalize them, so that a concept is spelled the same in the api, the web UI and the app.
 - **A name outside the program keeps its spelling,** such as a variable of `.env` or a field of the API, because
   installations, phones and agents depend on it.
+- **The project's own files are not checked as outside input is,** since such a check costs code and tests and guards
+  against nothing but its own bugs, which a loud failure shows sooner.
 
 ### Git
 

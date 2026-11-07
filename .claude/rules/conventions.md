@@ -81,6 +81,10 @@ authors, page labels and ranges, folder names, messages), from `.env` files, and
 - **Outside input is checked before use.** A request, an upload, a shared file, a sandbox result, a response of the
   PC, a command-line argument, a URL parameter or a `.env` value is checked for its shape and its bounds. Malformed
   input fails cleanly, without crashing the program or corrupting its state.
+- **The project's own files are not outside input:** the files merged into its own repository, and what its build
+  generates from them, are read strictly, so that a malformed one fails loudly, as a bug does. Text that came from
+  outside stays outside text once the project stores it, such as a title the phone sent, kept in the database, or the
+  text of a sandbox result, kept in the library.
 - **Outside text never reaches a parser of markup, script, queries, URLs or command lines,** nor a path. Markup is built
   with the platform's text APIs, queries with parameters, paths from checked ids, and a command's arguments are passed
   as a list, never through a shell. For example:

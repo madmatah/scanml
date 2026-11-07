@@ -137,6 +137,86 @@ class TheLastCommitOptionWhenTheCommitChangesTheApi(InstallationTestCase):
         self.assertEqual(list_areas_checked(self.gate_run), ["lint", "server"])
 
 
+class TheLastCommitOptionWhenTheCommitAlreadyPassed(InstallationTestCase):
+    gate_run: ClassVar[ScriptRun]
+    checks: ClassVar[list[list[str]]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        installation = make_installation(cls)
+        commit_in_worktree(installation, "server/scanmylib/notes.py", "NOTES = 1\n")
+        check(installation, "--last-commit")
+        installation.forget_docker_calls()
+        cls.gate_run = check(installation, "--last-commit")
+        cls.checks = list_checks(installation.read_docker_calls())
+
+    def test_should_succeed_and_say_that_it_skips_the_commit(self) -> None:
+        self.assertEqual(self.gate_run.returncode, 0, self.gate_run.output)
+        self.assertIn("Skipped: this commit already passed the check.", self.gate_run.stdout)
+
+    def test_should_check_no_area(self) -> None:
+        self.assertEqual(self.checks, [])
+
+
+class TheLastCommitOptionWhenAnAreaFailedOnTheCommitInAnEarlierRun(InstallationTestCase):
+    failed_run: ClassVar[ScriptRun]
+    gate_run: ClassVar[ScriptRun]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        installation = make_installation(cls)
+        commit_in_worktree(installation, "server/scanmylib/notes.py", "NOTES = 1\n")
+        installation.answer_docker([{"match": r"^build ", "exit": 1}])
+        cls.failed_run = check(installation, "--last-commit")
+        installation.answer_docker([])
+        cls.gate_run = check(installation, "--last-commit")
+
+    def test_should_fail_the_first_run(self) -> None:
+        self.assertNotEqual(self.failed_run.returncode, 0)
+
+    def test_should_check_its_areas_again_since_a_failed_run_records_nothing(self) -> None:
+        self.assertEqual(list_areas_checked(self.gate_run), ["lint", "server"])
+
+
+class TheLastCommitOptionWhenAnUntrackedFileWasBesideTheCommitInAnEarlierRun(InstallationTestCase):
+    gate_run: ClassVar[ScriptRun]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        installation = make_installation(cls)
+        commit_in_worktree(installation, "server/scanmylib/notes.py", "NOTES = 1\n")
+        draft = installation.worktree / "draft.md"
+        draft.write_text("# draft\n")
+        check(installation, "--last-commit")
+        draft.unlink()
+        cls.gate_run = check(installation, "--last-commit")
+
+    def test_should_check_its_areas_again_since_a_run_beside_an_untracked_file_records_nothing(self) -> None:
+        self.assertEqual(list_areas_checked(self.gate_run), ["lint", "server"])
+
+
+class TheLastCommitOptionWhenItCannotTellWhetherTheCommitPassed(InstallationTestCase):
+    gate_run: ClassVar[ScriptRun]
+    checks: ClassVar[list[list[str]]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        installation = make_installation(cls)
+        commit_in_worktree(installation, "server/scanmylib/notes.py", "NOTES = 1\n")
+        check(installation, "--last-commit")
+        installation.forget_docker_calls()
+        (installation.worktree / "scripts" / "lib" / "passed_commit_check.py").write_text("import sys\n\nsys.exit(1)\n")
+        cls.gate_run = check(installation, "--last-commit")
+        cls.checks = list_checks(installation.read_docker_calls())
+
+    def test_should_fail_and_say_that_it_cannot_tell_rather_than_skip(self) -> None:
+        self.assertNotEqual(self.gate_run.returncode, 0)
+        self.assertIn("cannot tell whether the last commit already passed its check", self.gate_run.stderr)
+
+    def test_should_check_no_area(self) -> None:
+        self.assertEqual(self.checks, [])
+
+
 class TheLastCommitOptionWhenTheCommitChangesDocumentsOnly(InstallationTestCase):
     gate_run: ClassVar[ScriptRun]
     checks: ClassVar[list[list[str]]]

@@ -373,6 +373,12 @@ other formatters to the files git tracks in `server/`, `ocr/`, `scripts/` and `.
 before running what it changed. Each commit of a pull request passes the areas that read what it changes
 (`scripts/check.sh --last-commit`), its last commit the whole gate, and every pull request runs it in the continuous
 integration (`.github/workflows/ci.yml`, one job per area). Pull requests are merged when it is green.
+`scripts/check.sh --last-commit` skips a `fixup!`, `amend!` or `squash!` commit, which is checked once folded into its
+commit, and a commit whose files and whose parent's files already passed on a clean working tree, which it records in
+the common git directory of the repository: after a change outside the repository that the checks depend on, such as a
+new base image, `python3` or Android SDK, or to an ignored file that they read, such as a worktree's `.env` or
+`android/local.properties`, clear the record with
+`rm -f "$(git rev-parse --git-common-dir)/passed-commit-check"`.
 
 Every Monday, and on a push to `main` that changes what it scans, `.github/workflows/vulnerability-scan.yml` runs
 Google's OSV-Scanner on what Dependabot cannot see: the OCR sandbox's environments, resolved as a new installation would

@@ -410,8 +410,8 @@ copy. `.claude/rules/documents.md` > Where a statement lives says what goes wher
   could steer it: the rules that apply are the checkout's.
 - **Each agent runs on the model and at the effort its task needs,** because every turn of every run pays for both, and
   a review multiplies the runs: Opus where a miss costs most or where code is written, at `xhigh` only for large plans
-  ([Plans](#plans)), Sonnet where written rules guide the check, Haiku for search. A low effort saves Haiku and Sonnet
-  little and costs them much quality, so they never run at it.
+  ([Plans](#plans)), Sonnet where written rules or a plan guide the check, Haiku for search. A low effort saves Haiku
+  and Sonnet little and costs them much quality, so they never run at it.
 - **The history of a decision lives outside the repository,** with the project-management material, so the documents
   here describe only the present, with its reasons.
 
@@ -491,9 +491,15 @@ Every branch goes through `/expert-review` before its pull request. It is a proj
 - **One expert per domain, in parallel.** Correctness reviews every diff, and conventions every diff that holds code or
   configuration. Architecture, tests, performance, security and documentation join when the diff touches their domain,
   and so do the project's own experts: isolation (the sandbox, the guards of the scripts, the Dockerfiles and
-  `compose.yaml`) and Android. Each expert is an agent of `.claude/agents/`, on Opus for bugs, security, isolation,
-  architecture, the app, performance and tests, and on Sonnet for conventions and documentation, which written rules
-  guide. No expert can run a command, so that no reviewed text can make it act.
+  `compose.yaml`) and Android. The goal expert joins when the review has the plan of the work. Each expert is an agent
+  of `.claude/agents/`, on Opus for bugs, security, isolation, architecture, the app, performance and tests, and on
+  Sonnet for conventions, documentation and the goal, which written text guides. No expert can run a command, so that
+  no reviewed text can make it act.
+- **The goal expert checks the code against its plan,** and its findings get a section of their own in the report: a
+  change can pass every rule and still miss its goal, and nothing else in the review reads the plan; a section apart
+  keeps a passing axis from hiding a failing one. The plan picks it, not the paths or the triage. It never judges the
+  plan, which was checked before the code, as its size calls for. Without a plan it does not run, rather than read a
+  goal into an issue whose text may not be the user's.
 - **A triage on Sonnet weighs the experts that the paths pick,** by what the diff holds, before any of them runs: an
   expert pays a full reading of its rules, the diff and the code even when it has nothing to say, and the triage costs a
   fraction of that. It keeps an expert when unsure, and never drops correctness, nor security and isolation on their

@@ -141,7 +141,7 @@ paths:
   - Opus writes code: an implementation, a fix, any change to the code;
   - Opus judges where a miss costs most: hunting bugs, security, the sandbox's isolation, architecture, the app's
     platform, performance, verifying findings;
-  - Sonnet sorts, and checks a change against written rules, where it gives the best quality for its price;
+  - Sonnet sorts, and checks a change against written rules or its plan, where it gives the best quality for its price;
   - Haiku searches and lists;
   - Haiku and Sonnet run at `medium` or higher, since a low effort costs them much quality for little saving, and
     Haiku's price leaves room for `high`;

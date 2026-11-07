@@ -165,8 +165,8 @@ read the file before you do what its line says.
 
 - `develop`: from a new branch to a merged pull request.
 - `pull-request`: opening and updating a pull request, and reviewing someone else's.
-- `expert-review`: `/expert-review [<pr#>|<branch>|<range>] [--fixes <file>] [--post] [focus]`, the review of a diff
-  before `main`.
+- `expert-review`: `/expert-review [<pr#>|<branch>|<range>] [--plan <file>] [--fixes <file>] [--post] [focus]`, the
+  review of a diff before `main`, against its plan when given one.
 - `release`: `/release [major|minor|patch]`, the pull request of a new release, which a workflow publishes once merged.
 - `writing-commits`: the rules of a commit message and how to apply them, from its header and its scope to its body
   and its footer.

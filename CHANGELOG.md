@@ -7,6 +7,28 @@ The notable changes of each release of ScanMyLib. The format is based on
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-07
+
+### Added
+
+- Scripts: install a new OCR sandbox next to the running one at a deployment, with `scripts/deploy.sh --new-sandbox`, and keep the replaced one for a rollback
+- Scripts: check the new OCR image against its sandbox before the restart, so that a failed check leaves production unchanged
+- Scripts: give the development stack a sandbox of its own, with `scripts/dev-env.sh --own-sandbox`
+- OCR: fail the engine's check where PaddleX would refuse its requirements
+
+### Changed
+
+- Deploy this release with `scripts/deploy.sh --new-sandbox`, with 36 GiB free next to the sandbox: it installs the new OCR sandbox next to the running one and keeps the replaced one for a rollback
+- The api and OCR images are built on Debian 13 and ship without pip; the OCR image also leaves out uv, OpenGL and OpenCV's GUI, which halves its size
+
+### Fixed
+
+- Scripts: build production's images on the current base image
+
+### Security
+
+- Upgrade Pillow to 13.0.0, certifi to 2026.10.18 and the sandbox's uv to 0.13.4 for their security fixes
+
 ## [0.7.0] - 2026-10-25
 
 ### Added
@@ -137,7 +159,8 @@ The notable changes of each release of ScanMyLib. The format is based on
 
 - OCR: read the whole request body before refusing a request
 
-[unreleased]: https://github.com/madmatah/scanml/compare/v0.7.0...HEAD
+[unreleased]: https://github.com/madmatah/scanml/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/madmatah/scanml/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/madmatah/scanml/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/madmatah/scanml/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/madmatah/scanml/compare/v0.4.0...v0.5.0

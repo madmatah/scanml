@@ -349,13 +349,36 @@ skill how it is made. The reasons:
 - **The session that held the interview writes the plan of normal work:** it holds the decisions first-hand, and a
   planner would read the code again to rebuild them. The planner stays for large work, whose design needs a context of
   its own.
+- **A plan holds decisions, not code:** the goal, the design choices and the alternatives they reject, where the tests
+  go, the slices and their commits, the documents and the risks. File paths and code go stale as soon as the work
+  starts, the implementation finds them anyway, and a plan that describes the code line by line runs to hundreds of
+  lines that the planner, the critic and the implementation all pay for.
+- **The plan cuts the work into vertical slices, each sized for one fresh context:** every turn of an agent rereads its
+  whole context, so its cost grows roughly with the square of its length. In a measured session, one implementer that
+  took a whole branch of 10 commits reached a context of 653k tokens and cost about a third of the session, while three
+  implementers that shared a branch of 24 commits kept mean contexts between 144k and 181k. A slice through every layer
+  it needs is verifiable on its own, so the next one starts from work that holds, while a slice of one layer proves
+  nothing until the last.
+- **Each slice goes to a new implementer,** whose context holds the plan, its slice, the commits so far and the report
+  of the implementer before it, rather than the code of every earlier slice; and the session, whose context already
+  holds the interview, the plan and its critic, does not grow with the code. The report is the handoff, since it is
+  written anyway: a file beside the plan would be one more writer.
 - **A mock of an output a person reads comes before its plan:** a critic checks a plan against the code and the rules,
   but cannot tell whether a reader will like the output. A mock costs a few lines to write and to change, while an
   output that the user rejects once it is built costs a revised plan, a new implementation and another review.
 - **A critic that did not write the plan checks it,** against the code and the rules, as an expert reviews code it did
   not write: an assumption about the code that no one checked is the cheapest mistake to catch in a plan.
+- **The critic names a simpler alternative, with its size beside the plan's,** since nothing else in the loop asks
+  whether a much smaller design would do: the critic checks the design it is given, and reviews then harden it. A plan
+  sized next to its alternative shows a design out of proportion with its goal before any code is written.
 - **The code follows the plan, or the plan changes first,** since a design changed while it is built escapes the
   critic.
+- **The planner writes its plan file and reports in a few lines:** a plan returned in a report is written twice, by the
+  planner and again by the session, and then weighs on every later turn of the session, which needs its summary and its
+  open questions, and reads the rest of the plan only where it needs it, such as its decisions.
+- **The critic checks the whole plan, and its mock, at each round,** since a plan of decisions is short: a check of a
+  revision from its diff alone would miss the parts of the plan that a changed mock settles and the diff does not
+  touch, such as a test that still asserts the old order of the output.
 - **Within one planning, the planner answers the critic itself,** since it already holds the code the plan rests on, in
   a context far smaller than an implementer's: a new planner would read it all again.
 - **The smallest changes go without a plan,** such as a bug fix inside one function: even a brief would cost more than

@@ -48,11 +48,12 @@ outside the worktree, with `git commit -F <file>`.
   session writes the plan of normal work, since it holds the decisions first-hand, and a `plan-critic` agent checks it
   in one round, and in a second only for a blocking point. A `planner` agent writes the plan of large work, and a
   `plan-critic` agent checks it. The critic did not write the plan: it checks it against the code and the rules before
-  any code is written. Only these changes go without a plan: a typo, a rename inside one file, a dependency bump, a bug
-  fix inside one function. A review fix stays within the plan: only a change of design, or the change of method that
-  `CLAUDE.md` > Workflow, "Rounds of review converge, or the user decides" calls for, goes back to it. The code follows
-  the plan: an implementation that finds it wrong stops and says why, and the plan is revised and checked again as its
-  size calls for before the work goes on.
+  any code is written, and names a simpler design where one would do. Only these changes go without a plan: a typo, a
+  rename inside one file, a dependency bump, a bug fix inside one function. A review fix stays within the plan: only a
+  change of design, or the change of method that `CLAUDE.md` > Workflow, "Rounds of review converge, or the user
+  decides" calls for, goes back to it. The plan cuts the work into vertical slices, and each slice goes to a new agent.
+  The code follows the plan: an implementation that finds it wrong stops and says why, and the plan is revised and
+  checked again as its size calls for before the work goes on.
 - **A mock comes before the plan of an output a person reads:** when planned work adds or changes something whose layout
   or content a reader judges, such as a document that the code generates, a report, the output of a command or a
   screen, rather than a single message, its plan starts from a mock of that output, written by hand with realistic
@@ -103,8 +104,10 @@ Before any plan of normal or large work is written, settle its open decisions as
 ### Mechanical work
 
 Write the brief to the plan's path, with the Write tool: the size and its reason, the goal and what it leaves out, the
-recipe and where it comes from, and the commits, each with its reason to change. Then, without waiting, commit it as
-your instructions say, and write the code as [Write the code](#write-the-code) says.
+recipe and where it comes from, and the commits, each with its reason to change, which form one slice, or, when they
+would not fit one fresh context, such as a migration in batches, several slices, as `.claude/agents/planner.md` > The
+plan says. Then, without waiting, commit it as your instructions say, and write the code as [Write the
+code](#write-the-code) says.
 
 ### Normal work
 
@@ -123,40 +126,56 @@ your instructions say, and write the code as [Write the code](#write-the-code) s
 
 ### Large work
 
-1. Spawn the `planner` agent with its brief: the worktree and its base, the size and its reason, the goal and where it
-   comes from, the constraints, the decisions you settled with the user and those you took alone, and, when your
-   instructions keep the project-management material somewhere, its path and that of its decision log. For a revision,
-   add the path of the plan, what showed it wrong, such as the findings of a review, and the commits of the branch with
-   their files, from `cd <worktree> && git log --format='%h %s' --name-only <base>..HEAD`. Write each plan it returns,
-   without its `Answers` section, to the plan's path, with the Write tool.
-2. Spawn the `plan-critic` agent with the worktree, its base, the goal, the constraints, the decisions and the user's
+1. Spawn the `planner` agent with its brief: the worktree and its base, the path of the plan, the size and its reason,
+   the goal and where it comes from, the constraints, the decisions you settled with the user and those you took alone,
+   and, when your instructions keep the project-management material somewhere, its path and that of its decision log.
+   For a revision, add what showed the plan wrong, such as the findings of a review, and the commits of the branch with
+   their files, from `cd <worktree> && git log --format='%h %s' --name-only <base>..HEAD`. The planner writes the plan
+   itself and returns a short report: a summary, what changed in a revision, its open questions and its answers to the
+   critic. Read the plan only where the report leaves you a question: you carry every file you read for the rest of the
+   work.
+2. When the planner reports that it could not write the plan, stop, and tell the user, or, when the user does not follow
+   the work, say in your final report, the path that the planner needs leave to write, and any open points of the
+   critic.
+3. Spawn the `plan-critic` agent with the worktree, its base, the goal, the constraints, the decisions and the user's
    answers you know, and the path of the plan, and, for a revision, what showed the plan wrong and the commits of the
    branch, as the planner got them. Resume the planner with the critic's blocking and should-fix points, rather than
-   spawning a new one that would read the code again, then resume the critic with the planner's answers. Go on until
-   the critic says `ready`. After three rounds, ask the user about what remains, or, when the user does not follow the
-   work, stop and give the path of the plan and its open points in your final report.
-3. Once the critic says `ready`, commit the plan as your instructions say, and go on as [After the
+   spawning a new one that would read the code again, then resume the critic with the planner's answers: it checks the
+   whole plan again. Go on until the critic says `ready`. After three rounds, ask the user about what remains, or, when
+   the user does not follow the work, stop and give the path of the plan and its open points in your final report.
+4. Once the critic says `ready`, commit the plan as your instructions say, and go on as [After the
    plan](#after-the-plan) says.
 
 ### After the plan
 
-When the user follows the work, give them the path of the plan, its summary and its open questions, and wait for their
-answers only while open questions remain: the interview settled the rest. Revise the plan with a change they ask for:
-yourself for normal work, or, for large work, by resuming the planner with the change as the user's answer. Then have
-the critic check it, as [Normal work](#normal-work) or [Large work](#large-work) says, and commit the plan again. When
-the user does not follow the work, move each open question, with the answer that the plan recommends, to its "Decided
-alone" section, and commit the plan again.
+When the user follows the work, give them the path of the plan, its summary, with each slice, the slices it needs and
+what it delivers, so that they can judge how the work is cut, and its open questions, from the planner's last report for
+large work, and wait for their answers only while open questions remain: the interview settled the rest. Revise the plan
+with a change they ask for: yourself for normal work, or, for large work, by resuming the planner with the change as the
+user's answer. Then have the critic check it, as [Normal work](#normal-work) or [Large work](#large-work) says, and
+commit the plan again. When the user does not follow the work, move each open question, with the answer that the plan
+recommends, to its "Decided alone" section, and commit the plan again.
 
 ## Write the code
 
-Write the code from the plan, or give it to an agent on Opus at `high`, as `.claude/rules/configuration.md` > Claude
-Code automation says, with the worktree, its base and the path of the plan, and the bound that
-`.claude/rules/configuration.md` > Claude Code automation, "An agent given a worktree works only there" sets, which it
-reads before its first command, as the `fixer` agent does: it reads the plan, and writes each commit message as
-`.claude/skills/develop/SKILL.md` > Develop says. When the plan proves wrong, stop, and revise it as [Plan the
-work](#plan-the-work) says. If an agent was writing the code, commit or drop its work in progress, as the revised plan
-says, then give the rest to a new agent, with the revised plan and the commits so far: the one that stopped carries a
-context that only grows.
+Give each slice of the plan not marked done, in order, to a new agent on Opus at `high`, as
+`.claude/rules/configuration.md` > Claude Code automation says, even when the plan holds one slice. Its brief gives the
+worktree, its base, the path of the plan and that of its mock, when it has one, its slice, the commits so far, from
+`cd <worktree> && git log --format='%h %s' --name-only <base>..HEAD`, the report of the agent before it, when there is
+one, and the bound that `.claude/rules/configuration.md` > Claude Code automation, "An agent given a worktree works only
+there" sets. The agent reads that rule before its first command, then the plan and its mock, writes each commit message
+with the `writing-commits` skill and as `.claude/skills/develop/SKILL.md` > Develop says, and ends with a short report,
+which is the handoff to the next one: its commits, the work it leaves uncommitted, what it found, such as a deviation
+from the plan or a surprise in the code, the state of each acceptance criterion of its slice, and its open points, those
+of the report it received included.
+
+Read each report, and go on to the next slice. A deviation that changes a decision of the plan is the plan proving
+wrong. When a report leaves an acceptance criterion unmet, a commit of its slice not made, or work uncommitted, and the
+plan is not wrong, give the rest of that slice to a new agent, with that report; when that one leaves it unfinished too,
+stop, and tell the user, or, when the user does not follow the work, say so in your final report. When the plan proves
+wrong, stop, and revise it from the last report, as [Plan the work](#plan-the-work) says. Commit or drop the work that
+report leaves uncommitted, as the revised plan says, then give each remaining slice to a new agent, with the revised
+plan, the commits so far and that report.
 
 ## Stack on an unmerged branch
 

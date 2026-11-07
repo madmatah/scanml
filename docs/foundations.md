@@ -317,8 +317,6 @@ procedures. The reasons behind them:
   the tool that typed a change would add a line to every message and say nothing of its reason.
 - **"Rebase and merge"** lands each commit as written, after the review ([Code review](#code-review)) and CI
   ([Technology stack](#technology-stack)).
-- **One writer for `.pm/`,** the coordinating session, keeps its commits from racing, while each session in parallel
-  still writes the plan of its own branch, a file that no other session touches.
 - **The screenshots of pull requests live on a branch of their own, `pr-screenshots`,** that holds no code: in the
   code's history, every clone would carry them, and CI artifacts would show every screen rather than the case a pull
   request makes. Each picture is linked by the commit that adds it, so a description never changes once written, and
@@ -345,8 +343,8 @@ The reasons:
   a context far smaller than an implementer's: a new planner would read it all again.
 - **A change that leaves the design as it is goes without a plan,** such as a bug fix inside one function: a plan and
   its check, both at `xhigh`, would cost more than the mistakes they could catch there.
-- **The plan lives in `.pm/`,** since the repository holds only the current state, and a plan describes work to come.
-  Each plan has one writer, the session that owns its branch, so plans written in parallel never collide.
+- **The plan lives outside the repository,** since the repository holds only the current state, and a plan describes
+  work to come. Each plan has one writer, the session that owns its branch, so plans written in parallel never collide.
 
 ### Agent guidance
 
@@ -370,8 +368,8 @@ copy. `.claude/rules/documents.md` > Where a statement lives says what goes wher
   a review multiplies the runs: Opus where a miss costs most or where code is written, at `xhigh` only for plans
   ([Plans](#plans)), Sonnet where written rules guide the check, Haiku for search. A low effort saves Haiku and Sonnet
   little and costs them much quality, so they never run at it.
-- **The history of a decision lives in `.pm/`**, a private repository nested in the main checkout, so the documents here
-  describe only the present, with its reasons.
+- **The history of a decision lives outside the repository,** with the project-management material, so the documents
+  here describe only the present, with its reasons.
 
 ## Testing
 

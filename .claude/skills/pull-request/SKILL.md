@@ -34,11 +34,11 @@ Plan the work as `CLAUDE.md` > Workflow, "Plan before writing code" says, and re
 or a review shows it wrong:
 
 1. Spawn the `planner` agent with its brief: the worktree and its base, the goal and where it comes from, the
-   constraints and the decisions you know, and the path of `.pm/`, as `CLAUDE.md` > Project management gives it. For a
-   revision, add the path of the plan, what showed it wrong, such as the findings of a review, and the commits of the
-   branch with their files, from `cd <worktree> && git log --format='%h %s' --name-only <base>..HEAD`. Write each plan
-   it returns, without its `Answers` section, to the path of the plan that `CLAUDE.md` > Project management gives, and
-   commit it as it says.
+   constraints and the decisions you know, and, when your instructions keep the project-management material somewhere,
+   its path and that of its decision log. For a revision, add the path of the plan, what showed it wrong, such as the
+   findings of a review, and the commits of the branch with their files, from
+   `cd <worktree> && git log --format='%h %s' --name-only <base>..HEAD`. Write each plan it returns, without its
+   `Answers` section, where your instructions keep the plan of a branch, and commit it as they say.
 2. Spawn the `plan-critic` agent with the worktree, its base, the goal, the constraints, the decisions and the user's
    answers you know, and the path of the plan, and, for a revision, what showed the plan wrong and the commits of the
    branch, as the planner got them. Resume the planner with the critic's blocking and should-fix points, rather than

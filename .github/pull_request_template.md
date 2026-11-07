@@ -8,7 +8,7 @@
 
 ## Screenshots
 
-<!-- The screens a visible change or fix changes, before and after; a screenshot can also show that a change works, even one that does not touch the UI. They are published as the `pull-request` skill > Show a visible change says, once the pull request is open: until then, the section keeps this comment. They are public, and a published picture stays readable by anyone with its link: invented data only, never a real library, a phone's screen capture or production. "None" when nothing shows. -->
+<!-- The screens a visible change or fix changes, before and after; a screenshot can also show that a change works, even one that does not touch the UI. They are published as `.claude/skills/pull-request/SKILL.md` > Show a visible change says, once the pull request is open: until then, the section keeps this comment. They are public, and a published picture stays readable by anyone with its link: invented data only, never a real library, a phone's screen capture or production. "None" when nothing shows. -->
 
 ## How to test
 

@@ -90,7 +90,8 @@ Production runs on this machine, from the main checkout, `~/Dev/scanmylib`, and 
   console; the app in its screenshot tests (`.claude/rules/tests.md` > Levels). The gate cannot see what is drawn.
 - **Show a visible change in its pull request:** a change that a screen of the app or the web UI shows puts screenshots
   of the screens it changes in its pull request, after the change and before it when the base can show the screen, so
-  that the reviewer sees it without running it, as the `pull-request` skill > Show a visible change says.
+  that the reviewer sees it without running it, as `.claude/skills/pull-request/SKILL.md` > Show a visible change
+  says.
 - **Commits:** commit as you like while the work is in progress. Before pushing, rewrite the branch into atomic commits
   that each hold one reason to change, with its tests and documents, and pass `scripts/check.sh --last-commit`: the
   areas that read what it changes, the integration tests of the scripts included when it changes a script they run.

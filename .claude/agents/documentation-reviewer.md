@@ -42,8 +42,8 @@ review: read what a check needs of them.
   - two rules that contradict each other;
   - a rules file that sends its reader to another document for a rule;
   - `paths` that miss the files a rule is about, or a rules file without its line in `CLAUDE.md`;
-  - an expert whose "Read first" names a source of rules other than rules files and `CLAUDE.md` headings, or sends its
-    reader more than one hop away;
+  - an expert whose "Read first" names a source of rules other than rules files and headings of `CLAUDE.md` or of the
+    skill that holds the rules it checks, or sends its reader more than one hop away;
   - an expert check that enforces a written rule without citing it;
   - a skill or an agent whose instructions no longer match the repository;
   - a skill whose `description` lists its steps, is not in the third person, or does not say what the skill is for and

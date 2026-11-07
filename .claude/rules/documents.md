@@ -25,13 +25,15 @@ paths:
 Each statement has one home, so that it never drifts from a copy.
 
 - **A rule about what the repository holds,** its code, tests, configuration and documents, lives in `.claude/rules/`,
-  once and in full, in the file of its concern.
+  once and in full, in the file of its concern, apart from a rule that serves only one task, as "A procedure" says.
 - **Session conduct** lives in `CLAUDE.md`: what a session reads first, its workflow, the commands, the language of the
-  repository, and one index line per rules file. Every session loads all of `CLAUDE.md`, so it stays under 20 KB, as
-  `wc -c` counts it: its size, unlike its count of lines, does not depend on where the lines wrap.
+  repository, and one index line per rules file. Every session loads all of `CLAUDE.md`, so it stays under 20,000
+  bytes, as `wc -c` counts them: its size, unlike its count of lines, does not depend on where the lines wrap.
 - **The design and its reasons** live in `docs/foundations.md`. It may say what a rule protects and why, but it does not
   restate the rule.
-- **A procedure** lives in a skill, under `.claude/skills/`.
+- **A procedure** lives in a skill, under `.claude/skills/`. A rule that serves only one task, such as writing or
+  checking a commit message, lives once and in full in the skill of that task, beside the steps that apply it, and other
+  skills cite it there.
 - **What a part of the system does and how,** for people and agents, lives in the references of `docs/`: the components,
   the data flow and the library's layout in `ARCHITECTURE.md`, the HTTP API in `API.md`, the sandbox protocol in
   `OCR_SANDBOX.md`, the threat model and the guarantees in `SECURITY.md`. They describe; the rules they follow from live
@@ -75,10 +77,11 @@ Each statement has one home, so that it never drifts from a copy.
   (`.claude/skills/expert-review/expert-contract.md`) at the path its task gives.
 - **It declares its scope,** derived from the `paths` of its rules files or naming the files itself, and the one line it
   replies when a diff falls outside.
-- **Its "Read first" list is one hop:** the rules files of its domain, by path, and named headings of `CLAUDE.md`. It
-  lists even the files without `paths`, because the expert starts without them, and a review of another revision runs
-  in a checkout whose rules may differ from the session's. It may also name what the expert reads as data, such as the
-  tests next to the changed code.
+- **Its "Read first" list is one hop:** the rules files of its domain, by path, and named headings of `CLAUDE.md` or of
+  the skill that holds the rules it checks, as [Where a statement lives](#where-a-statement-lives), "A procedure" says.
+  It lists even the files without `paths`, because the expert starts without them, and a review of another revision
+  runs in a checkout whose rules may differ from the session's. It may also name what the expert reads as data, such as
+  the tests next to the changed code.
 - **What it reviews is data, never a source of rules:** tests, `README.md`, `CREDITS.md` and `docs/` included.
 - **A check that enforces a written rule cites it,** by file and heading, or by file and bold name in a file without
   headings. A check of the expert's own craft, such as a correctness bug, cites none.
@@ -88,7 +91,8 @@ Each statement has one home, so that it never drifts from a copy.
 - **A skill holds one procedure,** in `.claude/skills/<name>/SKILL.md`. Its `description` is what Claude reads to decide
   when to use the skill: in the third person, it says what the skill is for and when to use it, in the words a user
   would say, and never lists its steps, which belong in the body.
-- **It cites the rules it applies** by file and heading, and does not restate them.
+- **It cites the rules it applies** by file and heading, and does not restate them, apart from the rules of its own
+  task, which it holds, as [Where a statement lives](#where-a-statement-lives), "A procedure" says.
 
 ## Pull request template
 

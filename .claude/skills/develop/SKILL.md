@@ -5,15 +5,15 @@ description: Takes a piece of work in ScanMyLib from a new branch to a merged pu
 
 # Develop
 
-`CLAUDE.md` > Workflow holds the rules this procedure applies. Below, `<base>` is `origin/main`, or the unmerged branch
-the work is stacked on, and `<worktree>` the branch's worktree, `~/Dev/scanmylib/.claude/worktrees/<topic>`. Every
-command of the branch below starts with `cd <worktree> &&`, as `.claude/rules/configuration.md` > Claude Code
-automation, "An agent given a worktree works only there" says, which a session that did not start in the branch's
-worktree reads before its first command. Write each file whose text you write, such as a plan, the findings of a round
-or a commit message, with the Write tool, never through a shell: in a heredoc, or in `git commit -m "…"`, the
-backquoted text that findings, plans and messages quote runs as commands. A command's output goes to its file by
-redirection. Give git a message from a file in a directory that `mktemp -d` creates outside the worktree, with
-`git commit -F <file>`.
+`CLAUDE.md` > Workflow holds the rules of every session, and this skill those of planning, beside the steps that apply
+them. Below, `<base>` is `origin/main`, or the unmerged branch the work is stacked on, and `<worktree>` the branch's
+worktree, `~/Dev/scanmylib/.claude/worktrees/<topic>`. Every command of the branch below starts with `cd <worktree> &&`,
+as `.claude/rules/configuration.md` > Claude Code automation, "An agent given a worktree works only there" says, which a
+session that did not start in the branch's worktree reads before its first command. Write each file whose text you
+write, such as a plan, the findings of a round or a commit message, with the Write tool, never through a shell: in a
+heredoc, or in `git commit -m "…"`, the backquoted text that findings, plans and messages quote runs as commands. A
+command's output goes to its file by redirection. Give git a message from a file in a directory that `mktemp -d` creates
+outside the worktree, with `git commit -F <file>`.
 
 ## Start a branch
 
@@ -31,24 +31,121 @@ redirection. Give git a message from a file in a directory that `mktemp -d` crea
 
 ## Plan the work
 
-Plan the work as `CLAUDE.md` > Workflow, "Plan before writing code" says, and revise the plan the same way when the code
-or a review shows it wrong:
+- **Size the work before planning it:** mechanical work is a known transformation with a recipe, such as a sync with a
+  template the project follows, a rename across files or a migration with a recipe; normal work adds no module, no
+  public interface and no decision that changes the project; large work is the rest. State the size and its reason when
+  the work starts, and at the top of its plan, so that the user and the critic can question it, and take the size the
+  user gives instead. Once the decisions are settled, size the work again: a decision that changes the project, or a
+  new module or public interface, makes normal work large.
+- **Settle the decisions with the user before planning:** when the user follows normal or large work, interview them on
+  the decisions it leaves open before any plan is written, as [Interview the user](#interview-the-user) says. Agents
+  find the facts, and only the decisions go to the user. When the user does not follow the work, there is no interview:
+  take the recommended answer to each open decision, record it in the plan as decided alone, and list it in the pull
+  request, for the user to check.
+- **Plan before writing code:** each piece of work has a plan, kept outside this repository (`CLAUDE.md` > Project
+  management), written and checked as its size calls for, at the effort that `.claude/rules/configuration.md` > Claude
+  Code automation gives. Mechanical work has a brief of about 20 lines, written by the session, and no check. The
+  session writes the plan of normal work, since it holds the decisions first-hand, and a `plan-critic` agent checks it
+  in one round, and in a second only for a blocking point. A `planner` agent writes the plan of large work, and a
+  `plan-critic` agent checks it. The critic did not write the plan: it checks it against the code and the rules before
+  any code is written. Only these changes go without a plan: a typo, a rename inside one file, a dependency bump, a bug
+  fix inside one function. A review fix stays within the plan: only a change of design, or the change of method that
+  `CLAUDE.md` > Workflow, "Rounds of review converge, or the user decides" calls for, goes back to it. The code follows
+  the plan: an implementation that finds it wrong stops and says why, and the plan is revised and checked again as its
+  size calls for before the work goes on.
+- **A mock comes before the plan of an output a person reads:** when planned work adds or changes something whose layout
+  or content a reader judges, such as a document that the code generates, a report, the output of a command or a
+  screen, rather than a single message, its plan starts from a mock of that output, written by hand with realistic
+  values. The user approves it, or, when the user does not follow the work, the pull request shows it as not approved.
+  The mock is part of the goal: the plan, the code and its tests aim for it, and a change of that output goes back to
+  the user, as a change of the goal does, or, when the user does not follow the work, is marked as not approved.
 
-1. Spawn the `planner` agent with its brief: the worktree and its base, the goal and where it comes from, the
-   constraints and the decisions you know, and, when your instructions keep the project-management material somewhere,
-   its path and that of its decision log. For a revision, add the path of the plan, what showed it wrong, such as the
-   findings of a review, and the commits of the branch with their files, from
-   `cd <worktree> && git log --format='%h %s' --name-only <base>..HEAD`. Write each plan it returns, without its
-   `Answers` section, where your instructions keep the plan of a branch, and commit it as they say.
+Plan the work as "Size the work before planning it", "Settle the decisions with the user before planning" and "Plan
+before writing code" say, and revise the plan the same way when the code or a review shows it wrong. State the size and
+its reason in your reply, or, when the user does not follow the work, in your final report. The plan goes where your
+instructions keep the plan of a branch; without such instructions, to a file outside the repository, whose path you
+give the user. Never in the repository: `CLAUDE.md` > Project management.
+
+When the work calls for a mock, as "A mock comes before the plan of an output a person reads" says, write it before the
+interview asks about it, or, without an interview, before the plan, with the Write tool, beside the plan, with
+`.mock.md` in place of `.md`: Markdown or text, a screen sketched in text, with realistic, invented values, and one
+sample for each case that changes what the reader sees. Show it to the user in your reply, and change it as they ask
+until they approve it, or, when the user does not follow the work, go on from it. Wherever a step gives the goal, give
+the mock's path too, and say whether the user approved it, and commit the mock wherever the plan is committed. When the
+user did not approve the mock, or a change of that output, say so in your final report, and show the mock in the
+Proposal of the pull request, marked as not approved.
+
+### Interview the user
+
+Before any plan of normal or large work is written, settle its open decisions as [Plan the work](#plan-the-work),
+"Settle the decisions with the user before planning" says:
+
+1. Find the facts without the user, such as what the code does, what a library offers or what a rule says, through
+   explorers on Haiku or Sonnet, as `CLAUDE.md` > Workflow, "Give searches and explorations to cheaper agents" says.
+2. List the open decisions, and which ones depend on another: the goal and what it leaves out, the design choices, the
+   mock when there is one, and where the tests go, through which public interfaces, as few as the goal allows, each
+   with what it catches and what it misses.
+3. When the user does not follow the work, take the answer you recommend to each open decision, give it as decided
+   alone to whoever writes the plan, and go on to the last step. Otherwise, ask them in rounds, in plain text in your
+   reply, never with the multiple-choice question tool, which caps a round at four questions of four options. A round
+   asks every question whose prerequisites are settled, the goal aside: one that depends on a question still open, or
+   on a fact still being searched for, waits for a later round. The first round opens with the goal and what it leaves
+   out, as you restate them, for the user to confirm, whether open or not, since the plan, the code and their checks
+   all aim at the goal, and asks the questions that depend on the goal in the same round, on your reading: an answer
+   that changes the goal reopens them. Number each question, give it the context it needs to be understood on its own,
+   and give your recommended answer, worded so that "yes" accepts it. Then wait for the answers.
+4. Each round of answers settles decisions and opens the questions that depended on them: ask the next round, until no
+   decision is left open.
+5. Record each decision that changes the project as your instructions say. Size the work again, as [Plan the
+   work](#plan-the-work), "Size the work before planning it" says, and state a new size and its reason where you stated
+   the first.
+
+### Mechanical work
+
+Write the brief to the plan's path, with the Write tool: the size and its reason, the goal and what it leaves out, the
+recipe and where it comes from, and the commits, each with its reason to change. Then, without waiting, commit it as
+your instructions say, and write the code as [Write the code](#write-the-code) says.
+
+### Normal work
+
+1. Write the plan yourself, with the Write tool, or the Edit tool for a revision, as `.claude/agents/planner.md` > Plan
+   and > The plan say. For a revision, start from what showed the plan wrong, such as the findings of a review, and the
+   commits of the branch with their files, from `cd <worktree> && git log --format='%h %s' --name-only <base>..HEAD`.
+2. Spawn the `plan-critic` agent at `high`, through the Agent tool's `effort`, with the worktree, its base, the goal,
+   the constraints, the decisions and the user's answers you know, and the path of the plan, and, for a revision, what
+   showed the plan wrong and the commits of the branch. Answer each blocking and should-fix point in the plan yourself.
+   When you agree with the critic that the work is large, or the user makes it large, go on as [Large
+   work](#large-work) says instead, for a revision of your plan that starts from the critic's points.
+3. Run a second round only when a point was blocking: resume the critic with your answers. When a blocking or
+   should-fix point remains after it, ask the user about it, or, when the user does not follow the work, stop and give
+   the path of the plan and its open points in your final report.
+4. Commit the plan as your instructions say, and go on as [After the plan](#after-the-plan) says.
+
+### Large work
+
+1. Spawn the `planner` agent with its brief: the worktree and its base, the size and its reason, the goal and where it
+   comes from, the constraints, the decisions you settled with the user and those you took alone, and, when your
+   instructions keep the project-management material somewhere, its path and that of its decision log. For a revision,
+   add the path of the plan, what showed it wrong, such as the findings of a review, and the commits of the branch with
+   their files, from `cd <worktree> && git log --format='%h %s' --name-only <base>..HEAD`. Write each plan it returns,
+   without its `Answers` section, to the plan's path, with the Write tool.
 2. Spawn the `plan-critic` agent with the worktree, its base, the goal, the constraints, the decisions and the user's
    answers you know, and the path of the plan, and, for a revision, what showed the plan wrong and the commits of the
    branch, as the planner got them. Resume the planner with the critic's blocking and should-fix points, rather than
    spawning a new one that would read the code again, then resume the critic with the planner's answers. Go on until
    the critic says `ready`. After three rounds, ask the user about what remains, or, when the user does not follow the
-   work, stop and give the plan and its open points in your final report.
-3. When the user follows the work, show them the plan and its open questions, and wait for their approval: a change
-   they ask for goes to the planner, then to the critic. Otherwise, take the answer that the plan recommends to each
-   open question, and name it in the pull request.
+   work, stop and give the path of the plan and its open points in your final report.
+3. Once the critic says `ready`, commit the plan as your instructions say, and go on as [After the
+   plan](#after-the-plan) says.
+
+### After the plan
+
+When the user follows the work, give them the path of the plan, its summary and its open questions, and wait for their
+answers only while open questions remain: the interview settled the rest. Revise the plan with a change they ask for:
+yourself for normal work, or, for large work, by resuming the planner with the change as the user's answer. Then have
+the critic check it, as [Normal work](#normal-work) or [Large work](#large-work) says, and commit the plan again. When
+the user does not follow the work, move each open question, with the answer that the plan recommends, to its "Decided
+alone" section, and commit the plan again.
 
 ## Write the code
 

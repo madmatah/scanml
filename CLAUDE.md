@@ -68,13 +68,6 @@ Production runs on this machine, from the main checkout, `~/Dev/scanmylib`, and 
 - **In a worktree, its own guidance prevails.** Claude Code also loads the `CLAUDE.md` and the rules of the main
   checkout, which encloses the worktree: those of production's release, which may be older. Where they differ, follow
   the worktree's, which describe the code you change.
-- **Plan before writing code:** a `planner` agent writes the plan of each piece of work, kept outside the repository
-  ([Project management](#project-management)), and a `plan-critic` agent, which did not write it, checks it against the
-  code and the rules before any code is written. Only a change that leaves the design as it is goes without a plan: a
-  typo, a mechanical rename, a dependency bump, a bug fix inside one function. A review fix stays within the plan: only
-  a change of design, or the change of method that "Rounds of review converge, or the user decides" calls for, goes back
-  to it. The code follows the plan: an implementation that finds it wrong stops and says why, and the plan is revised
-  and checked again before the work goes on.
 - **Parallel sessions:** when several Claude sessions work at the same time, each owns one worktree and its pull
   request, from its plan to its review fixes, and never works in another session's worktree. A round of review fixes
   goes to a new `fixer` agent in that worktree, as the `develop` skill says, never back to the agent that wrote the
@@ -110,8 +103,8 @@ Production runs on this machine, from the main checkout, `~/Dev/scanmylib`, and 
 - **Rounds of review converge, or the user decides:**
   - a round that finds a defect, other than a failed check, that the previous fix brought into the same code calls for
     another method, not another patch: a test that covers the whole input space, such as a conformance table, a
-    property test or the standard's own test data, a simpler design, or a library, planned and checked as "Plan before
-    writing code" says. One round then reviews it;
+    property test or the standard's own test data, a simpler design, or a library, planned and checked as
+    `.claude/skills/develop/SKILL.md` > Plan the work, "Plan before writing code" says. One round then reviews it;
   - before a third round in all, weigh what remains against the risk of the code and the cost of the rounds so far: a
     should-fix in code that handles only trusted input may be answered in the pull request instead;
   - after four rounds in all, the review of the whole branch included, ask the user whether to go on, with what
@@ -120,7 +113,9 @@ Production runs on this machine, from the main checkout, `~/Dev/scanmylib`, and 
 - **A branch reaches `main` only through a pull request whose CI passes.** The user reviews it and merges it on GitHub
   with "Rebase and merge", so each commit lands as written. Never merge into `main` yourself.
 - **The `develop` skill holds the procedure:** starting a branch, planning its work and writing its code, stacking it
-  on another, shaping its history, reviewing it, pushing it and watching its CI, and folding its review fixes.
+  on another, shaping its history, reviewing it, pushing it and watching its CI, and folding its review fixes. It holds
+  the rules of planning too: read it before you start any change, since `.claude/skills/develop/SKILL.md` > Plan the
+  work, "Plan before writing code" says which changes go without a plan.
 - **The `pull-request` skill holds the procedure:** opening and updating the pull request of a branch, showing the
   screens a change changes in it, and reviewing someone else's.
 

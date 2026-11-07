@@ -1,8 +1,8 @@
 # Credits
 
 ScanMyLib reuses the work below. Each entry says what is reused, where it lives in this repository or where the
-project installs it, where it comes from, and under which terms. License notices that must be kept are copied
-verbatim.
+project installs it, where it comes from, and under which terms; guidance that borrows here and there is credited as a
+whole. License notices that must be kept are copied verbatim.
 
 ## Libraries
 
@@ -126,3 +126,32 @@ Tools that build and test the project, run in containers and never shipped.
 | shfmt | Formats the shell scripts; its author's image `mvdan/shfmt`, pinned by digest in `scripts/check.sh` | BSD-3-Clause | https://github.com/mvdan/sh |
 | ktlint, and the libraries it runs on: logback, JNA, SLF4J, colormath, Clikt, Mordant, kotlin-logging, ec4j, sarif4k, Poko, the Kotlin compiler and standard library, kotlinx.serialization, kotlinx.coroutines, JetBrains annotations | Formats and lints the app's Kotlin; from Maven Central, through the version catalog (`android/gradle/libs.versions.toml`) | MIT; logback EPL-1.0 or LGPL-2.1; JNA LGPL-2.1-or-later or Apache-2.0; SLF4J and colormath MIT; the others Apache-2.0 | https://github.com/pinterest/ktlint |
 | Biome | Formats and lints the web UI; installed from `server/scanmylib/web/package-lock.json` | MIT or Apache-2.0 | https://github.com/biomejs/biome |
+
+## Agent guidance
+
+- **mattpocock/skills:** parts of the agent guidance in `.claude/` draw on https://github.com/mattpocock/skills, by Matt
+  Pocock, under the MIT License:
+
+  ```
+  MIT License
+
+  Copyright (c) 2026 Matt Pocock
+
+  Permission is hereby granted, free of charge, to any person obtaining a copy
+  of this software and associated documentation files (the "Software"), to deal
+  in the Software without restriction, including without limitation the rights
+  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  copies of the Software, and to permit persons to whom the Software is
+  furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in all
+  copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  SOFTWARE.
+  ```

@@ -328,25 +328,41 @@ the procedures. The reasons behind them:
 
 ### Plans
 
-`CLAUDE.md` > Workflow, "Plan before writing code" says when a plan is due, and the `develop` skill how it is made.
-The reasons:
+`.claude/skills/develop/SKILL.md` > Plan the work, "Plan before writing code" says when a plan is due, and the `develop`
+skill how it is made. The reasons:
 
-- **A mistake in a plan costs every step after it:** the code built on it, its review and the rounds of fixes. A plan is
-  short, so thorough reasoning costs less there than anywhere else: the planner and the critic run on Opus at `xhigh`,
-  and the implementation that follows a checked plan at `high`.
+- **A mistake in a plan costs every step after it:** the code built on it, its review and its fixes. A plan is short,
+  so thorough reasoning costs less there than anywhere else: the planner and the critic of large work run on Opus at
+  `xhigh`, the critic of normal work at `high`, since a normal plan adds no module, no public interface and no decision
+  that changes the project, and the implementation that follows a checked plan at `high`.
 - **A plan chooses the method before the code.** A test that covers the whole input space, a simpler design or a
-  library costs nothing to choose in a plan; chosen after the code, it costs the rounds of review that showed the need
-  for it.
+  library costs nothing to choose in a plan; chosen after the code, it costs a revised plan, the code written again and
+  another full review.
+- **The work is sized before it is planned:** a sync made of mechanical commits and a new module do not need the same
+  planning, and a planner with three rounds of a critic at `xhigh` can cost a third of a session that a brief would
+  serve. The plan states its size and the reason, so that the critic and the user can question it.
+- **The decisions are settled with the user before the plan is written:** a decision that the user meets only in a
+  written plan sends the plan back to planning and to its critic, while a question asked first, with its recommended
+  answer, costs a line. The agents find the facts, since a question that the code answers spends the user's attention
+  on nothing. When the user does not follow the work, the pull request lists the answers taken alone, so that the user
+  checks them once.
+- **The session that held the interview writes the plan of normal work:** it holds the decisions first-hand, and a
+  planner would read the code again to rebuild them. The planner stays for large work, whose design needs a context of
+  its own.
+- **A mock of an output a person reads comes before its plan:** a critic checks a plan against the code and the rules,
+  but cannot tell whether a reader will like the output. A mock costs a few lines to write and to change, while an
+  output that the user rejects once it is built costs a revised plan, a new implementation and another review.
 - **A critic that did not write the plan checks it,** against the code and the rules, as an expert reviews code it did
   not write: an assumption about the code that no one checked is the cheapest mistake to catch in a plan.
 - **The code follows the plan, or the plan changes first,** since a design changed while it is built escapes the
   critic.
 - **Within one planning, the planner answers the critic itself,** since it already holds the code the plan rests on, in
   a context far smaller than an implementer's: a new planner would read it all again.
-- **A change that leaves the design as it is goes without a plan,** such as a bug fix inside one function: a plan and
-  its check, both at `xhigh`, would cost more than the mistakes they could catch there.
+- **The smallest changes go without a plan,** such as a bug fix inside one function: even a brief would cost more than
+  the mistakes it could catch there.
 - **The plan lives outside the repository,** since the repository holds only the current state, and a plan describes
-  work to come. Each plan has one writer, the session that owns its branch, so plans written in parallel never collide.
+  work to come. Each plan has one writer, the session that owns its branch, itself or through its planner, so plans
+  written in parallel never collide.
 
 ### Agent guidance
 
@@ -370,7 +386,7 @@ copy. `.claude/rules/documents.md` > Where a statement lives says what goes wher
   across documents. It starts without the session's `CLAUDE.md` files, which would cost it tokens on every turn and
   could steer it: the rules that apply are the checkout's.
 - **Each agent runs on the model and at the effort its task needs,** because every turn of every run pays for both, and
-  a review multiplies the runs: Opus where a miss costs most or where code is written, at `xhigh` only for plans
+  a review multiplies the runs: Opus where a miss costs most or where code is written, at `xhigh` only for large plans
   ([Plans](#plans)), Sonnet where written rules guide the check, Haiku for search. A low effort saves Haiku and Sonnet
   little and costs them much quality, so they never run at it.
 - **The history of a decision lives outside the repository,** with the project-management material, so the documents
@@ -502,3 +518,4 @@ Every branch goes through `/expert-review` before its pull request. It is a proj
 - Conventional Commits 1.0.0: https://www.conventionalcommits.org/en/v1.0.0/
 - Keep a Changelog 1.1.0: https://keepachangelog.com/en/1.1.0/
 - Semantic Versioning 2.0.0: https://semver.org
+- mattpocock/skills (the interview before a plan, and the plan of decisions): https://github.com/mattpocock/skills

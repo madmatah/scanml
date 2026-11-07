@@ -535,7 +535,8 @@ Every branch goes through `/expert-review` before its pull request. It is a proj
   changes what it reads. The experts follow the contract beside the skill that runs, the triage reads the Scopes beside
   it, and the commit check reads the commit rules beside it: those of the checkout the session started in. A review run
   from another checkout than the branch's worktree, such as the main checkout, follows definitions the branch cannot
-  rewrite; one run from the branch's worktree follows the branch's own, which the pull request names.
+  rewrite; one run from the branch's worktree follows the branch's own, which its report lists when they differ from
+  main's, so that the pull request names them.
 - **Reviews can run at the same time, from the same checkout:** each one keeps its scope in a temporary directory of
   its own.
 - **The report ends the review.** It suggests a fix for each finding but applies none: the session that owns the branch

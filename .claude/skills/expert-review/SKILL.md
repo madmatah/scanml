@@ -222,7 +222,13 @@ Write one report, in one voice: calm, plain, no preamble, no flattery. Its parts
 5. **Clean**: the experts that ran and found nothing, `goal-reviewer` aside, and the checks that came back clean.
 6. **Dropped**: the findings you refuted, each with its counter-evidence in one line.
 7. **Not reviewed**: what the scope left out, such as an expert with no report, and each expert the triage left out,
-   with its reason.
+   with its reason. The definitions that ran are those of the checkout that holds this skill, `<skill checkout>`, the
+   root that `git -C "${CLAUDE_SKILL_DIR}" rev-parse --show-toplevel` prints: whenever its `.claude/agents/`,
+   `.claude/skills/expert-review/` or `.claude/skills/writing-commits/` differ from `<main commit>`'s, as
+   `git -C <skill checkout> diff --name-only <main commit> -- .claude/agents .claude/skills/expert-review
+   .claude/skills/writing-commits` lists them, along with the untracked files that `git -C <skill checkout> ls-files
+   --others --exclude-standard` lists under the same paths, say which definitions ran: those files, as
+   `<skill checkout>` holds them, so that the pull request can name them.
 8. **Cost**: each agent that ran, the triage included, with the tokens its completion notice gives, and their total.
 
 In the terminal, paths are absolute. In a posted report, they are relative to the repository root.

@@ -21,7 +21,10 @@
 # before running what they changed. Every tool runs even after one that leaves findings, and the script then fails.
 #
 # --last-commit checks only the areas that read what the last commit changes (scripts/lib/commit_areas.py), none for
-# documents and agent guidance; CLAUDE.md > Workflow, "Commits" says when each mode runs.
+# documents and agent guidance, and skips a fixup, which is checked once folded into its commit, and a commit whose tree
+# and parent's tree already passed on a clean working tree (scripts/lib/passed_commit_check.py, whose record lies in the
+# common git directory: delete it after a change outside the repository that the areas depend on). CLAUDE.md >
+# Workflow, "Commits" says when each mode runs.
 #
 # Usage: scripts/check.sh [AREA...]
 #        scripts/check.sh --last-commit
@@ -32,6 +35,7 @@
 set -euo pipefail
 
 readonly AREAS=(lint scripts web server ocr android integration)
+readonly MUST_CHECK_STATUS=3
 readonly SHELLCHECK_DIGEST=sha256:61862eba1fcf09a484ebcc6feea46f1782532571a34ed51fedf90dd25f925a8d
 readonly SHELLCHECK_IMAGE=koalaman/shellcheck:v0.11.0@$SHELLCHECK_DIGEST
 readonly SHFMT_DIGEST=sha256:8c06884a35683d8763fba6c0d9484d11a61a96da65f8d497d6f625825a6043f2
@@ -261,6 +265,16 @@ if is_production_checkout "$ROOT" "$checkout"; then
 fi
 
 if ((checks_last_commit)); then
+    skip_status=0
+    commit_state=$(python3 "$ROOT/scripts/lib/passed_commit_check.py" check "$ROOT") || skip_status=$?
+    case $skip_status in
+        0)
+            say "$commit_state"
+            exit 0
+            ;;
+        "$MUST_CHECK_STATUS") read -r head_tree parent_tree tree_state <<< "$commit_state" ;;
+        *) die "cannot tell whether the last commit already passed its check: see the error above" ;;
+    esac
     mapfile -t areas < <(python3 "$ROOT/scripts/lib/commit_areas.py" "$ROOT")
     wait "$!" || die "cannot tell the areas the last commit touches: see git's error above"
     if ((${#areas[@]} == 0)); then
@@ -285,3 +299,7 @@ for area in "${areas[@]}"; do
     check_area "$area"
 done
 say "Passed: ${areas[*]}"
+if ((checks_last_commit)); then
+    python3 "$ROOT/scripts/lib/passed_commit_check.py" record "$ROOT" "$head_tree $parent_tree" "$tree_state" \
+        || die "the areas passed, but the commit could not be recorded: see the error above"
+fi

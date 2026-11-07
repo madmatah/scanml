@@ -45,6 +45,7 @@ COPIED = (
     "scripts/lib/common.sh",
     "scripts/lib/engine_check.sh",
     "scripts/lib/commit_areas.py",
+    "scripts/lib/passed_commit_check.py",
     "scripts/lib/formatting.py",
     "scripts/lib/parallel_tests.py",
     "scripts/tests/test_parallel_tests.py",

@@ -14,6 +14,7 @@ paths:
   - "scripts/vendor-katex.sh"
   - "scripts/check.sh"
   - "scripts/lib/commit_areas.py"
+  - "scripts/lib/passed_commit_check.py"
   - "scripts/lib/parallel_tests.py"
   - "scripts/lint/**"
   - "ruff.toml"
@@ -117,6 +118,30 @@ paths:
   loosened, and no step dropped from the gate or from its CI run. The tests follow `tests.md`, where a loosened
   expectation states its reason. A change to the rule itself changes its rules file and its check together, and says
   why.
+- **`scripts/check.sh --last-commit` skips a commit that already passed it:** `git rebase --exec` runs it on every
+  commit of a branch each time the history is shaped again, while a reword, or a fix folded into a commit, leaves the
+  commits before it as they were. A commit is known by its tree and its parent's tree, which fix both the files it holds
+  and the areas that `scripts/lib/commit_areas.py` picks from the files the commit changes: the same areas already
+  passed on the same files, so the skip narrows nothing. The tree alone would let the squash of two commits, whose tree
+  is the second's, skip the areas of the first. A commit is skipped as already passed, or recorded, only when the
+  working tree is clean, untracked files included whatever `status.showUntrackedFiles` says, and with no tracked file
+  marked assume-unchanged or skip-worktree, whose changes `git status` hides, since only then is `HEAD` what the areas
+  check. `scripts/lib/passed_commit_check.py` holds the skip, with the standard library only:
+  - its `check` runs after the guard of production's checkout and before the areas are picked; it skips a `fixup! `,
+    `amend! ` or `squash! ` commit and records nothing, since the fold puts it into its commit, which the areas then
+    check, so a check of the fixup alone is lost; it skips a commit whose key is recorded, on a clean working tree;
+    otherwise it prints the key and whether the working tree is clean, with a status of its own;
+  - its `record` runs only once every area passed, with what `check` printed before the areas ran, so that it records
+    the state that was checked: it appends the key, or, when the working tree was not clean, says that it records
+    nothing;
+  - any other status of the module stops the check, so that an error never skips it; a commit that no area reads, a run
+    given areas and a full run neither skip nor record;
+  - the record, `passed-commit-check` in the repository's common git directory, lies outside the working tree and is
+    shared by every worktree: delete it after a change outside the repository that the areas depend on, such as a new
+    build of an image that the gate pulls by tag, `node:22-trixie-slim`, which runs the web UI's tests, or
+    `python:3.12-slim-trixie`, the base of the images of the api, the sandbox and the gate's tools, a new `python3` on
+    the host, or a new Android SDK, and after a change to an ignored file that the areas read, such as the worktree's
+    `.env` or `android/local.properties`.
 
 ## Claude Code automation
 

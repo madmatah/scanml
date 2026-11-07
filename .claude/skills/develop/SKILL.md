@@ -195,9 +195,15 @@ plan, the commits so far and that report.
    message with the `writing-commits` skill, which holds the rules of a commit message. Interactive editors are
    unavailable: fold a change into its commit with `cd <worktree> && git commit --fixup=<commit>`, then
    `cd <worktree> && GIT_SEQUENCE_EDITOR=: git rebase -i --autosquash <base>`.
-2. Check every commit as `CLAUDE.md` > Workflow, "Commits" asks: each one on the areas it touches, with
-   `cd <worktree> && git rebase --exec 'scripts/check.sh --last-commit' <base>`, then the last one on every area, with
-   `cd <worktree> && scripts/check.sh`.
+2. Check every commit, as `CLAUDE.md` > Workflow, "Commits" and "Run each check once, at its level" ask: each one on
+   the areas it touches, with `cd <worktree> && git rebase --exec 'scripts/check.sh --last-commit' <base>`. The CI runs
+   the whole gate; run `cd <worktree> && scripts/check.sh` here only where "Run each check once, at its level" says.
+   When a commit fails, take its hash from `cd <worktree> && git rev-parse --short HEAD`, run
+   `cd <worktree> && git rebase --abort`, and commit the fix with `cd <worktree> && git commit --fixup=<that commit>`,
+   written by you or, once the branch is under review, by a new `fixer` agent with the brief that [Review](#review)
+   gives it and the failure as its finding, whose fix the pull request names among the fixes that no expert checked.
+   Fold it with `cd <worktree> && GIT_SEQUENCE_EDITOR=: git rebase -i --autosquash <base>`, and check again: amended
+   in the middle of the rebase, the commit would go on unchecked.
 
 ## Review
 
@@ -315,8 +321,8 @@ plan, the commits so far and that report.
      user, or, when the user does not follow the work, put in your final report the finding, where its fix now lives
      and the paths of `fix.patch`, and of `message` when one was saved.
 
-   Repeat this check until it lists none, then check the commits again, as [Shape the history](#shape-the-history)
-   does.
+   Repeat this check until it lists none, then check the commits again, and fix a failure, as [Shape the
+   history](#shape-the-history) says.
 4. Push with `cd <worktree> && git push --force-with-lease`, then keep the body true: update every section the fixes
    changed, and the "Screenshots" section, with pictures taken and published as `.claude/skills/pull-request/SKILL.md` >
    Show a visible change says. A screen whose change the fixes alter is published again, and its new "after" takes the

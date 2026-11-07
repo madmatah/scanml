@@ -309,9 +309,11 @@ the procedures. The reasons behind them:
   merge.
 - **A history rewritten before it is pushed,** into atomic commits whose messages say why, keeps the reasons that a diff
   cannot show. Each commit passing the areas that read what it changes keeps `main` a safe start for any work, a commit
-  of documents costing nothing, and the last commit of a pull request passing the whole gate keeps every part working
-  with the others. The integration tests of the scripts run for each commit that changes a script they run, since a
-  commit that a `git bisect` checks out may then run that script on the machine of production, whose guards it holds.
+  of documents costing nothing, and the whole gate, which the CI runs on the pull request, keeps every part working
+  with the others: every pull request must pass it there anyway, so it runs once per push rather than on each machine
+  at each rewrite of the branch, and `scripts/check.sh --last-commit` skips a commit that already passed it. The
+  integration tests of the scripts run for each commit that changes a script they run, since a commit that a
+  `git bisect` checks out may then run that script on the machine of production, whose guards it holds.
 - **A header that says what the change achieves, under the scope it belongs to,** lets a reader find a change in
   `git log --oneline` without opening it, since the diff already lists the files. The release notes that
   `scripts/release.py` drafts are the subjects of the features and fixes, each prefixed with its scope.

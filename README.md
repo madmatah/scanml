@@ -371,8 +371,8 @@ UI, the server and the OCR sandbox, and the Android tests and lint (`scripts/che
 only). `scripts/check.sh --fix` formats the code and applies the linters' safe fixes: ktlint to the app in place, the
 other formatters to the files git tracks in `server/`, `ocr/`, `scripts/` and `.claude/skills/`; read `git diff`
 before running what it changed. Each commit of a pull request passes the areas that read what it changes
-(`scripts/check.sh --last-commit`), its last commit the whole gate, and every pull request runs it in the continuous
-integration (`.github/workflows/ci.yml`, one job per area). Pull requests are merged when it is green.
+(`scripts/check.sh --last-commit`), and every pull request runs the whole gate in the continuous integration
+(`.github/workflows/ci.yml`, one job per area). Pull requests are merged when it is green.
 `scripts/check.sh --last-commit` skips a `fixup!`, `amend!` or `squash!` commit, which is checked once folded into its
 commit, and a commit whose files and whose parent's files already passed on a clean working tree, which it records in
 the common git directory of the repository: after a change outside the repository that the checks depend on, such as a

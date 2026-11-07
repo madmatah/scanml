@@ -196,6 +196,7 @@ Before committing, read the message against the rules:
    nothing that `.claude/rules/repository.md` > What belongs in the repository, > No real document names or > No
    personal information forbids, from a pasted log or a command's output as much as from your own words.
 
-Once committed, the commit passes what `CLAUDE.md` > Workflow, "Commits" asks of it: `scripts/check.sh --last-commit`,
-which checks what the last commit changes. When you rewrite a branch, `.claude/skills/develop/SKILL.md` > Shape the
-history checks every commit at once, and the last one on every area.
+Nothing to run here: the commit passes what `CLAUDE.md` > Workflow, "Commits" asks of it,
+`scripts/check.sh --last-commit`, which `.claude/skills/develop/SKILL.md` > Shape the history runs on every commit at
+once, when the branch is shaped; the CI then runs the whole gate on the pull request, as `CLAUDE.md` > Workflow, "Run
+each check once, at its level" says.

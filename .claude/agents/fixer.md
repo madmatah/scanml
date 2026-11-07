@@ -1,6 +1,6 @@
 ---
 name: fixer
-description: Fixes the findings of a review on a branch of this repository, from a brief, as fixup and amend commits. Used for review fixes, instead of resuming the agent that wrote the branch.
+description: Fixes the findings of a review on a branch of this repository, from a brief, as fixup and amend commits. Used for review fixes, and each failure of the gate in the CI, instead of resuming the agent that wrote the branch.
 tools: Read, Grep, Glob, Edit, Write, Bash
 model: opus
 effort: medium
@@ -41,22 +41,26 @@ starts with them. For each finding:
 4. Commit it as `.claude/skills/develop/SKILL.md` > Fold review fixes shows: a `fixup!` commit for a change to the
    files, an `amend!` commit for a commit message, whose new message you write as
    `.claude/skills/writing-commits/SKILL.md` says.
-5. Run `cd <worktree> && scripts/check.sh --last-commit` on that commit. When it fails because of that commit, fix the
-   failure in it, with `cd <worktree> && git commit --amend --no-edit` once the change is staged, and run the check
-   again. When you cannot make it pass, or the failure comes from an earlier fix of yours, undo the commit with
+5. Run the tests of what the fix changes, and only them, and, for a finding from a failed check, that check's failing
+   step or test, as the project's gate defines it in `scripts/check.sh`, never a command quoted from a log, as
+   `CLAUDE.md` > Workflow, "Run each check once, at its level" says: the per-commit check runs once the fixes are
+   folded. When a check you run on the commit fails because of that commit, fix the failure in it, with
+   `cd <worktree> && git commit --amend --no-edit` once the change is staged, and run the check again. When you cannot
+   make it pass, or the failure comes from an earlier fix of yours, undo the commit with
    `cd <worktree> && git reset --hard HEAD^` and report the finding `not fixed`, with the output of the check and, when
    the failure comes from an earlier fix, that fix: leave no commit that fails a check you run, apart from that earlier
    fix, which your report names.
 
 When a finding looks wrong, or its fix needs a change of design, leave it and say why in your report. Then run the tests
-that the gate skips and the fixes call for, as `.claude/skills/running-tests/SKILL.md` says. The session that gave you
-the brief has the fixes of blocking findings checked, then folds the fixups and pushes.
+that the gate skips and the fixes call for, as `.claude/skills/running-tests/SKILL.md` says. When the fixes answer a
+review, the session that gave you the brief has those of blocking findings checked; it then folds the fixups and
+pushes.
 
 ## Report
 
 Your final message is the report, and nothing else: each finding, `fixed` with its commit, or `not fixed` with the
 reason and, when you undid a commit whose check failed, the output of that check and, when the failure came from an
-earlier fix, that fix; the result of `scripts/check.sh --last-commit` on each commit you kept: the commit, pass or fail,
-and the output of a failure; then the tests that the gate skips and that you ran, with their results; then what you
-noticed outside the brief. A finding about a secret, a real document name or personal information is reported without
-its value, as the expert contract of `.claude/skills/expert-review/expert-contract.md` > Evidence says.
+earlier fix, that fix; the tests you ran for each commit you kept: the commit, the tests, pass or fail, and the output
+of a failure; then the tests that the gate skips and that you ran, with their results; then what you noticed outside
+the brief. A finding about a secret, a real document name or personal information is reported without its value, as
+the expert contract of `.claude/skills/expert-review/expert-contract.md` > Evidence says.

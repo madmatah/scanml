@@ -19,7 +19,8 @@ redirection. Give git a message from a file in a directory that `mktemp -d` crea
 
 1. From the main checkout, run `git fetch origin`, then
    `git worktree add --no-track -b <type>/<topic> .claude/worktrees/<topic> origin/main`, with a type from `CLAUDE.md` >
-   Workflow, "Commits". The main checkout keeps its HEAD, as `CLAUDE.md` > Production says.
+   Workflow, "Each piece of work has its own short-lived branch, `<type>/<topic>`, in its own worktree". The main
+   checkout keeps its HEAD, as `CLAUDE.md` > Production says.
 2. If the session started with `claude --worktree <name>` instead, `<worktree>` is
    `~/Dev/scanmylib/.claude/worktrees/<name>`, on a branch `worktree-<name>`: rename the branch with
    `cd <worktree> && git branch -m <type>/<topic>`, then check that it starts from `origin/main`:
@@ -75,9 +76,9 @@ context that only grows.
 
 ## Shape the history
 
-1. Before pushing, rewrite the branch into atomic commits, as `CLAUDE.md` > Workflow, "Commits" and "A commit message
-   says why" ask, and write each message with the `writing-commits` skill. Interactive editors are unavailable: fold a
-   change into its commit with `cd <worktree> && git commit --fixup=<commit>`, then
+1. Before pushing, rewrite the branch into atomic commits, as `CLAUDE.md` > Workflow, "Commits" asks, and write each
+   message with the `writing-commits` skill, which holds the rules of a commit message. Interactive editors are
+   unavailable: fold a change into its commit with `cd <worktree> && git commit --fixup=<commit>`, then
    `cd <worktree> && GIT_SEQUENCE_EDITOR=: git rebase -i --autosquash <base>`.
 2. Check every commit as `CLAUDE.md` > Workflow, "Commits" asks: each one on the areas it touches, with
    `cd <worktree> && git rebase --exec 'scripts/check.sh --last-commit' <base>`, then the last one on every area, with

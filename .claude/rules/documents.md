@@ -43,8 +43,8 @@ Each statement has one home, so that it never drifts from a copy.
 
 - **A reference names a file, and one of its headings when it points at a part:** `docs/foundations.md` > Layers and
   modules. Inside a document, it links the heading instead: `[References](#references)`. When a short section holds
-  several rules, the reference adds the rule's bold name, in quotes: `CLAUDE.md` > Workflow, "A commit message says
-  why".
+  several rules, the reference adds the rule's bold name, in quotes: `CLAUDE.md` > Workflow, "Check a visible
+  change".
 - **Never a number:** no section, rule or step number of a document of this repository. A number says nothing about its
   target, and it shifts when something is inserted before it. An outside standard is cited as its authors number it,
   such as RFC 5545, section 3.8.5.3.

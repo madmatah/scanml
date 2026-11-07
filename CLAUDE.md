@@ -96,7 +96,7 @@ Production runs on this machine, from the main checkout, `~/Dev/scanmylib`, and 
   console; the app in its screenshot tests (`.claude/rules/tests.md` > Levels). The gate cannot see what is drawn.
 - **Show a visible change in its pull request:** a change that a screen of the app or the web UI shows puts screenshots
   of the screens it changes in its pull request, after the change and before it when the base can show the screen, so
-  that the reviewer sees it without running it, as the `develop` skill > Show a visible change says.
+  that the reviewer sees it without running it, as the `pull-request` skill > Show a visible change says.
 - **Commits:** commit as you like while the work is in progress. Before pushing, rewrite the branch into atomic commits
   that each hold one reason to change, with its tests and documents, and pass `scripts/check.sh --last-commit`, the
   areas it touches; the last one passes `scripts/check.sh`. The header of a message follows Conventional Commits,
@@ -142,9 +142,10 @@ Production runs on this machine, from the main checkout, `~/Dev/scanmylib`, and 
 - **Releases** are pull requests of their own, which the `release` skill prepares (`.claude/rules/releases.md`).
 - **A branch reaches `main` only through a pull request whose CI passes.** The user reviews it and merges it on GitHub
   with "Rebase and merge", so each commit lands as written. Never merge into `main` yourself.
-- **The `develop` skill holds the procedure:** starting a branch, planning its work and writing its code, stacking
-  it on another, shaping its history, reviewing it, opening and updating its pull request, showing a visible change in
-  it, and reviewing someone else's.
+- **The `develop` skill holds the procedure:** starting a branch, planning its work and writing its code, stacking it
+  on another, shaping its history, reviewing it, pushing it and watching its CI, and folding its review fixes.
+- **The `pull-request` skill holds the procedure:** opening and updating the pull request of a branch, showing the
+  screens a change changes in it, and reviewing someone else's.
 
 ## Commands
 
@@ -203,7 +204,8 @@ read the file before you do what its line says.
 
 ## Skills
 
-- `develop`: from a new branch to a merged pull request, and reviewing someone else's.
+- `develop`: from a new branch to a merged pull request.
+- `pull-request`: opening and updating a pull request, and reviewing someone else's.
 - `expert-review`: `/expert-review [<pr#>|<branch>|<range>] [--fixes <file>] [--post] [focus]`, the review of a diff
   before `main`.
 - `release`: `/release [major|minor|patch]`, the pull request of a new release, which a workflow publishes once merged.

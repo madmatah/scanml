@@ -294,8 +294,8 @@ against the domain. `.claude/rules/conventions.md` states them, and a rules file
 
 ### Git
 
-`CLAUDE.md` > Workflow says how a session works, and the `develop` and `writing-commits` skills hold the
-procedures. The reasons behind them:
+`CLAUDE.md` > Workflow says how a session works, and the `develop`, `pull-request` and `writing-commits` skills hold
+the procedures. The reasons behind them:
 
 - **A worktree per piece of work** keeps parallel sessions from changing each other's files, and keeps work in progress
   out of the main checkout, which holds production's release. The worktrees live under `.claude/worktrees/` of the

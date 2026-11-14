@@ -11,12 +11,20 @@ import unittest
 from typing import ClassVar
 
 from docker_shim import Rule
-from installation_support import InstallationTestCase, ScriptRun, build_running_sandbox_rules, make_installation
+from installation_support import (
+    PASSWD_HOME,
+    InstallationTestCase,
+    ScriptRun,
+    build_running_sandbox_rules,
+    make_installation,
+)
 
 CLIPBOARD_WRITE = "\N{ESCAPE}]52;c;aGk=\a"
 SHOWN_CLIPBOARD_WRITE = "^[]52;c;aGk=^G"
 SCREEN_CLEAR = "\N{ESCAPE}[2J"
 SHOWN_SCREEN_CLEAR = "^[[2J"
+CREDENTIAL_VARIABLE = "EXAMPLE_API_TOKEN"
+HOME_VARIABLE = "EXAMPLE_CACHE_DIR"
 
 
 class WhenProductionsSandboxIsIsolated(InstallationTestCase):
@@ -123,6 +131,60 @@ class WhenTheChecksInsideTheSandboxPrintControlSequences(InstallationTestCase):
 
     def test_should_hand_the_terminal_no_control_character(self) -> None:
         self.assertNotIn("\N{ESCAPE}", self.verification.output)
+
+
+class WhenTheSandboxsEnvironmentHoldsACredentialLikeVariable(InstallationTestCase):
+    verification: ClassVar[ScriptRun]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        installation = make_installation(cls)
+        production_data = installation.production_data
+        environment: Rule = {
+            "match": r"\{\{range \.Config\.Env\}\}",
+            "stdout": f"PATH=/usr/bin\n{CREDENTIAL_VARIABLE}=x\n",
+        }
+        installation.answer_docker(
+            [environment, *build_running_sandbox_rules(f"{production_data}/sandbox", str(production_data))]
+        )
+        cls.verification = installation.run_script(installation.production_checkout, "verify-sandbox.sh")
+
+    def test_should_fail_and_name_the_variable(self) -> None:
+        self.assertEqual(
+            (
+                self.verification.returncode,
+                f"FAIL: no credential-like environment variable (expected '', got "
+                f"'{CREDENTIAL_VARIABLE} ')" in self.verification.stdout,
+            ),
+            (1, True),
+        )
+
+
+class WhenTheSandboxsEnvironmentMentionsTheHostsHome(InstallationTestCase):
+    verification: ClassVar[ScriptRun]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        installation = make_installation(cls)
+        production_data = installation.production_data
+        environment: Rule = {
+            "match": r"\{\{range \.Config\.Env\}\}",
+            "stdout": f"PATH=/usr/bin\n{HOME_VARIABLE}={PASSWD_HOME}/.cache\n",
+        }
+        installation.answer_docker(
+            [environment, *build_running_sandbox_rules(f"{production_data}/sandbox", str(production_data))]
+        )
+        cls.verification = installation.run_script(installation.production_checkout, "verify-sandbox.sh")
+
+    def test_should_fail_and_name_the_variable(self) -> None:
+        self.assertEqual(
+            (
+                self.verification.returncode,
+                f"FAIL: no environment variable mentions {PASSWD_HOME} (expected '', got '{HOME_VARIABLE} ')"
+                in self.verification.stdout,
+            ),
+            (1, True),
+        )
 
 
 if __name__ == "__main__":

@@ -123,7 +123,8 @@ services:
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
     user: "${SCANMYLIB_UID:-1000}:${SCANMYLIB_GID:-1000}"
-    init: true
+    # No Docker init: the image's command starts the sandbox's own, which no process of the sandbox can open in /proc,
+    # as it holds the container's output (ocr/scanmylib_ocr/container_init.py).
     devices: ["nvidia.com/gpu=all"]
     shm_size: 2gb
     pids_limit: 4096

@@ -127,15 +127,25 @@ log_max_size="$(inspect '{{index .HostConfig.LogConfig.Config "max-size"}}')"
 check "container log size bounded (logging max-size)" "yes" \
     "$([[ $log_driver != json-file || -n $log_max_size ]] && echo yes || echo "no ($log_driver without max-size)")"
 
+# The environment every sandbox process starts with, as Docker configures it: the init's /proc entries, which would
+# show it as the container started, are closed to the sandbox's user, whose processes could write to its output. So
+# the variables that a hook or a CDI specification adds at the container's start are not checked.
+host_home="$(getent passwd "$(id -u)" | cut -d: -f6)" || die "cannot read the home directory of uid $(id -u)"
+environment="$(inspect '{{range .Config.Env}}{{println .}}{{end}}' | sed '/^$/d')"
+check "no credential-like environment variable" "" \
+    "$(cut -d= -f1 <<< "$environment" | grep -iE 'TOKEN|SECRET|PASSW|CREDENTIAL|AUTH|API_?KEY|ACCESS_?KEY|PRIVATE' \
+        | tr '\n' ' ' || true)"
+check "no environment variable mentions $host_home" "" \
+    "$(grep -F -- "$host_home" <<< "$environment" | cut -d= -f1 | tr '\n' ' ' || true)"
+
 # What the check prints inside is the sandbox's, untrusted: a process of the sandbox can write to the output of any
 # process there that it may open in /proc, so nothing of it reaches the terminal but through cat -v.
 echo "== inside the sandbox (docker exec, as the sandbox user)"
 set +e
-docker exec -i -e LAN_TARGET="$lan_target" -e HOST_HOME="$(getent passwd "$(id -u)" | cut -d: -f6)" \
-    -e SANDBOX_KIND="$kind" "$container" python3 - 2>&1 << 'PY' | cat -v
+docker exec -i -e LAN_TARGET="$lan_target" -e HOST_HOME="$host_home" -e SANDBOX_KIND="$kind" "$container" \
+    python3 - 2>&1 << 'PY' | cat -v
 import errno
 import os
-import re
 import socket
 import stat
 import sys
@@ -318,13 +328,39 @@ else:
     print("INFO: AppArmor is not enabled on this host")
 check("not running as root", os.getuid() != 0 and os.geteuid() != 0, f"uid={os.getuid()}")
 
-# The environment every sandbox process starts with (that of the container's init).
-with open("/proc/1/environ", "rb") as environ:
-    variables = dict(item.split("=", 1) for item in environ.read().decode(errors="replace").split("\0") if "=" in item)
-secret_like = sorted(n for n in variables if re.search(r"TOKEN|SECRET|PASSW|CREDENTIAL|AUTH|API_?KEY|ACCESS_?KEY|PRIVATE", n, re.I))
-check("no credential-like environment variable", not secret_like, ", ".join(secret_like))
-host_paths = sorted(n for n, value in variables.items() if host_home in value)
-check(f"no environment variable mentions {host_home}", not host_paths, ", ".join(host_paths))
+
+def read_arguments(process_id: str) -> list[bytes]:
+    try:
+        with open(f"/proc/{process_id}/cmdline", "rb") as arguments:
+            return arguments.read().split(b"\0")
+    except OSError:
+        return []
+
+
+def open_for_writing(path: str) -> bool:
+    try:
+        os.close(os.open(path, os.O_WRONLY | os.O_NONBLOCK))
+        return True
+    except OSError:
+        return False
+
+
+# The container's init and the supervisor hold the container's output, its log: a process of the sandbox that could
+# open it in /proc would write to `docker logs` past the supervisor's escape.
+if SANDBOX:
+    process_ids = [name for name in os.listdir("/proc") if name.isdigit()]
+    supervisors = [
+        process_id
+        for process_id in process_ids
+        if read_arguments(process_id)[1:3] == [b"-m", b"scanmylib_ocr.supervisor"]
+    ]
+    outputs = [f"/proc/{process_id}/fd/{descriptor}" for process_id in ("1", *supervisors) for descriptor in (1, 2)]
+    reachable = [path for path in outputs if open_for_writing(path)]
+    check(
+        "the container's output (its init's and the supervisor's) cannot be opened from the sandbox",
+        len(supervisors) == 1 and not reachable,
+        ", ".join(reachable) or ("" if len(supervisors) == 1 else f"{len(supervisors)} supervisor processes found"),
+    )
 
 socket_path = os.environ.get("OCR_SOCKET", "/run/scanmylib/ocr.sock")
 if os.path.exists(socket_path):

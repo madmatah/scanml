@@ -24,6 +24,7 @@ import threading
 from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
+from .adapters.dumpable import stop_being_dumpable
 from .config import Settings
 from .engines import get_spec
 from .engines.base import EngineSpec, PageOptions
@@ -290,6 +291,11 @@ def _socket_in_use(path: str) -> bool:
 
 def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s", stream=sys.stderr)
+    try:
+        stop_being_dumpable()
+    except OSError as exc:
+        log.error("cannot keep the container's output from the sandbox: %s", exc)
+        return 1
     try:
         settings = Settings.from_env()
         spec = get_spec(settings.engine)

@@ -48,10 +48,10 @@ tree. The scripts of `scripts/` are tools: their logic lives in `scripts/lib/`, 
   no rule depends. asyncio's servers, connections and subprocesses stay behind ports, like every other technology.
 - **Only composition roots wire.** The entry points of each unit (the api's `scanmylib.__main__` and the application
   factory it calls, the app's `ScanMyLibApplication`, `AppContainer` and `MainActivity`, the web UI's `main.js`, the
-  sandbox's `supervisor`, `worker` and `engine_environment`) and the tests choose and connect the concrete adapters, by
-  hand: written by hand, the graph stays in one place and checked by the types, where a DI container would resolve it at
-  run time, by tokens. No DI container, no service locator, no singleton, and no global or top-level mutable state
-  shared between callers.
+  sandbox's `container_init`, `supervisor`, `worker` and `engine_environment`) and the tests choose and connect the
+  concrete adapters, by hand: written by hand, the graph stays in one place and checked by the types, where a DI
+  container would resolve it at run time, by tokens. No DI container, no service locator, no singleton, and no global
+  or top-level mutable state shared between callers.
 - **Plain data crosses boundaries:** values whose types belong to the inner side. No framework or platform type crosses
   a port: no FastAPI request, no `sqlite3.Row`, no Android `Uri` or `Context`.
 - **A location crosses a port as a value that names its file and cannot open it,** so that an inner layer does no I/O

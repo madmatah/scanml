@@ -75,7 +75,7 @@ Production runs on this machine, from the main checkout, `~/Dev/scanmylib`, and 
   one the user names.
 - **Give searches and explorations to cheaper agents,** on the model and at the effort that
   `.claude/rules/configuration.md` > Claude Code automation gives for the task, through the Agent tool's `model` and
-  `effort`. An agent defined in `.claude/agents/` runs as its definition says, unless a procedure raises or lowers its
+  `effort`. An agent defined in `.claude/agents/` runs as its definition says, unless a procedure sets its model or its
   effort.
 - **The development stack:** in a new worktree, run `scripts/dev-env.sh` once. It writes the `.env` of the single
   development slot: project and images `scanmylib-dev`, port 8770, its own data next to production's, a test library,

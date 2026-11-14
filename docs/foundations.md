@@ -351,9 +351,17 @@ copy. `.claude/rules/documents.md` > Where a statement lives says what goes wher
   across documents. It starts without the session's `CLAUDE.md` files, which would cost it tokens on every turn and
   could steer it: the rules that apply are the checkout's.
 - **Each agent runs on the model and at the effort its task needs,** because every turn of every run pays for both, and
-  a review multiplies the runs: Opus where a miss costs most or where code is written, at `xhigh` only for large plans,
-  since a mistake in a plan costs every step after it, Sonnet where written rules or a plan guide the check, Haiku for
-  search. A low effort saves Haiku and Sonnet little and costs them much quality, so they never run at it.
+  a review multiplies the runs: the stakes of the work where a plan or code is written, Opus where a review judges and a
+  miss costs most, Sonnet where written rules or a plan guide the check, Haiku for search, as
+  `.claude/rules/configuration.md` > Claude Code automation gives them. The stakes, not the size, choose the models that
+  plan and write, since the size says how much there is to check and the stakes what a mistake costs: reading the code
+  makes most of what these agents cost, and Opus charges half of what Fable charges for it, so Opus serves by default;
+  Fable serves where the stakes are high, at `high` for a plan, since a mistake in a plan costs every step after it,
+  and at `medium` for code, where its announcement measures it above Opus one effort level higher and a higher effort
+  costs it several times more; Sonnet writes the code of work whose stakes are low, guided by a checked plan and backed
+  by the review, which runs the same whatever the stakes. A low effort saves Haiku and Sonnet little and costs them
+  much quality, so they never run at it. The reviews that judge stay on Opus, since a review reads far more than it
+  writes, and Fable charges twice as much for what an agent reads.
 - **The history of a decision lives outside the repository,** with the project-management material, so the documents
   here describe only the present, with its reasons.
 

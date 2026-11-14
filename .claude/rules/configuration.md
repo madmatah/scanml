@@ -166,17 +166,27 @@ paths:
   to send.
 - **Each agent runs on the model and at the effort its task needs,** named in the frontmatter of an agent or a forked
   skill (`model`, `effort`), or passed through the Agent tool's `model` and `effort` when a session gives a task to an
-  agent without a definition, or raises or lowers a defined agent's effort where a procedure says so, since every turn
-  of every run pays for both:
-  - Opus plans a piece of work, and checks the plan;
-  - Opus writes code: an implementation, a fix, any change to the code;
+  agent without a definition, or sets a defined agent's model or effort where a procedure says so, since every turn of
+  every run pays for both:
+  - the stakes of a piece of work choose the model and the effort of the agents that plan it, check its plan, write its
+    code and fix it, whatever its size, as the line on the stakes below gives them;
   - Opus judges where a miss costs most: hunting bugs, security, the sandbox's isolation, architecture, the app's
-    platform, performance, verifying findings;
-  - Sonnet sorts, and checks a change against written rules or its plan, where it gives the best quality for its price;
+    platform, performance, verifying findings, since a review reads far more than it writes, and Fable charges twice as
+    much for what an agent reads;
+  - Sonnet sorts, maps the code that a piece of work meets, and checks a change against written rules or its plan, or
+    the tests of a change against the rules of testing, where it gives the best quality for its price;
   - Haiku searches and lists;
   - Haiku and Sonnet run at `medium` or higher, since a low effort costs them much quality for little saving, and
     Haiku's price leaves room for `high`;
-  - Opus runs at `medium` for well-specified work, such as a fix from a brief or the review of a change's tests, at
-    `high` for an implementation, for judgment and for the check of a normal plan, and at `xhigh` for the plan of large
-    work and its check, since a mistake in a plan costs every step after it; any other `xhigh`, and any `max`, needs a
-    reason that `docs/foundations.md` gives.
+  - Opus runs at `high`, apart from an expert that a check of fixes picks only to confirm its own findings, which
+    `.claude/skills/expert-review/SKILL.md` > Classify runs one level lower, and from the stakes that say `medium`;
+    Fable runs only where the stakes say; any other `high` of Fable, and any `xhigh` or `max`, needs a reason that
+    `docs/foundations.md` gives;
+  - the sizes of work are those that whoever plans it states: mechanical work applies a known recipe, such as a sync
+    with a template the project follows, a rename across files or a migration with a recipe; normal work adds no
+    module, no public interface and no decision that changes the project; large work is the rest;
+  - the stakes of a piece of work, `low`, `normal` or `high`, say what a mistake in it costs. Its contributor gives
+    them, and they are `normal` when nobody does; the plan states them at its top. `low`: the plan and its check on
+    Opus at `medium`, the implementation on Sonnet at `high`, the fixes on Opus at `medium`; `normal`: all four on Opus
+    at `high`; `high`: the plan and its check on Fable at `high`, the implementation and the fixes on Fable at
+    `medium`. The review's agents run as their definitions say, whatever the stakes.

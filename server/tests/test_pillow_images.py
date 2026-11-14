@@ -17,6 +17,19 @@ from support import BROKEN_EXIF, CORRUPT_PNGS, encoded, jpeg, mpo, png
 NOT_A_JPEG_PNG_OR_WEBP_IMAGE = "not a JPEG, PNG or WebP image"
 CORRUPT_IMAGE = "(unreadable|corrupt) image"
 
+EXIF_ORIENTATION_TAG = 0x0112
+SCAN_SIZE_PIXELS = (300, 200)
+PIXEL_IN_THE_MIDDLE = (150, 100)
+WHITE = (255, 255, 255)
+BLACK = (0, 0, 0)
+BLACK_GRAY_LEVEL = 0
+RED = (255, 0, 0)
+FULLY_TRANSPARENT_ALPHA = 0
+TRANSPARENT_PALETTE_INDEX = 0
+#: JPEG is lossy: a plain color comes back a few levels off.
+JPEG_CHANNEL_TOLERANCE = 4
+MARK_SIDE_PIXELS = 20
+
 
 class IngestedScan(NamedTuple):
     scan_info: ScanInfo
@@ -28,12 +41,64 @@ class ScanFile(NamedTuple):
     extension: str
 
 
+class ExifOrientation(NamedTuple):
+    orientation: int
+    shown_size_pixels: tuple[int, int]
+    corner_of_the_stored_top_left_pixel: str
+
+
 SCANS_WITH_AN_UNREADABLE_EXIF_BLOCK = {
     # JFIF density in dpi: Pillow does not read the EXIF block when opening the file.
     "jpeg": ScanFile(encoded(Image.new("RGB", (300, 200), "white"), "JPEG", dpi=(300, 300), exif=BROKEN_EXIF), "jpg"),
     "webp": ScanFile(encoded(Image.new("RGB", (300, 200), "white"), "WEBP", exif=BROKEN_EXIF), "webp"),
     "png": ScanFile(encoded(Image.new("RGB", (300, 200), "white"), "PNG", exif=BROKEN_EXIF), "png"),
 }
+
+
+#: Where each orientation shows the stored top-left pixel, from the EXIF specification: the value names the sides of the
+#: picture that the stored first row and first column are shown along.
+EXIF_ORIENTATIONS = {
+    "2, to mirror left to right": ExifOrientation(2, (300, 200), "top right"),
+    "3, to turn a half turn": ExifOrientation(3, (300, 200), "bottom right"),
+    "4, to mirror top to bottom": ExifOrientation(4, (300, 200), "bottom left"),
+    "5, to mirror along the diagonal from the top left": ExifOrientation(5, (200, 300), "top left"),
+    "6, to turn a quarter turn clockwise": ExifOrientation(6, (200, 300), "top right"),
+    "7, to mirror along the diagonal from the top right": ExifOrientation(7, (200, 300), "bottom right"),
+    "8, to turn a quarter turn counterclockwise": ExifOrientation(8, (200, 300), "bottom left"),
+}
+
+
+def encode_transparent_palette_png() -> bytes:
+    image = Image.new("P", SCAN_SIZE_PIXELS, TRANSPARENT_PALETTE_INDEX)
+    image.putpalette(BLACK)
+    return encoded(image, "PNG", transparency=TRANSPARENT_PALETTE_INDEX)
+
+
+def encode_scan_marked_in_its_top_left_corner(orientation: int) -> bytes:
+    image = Image.new("RGB", SCAN_SIZE_PIXELS, WHITE)
+    image.paste(RED, (0, 0, MARK_SIDE_PIXELS, MARK_SIDE_PIXELS))
+    exif = Image.Exif()
+    exif[EXIF_ORIENTATION_TAG] = orientation
+    return encoded(image, "JPEG", quality=100, exif=exif.tobytes())
+
+
+def find_red_corners(image: Image.Image) -> list[str]:
+    width, height = image.size
+    inside_the_mark_pixels = MARK_SIDE_PIXELS // 2
+    left_pixels, top_pixels = inside_the_mark_pixels, inside_the_mark_pixels
+    right_pixels, bottom_pixels = width - 1 - inside_the_mark_pixels, height - 1 - inside_the_mark_pixels
+    corners = {
+        "top left": (left_pixels, top_pixels),
+        "top right": (right_pixels, top_pixels),
+        "bottom left": (left_pixels, bottom_pixels),
+        "bottom right": (right_pixels, bottom_pixels),
+    }
+    return [name for name, position in corners.items() if is_red(cast(tuple[int, int, int], image.getpixel(position)))]
+
+
+def is_red(pixel: tuple[int, int, int]) -> bool:
+    red, green, blue = pixel
+    return red > 200 and green < 80 and blue < 80
 
 
 def open_image(image_bytes: bytes) -> Image.Image:
@@ -104,6 +169,36 @@ class TestThePillowImages:
 
             def test_should_make_a_red_green_blue_thumbnail(self, ingested_scan: IngestedScan) -> None:
                 assert ingested_scan.thumbnail.mode == "RGB"
+
+        class TestWhenTheScanIsAFullyTransparentPngWhoseHiddenColorIsBlack:
+            @pytest.fixture(
+                params=[
+                    encoded(Image.new("RGBA", SCAN_SIZE_PIXELS, (*BLACK, FULLY_TRANSPARENT_ALPHA)), "PNG"),
+                    encoded(Image.new("LA", SCAN_SIZE_PIXELS, (BLACK_GRAY_LEVEL, FULLY_TRANSPARENT_ALPHA)), "PNG"),
+                    encode_transparent_palette_png(),
+                ],
+                ids=["red green blue alpha", "grayscale alpha", "a palette whose one color is transparent"],
+            )
+            def ingested_scan(self, request: pytest.FixtureRequest) -> IngestedScan:
+                return ingest(request.param)
+
+            def test_should_lay_it_on_white_in_the_thumbnail(self, ingested_scan: IngestedScan) -> None:
+                pixel = ingested_scan.thumbnail.getpixel(PIXEL_IN_THE_MIDDLE)
+                assert pixel == pytest.approx(WHITE, abs=JPEG_CHANNEL_TOLERANCE)
+
+        class TestWhenTheScanIsAMidGray16BitGrayscalePng:
+            MID_GRAY_16_BIT = 32_768
+            MID_GRAY_8_BIT = (128, 128, 128)
+
+            @pytest.fixture
+            def ingested_scan(self) -> IngestedScan:
+                return ingest(encoded(Image.new("I;16", SCAN_SIZE_PIXELS, self.MID_GRAY_16_BIT), "PNG"))
+
+            def test_should_scale_its_brightness_down_to_8_bits_in_the_thumbnail(
+                self, ingested_scan: IngestedScan
+            ) -> None:
+                pixel = ingested_scan.thumbnail.getpixel(PIXEL_IN_THE_MIDDLE)
+                assert pixel == pytest.approx(self.MID_GRAY_8_BIT, abs=JPEG_CHANNEL_TOLERANCE)
 
         class TestWhenTheScanIsAWebp:
             @pytest.fixture
@@ -249,10 +344,8 @@ class TestThePillowImages:
         class TestWhenTheUserTurnedAScanWithMetadataAQuarterTurnClockwise:
             @pytest.fixture
             def prepared_image(self, tmp_path: Path) -> Image.Image:
-                source = Image.new("RGB", (300, 200), "white")
-                red = (255, 0, 0)
-                square_in_the_top_left_corner = (0, 0, 20, 20)
-                source.paste(red, square_in_the_top_left_corner)
+                source = Image.new("RGB", SCAN_SIZE_PIXELS, WHITE)
+                source.paste(RED, (0, 0, MARK_SIDE_PIXELS, MARK_SIDE_PIXELS))
                 exif = Image.Exif()
                 exif[0x010F] = "PhoneMaker"
                 with_metadata = encoded(
@@ -265,14 +358,30 @@ class TestThePillowImages:
                 assert prepared_image.size == (200, 300)
 
             def test_should_turn_its_top_left_corner_to_the_top_right(self, prepared_image: Image.Image) -> None:
-                red, green, _ = cast(tuple[int, int, int], prepared_image.getpixel((190, 10)))
-                assert red > 200 and green < 80
+                assert find_red_corners(prepared_image) == ["top right"]
 
             def test_should_strip_its_exif_block(self, prepared_image: Image.Image) -> None:
                 assert dict(prepared_image.getexif()) == {}
 
             def test_should_strip_its_color_profile_and_its_comment(self, prepared_image: Image.Image) -> None:
                 assert not {"icc_profile", "comment", "exif"} & set(prepared_image.info)
+
+        class TestWhenTheExifOrientationOfTheScanTurnsOrMirrorsIt:
+            @pytest.fixture(params=list(EXIF_ORIENTATIONS.values()), ids=list(EXIF_ORIENTATIONS))
+            def exif_orientation(self, request: pytest.FixtureRequest) -> ExifOrientation:
+                return cast(ExifOrientation, request.param)
+
+            @pytest.fixture
+            def prepared_image(self, exif_orientation: ExifOrientation, tmp_path: Path) -> Image.Image:
+                marked_scan = encode_scan_marked_in_its_top_left_corner(exif_orientation.orientation)
+                scan = write_scan(tmp_path, ScanFile(marked_scan, "jpg"))
+                return open_image(pillow_images.prepare_for_ocr(scan, 0, max_side=4096))
+
+            def test_should_send_it_upright_with_its_stored_top_left_corner_where_the_orientation_shows_it(
+                self, prepared_image: Image.Image, exif_orientation: ExifOrientation
+            ) -> None:
+                expected = (exif_orientation.shown_size_pixels, [exif_orientation.corner_of_the_stored_top_left_pixel])
+                assert (prepared_image.size, find_red_corners(prepared_image)) == expected
 
         class TestWhenTheScanIsLargerThanTheLimit:
             @pytest.fixture

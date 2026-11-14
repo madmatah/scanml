@@ -1,6 +1,6 @@
 ---
 name: expert-review
-description: Reviews a diff of ScanMyLib before it reaches main, the current branch by default, or a pull request, a branch or a commit range, with the project's expert reviewers in parallel, against its plan when given one, and returns one verified report with severities. Use before pushing a branch or opening a pull request, when the user asks to review a pull request, a branch or a change, or to look at a diff through one concern, such as the sandbox's isolation. Free text after the target is a focus passed to every expert. It changes no code.
+description: Reviews a diff of ScanMyLib, the current branch by default, or a pull request, a branch or a commit range, with the project's expert reviewers, each in an agent of its own, in parallel, against its plan when given one, and returns one verified report with severities. Use to review someone else's pull request, when the user asks for an expert review, or for one agent per expert, on a branch, a pull request or a diff, or to look at a diff through one concern, such as the sandbox's isolation; the reviews of the project's own branches go to combined-review, which follows this skill's procedure. Free text after the target is a focus passed to every expert. It changes no code.
 argument-hint: "[<pr#>|<branch>|<range>] [--plan <file>] [--mock <file>] [--fixes <file>] [--post] [focus]"
 context: fork
 model: opus
@@ -232,11 +232,12 @@ Write one report, in one voice: calm, plain, no preamble, no flattery. Its parts
 7. **Not reviewed**: what the scope left out, such as an expert with no report, and each expert the triage left out,
    with its reason. The definitions that ran are those of the checkout that holds this skill, `<skill checkout>`, the
    root that `git -C "${CLAUDE_SKILL_DIR}" rev-parse --show-toplevel` prints: whenever its `.claude/agents/`,
-   `.claude/skills/expert-review/`, `.claude/skills/writing-commits/` or `.claude/skills/deliver-branch/` differ from
-   `<main commit>`'s, as `git -C <skill checkout> diff --name-only <main commit> -- .claude/agents
-   .claude/skills/expert-review .claude/skills/writing-commits .claude/skills/deliver-branch` lists them, along with the untracked files that `git -C <skill checkout> ls-files
-   --others --exclude-standard` lists under the same paths, say which definitions ran: those files, as
-   `<skill checkout>` holds them, so that the pull request can name them.
+   `.claude/skills/expert-review/`, `.claude/skills/combined-review/`, `.claude/skills/writing-commits/` or
+   `.claude/skills/deliver-branch/` differ from `<main commit>`'s, as
+   `git -C <skill checkout> diff --name-only <main commit> -- .claude/agents .claude/skills/expert-review
+   .claude/skills/combined-review .claude/skills/writing-commits .claude/skills/deliver-branch` lists them, along with
+   the untracked files that `git -C <skill checkout> ls-files --others --exclude-standard` lists under the same paths,
+   say which definitions ran: those files, as `<skill checkout>` holds them, so that the pull request can name them.
 8. **Cost**: each agent that ran, the triage included, with the tokens its completion notice gives, and their total.
 
 In the terminal, paths are absolute. In a posted report, they are relative to the repository root.

@@ -1,6 +1,6 @@
 ---
 name: android-reviewer
-description: Expert reviewer for the Android app, used by the expert-review skill. Checks lifecycles and process death, permissions, exported components and intents, background work, storage and backups, the app ids and signing, SDK levels, Compose, coroutines and translations. Read-only.
+description: Expert reviewer for the Android app, used by the expert-review and combined-review skills. Checks lifecycles and process death, permissions, exported components and intents, background work, storage and backups, the app ids and signing, SDK levels, Compose, coroutines and translations. Read-only.
 tools: Read, Grep, Glob
 omitClaudeMd: true
 model: opus

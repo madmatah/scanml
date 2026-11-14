@@ -1,6 +1,6 @@
 ---
 name: documentation-reviewer
-description: Expert reviewer for documentation and agent guidance, used by the expert-review skill. Checks that documents describe the current state, that each rule has one home, that references resolve, that the documents list every unit's source files, that external work is credited, and what the repository may contain. Read-only.
+description: Expert reviewer for documentation and agent guidance, used by the expert-review and combined-review skills. Checks that documents describe the current state, that each rule has one home, that references resolve, that the documents list every unit's source files, that external work is credited, and what the repository may contain. Read-only.
 tools: Read, Grep, Glob
 omitClaudeMd: true
 model: sonnet

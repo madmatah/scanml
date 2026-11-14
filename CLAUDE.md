@@ -138,7 +138,7 @@ read or edit a file that matches them, but a subagent in its own worktree or a c
 read the file before you do what its line says.
 
 - `repository.md`: loaded in every session.
-- `conventions.md`: loaded in every session.
+- `conventions.md`: for any code, test or configuration, scripts and the commands of Claude Code settings included.
 - `python.md`: for any Python file.
 - `kotlin.md`: for the app's Kotlin, Gradle scripts and resources.
 - `web.md`: for the web UI.

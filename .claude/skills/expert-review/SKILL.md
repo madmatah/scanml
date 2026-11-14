@@ -185,7 +185,11 @@ name. Each prompt holds:
 
 **Wait for every expert's report before going on.** Each report arrives as a message, or as the result of its Agent call
 when Claude Code waits for each agent, as under `claude -p`. Ending a turn while they run does not end a review that
-runs in the background: never hand back its report before it is written. Do not read the code while they run:
+runs in the background: never hand back its report before it is written. Keep your prompt cache warm while they run,
+since a subagent's cache lasts five minutes and the experts often take longer, so that it is not written again whole
+when their reports arrive: before you end each turn of the wait, run `sleep 240` with `run_in_background`; when it ends
+and an expert still runs, start it again and end your turn, doing nothing else; once the last report is in, stop the
+one still running with TaskStop, so that it does not hold the review open. Do not read the code while they run:
 [Verify](#verify) reads only what each finding cites. Write the report only once every picked expert has reported or
 replied "not applicable".
 

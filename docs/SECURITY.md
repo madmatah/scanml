@@ -20,6 +20,7 @@ content into its results.
 | `pids_limit`, `mem_limit: 16g`, `shm_size`, bounded tmpfs | resource limits (processes, RAM) |
 | rotated Docker logs (5 × 10 MB) | the sandbox cannot fill the system disk by writing logs |
 | the children's output escaped where the supervisor relays it | the stdout and stderr of vLLM and of the worker, and the error texts quoted from them, reach `docker logs` and the engine check with each character that is not printable written as an escape: the text the engine's libraries or the model print, control sequences from a page's content included, cannot act on an operator's terminal. A process that runs its own code in the sandbox can still write to the container's output directly, so the `ocr` container's log stays untrusted output |
+| no terminal for a command run in the sandbox | `scripts/verify-sandbox.sh` shows what its checks inside print through `cat -v`, its error output included; the engine checks of an installation and a deployment discard their output |
 | GPU through CDI only | the only device exposed |
 | the runtime image, without uv or pip | the image the service runs holds no package installer: uv and the installer live in the setup image, which only `ocr-setup` runs |
 

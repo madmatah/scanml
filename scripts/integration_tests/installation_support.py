@@ -68,7 +68,7 @@ COPIED = (
     "server/scanmylib/web/package.json",
     "server/scanmylib/web/package-lock.json",
     # A skill, so that .claude/skills/ exists to mount, as in the repository.
-    ".claude/skills/develop/SKILL.md",
+    ".claude/skills/deliver-branch/SKILL.md",
 )
 VERSION = (REPO / "VERSION").read_text().strip()
 VERSION_CODE = sum(int(part) * factor for part, factor in zip(VERSION.split("."), (10000, 100, 1), strict=True))

@@ -110,8 +110,8 @@ skill names, with no value but the ones checked here, and read and search with t
    - in a check of fixes, which reviews the fixups before they are folded, check that each `fixup!` and `amend!` commit
      names a commit of the branch, by a first line that holds, after `fixup! ` or `amend! `, that commit's whole header,
      as `git log --format='%h %s' <main commit>..<start commit>` lists them, written to `<dir>/branch.txt`, where a
-     branch stacked on another also lists its base's, whose fixups `.claude/skills/develop/SKILL.md` > Fold review
-     fixes catches; check the new message that an `amend!` commit carries, and check any other commit against the
+     branch stacked on another also lists its base's, whose fixups `.claude/skills/deliver-branch/SKILL.md` > Fold
+     review fixes catches; check the new message that an `amend!` commit carries, and check any other commit against the
      bullets below, which the fixups meet once folded;
    - outside a check of fixes, a `fixup!`, `amend!` or `squash!` commit that is still there is `blocking`;
    - a message that holds a secret, or what `.claude/rules/repository.md` > What belongs in the repository, > No real

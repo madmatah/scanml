@@ -55,8 +55,8 @@ find it with `git bisect` on its own.
   commits.
 - **The test that pins a fix** goes in the commit of the fix, since every commit passes the checks of the areas it
   touches on its own (`CLAUDE.md` > Workflow, "Commits").
-- **A correction to an earlier commit of the branch** is folded into it, as `.claude/skills/develop/SKILL.md` > Shape
-  the history shows. The history describes the change that ships, not the path that found it.
+- **A correction to an earlier commit of the branch** is folded into it, as `.claude/skills/deliver-branch/SKILL.md` >
+  Shape the history shows. The history describes the change that ships, not the path that found it.
 
 ## Choose the type
 
@@ -196,7 +196,7 @@ Before committing, read the message against the rules:
    nothing that `.claude/rules/repository.md` > What belongs in the repository, > No real document names or > No
    personal information forbids, from a pasted log or a command's output as much as from your own words.
 
-Nothing to run here: the commit passes what `CLAUDE.md` > Workflow, "Commits" asks of it,
-`scripts/check.sh --last-commit`, which `.claude/skills/develop/SKILL.md` > Shape the history runs on every commit at
-once, when the branch is shaped; the CI then runs the whole gate on the pull request, as `CLAUDE.md` > Workflow, "Run
-each check once, at its level" says.
+Nothing to run here: the commit passes what `CLAUDE.md` > Workflow, "Commits" asks of it, `scripts/check.sh
+--last-commit`, which `.claude/skills/deliver-branch/SKILL.md` > Shape the history runs on every commit at once, when
+the branch is shaped; the CI then runs the whole gate on the pull request, as `CLAUDE.md` > Workflow, "Run each check
+once, at its level" says.

@@ -70,9 +70,9 @@ Production runs on this machine, from the main checkout, `~/Dev/scanmylib`, and 
   the worktree's, which describe the code you change.
 - **Parallel sessions:** when several Claude sessions work at the same time, each owns one worktree and its pull
   request, from its plan to its review fixes, and never works in another session's worktree. Review fixes go to a new
-  `fixer` agent in that worktree, as `.claude/skills/develop/SKILL.md` > Review says, never back to the agent that wrote
-  the branch, whose context only grows. The coordinating session is the one that started the others, or the one the
-  user names.
+  `fixer` agent in that worktree, as `.claude/skills/deliver-branch/SKILL.md` > Review says, never back to the agent
+  that wrote the branch, whose context only grows. The coordinating session is the one that started the others, or the
+  one the user names.
 - **Give searches and explorations to cheaper agents,** on the model and at the effort that
   `.claude/rules/configuration.md` > Claude Code automation gives for the task, through the Agent tool's `model` and
   `effort`. An agent defined in `.claude/agents/` runs as its definition says, unless a procedure raises or lowers its
@@ -100,7 +100,7 @@ Production runs on this machine, from the main checkout, `~/Dev/scanmylib`, and 
   - while you write code, a fix included, run only the tests of what you change, as the `running-tests` skill picks
     them;
   - when the history is shaped, `scripts/check.sh --last-commit` runs once on every commit, as
-    `.claude/skills/develop/SKILL.md` > Shape the history says, and skips a commit that already passed it
+    `.claude/skills/deliver-branch/SKILL.md` > Shape the history says, and skips a commit that already passed it
     (`.claude/rules/configuration.md` > Checks);
   - the CI runs `scripts/check.sh`, the whole gate, one job per area, on every pull request, which merges only once it
     passes. Run it yourself, beyond what the per-commit check runs, only when the change touches the gate itself, such
@@ -114,11 +114,12 @@ Production runs on this machine, from the main checkout, `~/Dev/scanmylib`, and 
 - **A branch reaches `main` only through a pull request whose CI passes.** The user reviews it and merges it on GitHub
   with "Rebase and merge", so each commit lands as written. Never merge into `main` yourself, except a release pull
   request, which the `release` skill merges under the conditions of `.claude/rules/releases.md`.
-- **The `develop` skill holds the procedure:** starting a branch, planning its work and writing its code, stacking it
-  on another, shaping its history, reviewing it, pushing it and watching its CI, and folding its review fixes. It holds
-  the rules of planning and review too: read it before you start any change, since `.claude/skills/develop/SKILL.md` >
-  Plan the work, "Plan before writing code" says which changes go without a plan, and its Review applies to every
-  branch.
+- **The `implement` skill holds the procedure** of writing the code of a brief: starting a branch and writing its
+  code, a whole change or one slice of a plan. A planned piece of work comes planned outside this repository
+  ([Project management](#project-management)).
+- **The `deliver-branch` skill holds the procedure** of taking a written branch to a mergeable pull request: stacking
+  it on another, shaping its history, reviewing it, pushing it and watching its CI, and folding its review fixes. It
+  holds the rules of review too, and its Review applies to every branch.
 - **The `pull-request` skill holds the procedure:** opening and updating the pull request of a branch, showing the
   screens a change changes in it, and reviewing someone else's.
 
@@ -181,7 +182,8 @@ read the file before you do what its line says.
 
 ## Skills
 
-- `develop`: from a new branch to a merged pull request.
+- `implement`: the code of a brief, on its own branch.
+- `deliver-branch`: from a written branch to a mergeable pull request.
 - `pull-request`: opening and updating a pull request, and reviewing someone else's.
 - `expert-review`: `/expert-review [<pr#>|<branch>|<range>] [--plan <file>] [--fixes <file>] [--post] [focus]`, the
   review of a diff before `main`, against its plan when given one.

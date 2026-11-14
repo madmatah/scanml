@@ -21,7 +21,7 @@ content into its results.
 | rotated Docker logs (5 × 10 MB) | the sandbox cannot fill the system disk by writing logs |
 | the children's output escaped where the supervisor relays it | the stdout and stderr of vLLM and of the worker, and the error texts quoted from them, reach `docker logs` and the engine check with each character that is not printable written as an escape: the text the engine's libraries or the model print, control sequences from a page's content included, cannot act on an operator's terminal |
 | the container's output out of the sandbox's reach | the processes that hold it, the sandbox's own init (process 1, in place of Docker's) and the supervisor, are not dumpable (`prctl(PR_SET_DUMPABLE, 0)`): the kernel refuses to open their descriptors in `/proc` to the other processes of the sandbox, which run as the same user, so a process that runs its own code there cannot write to `docker logs` past the escape of the relay. The children that the supervisor starts never hold that output, and `scripts/verify-sandbox.sh` checks that neither process can be opened |
-| no terminal for a command run in the sandbox | `scripts/verify-sandbox.sh` shows what its checks inside print through `cat -v`, its error output included; the engine checks of an installation and a deployment discard their output |
+| no terminal for a command run in the sandbox | `scripts/verify-sandbox.sh` shows what its checks inside print through `cat -v`, its error output included; the engine checks of an installation and a deployment, and the health check, discard their output |
 | GPU through CDI only | the only device exposed |
 | the runtime image, without uv or pip | the image the service runs holds no package installer: uv and the installer live in the setup image, which only `ocr-setup` runs |
 
@@ -82,6 +82,10 @@ Rules applied by the api to every answer of the sandbox:
   few extra NVIDIA device nodes and the socket of the `nvidia-persistenced`
   daemon to the sandbox. Restricting them would require changing the system
   configuration (sudo).
+- The health check discards its output inside the container, where its shell
+  redirects it: for the instant before that redirection, a process of the
+  sandbox can write to the output that Docker keeps in the health log, which
+  `docker inspect` prints. Read that log through `cat -v`.
 - The host folders the sandbox can write to (`DATA_DIR/run`,
   `DATA_DIR/ocr-cache`) are on the same partition as the api's state, without
   a quota. A malicious sandbox could fill it (denial of service), without

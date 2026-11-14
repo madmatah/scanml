@@ -48,6 +48,12 @@ Read first: `.claude/rules/sandbox.md`, `.claude/rules/configuration.md` > Depen
 - **Untrusted output** (`.claude/rules/sandbox.md` > The OCR sandbox): a change to what the api reads from the sandbox
   that drops a bound on a size or a count, writes a file under a name the sandbox sent, stores an image without
   re-encoding it, or lets Markdown or HTML reach the library or a browser without the sanitizer.
+- **Text of the sandbox on a terminal** (`.claude/rules/sandbox.md` > The OCR sandbox, "No text of the sandbox reaches a
+  terminal as it is"): a command run in the `ocr` service with a terminal (`-t`, or `docker compose exec` without
+  `-T`), or whose output, its error output included, is neither discarded nor passed through `cat -v`; a process that
+  holds the container's output and stays dumpable, such as Docker's init (`init: true`) back on the service, or a child
+  of the supervisor that inherits that output; a text that the supervisor relays or quotes from its children without
+  its escape.
 - **Containers and the host** (`.claude/rules/sandbox.md` > Containers and the host): a container that mounts the home
   directory or a secret, besides the signing container as that section allows; a script that needs a tool installed on
   the host beyond what that section allows.

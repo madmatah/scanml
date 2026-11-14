@@ -258,6 +258,7 @@ Each row names a rule, the rules file that states it, and what enforces it.
 | Rule | Enforced by |
 |---|---|
 | The `ocr` service stays isolated (`.claude/rules/sandbox.md` > The OCR sandbox) | `scripts/verify-sandbox.sh`, after every deployment and the first installation |
+| No text of the sandbox reaches a terminal as it is (`.claude/rules/sandbox.md` > The OCR sandbox) | `scripts/verify-sandbox.sh` for the processes that hold the container's output, the tests of the supervisor's relay and of `scripts/verify-sandbox.sh`, and the sandbox's expert reviewer (`.claude/agents/sandbox-reviewer.md`) for the commands run in the `ocr` service |
 | Every stack but production's is checked before docker compose runs it (`.claude/rules/sandbox.md` > Development stacks and production) | `scripts/lib/stack.py`, through `scripts/dev.sh`, `scripts/dev-env.sh`, `scripts/deploy.sh`'s rehearsal and `scripts/build-apk.sh`, its unit tests in `scripts/tests/`, and the integration tests of those scripts in `scripts/integration_tests/` |
 | Production is operated by hand only through `scripts/prod.sh compose` (`.claude/rules/sandbox.md` > Development stacks and production) | `scripts/lib/stack.py check-compose-command --production`, through `scripts/prod.sh` |
 | The dev app keeps its own application id (`.claude/rules/sandbox.md` > Development stacks and production) | The signing container of `scripts/build-apk.sh` |

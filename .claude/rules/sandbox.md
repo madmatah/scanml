@@ -56,6 +56,16 @@ production runs next to the development stack on the same machine. These rules k
   and count against its limits, names every file it writes itself, re-encodes images with Pillow, sanitizes the Markdown
   before writing it, renders HTML through its allowlist sanitizer, and serves the web UI with a strict Content Security
   Policy. A change to what the api reads from the sandbox keeps each of these checks.
+- **No text of the sandbox reaches a terminal as it is:** a terminal acts on the control sequences it prints, such as
+  OSC 52, which writes the clipboard, and every process of the sandbox runs as the same user, so a process that runs
+  its own code there can write to the output of any other one whose descriptors it may open in `/proc`:
+  - a command run in the `ocr` service gets no terminal (`docker exec` without `-t`, `docker compose exec -T`), and its
+    output, its error output included, is discarded or passes through `cat -v`;
+  - the processes that hold the container's output, its log, are not dumpable (`prctl(PR_SET_DUMPABLE, 0)`), so that
+    no other process of the sandbox can open their descriptors: the sandbox's own init, which the image runs in place
+    of Docker's (`init: true`), and the supervisor, whose children never hold that output;
+  - the supervisor escapes every character that is not printable in what it relays of its children and in the error
+    texts it quotes from them.
 
 ## Containers and the host
 

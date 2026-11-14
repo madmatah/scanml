@@ -148,13 +148,22 @@ it (pages still queued then start the engine again).
 ## Inside the sandbox
 
 ```
-supervisor (python3, stdlib)          HTTP on the Unix socket, FIFO queue, lifecycle
- ├─ vllm serve …  (venv-vllm)         own process group; its engine core is a child
- └─ worker        (venv-paddle)       own process group; PaddleOCRVL pipeline
-      protocol: two dedicated pipes (fds named in $SCANMYLIB_OCR_PROTOCOL_FDS),
-      one JSON object per line; stdout/stderr are only logs (relayed to `docker logs`)
+container_init (python3, stdlib)      process 1: passes on the stop signals, reaps orphans
+ └─ supervisor (python3, stdlib)      HTTP on the Unix socket, FIFO queue, lifecycle
+     ├─ vllm serve …  (venv-vllm)     own process group; its engine core is a child
+     └─ worker        (venv-paddle)   own process group; PaddleOCRVL pipeline
+          protocol: two dedicated pipes (fds named in $SCANMYLIB_OCR_PROTOCOL_FDS),
+          one JSON object per line; stdout/stderr are only logs (relayed to `docker logs`)
 ```
 
+- **The container's output**: only the sandbox's own init
+  (`ocr/scanmylib_ocr/container_init.py`, the image's command, in place of
+  Docker's `init`) and the supervisor hold it, and both stop being dumpable
+  (`prctl(PR_SET_DUMPABLE, 0)`) before they start anything: the other processes
+  of the sandbox, which run as the same user, cannot open their descriptors in
+  `/proc`. The init passes SIGTERM, SIGINT, SIGHUP, SIGQUIT, SIGUSR1 and SIGUSR2
+  to the supervisor, reaps every process left to it, and exits with the
+  supervisor's exit code, or 128 plus the signal that killed it.
 - **The children's output**: the supervisor relays the stdout and stderr of
   vLLM and of the worker line by line to the `ocr` container's log, each
   character that is not printable, and each backslash, written as an escape

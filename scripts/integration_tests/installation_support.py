@@ -424,6 +424,10 @@ def build_running_sandbox_rules(
         {"match": r"\{\{\.HostConfig\.Memory\}\}", "stdout": "536870912\n"},
         {"match": r"LogConfig\.Type", "stdout": "json-file\n"},
         {"match": r'"max-size"', "stdout": "10m\n"},
+        {
+            "match": r"\{\{range \.Config\.Env\}\}",
+            "stdout": "PATH=/usr/local/bin:/usr/bin:/bin\nOCR_ENGINE=paddleocr-vl\n",
+        },
         {"match": r"^exec ", "stdout": "PASS: the checks inside the container (stand-in)\n"},
     ]
 

@@ -7,11 +7,14 @@ Standard library only, in the sandbox's image: `scripts/check.sh ocr`.
 from __future__ import annotations
 
 import contextlib
+import errno
 import functools
 import json
 import logging
 import os
 import socket
+import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -21,7 +24,10 @@ from contextlib import suppress
 from dataclasses import dataclass, replace
 from types import MappingProxyType
 from typing import Any, ClassVar
+from unittest import mock
 
+import scanmylib_ocr
+from scanmylib_ocr import supervisor as supervisor_module
 from scanmylib_ocr.client import request_json
 from scanmylib_ocr.config import Settings
 from scanmylib_ocr.engines import get_spec
@@ -40,6 +46,9 @@ REQUEST_TIMEOUT_SECONDS = 10.0
 SHUTDOWN_TIMEOUT_SECONDS = 5.0
 # An upper bound for a test's signal or a state of the engine: reaching it means the test is broken, not slow.
 SIGNAL_TIMEOUT_SECONDS = 10.0
+POLL_INTERVAL_SECONDS = 0.05
+REFUSED_PRCTL = OSError(errno.EPERM, "prctl(PR_SET_DUMPABLE, 0): Operation not permitted")
+PACKAGE_PARENT_DIRECTORY = os.path.dirname(os.path.dirname(scanmylib_ocr.__file__))
 START_ERROR = "vllm exited with code 1: CUDA out of memory"
 ERROR_CODE_WITH_TERMINAL_CONTROLS = "failed\N{ESCAPE}]52;c;"
 ESCAPED_ERROR_CODE_WITH_TERMINAL_CONTROLS = "failed\\x1b]52;c;"
@@ -936,6 +945,68 @@ class TheServerCloseMethodWhenTheServerServesTheSocket(unittest.TestCase):
 
     def test_should_remove_the_socket(self) -> None:
         self.assertFalse(self.does_socket_exist)
+
+
+def stop_supervisor_process(supervisor: subprocess.Popen[bytes]) -> None:
+    supervisor.terminate()
+    try:
+        supervisor.wait(timeout=SIGNAL_TIMEOUT_SECONDS)
+    except subprocess.TimeoutExpired:
+        supervisor.kill()
+        supervisor.wait()
+
+
+@unittest.skipIf(os.geteuid() == 0, "root opens the descriptors of any process")
+class TheMainFunctionWhenTheSupervisorServes(unittest.TestCase):
+    output_path: ClassVar[str]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        sandbox_directory = make_sandbox_directory(cls.addClassCleanup)
+        socket_path = os.path.join(sandbox_directory, "ocr.sock")
+        supervisor = subprocess.Popen(
+            [sys.executable, "-m", "scanmylib_ocr.supervisor"],
+            cwd=PACKAGE_PARENT_DIRECTORY,
+            env={
+                **os.environ,
+                "OCR_SOCKET": socket_path,
+                "OCR_SANDBOX_DIR": sandbox_directory,
+                "OCR_WORK_DIR": sandbox_directory,
+            },
+            stderr=subprocess.DEVNULL,
+        )
+        cls.addClassCleanup(stop_supervisor_process, supervisor)
+        deadline_seconds = time.monotonic() + SIGNAL_TIMEOUT_SECONDS
+        while not os.path.exists(socket_path) and time.monotonic() < deadline_seconds:
+            time.sleep(POLL_INTERVAL_SECONDS)
+        cls.output_path = f"/proc/{supervisor.pid}/fd/2"
+
+    def setUp(self) -> None:
+        self.open_supervisor_output = functools.partial(os.open, self.output_path, os.O_WRONLY | os.O_NONBLOCK)
+
+    def test_should_keep_its_output_from_the_sandbox_s_processes_so_that_none_writes_to_docker_logs_unescaped(
+        self,
+    ) -> None:
+        self.assertRaises(PermissionError, self.open_supervisor_output)
+
+
+class TheMainFunctionWhenItCannotStopBeingDumpable(unittest.TestCase):
+    exit_code: ClassVar[int]
+    listened_sockets: ClassVar[int]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        with (
+            mock.patch.object(supervisor_module, "stop_being_dumpable", side_effect=REFUSED_PRCTL),
+            mock.patch.object(supervisor_module, "UnixHTTPServer") as server,
+            mock.patch.object(logging, "basicConfig"),
+            record_logs("scanmylib_ocr.supervisor", logging.ERROR),
+        ):
+            cls.exit_code = supervisor_module.main()
+        cls.listened_sockets = server.call_count
+
+    def test_should_refuse_to_serve_so_that_no_engine_runs_beside_a_reachable_output(self) -> None:
+        self.assertEqual((self.exit_code, self.listened_sockets), (1, 0))
 
 
 if __name__ == "__main__":

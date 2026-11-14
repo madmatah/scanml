@@ -61,4 +61,6 @@ RUN python3 -m pip uninstall --yes pip \
 COPY scanmylib_ocr /app/scanmylib_ocr
 
 USER ${UID}:${GID}
-CMD ["python3", "-m", "scanmylib_ocr.supervisor"]
+# The sandbox's own init, in place of Docker's: no process of the sandbox can open its descriptors, which hold the
+# container's output (ocr/scanmylib_ocr/container_init.py).
+CMD ["python3", "-m", "scanmylib_ocr.container_init", "python3", "-m", "scanmylib_ocr.supervisor"]

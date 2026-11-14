@@ -19,7 +19,8 @@ content into its results.
 | non-root user (uid 1000 in the container) | no root privileges in the container |
 | `pids_limit`, `mem_limit: 16g`, `shm_size`, bounded tmpfs | resource limits (processes, RAM) |
 | rotated Docker logs (5 × 10 MB) | the sandbox cannot fill the system disk by writing logs |
-| the children's output escaped where the supervisor relays it | the stdout and stderr of vLLM and of the worker, and the error texts quoted from them, reach `docker logs` and the engine check with each character that is not printable written as an escape: the text the engine's libraries or the model print, control sequences from a page's content included, cannot act on an operator's terminal. A process that runs its own code in the sandbox can still write to the container's output directly, so the `ocr` container's log stays untrusted output |
+| the children's output escaped where the supervisor relays it | the stdout and stderr of vLLM and of the worker, and the error texts quoted from them, reach `docker logs` and the engine check with each character that is not printable written as an escape: the text the engine's libraries or the model print, control sequences from a page's content included, cannot act on an operator's terminal |
+| the container's output out of the sandbox's reach | the processes that hold it, the sandbox's own init (process 1, in place of Docker's) and the supervisor, are not dumpable (`prctl(PR_SET_DUMPABLE, 0)`): the kernel refuses to open their descriptors in `/proc` to the other processes of the sandbox, which run as the same user, so a process that runs its own code there cannot write to `docker logs` past the escape of the relay. The children that the supervisor starts never hold that output, and `scripts/verify-sandbox.sh` checks that neither process can be opened |
 | no terminal for a command run in the sandbox | `scripts/verify-sandbox.sh` shows what its checks inside print through `cat -v`, its error output included; the engine checks of an installation and a deployment discard their output |
 | GPU through CDI only | the only device exposed |
 | the runtime image, without uv or pip | the image the service runs holds no package installer: uv and the installer live in the setup image, which only `ocr-setup` runs |
@@ -56,9 +57,11 @@ for `/tmp` and the caches, no capabilities, `no-new-privileges`, a non-root
 user, the GPU through CDI only, the service's limits), bounds it in time and
 discards its output.
 
-The script `scripts/verify-sandbox.sh` (53 checks) verifies these properties on
+The script `scripts/verify-sandbox.sh` (54 checks) verifies these properties on
 the running container (network interfaces, DNS resolution, outbound
-connections, visible files, capabilities, read-only file system). On a
+connections, visible files, capabilities, read-only file system). It checks the
+sandbox's environment as Docker configures it, which leaves out the variables
+that a hook or a CDI specification adds when the container starts. On a
 development stack, the fake OCR (`ocr-fake`, our own code) runs with the same
 isolation, sees only the socket directory, and passes the same checks.
 

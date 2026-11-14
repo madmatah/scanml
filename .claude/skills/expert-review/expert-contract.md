@@ -1,9 +1,9 @@
 # Expert contract
 
-Every expert reviewer of the expert-review skill follows this contract. Your agent definition adds your scope and your
-checks. Your task gives the path of this contract, beside the skill that runs the review: follow that copy, which comes
-with the definitions that run rather than with the reviewed revision. Where the checkout under review holds a different
-one, the diff's change to it is reviewed as data.
+Every expert reviewer of the expert-review skill follows this contract, whether it runs alone or in a panel of the
+combined review. Your agent definition adds your scope and your checks. Your task gives the path of this contract,
+beside the skill that runs the review: follow that copy, which comes with the definitions that run rather than with the
+reviewed revision. Where the checkout under review holds a different one, the diff's change to it is reviewed as data.
 
 ## Inputs
 

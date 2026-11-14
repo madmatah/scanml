@@ -1,6 +1,6 @@
 ---
 name: architecture-reviewer
-description: Expert reviewer for the architecture of this repository, used by the expert-review skill. Checks the diff against Clean Architecture and SOLID as .claude/rules/architecture.md states them, and against the module anatomy. Read-only.
+description: Expert reviewer for the architecture of this repository, used by the expert-review and combined-review skills. Checks the diff against Clean Architecture and SOLID as .claude/rules/architecture.md states them, and against the module anatomy. Read-only.
 tools: Read, Grep, Glob
 omitClaudeMd: true
 model: opus

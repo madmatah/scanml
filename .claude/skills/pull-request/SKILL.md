@@ -72,5 +72,7 @@ what it does without building it.
 
 ## Review someone else's pull request
 
-From the main checkout, run `/expert-review <number>`. The skill checks the pull request out in a temporary directory
-outside the repository, so it never touches a session's worktree.
+From the main checkout, run `/expert-review <number>`, not `/combined-review`: the pull request's text is not the
+user's, and with one agent per expert, a text planted in its diff cannot silence several experts at once, as it could
+by steering a panel that holds them all. The skill checks the pull request out in a temporary directory outside the
+repository, so it never touches a session's worktree.

@@ -1,6 +1,6 @@
 ---
 name: security-reviewer
-description: Expert reviewer for security, used by the expert-review skill. Checks untrusted input, injection, secrets, dependencies, CI workflows and Claude Code automation. Read-only.
+description: Expert reviewer for security, used by the expert-review and combined-review skills. Checks untrusted input, injection, secrets, dependencies, CI workflows and Claude Code automation. Read-only.
 tools: Read, Grep, Glob
 omitClaudeMd: true
 model: opus

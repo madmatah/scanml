@@ -1,6 +1,6 @@
 ---
 name: goal-reviewer
-description: Expert reviewer for the goal of a change, used by the expert-review skill when a review is given the plan of the work. Checks that the code does what its plan and its mock ask, never the plan itself. Read-only.
+description: Expert reviewer for the goal of a change, used by the expert-review and combined-review skills when a review is given the plan of the work. Checks that the code does what its plan and its mock ask, never the plan itself. Read-only.
 tools: Read, Grep, Glob
 omitClaudeMd: true
 model: sonnet

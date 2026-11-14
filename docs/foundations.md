@@ -272,7 +272,7 @@ Each row names a rule, the rules file that states it, and what enforces it.
 | Part of the rules of continuous integration: actions pinned to commits, the jobs' permissions and credentials, no template injection (`.claude/rules/configuration.md` > Continuous integration) | zizmor, in `scripts/check.sh lint`; the unit tests of the workflows, in `scripts/check.sh scripts`, for the actions they may use, their permissions, their secrets, `pull_request_target`, what the release workflow runs, and the vulnerability scan's split between the job that scans and the one that uploads, its triggers, the exact options of its containers, and the sandbox's image, uv, requirements and Paddle's version that it follows |
 | A commit footer holds only what tools read (`.claude/skills/writing-commits/SKILL.md` > The rules of a commit message) | `attribution` in `.claude/settings.json`, which keeps Claude Code's own commit trailers and pull request line out |
 | Part of the layers of the api: every file of the api lies in a layer's directory, but the composition roots at its top and the test support; the domain imports only the domain and libraries of plain values, reads no wall clock and calls no input or output function; the application imports only the inner layers, libraries of plain values, Python's runtime and `PurePath`, reads the wall clock only through its port and calls no input or output function itself; the adapters import no composition root and no test support; a file in a layer imports none still outside the layers; no import cycle between the api's files (`.claude/rules/architecture.md` > Layers, > Ports and wiring and > Responsibilities, `.claude/rules/python.md`, "Plain data is a frozen dataclass", `.claude/rules/tests.md` > Test support) | `server/tests/test_layers.py`, in `scripts/check.sh server` |
-| Every rule no tool can check: architecture, conventions, tests as specification… | `/expert-review` ([Code review](#code-review)), before every pull request |
+| Every rule no tool can check: architecture, conventions, tests as specification… | `/combined-review` ([Code review](#code-review)), before every pull request |
 
 ## Conventions
 
@@ -433,8 +433,11 @@ and the benchmarks of `ocr/bench/` are the references.
 
 ### Code review
 
-Every branch goes through `/expert-review` before its pull request. It is a project skill in
-`.claude/skills/expert-review/`, named so that it never shadows the built-in `/code-review`.
+Every branch goes through `/combined-review` before its pull request, which follows the procedure of `/expert-review`,
+described below, with its experts grouped into two agents, as its own line says; `/expert-review`, one agent per
+expert, reviews someone else's pull request, whose planted text could steer a panel and silence all its experts at
+once, and runs when the user asks for it. Both are project skills in `.claude/skills/`, named so that they never shadow
+the built-in `/code-review`.
 
 - **It runs in its own subagent**, which never saw the code being written, so the review stays independent of the
   session that wrote the code, and that session keeps its context: the experts report to the review, which waits for
@@ -453,8 +456,9 @@ Every branch goes through `/expert-review` before its pull request. It is a proj
   of `.claude/agents/`, on Opus for bugs, security, isolation, architecture, the app and performance, and on Sonnet
   for conventions, tests, documentation and the goal, which written rules or the plan guide. No expert can run a
   command, so that no reviewed text can make it act.
-- **The goal expert checks the code against its plan,** and its findings get a section of their own in the report: a
-  change can pass every rule and still miss its goal, and nothing else in the review reads the plan; a section apart
+- **The goal expert checks the code against its plan,** which the review receives when the brief of the work gives one,
+  through `.claude/skills/deliver-branch/SKILL.md` > Review, and its findings get a section of their own in the report:
+  a change can pass every rule and still miss its goal, and nothing else in the review reads the plan; a section apart
   keeps a passing axis from hiding a failing one. The plan picks it, not the paths or the triage. It never judges the
   plan, which was checked before the code, as its size calls for. Without a plan it does not run, rather than read a
   goal into an issue whose text may not be the user's.
@@ -464,6 +468,14 @@ Every branch goes through `/expert-review` before its pull request. It is a proj
   paths, nor documentation on an added file, whose content only it searches for a real document's name, nor narrows
   what they read, since a missed expert costs more than a needless one, and a triage that reads the
   diff can be steered by it.
+- **`/combined-review` runs the same experts in two agents,** a `review-panel` on Sonnet for the experts on Sonnet and
+  one on Opus for those on Opus, without the triage: each expert's run pays for reading its rules, the diff and the
+  code around it before it checks anything, and a panel pays for that once for all its experts. Each panel gets every
+  expert of its model and reads the whole diff, so that each expert's scope gate both drops it and adds it, by what the
+  diff holds, as the triage does. A panel holds several checklists, which makes a miss likelier than with one expert per
+  agent, so it takes its experts one at a time, those whose miss costs most first; the workflow takes that risk for the
+  cost. The combined review reads the procedure, the contract and the experts' definitions of the expert review rather
+  than copying them, so that each rule of review changes in one place.
 - **The fixes of blocking findings are checked against the findings they answer,** by their experts, by correctness,
   and by the experts whose concerns the fixes newly touch, such as tests for a new test, rather than by every expert
   whose paths they touch: a fix of three files can touch the paths of every domain, and only the experts it concerns
@@ -483,11 +495,12 @@ Every branch goes through `/expert-review` before its pull request. It is a proj
   an expert that finds nothing on a large diff, and the triage and the experts can be tuned.
 - **A target other than the current branch is checked out outside the repository**, at the commits its range resolves
   once, so a reviewed `CLAUDE.md` never loads as an instruction, and nothing done to a branch while the review runs
-  changes what it reads. The experts follow the contract beside the skill that runs, the triage reads the Scopes beside
-  it, and the commit check reads the commit rules beside it: those of the checkout the session started in. A review run
-  from another checkout than the branch's worktree, such as the main checkout, follows definitions the branch cannot
-  rewrite; one run from the branch's worktree follows the branch's own, which its report lists when they differ from
-  main's, so that the pull request names them.
+  changes what it reads. The experts and the panels follow the contract beside the session's expert-review skill, the
+  triage and the panels read the definitions of the session's `.claude/agents/`, and the commit check reads the commit
+  rules beside the skill: those of the checkout the session started in. A review run from another checkout than the
+  branch's worktree, such as the main checkout, follows definitions the branch cannot rewrite; one run from the
+  branch's worktree follows the branch's own, which its report lists when they differ from main's, so that the pull
+  request names them.
 - **Reviews can run at the same time, from the same checkout:** each one keeps its scope in a temporary directory of
   its own.
 - **The report ends the review.** It suggests a fix for each finding but applies none: the session that owns the branch

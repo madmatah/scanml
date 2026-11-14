@@ -178,8 +178,9 @@ paths:
   - Haiku searches and lists;
   - Haiku and Sonnet run at `medium` or higher, since a low effort costs them much quality for little saving, and
     Haiku's price leaves room for `high`;
-  - Opus runs at `high`, apart from an expert that a check of fixes picks only to confirm its own findings, which
-    `.claude/skills/expert-review/SKILL.md` > Classify runs one level lower, and from the stakes that say `medium`;
+  - Opus runs at `high`, apart from the stakes that say `medium`, and from an expert that runs alone and that a check of
+    fixes picks only to confirm its own findings, which `.claude/skills/expert-review/SKILL.md` > Classify runs one
+    level lower, while a `review-panel` runs at the effort of its definition, whatever its experts;
     Fable runs only where the stakes say; any other `high` of Fable, and any `xhigh` or `max`, needs a reason that
     `docs/foundations.md` gives;
   - the sizes of work are those that whoever plans it states: mechanical work applies a known recipe, such as a sync

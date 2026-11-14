@@ -5,7 +5,7 @@ description: Holds the rules of ScanMyLib's commit messages and writes them, so 
 
 # Writing commits
 
-`CLAUDE.md` > Workflow, "Commits" says what a commit holds, and [The rules of a commit
+[Draw the commits](#draw-the-commits) says what a commit holds, and [The rules of a commit
 message](#the-rules-of-a-commit-message) below states the rules of its message. This skill applies them to each commit
 that will be pushed, whether you write it at once or while you rewrite the branch before pushing. A work-in-progress
 commit or a `fixup!` commit needs none of it, since the rewrite replaces it, but the message that an `amend!` commit
@@ -48,13 +48,13 @@ none shows a scope the rule refuses. The changes they tell are invented: none of
 
 ## Draw the commits
 
-Each commit holds one reason to change (`CLAUDE.md` > Workflow, "Commits"), so that a reader can review it, revert it or
+Each commit holds one reason to change, so that a reader can review it, revert it or
 find it with `git bisect` on its own.
 
 - **A subject that needs an "and"** usually holds two commits. Two unrelated fixes made the same afternoon are two
   commits.
 - **The test that pins a fix** goes in the commit of the fix, since every commit passes the checks of the areas it
-  touches on its own (`CLAUDE.md` > Workflow, "Commits").
+  touches on its own (`.claude/skills/deliver-branch/SKILL.md` > Shape the history, "Commits").
 - **A correction to an earlier commit of the branch** is folded into it, as `.claude/skills/deliver-branch/SKILL.md` >
   Shape the history shows. The history describes the change that ships, not the path that found it.
 
@@ -196,7 +196,7 @@ Before committing, read the message against the rules:
    nothing that `.claude/rules/repository.md` > What belongs in the repository, > No real document names or > No
    personal information forbids, from a pasted log or a command's output as much as from your own words.
 
-Nothing to run here: the commit passes what `CLAUDE.md` > Workflow, "Commits" asks of it, `scripts/check.sh
---last-commit`, which `.claude/skills/deliver-branch/SKILL.md` > Shape the history runs on every commit at once, when
-the branch is shaped; the CI then runs the whole gate on the pull request, as `CLAUDE.md` > Workflow, "Run each check
-once, at its level" says.
+Nothing to run here: the commit passes what `.claude/skills/deliver-branch/SKILL.md` > Shape the history, "Commits"
+asks of it, `scripts/check.sh --last-commit`, which the steps of that section run on every commit at once, when the
+branch is shaped; the CI then runs the whole gate on the pull request, as "Run each check once, at its level", in the
+same section, says.

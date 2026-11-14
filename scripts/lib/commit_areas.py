@@ -1,9 +1,9 @@
 """The areas of the gate that the last commit touches, for `scripts/check.sh --last-commit`.
 
 A commit is checked on the areas that read the files it changes: an area that reads none of them gives the result it
-gave on the commit before. The integration tests of the scripts run for the scripts they run, and not for the files
-that unit tests cover alone (`CLAUDE.md` > Workflow, "Commits"). A path that no rule below knows reaches every area, so
-that a file nobody thought of is checked rather than skipped.
+gave on the commit before. The integration tests of the scripts run for the scripts they run, and not for the files that
+unit tests cover alone (`.claude/skills/deliver-branch/SKILL.md` > Shape the history, "Commits"). A path that no rule
+below knows reaches every area, so that a file nobody thought of is checked rather than skipped.
 
 Standard library and git only:
     python3 scripts/lib/commit_areas.py ROOT

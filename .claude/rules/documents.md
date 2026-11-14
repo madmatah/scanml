@@ -28,12 +28,17 @@ Each statement has one home, so that it never drifts from a copy.
   once and in full, in the file of its concern, apart from a rule that serves only one task, as "A procedure" says.
 - **Session conduct** lives in `CLAUDE.md`: what a session reads first, its workflow, the commands, the language of the
   repository, and one index line per rules file. Every session loads all of `CLAUDE.md`, so it stays under 20,000
-  bytes, as `wc -c` counts them: its size, unlike its count of lines, does not depend on where the lines wrap.
+  bytes, as `wc -c` counts them: its size, unlike its count of lines, does not depend on where the lines wrap. For the
+  same reason, it restates no rule that a skill or a rules file holds in full, beyond one sentence that points to it,
+  and it holds neither the steps of the gate, which `README.md` lists, nor a list of the skills, which Claude Code
+  gives a session.
 - **The design and its reasons** live in `docs/foundations.md`. It may say what a rule protects and why, but it does not
   restate the rule.
 - **A procedure** lives in a skill, under `.claude/skills/`. A rule that serves only one task, such as writing or
   checking a commit message, lives once and in full in the skill of that task, beside the steps that apply it, and other
-  skills cite it there.
+  skills cite it there. So does a rule of a procedure that other tasks cite, such as what a pushed commit passes: it
+  lives in the skill whose steps apply it, and `CLAUDE.md` keeps one sentence that points to it. A skill loads only
+  while its task runs, while `CLAUDE.md` and a rules file without `paths` load in every session.
 - **What a part of the system does and how,** for people and agents, lives in the references of `docs/`: the components,
   the data flow and the library's layout in `ARCHITECTURE.md`, the HTTP API in `API.md`, the sandbox protocol in
   `OCR_SANDBOX.md`, the threat model and the guarantees in `SECURITY.md`. They describe; the rules they follow from live
@@ -64,9 +69,9 @@ Each statement has one home, so that it never drifts from a copy.
   `CLAUDE.md` files (`omitClaudeMd: true`), such as an expert reviewer. Only what every session needs goes in a file
   without `paths`, kept short.
 - **`paths` are kept by hand, per concern,** and so are the scopes of the expert reviewers that derive from them.
-- **Each rules file has its line in `CLAUDE.md`,** which names its topics and when to read it, without restating its
-  rules. A subagent in another worktree, or a compacted session, can miss a load by `paths`: the line tells it to read
-  the file.
+- **Each rules file has its line in `CLAUDE.md`,** which says when to read it, without naming its topics or restating
+  its rules: the file's own headings name its topics, once the line has sent a session there. A subagent in another
+  worktree, or a compacted session, can miss a load by `paths`: the line tells it to read the file.
 
 ## Expert reviewers
 

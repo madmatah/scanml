@@ -54,7 +54,8 @@ Each statement has one home, so that it never drifts from a copy.
   change".
 - **Never a number:** no section, rule or step number of a document of this repository. A number says nothing about its
   target, and it shifts when something is inserted before it. An outside standard is cited as its authors number it,
-  such as RFC 5545, section 3.8.5.3.
+  such as RFC 5545, section 3.8.5.3, and an issue by its number, the identifier its tracker gives, with its title, so
+  that a reader finds it without the tracker: `#12`, "Export CSV".
 - **Every cited file and heading exists.** A change that renames or removes a heading updates every reference to it, in
   the documents, the agent guidance and the messages of the tools.
 

@@ -443,6 +443,9 @@ Every branch goes through `/expert-review` before its pull request. It is a proj
   its triage and its experts still run, and their answers then reach the session instead. In the background, Claude
   Code keeps a fork running until it hands back its report, and delivers its agents' answers to it. Under `claude -p`,
   which waits for each agent, or with `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1` set, it runs in the foreground.
+- **The review keeps its prompt cache warm while its agents run,** with a sleep in the background started again at each
+  turn of the wait: a subagent's cache lasts five minutes, the experts often take longer, and a context written again
+  whole costs a cache write where a warm one costs a read.
 - **One expert per domain, in parallel.** Correctness reviews every diff, and conventions every diff that holds code or
   configuration. Architecture, tests, performance, security and documentation join when the diff touches their domain,
   and so do the project's own experts: isolation (the sandbox, the guards of the scripts, the Dockerfiles and

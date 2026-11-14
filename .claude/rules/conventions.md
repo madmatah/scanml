@@ -1,3 +1,21 @@
+---
+paths:
+  - "server/**"
+  - "ocr/**"
+  - "android/**"
+  - "scripts/**"
+  - ".claude/skills/*/scripts/**"
+  - ".github/workflows/**"
+  - ".claude/settings.json"
+  - "compose.yaml"
+  - ".env.example"
+  - ".gitignore"
+  - ".editorconfig"
+  - ".shellcheckrc"
+  - "ruff.toml"
+  - "mypy.ini"
+---
+
 # Code conventions
 
 These rules apply to code, tests and configuration, in every part of the repository, except a script copied from a

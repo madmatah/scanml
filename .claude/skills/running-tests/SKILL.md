@@ -17,8 +17,8 @@ Code automation, "An agent given a worktree works only there" says, so that no c
   change touches, `cd <worktree> && scripts/check.sh AREA...`, the areas of `CLAUDE.md` > Commands, or, within them,
   only the test files of what you change.
 - **When the history is shaped,** `cd <worktree> && scripts/check.sh --last-commit` checks every commit once, on the
-  areas that read what it changes, as `.claude/skills/develop/SKILL.md` > Shape the history shows, and skips a commit
-  that already passed it.
+  areas that read what it changes, as `.claude/skills/deliver-branch/SKILL.md` > Shape the history shows, and skips a
+  commit that already passed it.
 - **The CI runs the whole gate** on every pull request. Run `cd <worktree> && scripts/check.sh` yourself only when the
   change touches the gate itself, as `CLAUDE.md` > Workflow, "Run each check once, at its level" says.
 

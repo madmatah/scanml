@@ -6,13 +6,14 @@ description: Opens and updates the pull request of a ScanMyLib branch, shows in 
 # Pull request
 
 `CLAUDE.md` > Workflow holds the rules this procedure applies, and, for every section but the review of someone else's
-pull request, `.claude/skills/develop/SKILL.md` > Develop says what `<base>` and `<worktree>` are, how to write a file
-whose text you write, and how a session that did not start in the branch's worktree runs each command below.
+pull request, `.claude/skills/deliver-branch/SKILL.md` > Deliver a branch says what `<base>` and `<worktree>` are, how
+to write a file whose text you write, and how a session that did not start in the branch's worktree runs each command
+below.
 
 ## Open the pull request
 
 The branch is shaped, reviewed and pushed first, and its CI watched once the pull request is open, as
-`.claude/skills/develop/SKILL.md` > Shape the history, > Review and > Push the branch and watch its CI say.
+`.claude/skills/deliver-branch/SKILL.md` > Shape the history, > Review and > Push the branch and watch its CI say.
 
 1. Write the body from `.github/pull_request_template.md`, which `gh pr create --body-file` does not apply: fill each
    section in place of its comment, and tick a checklist item only once it holds. Write the body in a file outside the

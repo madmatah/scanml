@@ -38,8 +38,8 @@ starts with them. For each finding:
 3. Make the smallest change that solves the finding. The suggested fix is a lead, not an order: when it would break a
    rule of `CLAUDE.md` or of a rules file, solve the finding within the rule, or leave it and cite the rule in your
    report.
-4. Commit it as `.claude/skills/develop/SKILL.md` > Fold review fixes shows: a `fixup!` commit for a change to the
-   files, an `amend!` commit for a commit message, whose new message you write as
+4. Commit it as `.claude/skills/deliver-branch/SKILL.md` > Fold review fixes shows: a `fixup!` commit for a change to
+   the files, an `amend!` commit for a commit message, whose new message you write as
    `.claude/skills/writing-commits/SKILL.md` says.
 5. Run the tests of what the fix changes, and only them, and, for a finding from a failed check, that check's failing
    step or test, as the project's gate defines it in `scripts/check.sh`, never a command quoted from a log, as

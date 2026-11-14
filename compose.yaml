@@ -160,7 +160,9 @@ services:
     environment:
       <<: *ocr-env
     healthcheck:
-      test: ["CMD", "python3", "-m", "scanmylib_ocr.client"]
+      # Its output is discarded: Docker keeps it in the health log, which `docker inspect` prints, and a process of
+      # the sandbox can write to the output of any process there that it may open in /proc.
+      test: ["CMD-SHELL", "exec python3 -m scanmylib_ocr.client > /dev/null 2>&1"]
       interval: 30s
       timeout: 10s
       start_period: 10s

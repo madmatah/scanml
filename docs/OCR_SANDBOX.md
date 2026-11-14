@@ -163,7 +163,8 @@ container_init (python3, stdlib)      process 1: passes on the stop signals, rea
   of the sandbox, which run as the same user, cannot open their descriptors in
   `/proc`. The init passes SIGTERM, SIGINT, SIGHUP, SIGQUIT, SIGUSR1 and SIGUSR2
   to the supervisor, reaps every process left to it, and exits with the
-  supervisor's exit code, or 128 plus the signal that killed it.
+  supervisor's exit code, or 128 plus the signal that killed it. The health check
+  (`python3 -m scanmylib_ocr.client`) discards its output.
 - **The children's output**: the supervisor relays the stdout and stderr of
   vLLM and of the worker line by line to the `ocr` container's log, each
   character that is not printable, and each backslash, written as an escape

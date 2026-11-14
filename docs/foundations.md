@@ -447,9 +447,9 @@ Every branch goes through `/expert-review` before its pull request. It is a proj
   configuration. Architecture, tests, performance, security and documentation join when the diff touches their domain,
   and so do the project's own experts: isolation (the sandbox, the guards of the scripts, the Dockerfiles and
   `compose.yaml`) and Android. The goal expert joins when the review has the plan of the work. Each expert is an agent
-  of `.claude/agents/`, on Opus for bugs, security, isolation, architecture, the app, performance and tests, and on
-  Sonnet for conventions, documentation and the goal, which written text guides. No expert can run a command, so that
-  no reviewed text can make it act.
+  of `.claude/agents/`, on Opus for bugs, security, isolation, architecture, the app and performance, and on Sonnet
+  for conventions, tests, documentation and the goal, which written rules or the plan guide. No expert can run a
+  command, so that no reviewed text can make it act.
 - **The goal expert checks the code against its plan,** and its findings get a section of their own in the report: a
   change can pass every rule and still miss its goal, and nothing else in the review reads the plan; a section apart
   keeps a passing axis from hiding a failing one. The plan picks it, not the paths or the triage. It never judges the

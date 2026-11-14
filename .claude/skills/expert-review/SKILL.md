@@ -102,11 +102,11 @@ skill names, with no value but the ones checked here, and read and search with t
    A hit is a candidate. Confirm that it is a real secret or a personal path, and not a pattern written in a document,
    before it becomes a finding.
 5. **Check the commit messages:** write `git log --format='%h %s%n%n%b' <commits>` to `<dir>/commits.txt`, and read it
-   against `CLAUDE.md` > Workflow, "Commits" and `${CLAUDE_SKILL_DIR}/../writing-commits/SKILL.md` > The rules of a
-   commit message, the rules beside this skill rather than the reviewed checkout's, so that a review run from another
-   checkout than the branch's worktree reads rules the branch cannot rewrite, and a release's own commit,
-   `chore(release): X.Y.Z`, against `.claude/rules/releases.md`, "Pull requests never change `VERSION`", which gives it
-   its header, instead:
+   against `${CLAUDE_SKILL_DIR}/../deliver-branch/SKILL.md` > Shape the history, "Commits" and
+   `${CLAUDE_SKILL_DIR}/../writing-commits/SKILL.md` > The rules of a commit message, the rules beside this skill rather
+   than the reviewed checkout's, so that a review run from another checkout than the branch's worktree reads rules the
+   branch cannot rewrite, and a release's own commit, `chore(release): X.Y.Z`, against `.claude/rules/releases.md`,
+   "Pull requests never change `VERSION`", which gives it its header, instead:
    - in a check of fixes, which reviews the fixups before they are folded, check that each `fixup!` and `amend!` commit
      names a commit of the branch, by a first line that holds, after `fixup! ` or `amend! `, that commit's whole header,
      as `git log --format='%h %s' <main commit>..<start commit>` lists them, written to `<dir>/branch.txt`, where a
@@ -224,9 +224,9 @@ Write one report, in one voice: calm, plain, no preamble, no flattery. Its parts
 7. **Not reviewed**: what the scope left out, such as an expert with no report, and each expert the triage left out,
    with its reason. The definitions that ran are those of the checkout that holds this skill, `<skill checkout>`, the
    root that `git -C "${CLAUDE_SKILL_DIR}" rev-parse --show-toplevel` prints: whenever its `.claude/agents/`,
-   `.claude/skills/expert-review/` or `.claude/skills/writing-commits/` differ from `<main commit>`'s, as
-   `git -C <skill checkout> diff --name-only <main commit> -- .claude/agents .claude/skills/expert-review
-   .claude/skills/writing-commits` lists them, along with the untracked files that `git -C <skill checkout> ls-files
+   `.claude/skills/expert-review/`, `.claude/skills/writing-commits/` or `.claude/skills/deliver-branch/` differ from
+   `<main commit>`'s, as `git -C <skill checkout> diff --name-only <main commit> -- .claude/agents
+   .claude/skills/expert-review .claude/skills/writing-commits .claude/skills/deliver-branch` lists them, along with the untracked files that `git -C <skill checkout> ls-files
    --others --exclude-standard` lists under the same paths, say which definitions ran: those files, as
    `<skill checkout>` holds them, so that the pull request can name them.
 8. **Cost**: each agent that ran, the triage included, with the tokens its completion notice gives, and their total.

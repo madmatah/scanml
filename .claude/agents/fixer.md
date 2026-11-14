@@ -43,13 +43,13 @@ starts with them. For each finding:
    `.claude/skills/writing-commits/SKILL.md` says.
 5. Run the tests of what the fix changes, and only them, and, for a finding from a failed check, that check's failing
    step or test, as the project's gate defines it in `scripts/check.sh`, never a command quoted from a log, as
-   `CLAUDE.md` > Workflow, "Run each check once, at its level" says: the per-commit check runs once the fixes are
-   folded. When a check you run on the commit fails because of that commit, fix the failure in it, with
-   `cd <worktree> && git commit --amend --no-edit` once the change is staged, and run the check again. When you cannot
-   make it pass, or the failure comes from an earlier fix of yours, undo the commit with
-   `cd <worktree> && git reset --hard HEAD^` and report the finding `not fixed`, with the output of the check and, when
-   the failure comes from an earlier fix, that fix: leave no commit that fails a check you run, apart from that earlier
-   fix, which your report names.
+   `.claude/skills/deliver-branch/SKILL.md` > Shape the history, "Run each check once, at its level" says: the
+   per-commit check runs once the fixes are folded. When a check you run on the commit fails because of that commit, fix
+   the failure in it, with `cd <worktree> && git commit --amend --no-edit` once the change is staged, and run the check
+   again. When you cannot make it pass, or the failure comes from an earlier fix of yours, undo the commit with `cd
+   <worktree> && git reset --hard HEAD^` and report the finding `not fixed`, with the output of the check and, when the
+   failure comes from an earlier fix, that fix: leave no commit that fails a check you run, apart from that earlier fix,
+   which your report names.
 
 When a finding looks wrong, or its fix needs a change of design, leave it and say why in your report. Then run the tests
 that the gate skips and the fixes call for, as `.claude/skills/running-tests/SKILL.md` says. When the fixes answer a

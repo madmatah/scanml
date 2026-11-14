@@ -364,22 +364,22 @@ commands and options that could (`cp`, `run -v`, `exec --privileged`…). The gu
 indexed in [`CLAUDE.md`](CLAUDE.md). A rehearsal of a deployment, on a throwaway stack, is described in the header of
 `scripts/deploy.sh`.
 
-`scripts/check.sh` is the gate: the formatters, linters and type checker of every language (Ruff and mypy for the
-Python, ShellCheck and shfmt for the shell scripts, Biome for the web UI, ktlint for the app, zizmor for the workflows),
-the unit and integration tests of the scripts, on the host's `python3`, and, in throwaway containers, those of the web
-UI, the server and the OCR sandbox, and the Android tests and lint (`scripts/check.sh server web` checks those areas
-only). `scripts/check.sh --fix` formats the code and applies the linters' safe fixes: ktlint to the app in place, the
-other formatters to the files git tracks in `server/`, `ocr/`, `scripts/` and `.claude/skills/`, but the script
-copied from a template, which is kept as it ships; read `git diff` before running what it changed. Each commit of a
-pull request passes the areas that read what it changes (`scripts/check.sh --last-commit`), and every pull request runs
-the whole gate in the continuous integration (`.github/workflows/ci.yml`, one job per area). Pull requests are merged
-when it is green.
-`scripts/check.sh --last-commit` skips a `fixup!`, `amend!` or `squash!` commit, which is checked once folded into its
-commit, and a commit whose files and whose parent's files already passed on a clean working tree, which it records in
-the common git directory of the repository: after a change outside the repository that the checks depend on, such as a
-new base image, `python3` or Android SDK, or to an ignored file that they read, such as a worktree's `.env` or
-`android/local.properties`, clear the record with
-`rm -f "$(git rev-parse --git-common-dir)/passed-commit-check"`.
+`scripts/check.sh` is the gate, and runs its areas in this order: `lint`, the formatters, linters and type checker of
+every language (Ruff and mypy for the Python, ShellCheck and shfmt for the shell scripts, Biome for the web UI, zizmor
+for the workflows); `scripts`, the unit tests of the scripts, on the host's `python3`; then, in throwaway containers,
+`web`, the web UI's unit tests, `server`, the api's tests, `ocr`, the OCR sandbox's unit tests, without models, and
+`android`, the app's tests, lint and ktlint; and last `integration`, the integration tests of the scripts, on the host's
+`python3` (`scripts/check.sh server web` checks those areas only). `scripts/check.sh --fix` formats the code and applies
+the linters' safe fixes: ktlint to the app in place, the other formatters to the files git tracks in `server/`, `ocr/`,
+`scripts/` and `.claude/skills/`, but the script copied from a template, which is kept as it ships; read `git diff`
+before running what it changed. Each commit of a pull request passes the areas that read what it changes
+(`scripts/check.sh --last-commit`), and every pull request runs the whole gate in the continuous integration
+(`.github/workflows/ci.yml`, one job per area). Pull requests are merged when it is green. `scripts/check.sh
+--last-commit` skips a `fixup!`, `amend!` or `squash!` commit, which is checked once folded into its commit, and a
+commit whose files and whose parent's files already passed on a clean working tree, which it records in the common git
+directory of the repository: after a change outside the repository that the checks depend on, such as a new base image,
+`python3` or Android SDK, or to an ignored file that they read, such as a worktree's `.env` or
+`android/local.properties`, clear the record with `rm -f "$(git rev-parse --git-common-dir)/passed-commit-check"`.
 
 Every Monday, and on a push to `main` that changes what it scans, `.github/workflows/vulnerability-scan.yml` runs
 Google's OSV-Scanner on what Dependabot cannot see: the OCR sandbox's environments, resolved as a new installation would

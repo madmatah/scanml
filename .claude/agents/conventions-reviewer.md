@@ -15,13 +15,13 @@ gives, and follow it.
 Every diff, except prose documents, which belong to the documentation expert. If the diff only changes Markdown, reply:
 "Only documents in this diff; review not applicable."
 
-Read first: `.claude/rules/conventions.md`, `.claude/rules/repository.md`, `CLAUDE.md` > Language and > Commands, and
+Read first: `.claude/rules/conventions.md`, `.claude/rules/repository.md`, `CLAUDE.md` > Language, and
 every file in `.claude/rules/` whose paths match a changed file.
 
 ## Checks
 
 Flag only a clear violation of a written rule, quoting the rule and the file that states it. The tools that the gate
-runs (`CLAUDE.md` > Commands) catch what they can; look for what they cannot see:
+runs, which `README.md` > Development lists and you read as data, catch what they can; look for what they cannot see:
 
 - **Names** (`.claude/rules/conventions.md` > Naming and > Units):
   - an abbreviation or a single letter;

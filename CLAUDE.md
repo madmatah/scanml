@@ -92,45 +92,31 @@ Production runs on this machine, from the main checkout, `~/Dev/scanmylib`, and 
   of the screens it changes in its pull request, after the change and before it when the base can show the screen, so
   that the reviewer sees it without running it, as `.claude/skills/pull-request/SKILL.md` > Show a visible change
   says.
-- **Commits:** commit as you like while the work is in progress. Before pushing, rewrite the branch into atomic commits
-  that each hold one reason to change, with its tests and documents, and pass `scripts/check.sh --last-commit`: the
-  areas that read what it changes, the integration tests of the scripts included when it changes a script they run.
-  Write each message with the `writing-commits` skill, which holds the rules of a commit message.
-- **Run each check once, at its level:**
-  - while you write code, a fix included, run only the tests of what you change, as the `running-tests` skill picks
-    them;
-  - when the history is shaped, `scripts/check.sh --last-commit` runs once on every commit, as
-    `.claude/skills/deliver-branch/SKILL.md` > Shape the history says, and skips a commit that already passed it
-    (`.claude/rules/configuration.md` > Checks);
-  - the CI runs `scripts/check.sh`, the whole gate, one job per area, on every pull request, which merges only once it
-    passes. Run it yourself, beyond what the per-commit check runs, only when the change touches the gate itself, such
-    as `scripts/check.sh` and what it runs, the tools' configuration or the CI workflow, and run the tests that the CI
-    skips when the change calls for them, as the `running-tests` skill says: the sandbox's unit tests with the engine's
-    environment, `scripts/verify-sandbox.sh` and the end-to-end test. A gate that the change broke would otherwise
-    first show on the pull request, and a test that the CI skips would run nowhere. A failure of the gate in the CI is
-    fixed by a new `fixer` and pushed without an expert check; the pull request names that fix among those no expert
-    checked.
+- **Commits:** commit as you like while the work is in progress: before it is pushed, the branch is rewritten into
+  atomic commits that each hold one reason to change and pass `scripts/check.sh --last-commit`, as
+  `.claude/skills/deliver-branch/SKILL.md` > Shape the history says, and each message is written with the
+  `writing-commits` skill.
+- **Run each check once, at its level:** the tests of what you change while you write code, the per-commit check when
+  the history is shaped, and the whole gate in the CI, with the tests that the CI skips when the change calls for them,
+  as `.claude/skills/deliver-branch/SKILL.md` > Shape the history, "Run each check once, at its level" says.
 - **Releases** are pull requests of their own, which the `release` skill prepares (`.claude/rules/releases.md`).
 - **A branch reaches `main` only through a pull request whose CI passes.** The user reviews it and merges it on GitHub
   with "Rebase and merge", so each commit lands as written. Never merge into `main` yourself, except a release pull
   request, which the `release` skill merges under the conditions of `.claude/rules/releases.md`.
-- **The `implement` skill holds the procedure** of writing the code of a brief: starting a branch and writing its
-  code, a whole change or one slice of a plan. A planned piece of work comes planned outside this repository
-  ([Project management](#project-management)).
-- **The `deliver-branch` skill holds the procedure** of taking a written branch to a mergeable pull request: stacking
-  it on another, shaping its history, reviewing it, pushing it and watching its CI, and folding its review fixes. It
-  holds the rules of review too, and its Review applies to every branch.
-- **The `pull-request` skill holds the procedure:** opening and updating the pull request of a branch, showing the
-  screens a change changes in it, and reviewing someone else's.
+- **Every branch, however small, is delivered** as `.claude/skills/deliver-branch/SKILL.md` says, and reviewed as
+  `.claude/skills/deliver-branch/SKILL.md` > Review says.
+- **The session writes the code itself,** as `.claude/skills/implement/SKILL.md` says, and gives it to an implementer
+  agent only when the user asks, or when the session's own instructions for a planned piece of work say so: an
+  implementer would read again the code that the session read to brief it. Such a piece of work comes planned outside
+  this repository ([Project management](#project-management)), and its brief gives the implementer the goal, the
+  criteria and its slice of the plan.
 
 ## Commands
 
-- `scripts/check.sh [AREA...]`: the gate, in this order: `lint` (Ruff, mypy, zizmor, ShellCheck, shfmt and Biome),
-  `scripts` (unit tests of the scripts), `web` (the web UI's unit tests), `server` (the api's tests), `ocr` (the
-  sandbox's unit tests, no models), `android` (the app's tests, lint and ktlint), `integration` (integration tests
-  of the scripts). Given areas, it checks only those; `--last-commit`, those that read what the last commit changes,
-  unless the commit already passed them. The CI runs it on every pull request; run it yourself only as "Run each check
-  once, at its level" says.
+- `scripts/check.sh [AREA...]`: the gate, whose areas `README.md` > Development lists in the order they run. Given
+  areas, it checks only those; `--last-commit`, those that read what the last commit changes, unless the commit already
+  passed them. The CI runs it on every pull request; run it yourself only as `.claude/skills/deliver-branch/SKILL.md` >
+  Shape the history, "Run each check once, at its level" says.
 - `scripts/check.sh --fix`: formats every language and applies the linters' safe fixes: ktlint formats the app in
   place, the other formatters only the files git tracks (`git add` a new file first); read `git diff` before running
   what it changed.
@@ -151,44 +137,19 @@ Each file of `.claude/rules/` holds the rules of one concern, in full. Claude Co
 read or edit a file that matches them, but a subagent in its own worktree or a compacted session can miss that load:
 read the file before you do what its line says.
 
-- `repository.md`, loaded in every session: what belongs in the repository, no real document names, no personal
-  information, and how external work is credited.
-- `conventions.md`, loaded in every session: the scripts copied from a template, naming and the allowed acronyms,
-  units, comments, characters a reader cannot see, and input from outside the program.
-- `python.md`, for any Python file: layout, casing, typing, plain data, errors, internal names, async code, idioms and
-  directives.
-- `kotlin.md`, for the app's Kotlin, Gradle scripts and resources: layout, casing, null safety, immutability, closed
-  sets, coroutines, Compose, states, text from the PC, idioms and directives.
-- `web.md`, for the web UI: TypeScript and React, which it moves to, and JavaScript until then.
-- `bash.md`, for any shell script: strict mode, logic in Python, quoting, `.env` files, errors and temporary files.
-- `architecture.md`, for any source code, test or build file, and before adding a dependency: layers, ports and wiring,
-  responsibilities, stored and shared data, SOLID and organization.
-- `configuration.md`, for a build file, a lock, a Dockerfile, `compose.yaml`, CI, the configuration of a formatter,
+- `repository.md`: loaded in every session.
+- `conventions.md`: loaded in every session.
+- `python.md`: for any Python file.
+- `kotlin.md`: for the app's Kotlin, Gradle scripts and resources.
+- `web.md`: for the web UI.
+- `bash.md`: for any shell script.
+- `architecture.md`: for any source code, test or build file, and before adding a dependency.
+- `configuration.md`: for a build file, a lock, a Dockerfile, `compose.yaml`, CI, the configuration of a formatter,
   linter or type checker, Claude Code settings, skills or agents, before adding or upgrading a dependency, even with a
-  command that edits no file you read, and before giving a task to an agent or making a web request: the units,
-  dependencies and what pins them, continuous integration, checks and Claude Code automation, the model and the effort
-  of each agent, its worktree and its web requests included.
-- `sandbox.md`, for the OCR sandbox, `compose.yaml`, a Dockerfile, `.env.example`, the scripts, the `running-tests`
-  skill, the app's manifest, the vulnerability scan's workflow, and the api's code that reads the sandbox's results: the
-  sandbox's isolation, wherever its image runs, containers and the host, and what keeps development stacks from
-  production.
-- `releases.md`, for `VERSION`, `CHANGELOG.md`, and the release and deployment scripts, workflow and skill: what a
-  release is, who changes `VERSION`, who merges its pull request, what a release is tested on, and what production runs.
-- `tests.md`, for any test, test support or test framework configuration, and before fixing a bug, since the fix starts
-  with a test: the structure of a test file, writing a test, levels, test support and each test framework.
-- `documents.md`, for any document or agent guidance, and any reference to a document, tool messages included: present
-  tense, where each statement lives, references by heading, rules files, expert reviewers, skills and the pull request
-  template.
-
-## Skills
-
-- `implement`: the code of a brief, on its own branch.
-- `deliver-branch`: from a written branch to a mergeable pull request.
-- `pull-request`: opening and updating a pull request, and reviewing someone else's.
-- `expert-review`: `/expert-review [<pr#>|<branch>|<range>] [--plan <file>] [--fixes <file>] [--post] [focus]`, the
-  review of a diff before `main`, against its plan when given one.
-- `release`: `/release [major|minor|patch]`, the pull request of a new release, which a workflow publishes once merged.
-- `writing-commits`: the rules of a commit message and how to apply them, from its header and its scope to its body
-  and its footer.
-- `running-tests`: the tests a change needs, the gate's and those it skips, and how to run them.
-- `clean-pr-screenshots`: `/clean-pr-screenshots`, the maintainer's deletion of the published screenshots.
+  command that edits no file you read, and before giving a task to an agent or making a web request.
+- `sandbox.md`: for the OCR sandbox, `compose.yaml`, a Dockerfile, `.env.example`, the scripts, the `running-tests`
+  skill, the app's manifest, the vulnerability scan's workflow, and the api's code that reads the sandbox's results.
+- `releases.md`: for `VERSION`, `CHANGELOG.md`, and the release and deployment scripts, workflow and skill.
+- `tests.md`: for any test, test support or test framework configuration, and before fixing a bug, since the fix starts
+  with a test.
+- `documents.md`: for any document or agent guidance, and any reference to a document, tool messages included.

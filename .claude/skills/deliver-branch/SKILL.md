@@ -5,15 +5,15 @@ description: Takes a branch of ScanMyLib whose code is written to a mergeable pu
 
 # Deliver a branch
 
-`CLAUDE.md` > Workflow holds the rules of every session, and this skill those of review, beside the steps that apply
-them. Below, `<base>` is `origin/main`, or the unmerged branch the work is stacked on, and `<worktree>` the branch's
-worktree, `~/Dev/scanmylib/.claude/worktrees/<topic>`. Every command of the branch below starts with `cd <worktree> &&`,
-as `.claude/rules/configuration.md` > Claude Code automation, "An agent given a worktree works only there" says, which a
-session that did not start in the branch's worktree reads before its first command. Write each file whose text you
-write, such as the findings that the fixes answer or a commit message, with the Write tool, never through a shell: in a
-heredoc, or in `git commit -m "…"`, the backquoted text that findings, plans and messages quote runs as commands. A
-command's output goes to its file by redirection. Give git a message from a file in a directory that `mktemp -d`
-creates outside the worktree, with `git commit -F <file>`.
+`CLAUDE.md` > Workflow holds the rules of every session, and this skill those of commits, of their checks and of review,
+beside the steps that apply them. Below, `<base>` is `origin/main`, or the unmerged branch the work is stacked on, and
+`<worktree>` the branch's worktree, `~/Dev/scanmylib/.claude/worktrees/<topic>`. Every command of the branch below
+starts with `cd <worktree> &&`, as `.claude/rules/configuration.md` > Claude Code automation, "An agent given a worktree
+works only there" says, which a session that did not start in the branch's worktree reads before its first command.
+Write each file whose text you write, such as the findings that the fixes answer or a commit message, with the Write
+tool, never through a shell: in a heredoc, or in `git commit -m "…"`, the backquoted text that findings, plans and
+messages quote runs as commands. A command's output goes to its file by redirection. Give git a message from a file in a
+directory that `mktemp -d` creates outside the worktree, with `git commit -F <file>`.
 
 ## The brief
 
@@ -53,14 +53,32 @@ A contributor delivering their own branch has all of it.
 
 ## Shape the history
 
-1. Before pushing, rewrite the branch into atomic commits, as `CLAUDE.md` > Workflow, "Commits" asks, and write each
-   message with the `writing-commits` skill, which holds the rules of a commit message. Interactive editors are
+- **Commits:** commit as you like while the work is in progress. Before pushing, rewrite the branch into atomic
+  commits, each cut as `.claude/skills/writing-commits/SKILL.md` > Draw the commits says, with its tests and documents,
+  that each pass `scripts/check.sh --last-commit`: the areas that read what it changes, the integration tests of the
+  scripts included when it changes a script they run. Write each message with the `writing-commits` skill, which holds
+  the rules of a commit message.
+- **Run each check once, at its level:**
+  - while you write code, a fix included, run only the tests of what you change, as the `running-tests` skill picks
+    them;
+  - when the history is shaped, `scripts/check.sh --last-commit` runs once on every commit, as the steps below say, and
+    skips a commit that already passed it (`.claude/rules/configuration.md` > Checks);
+  - the CI runs `scripts/check.sh`, the whole gate, one job per area, on every pull request, which merges only once it
+    passes. Run it yourself, beyond what the per-commit check runs, only when the change touches the gate itself, such
+    as `scripts/check.sh` and what it runs, the tools' configuration or the CI workflow, and run the tests that the CI
+    skips when the change calls for them, as the `running-tests` skill says: the sandbox's unit tests with the engine's
+    environment, `scripts/verify-sandbox.sh` and the end-to-end test. A gate that the change broke would otherwise
+    first show on the pull request, and a test that the CI skips would run nowhere. A failure of the gate in the CI is
+    fixed by a new `fixer`, spawned as [Review](#review) says, and pushed without an expert check; the pull request
+    names that fix among those no expert checked.
+
+1. Rewrite the branch into atomic commits, as "Commits" asks. Interactive editors are
    unavailable: fold a change into its commit with `cd <worktree> && git commit --fixup=<commit>`, then
    `cd <worktree> && GIT_SEQUENCE_EDITOR=: git rebase -i --autosquash <base>`. Then make sure that no `fixup!`,
    `amend!` or `squash!` commit is left, and settle each leftover as [Fold review fixes](#fold-review-fixes) says for
    one leftover, then come back here and check the commits: the per-commit check skips such a commit, which it expects
    the fold to put into its commit.
-2. Check every commit, as `CLAUDE.md` > Workflow, "Commits" and "Run each check once, at its level" ask: each one on
+2. Check every commit, as "Commits" and "Run each check once, at its level" ask: each one on
    the areas it touches, with `cd <worktree> && git rebase --exec 'scripts/check.sh --last-commit' <base>`. The CI runs
    the whole gate; run `cd <worktree> && scripts/check.sh` here only where "Run each check once, at its level" says.
    When a commit fails, take its hash from `cd <worktree> && git rev-parse --short HEAD`, run

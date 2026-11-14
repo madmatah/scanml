@@ -5,22 +5,23 @@ description: Picks and runs the tests that a change to ScanMyLib needs, the gate
 
 # Running tests
 
-`CLAUDE.md` > Workflow, "Run each check once, at its level" says which checks run when, and `.claude/rules/tests.md` >
-Levels where each level of tests lives. This skill picks the tests a change needs and runs them, from the branch's
-worktree, `<worktree>` below: every command starts with `cd <worktree> &&`, as `.claude/rules/configuration.md` > Claude
-Code automation, "An agent given a worktree works only there" says, so that no command runs on production's `.env`
-(`CLAUDE.md` > Production).
+`.claude/skills/deliver-branch/SKILL.md` > Shape the history, "Run each check once, at its level" says which checks run
+when, and `.claude/rules/tests.md` > Levels where each level of tests lives. This skill picks the tests a change needs
+and runs them, from the branch's worktree, `<worktree>` below: every command starts with `cd <worktree> &&`, as
+`.claude/rules/configuration.md` > Claude Code automation, "An agent given a worktree works only there" says, so that no
+command runs on production's `.env` (`CLAUDE.md` > Production).
 
 ## The gate
 
 - **While you work,** a fix included, run the tests of what you change, and only them: those of the areas that the
-  change touches, `cd <worktree> && scripts/check.sh AREA...`, the areas of `CLAUDE.md` > Commands, or, within them,
-  only the test files of what you change.
+  change touches, `cd <worktree> && scripts/check.sh AREA...`, the areas that `README.md` > Development lists, or,
+  within them, only the test files of what you change.
 - **When the history is shaped,** `cd <worktree> && scripts/check.sh --last-commit` checks every commit once, on the
   areas that read what it changes, as `.claude/skills/deliver-branch/SKILL.md` > Shape the history shows, and skips a
   commit that already passed it.
 - **The CI runs the whole gate** on every pull request. Run `cd <worktree> && scripts/check.sh` yourself only when the
-  change touches the gate itself, as `CLAUDE.md` > Workflow, "Run each check once, at its level" says.
+  change touches the gate itself, as `.claude/skills/deliver-branch/SKILL.md` > Shape the history, "Run each check once,
+  at its level" says.
 
 ## What the gate skips
 

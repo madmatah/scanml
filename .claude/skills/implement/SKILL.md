@@ -60,8 +60,8 @@ When the brief gives no worktree, start one:
 2. Write the code of the brief, or of its slice, and no more. The code follows the plan: an implementation that finds it
    wrong stops and says why in its report, rather than departing from it.
 3. While you write code, run only the tests of what you change, as the `running-tests` skill picks them: the per-commit
-   check runs when the history is shaped, and the gate in the CI, as `CLAUDE.md` > Workflow, "Run each check once, at
-   its level" says.
+   check runs when the history is shaped, and the gate in the CI, as `.claude/skills/deliver-branch/SKILL.md` > Shape
+   the history, "Run each check once, at its level" says.
 4. Write each commit message with the `writing-commits` skill, `.claude/skills/writing-commits/SKILL.md`, which holds
    the rules of a commit message.
 5. Once the work is complete, check a visible change, as `CLAUDE.md` > Workflow, "Check a visible change" says: of the

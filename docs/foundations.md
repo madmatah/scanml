@@ -343,7 +343,8 @@ copy. `.claude/rules/documents.md` > Where a statement lives says what goes wher
   session loads only those of the code it touches.
 - **Skills hold procedures** because a procedure matters only while its task runs, and a skill loads only then. A rule
   that serves only one task, such as writing or checking a commit message, lives in the skill of that task for the same
-  reason: in `CLAUDE.md`, it would cost every session, and no file's `paths` would load a rules file of its own at the
+  reason, and so does a rule of a procedure that other tasks only cite, which `CLAUDE.md` points to in one sentence: in
+  `CLAUDE.md`, it would cost every session, and no file's `paths` would load a rules file of its own at the
   moment it serves.
 - **This document holds the design and its reasons,** and states no rule, so that a rule changes in one place.
 - **An expert reviewer reads at least the rules files of its domain,** one hop away, so that it never chases a rule

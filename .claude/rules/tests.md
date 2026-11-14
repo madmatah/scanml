@@ -152,7 +152,7 @@ The section of each test framework below gives its own words for them, and how i
   the project writes for its skills (`.claude/skills/*/scripts/`), against throwaway repositories and a docker stand-in
   (`scripts/integration_tests/docker_shim.py`) that never reaches the Docker daemon. Each one runs a script whole, with
   the processes it starts, and they have an area of their own in the gate, `integration`, which a commit runs only when
-  it changes a script they run (`CLAUDE.md` > Workflow, "Commits").
+  it changes a script they run (`.claude/skills/deliver-branch/SKILL.md` > Shape the history, "Commits").
 - **End to end:** `scripts/e2e_test.py`, which acts like the phone against a running stack, the development stack by
   default, outside the gate and so outside the CI: a change that the `running-tests` skill names runs it.
 - **Isolation of the sandbox:** `scripts/verify-sandbox.sh`, against the running `ocr` service, outside the gate and so

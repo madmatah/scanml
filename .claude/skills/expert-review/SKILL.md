@@ -107,8 +107,10 @@ skill names, with no value but the ones checked here, and read and search with t
    against `${CLAUDE_SKILL_DIR}/../deliver-branch/SKILL.md` > Shape the history, "Commits" and
    `${CLAUDE_SKILL_DIR}/../writing-commits/SKILL.md` > The rules of a commit message, the rules beside this skill rather
    than the reviewed checkout's, so that a review run from another checkout than the branch's worktree reads rules the
-   branch cannot rewrite, and a release's own commit, `chore(release): X.Y.Z`, against `.claude/rules/releases.md`,
-   "Pull requests never change `VERSION`", which gives it its header, instead:
+   branch cannot rewrite, with the types that "A commit header follows the commit style" takes from `CLAUDE.md`, read as
+   it stands on main for the same reason, with `git show <main commit>:CLAUDE.md`, and a release's own commit,
+   `chore(release): X.Y.Z`, against `.claude/rules/releases.md`, "Pull requests never change `VERSION`", which gives it
+   its header, instead:
    - in a check of fixes, which reviews the fixups before they are folded, check that each `fixup!` and `amend!` commit
      names a commit of the branch, by a first line that holds, after `fixup! ` or `amend! `, that commit's whole header,
      as `git log --format='%h %s' <main commit>..<start commit>` lists them, written to `<dir>/branch.txt`, where a

@@ -127,9 +127,12 @@ log_max_size="$(inspect '{{index .HostConfig.LogConfig.Config "max-size"}}')"
 check "container log size bounded (logging max-size)" "yes" \
     "$([[ $log_driver != json-file || -n $log_max_size ]] && echo yes || echo "no ($log_driver without max-size)")"
 
+# What the check prints inside is the sandbox's, untrusted: a process of the sandbox can write to the output of any
+# process there that it may open in /proc, so nothing of it reaches the terminal but through cat -v.
 echo "== inside the sandbox (docker exec, as the sandbox user)"
 set +e
-docker exec -i -e LAN_TARGET="$lan_target" -e HOST_HOME="$(getent passwd "$(id -u)" | cut -d: -f6)" -e SANDBOX_KIND="$kind" "$container" python3 - << 'PY'
+docker exec -i -e LAN_TARGET="$lan_target" -e HOST_HOME="$(getent passwd "$(id -u)" | cut -d: -f6)" \
+    -e SANDBOX_KIND="$kind" "$container" python3 - 2>&1 << 'PY' | cat -v
 import errno
 import os
 import re
@@ -330,7 +333,7 @@ if os.path.exists(socket_path):
 
 sys.exit(1 if failures else 0)
 PY
-inside=$?
+inside=${PIPESTATUS[0]}
 set -e
 
 if ((failures > 0 || inside != 0)); then

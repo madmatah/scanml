@@ -10,7 +10,13 @@ from __future__ import annotations
 import unittest
 from typing import ClassVar
 
+from docker_shim import Rule
 from installation_support import InstallationTestCase, ScriptRun, build_running_sandbox_rules, make_installation
+
+CLIPBOARD_WRITE = "\N{ESCAPE}]52;c;aGk=\a"
+SHOWN_CLIPBOARD_WRITE = "^[]52;c;aGk=^G"
+SCREEN_CLEAR = "\N{ESCAPE}[2J"
+SHOWN_SCREEN_CLEAR = "^[[2J"
 
 
 class WhenProductionsSandboxIsIsolated(InstallationTestCase):
@@ -86,6 +92,37 @@ class WhenADevelopmentStackRunsTheFakeOcr(InstallationTestCase):
 
     def test_should_pass(self) -> None:
         self.assertEqual(self.verification.returncode, 0, self.verification.output)
+
+
+class WhenTheChecksInsideTheSandboxPrintControlSequences(InstallationTestCase):
+    verification: ClassVar[ScriptRun]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        installation = make_installation(cls)
+        production_data = installation.production_data
+        printing_controls: Rule = {
+            "match": r"^exec ",
+            "stdout": f"FAIL: a check ({CLIPBOARD_WRITE})\n",
+            "stderr": f"{SCREEN_CLEAR}\n",
+            "exit": 1,
+        }
+        installation.answer_docker(
+            [printing_controls, *build_running_sandbox_rules(f"{production_data}/sandbox", str(production_data))]
+        )
+        cls.verification = installation.run_script(installation.production_checkout, "verify-sandbox.sh")
+
+    def test_should_fail_as_the_checks_inside_do(self) -> None:
+        self.assertEqual((self.verification.returncode, "RESULT: FAIL" in self.verification.stdout), (1, True))
+
+    def test_should_show_their_standard_output_through_cat_v(self) -> None:
+        self.assertIn(SHOWN_CLIPBOARD_WRITE, self.verification.stdout)
+
+    def test_should_show_their_error_output_through_cat_v_since_a_process_of_the_sandbox_can_write_there(self) -> None:
+        self.assertIn(SHOWN_SCREEN_CLEAR, self.verification.stdout)
+
+    def test_should_hand_the_terminal_no_control_character(self) -> None:
+        self.assertNotIn("\N{ESCAPE}", self.verification.output)
 
 
 if __name__ == "__main__":

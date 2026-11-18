@@ -150,6 +150,12 @@ describe('The navigation', () => {
         expectedSection: 'library',
       },
       {
+        situation: 'When the route is the reader',
+        route: 'reader',
+        rule: 'should be the library, which the document read belongs to',
+        expectedSection: 'library',
+      },
+      {
         situation: 'When the route is a page',
         route: 'page',
         rule: 'should be the library, which the page belongs to',
@@ -235,6 +241,18 @@ describe('The navigation', () => {
       {
         situation: 'When the address names a document by something else than an id',
         matchedId: 'document',
+        ids: { documentId: 'example-book' },
+        expected: 'unknown',
+      },
+      {
+        situation: 'When the address names the reader of a document by its id',
+        matchedId: 'reader',
+        ids: { documentId: '95bbeb79-4351-432f-a53c-d3658892ff50' },
+        expected: 'reader',
+      },
+      {
+        situation: 'When the address names the reader of a document by something else than an id',
+        matchedId: 'reader',
         ids: { documentId: 'example-book' },
         expected: 'unknown',
       },

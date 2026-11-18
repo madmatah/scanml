@@ -1,6 +1,5 @@
 import type { DocumentStats, DocumentSummary } from './document-summary.ts';
 
-// A document as the api gives it alone, after a change: its summary, and what its own screen shows besides.
 export interface DocumentDetails extends DocumentSummary {
   readonly slug: string;
   readonly notes: string;
@@ -10,19 +9,20 @@ export interface DocumentDetails extends DocumentSummary {
 
 export interface PageSummary {
   readonly id: string;
+  readonly key: string;
   readonly status: string;
   readonly pageLabel: string | null;
-  // The last number of a page that holds several, such as a spread.
   readonly numberEnd: number | null;
   readonly numberSource: string | null;
   readonly isExcluded: boolean;
   readonly duplicateOf: string | null;
   readonly isInDocument: boolean;
   readonly placement: string | null;
-  // The place chosen by hand on the line of the page numbers, or null when the page has its automatic place.
   readonly position: number | null;
   readonly rotation: number;
   readonly thumbnailUrl: string;
+  // When its text was last read, which rewrites its illustrations in place; null until it is read.
+  readonly readAt: string | null;
 }
 
 // The api lists the pages in reading order (the placed pages, then those it could not place), then the pages waiting
@@ -48,8 +48,6 @@ export function pageGroupOf(page: PageSummary): PageGroupKind {
   return 'pending';
 }
 
-// Consecutive pages of one kind form a group, in the api's order; a kind that comes back later forms a group of its
-// own, with a key of its own.
 export function groupPages(pages: readonly PageSummary[]): PageGroup[] {
   const groups: { readonly kind: PageGroupKind; readonly pages: PageSummary[] }[] = [];
   for (const page of pages) {
@@ -78,8 +76,12 @@ export function canOrganize(pages: readonly PageSummary[]): boolean {
   return pages.filter((page) => page.isInDocument).length >= PAGES_TO_ORGANIZE;
 }
 
+export function waitingPageCount(stats: DocumentStats): number {
+  return stats.queuedCount + stats.processingCount;
+}
+
 export function isTextPending(stats: DocumentStats): boolean {
-  return stats.queuedCount > 0 || stats.processingCount > 0;
+  return waitingPageCount(stats) > 0;
 }
 
 export function hasPagesPositionedByHand(pages: readonly PageSummary[]): boolean {

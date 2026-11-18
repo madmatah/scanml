@@ -15,6 +15,7 @@ function readDocumentDetails(document: ResponseFields): DocumentDetails {
 function readPageSummary(page: ResponseFields): PageSummary {
   return {
     id: page.string('id'),
+    key: page.string('key'),
     status: page.string('status'),
     pageLabel: page.nullableString('page_label'),
     numberEnd: page.nullableNumber('number_end'),
@@ -26,6 +27,7 @@ function readPageSummary(page: ResponseFields): PageSummary {
     position: page.nullableNumber('position'),
     rotation: page.number('rotation'),
     thumbnailUrl: page.apiPath('thumb_url'),
+    readAt: page.nullableObject('ocr')?.nullableString('at') ?? null,
   };
 }
 
@@ -36,4 +38,8 @@ export function decodeDocumentDetails(body: unknown): DocumentDetails {
 export function decodeDocumentWithPages(body: unknown): DocumentWithPages {
   const document = readResponseFields(body);
   return { ...readDocumentDetails(document), pages: document.objectList('pages').map(readPageSummary) };
+}
+
+export function decodeDocumentHtml(body: unknown): string {
+  return readResponseFields(body).string('html');
 }

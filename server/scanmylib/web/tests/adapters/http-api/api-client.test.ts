@@ -468,6 +468,32 @@ describe('The api client', () => {
     });
   });
 
+  describe('The readDocumentHtml() call', () => {
+    describe('When the api answers the HTML of the document', () => {
+      const screen = new AbortController();
+      let sent: Exchange;
+      let sanitizedHtml: string;
+      beforeEach(async () => {
+        sent = exchange(() => jsonResponse(OK, { html: '<h1>Example Book</h1>' }));
+        sanitizedHtml = await createApiClient(sent.fetchFromApi, ignoreUnauthorized).readDocumentHtml(
+          DOCUMENT_ID,
+          screen.signal,
+        );
+      });
+
+      it('should ask for the HTML of the document, with the signal of the screen', () => {
+        assert.deepEqual(
+          sent.requests.map(({ path, init }) => ({ request: `${init.method} ${path}`, signal: init.signal })),
+          [{ request: `GET /api/documents/${DOCUMENT_ID}/html`, signal: screen.signal }],
+        );
+      });
+
+      it('should give the HTML as the api wrote it', () => {
+        assert.equal(sanitizedHtml, '<h1>Example Book</h1>');
+      });
+    });
+  });
+
   describe('The updateDocument() call', () => {
     const fields = { title: 'Example Book', author: 'Jane Doe', kind: 'book', unwarp: false, notes: 'Second edition' };
 

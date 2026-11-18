@@ -12,6 +12,7 @@ import {
   type PageGroupKind,
   type PageSummary,
   pageGroupOf,
+  waitingPageCount,
 } from '../../src/domain/document-details.ts';
 import { samplePage } from './document-details-samples.ts';
 import { sampleDocument } from './document-summary-samples.ts';
@@ -213,5 +214,20 @@ describe('The document details', () => {
         });
       });
     }
+  });
+
+  describe('The waitingPageCount() function', () => {
+    describe('When pages are queued and one is being read', () => {
+      const queuedCount = 2;
+      const processingCount = 1;
+      let count: number;
+      beforeEach(() => {
+        count = waitingPageCount(sampleDocument({ stats: { queuedCount, processingCount } }).stats);
+      });
+
+      it('should count both', () => {
+        assert.equal(count, queuedCount + processingCount);
+      });
+    });
   });
 });

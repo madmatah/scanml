@@ -294,7 +294,7 @@ interface DocumentOverviewProps {
 function DocumentOverview({ document, store, toasts, clipboard, formatting, uploads, uuids }: DocumentOverviewProps) {
   const { t } = useTranslation();
   const withScansId = useId();
-  const [withScans, setWithScans] = useState(false);
+  const [includesScans, setIncludesScans] = useState(false);
 
   async function copyFolder(): Promise<void> {
     if (await clipboard.copyText(document.folder)) toasts.show(t('Folder path copied.'), 'success');
@@ -335,7 +335,7 @@ function DocumentOverview({ document, store, toasts, clipboard, formatting, uplo
               <Icon name="download" />
               {MARKDOWN_FILE_NAME}
             </a>
-            <a className="btn" href={store.archiveUrl(document.id, withScans)} download={`${document.slug}.zip`}>
+            <a className="btn" href={store.archiveUrl(document.id, includesScans)} download={`${document.slug}.zip`}>
               <Icon name="archive" />
               {t('.zip archive')}
             </a>
@@ -344,8 +344,8 @@ function DocumentOverview({ document, store, toasts, clipboard, formatting, uplo
             <input
               type="checkbox"
               id={withScansId}
-              checked={withScans}
-              onChange={(event) => setWithScans(event.target.checked)}
+              checked={includesScans}
+              onChange={(event) => setIncludesScans(event.target.checked)}
             />
             <span>{t('Include the original photos in the archive')}</span>
           </label>

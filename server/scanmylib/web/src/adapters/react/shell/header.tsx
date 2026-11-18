@@ -2,6 +2,9 @@ import type { MouseEvent, ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useLocation } from 'react-router';
 
+import type { EngineStatus } from '../../../application/engine-status.ts';
+import type { NumberFormatting } from '../../../domain/formatting.ts';
+import { EngineStatusBadge } from '../engine-status/engine-status-badge.tsx';
 import { BrandMark } from './brand-mark.tsx';
 import { Icon } from './icon.tsx';
 import { BRAND_NAME, PATHS, type Section } from './navigation.ts';
@@ -11,6 +14,8 @@ const BRAND_MARK_PIXELS = 28;
 export interface HeaderProps {
   readonly isSignedIn: boolean;
   readonly section: Section | null;
+  readonly engineStatus: EngineStatus;
+  readonly formatting: NumberFormatting;
   readonly onSignOut: () => void;
 }
 
@@ -35,7 +40,7 @@ function HeaderLink({ to, className, isCurrent = false, children }: HeaderLinkPr
   );
 }
 
-export function Header({ isSignedIn, section, onSignOut }: HeaderProps) {
+export function Header({ isSignedIn, section, engineStatus, formatting, onSignOut }: HeaderProps) {
   const { t } = useTranslation();
   return (
     <header className="app-header" id="app-header" hidden={!isSignedIn}>
@@ -52,6 +57,7 @@ export function Header({ isSignedIn, section, onSignOut }: HeaderProps) {
         </HeaderLink>
       </nav>
       <div className="header-tools">
+        <EngineStatusBadge engineStatus={engineStatus} formatting={formatting} />
         <button type="button" className="btn btn-ghost btn-compact" id="logout-button" onClick={onSignOut}>
           <Icon name="sign-out" />
           <span className="btn-label">{t('Sign out', { context: 'header' })}</span>

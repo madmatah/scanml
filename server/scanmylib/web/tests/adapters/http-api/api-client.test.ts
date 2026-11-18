@@ -3,6 +3,7 @@ import { beforeEach, describe, it } from 'node:test';
 
 import { createApiClient, type Fetch } from '../../../src/adapters/http-api/api-client.ts';
 import type { SessionServer } from '../../../src/application/session.ts';
+import type { ServerStatus } from '../../../src/domain/server-status.ts';
 
 interface SentRequest {
   readonly path: string;
@@ -179,6 +180,60 @@ describe('The api client', () => {
 
       it('should send the header that guards the changes of state', () => {
         assert.deepEqual(headersOf(sent.requests[0]), { accept: 'application/json', 'x-scanmylib': '1' });
+      });
+    });
+  });
+  describe('The readStatus() call', () => {
+    describe('When the api answers its status', () => {
+      let sent: Exchange;
+      let status: ServerStatus;
+      beforeEach(async () => {
+        sent = exchange(() =>
+          jsonResponse(OK, {
+            version: '0.2.3',
+            ocr: { reachable: true, state: 'ready', backend: 'vllm', last_error: null, gpu: null },
+            queue: { queued: 0, processing: 0, error: 0, done: 7 },
+            library_dir: '/library',
+          }),
+        );
+        status = await createApiClient(sent.fetchFromApi).readStatus();
+      });
+
+      it('should ask for the status of the api', () => {
+        assert.deepEqual(
+          sent.requests.map(({ path, init }) => `${init.method} ${path}`),
+          ['GET /api/status'],
+        );
+      });
+
+      it('should give the decoded status', () => {
+        assert.deepEqual(status.queue, { queuedCount: 0, processingCount: 0, errorCount: 0, doneCount: 7 });
+      });
+    });
+
+    describe('When the api answers a body that is not JSON', () => {
+      let act: () => Promise<ServerStatus>;
+      beforeEach(() => {
+        const client = createApiClient(exchange(() => new Response('<html>Hello</html>', { status: OK })).fetchFromApi);
+        act = () => client.readStatus();
+      });
+
+      it('should refuse its shape', async () => {
+        await assert.rejects(act(), { name: 'ResponseShapeError' });
+      });
+    });
+
+    describe('When the api cannot be reached', () => {
+      let act: () => Promise<ServerStatus>;
+      beforeEach(() => {
+        const client = createApiClient(async () => {
+          throw new TypeError('fetch failed');
+        });
+        act = () => client.readStatus();
+      });
+
+      it('should fail with a network failure, so that the header says the server is unreachable', async () => {
+        await assert.rejects(act(), { name: 'NetworkError' });
       });
     });
   });

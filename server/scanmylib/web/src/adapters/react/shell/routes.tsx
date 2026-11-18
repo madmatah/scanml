@@ -5,6 +5,7 @@ import { Library } from '../library/library.tsx';
 import { Login } from '../login/login.tsx';
 import { PageScreen } from '../page/page-screen.tsx';
 import { Pairing } from '../pairing/pairing.tsx';
+import { ReaderScreen } from '../reader/reader-screen.tsx';
 import type { RouteName } from './navigation.ts';
 import { Shell, type ShellServices } from './shell.tsx';
 
@@ -39,6 +40,17 @@ export function createRoutes(services: ShellServices): RouteObject[] {
               formatting={services.formatting}
               uploads={services.uploads}
               uuids={services.uuids}
+            />
+          ),
+        },
+        {
+          id: 'reader' satisfies RouteName,
+          path: 'documents/:documentId/read',
+          element: (
+            <ReaderScreen
+              documents={services.documents}
+              toasts={services.toasts}
+              typesetFormulas={services.typesetFormulas}
             />
           ),
         },

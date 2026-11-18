@@ -1,21 +1,21 @@
 import { type RefObject, useLayoutEffect, useRef } from 'react';
 
-// Typesets the formulas of HTML placed in the page; the composition root gives the one of the KaTeX adapter.
 export type FormulaTypesetter = (root: Element) => void;
 
-// Changes the parsed HTML before it is placed, while nothing of it has loaded.
 export type HtmlPreparation = (content: DocumentFragment) => void;
 
 // Places the HTML that the api's allowlist sanitizer wrote into the element given the returned ref, which React renders
 // empty and so never reconciles. It is parsed in an inert <template>, where no image loads and no script runs, so that
 // the preparation can rewrite the addresses of its illustrations before the browser fetches them; then, in the page,
-// its formulas are typeset before the browser paints. The Content Security Policy forbids inline scripts besides.
-export function useSanitizedHtml(
+// its formulas are typeset before the browser paints, and the caller is told, which may then measure what was placed.
+// The Content Security Policy forbids inline scripts besides.
+export function useSanitizedHtml<Container extends HTMLElement = HTMLDivElement>(
   sanitizedHtml: string,
   prepare: HtmlPreparation,
   typesetFormulas: FormulaTypesetter,
-): RefObject<HTMLDivElement | null> {
-  const container = useRef<HTMLDivElement>(null);
+  onPlaced?: (container: Container) => void,
+): RefObject<Container | null> {
+  const container = useRef<Container>(null);
   useLayoutEffect(() => {
     const element = container.current;
     if (element === null) return;
@@ -24,6 +24,7 @@ export function useSanitizedHtml(
     prepare(template.content);
     element.replaceChildren(template.content);
     typesetFormulas(element);
-  }, [sanitizedHtml, prepare, typesetFormulas]);
+    onPlaced?.(element);
+  }, [sanitizedHtml, prepare, typesetFormulas, onPlaced]);
   return container;
 }

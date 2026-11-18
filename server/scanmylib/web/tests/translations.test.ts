@@ -27,6 +27,9 @@ const PLACEHOLDER = /\{\{[^}]*\}\}/g;
 const COMPONENT_TAG = /<\/?([A-Za-z0-9]+)\s*\/?>/g;
 const PLURAL_SUFFIX = /_(zero|one|two|few|many|other)$/;
 const SEPARATOR = '_';
+// Every screen of the UI is in the catalogs, whose texts number in the hundreds: an extraction that found only part of
+// them fails too, as the earlier releases' scan of the sources did.
+const ENTRY_COUNT_TO_EXCEED = 300;
 const ESCAPE_SEQUENCE = /\\u\{([0-9a-fA-F]+)\}|\\u([0-9a-fA-F]{4})|\\x([0-9a-fA-F]{2})/g;
 
 function listFiles(directory: URL, pattern: RegExp): string[] {
@@ -71,8 +74,9 @@ function writeDelimited(text: string): string[] {
 
 describe('The translation catalogs', () => {
   describe('The English catalog', () => {
-    it('should not be empty, so that an extraction that found nothing fails on every key as unused', () => {
-      assert.notEqual(Object.keys(englishCatalog).length, 0);
+    it('should hold the texts of the whole UI by the hundreds, so that an extraction that missed them fails', () => {
+      const entryCount = Object.keys(englishCatalog).length;
+      assert.ok(entryCount > ENTRY_COUNT_TO_EXCEED, `${entryCount} entries`);
     });
 
     it('should hold no text with the separator of contexts and plurals, so that each one in a key is a suffix', () => {
@@ -95,8 +99,9 @@ describe('The translation catalogs', () => {
       );
     });
 
-    it('should not be empty, so that an extraction that found nothing fails on every key as unused', () => {
-      assert.notEqual(Object.keys(frenchCatalog).length, 0);
+    it('should hold the texts of the whole UI by the hundreds, so that an extraction that missed them fails', () => {
+      const entryCount = Object.keys(frenchCatalog).length;
+      assert.ok(entryCount > ENTRY_COUNT_TO_EXCEED, `${entryCount} entries`);
     });
 
     it('should keep the placeholders, with their formats, and the component tags of the English text', () => {

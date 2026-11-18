@@ -3,6 +3,7 @@ import { beforeEach, describe, it } from 'node:test';
 
 import {
   decodeDocumentDetails,
+  decodeDocumentHtml,
   decodeDocumentWithPages,
 } from '../../../src/adapters/http-api/document-details-decoder.ts';
 import type { DocumentDetails, DocumentWithPages, PageSummary } from '../../../src/domain/document-details.ts';
@@ -63,6 +64,7 @@ function pageBody(): Record<string, unknown> {
 
 const DECODED_PAGE: PageSummary = {
   id: PAGE_ID,
+  key: 'p0011',
   status: 'done',
   pageLabel: '11',
   numberEnd: null,
@@ -74,6 +76,7 @@ const DECODED_PAGE: PageSummary = {
   position: 0,
   rotation: 90,
   thumbnailUrl: `/api/pages/${PAGE_ID}/thumb`,
+  readAt: null,
 };
 
 describe('The document details decoder', () => {
@@ -167,6 +170,31 @@ describe('The document details decoder', () => {
       });
     });
 
+    describe('When the text of a page is read', () => {
+      const readAt = '2026-11-14T15:32:00+00:00';
+      let page: PageSummary | undefined;
+      beforeEach(() => {
+        const reading = { engine: 'example-engine', duration_s: 2.3, at: readAt, images: 1, chars: 1234 };
+        page = decodeDocumentWithPages({ ...documentBody(), pages: [{ ...pageBody(), ocr: reading }] }).pages[0];
+      });
+
+      it('should keep when it was read, which versions its illustrations', () => {
+        assert.equal(page?.readAt, readAt);
+      });
+    });
+
+    describe('When a page lacks its reading', () => {
+      let act: () => DocumentWithPages;
+      beforeEach(() => {
+        const { ocr: _ocr, ...body } = pageBody();
+        act = () => decodeDocumentWithPages({ ...documentBody(), pages: [body] });
+      });
+
+      it('should refuse it, naming the field with its path', () => {
+        assert.throws(act, { name: 'ResponseShapeError', message: "The api's answer holds no valid pages[0].ocr" });
+      });
+    });
+
     describe('When the place of a page has the wrong type', () => {
       let act: () => DocumentWithPages;
       beforeEach(() => {
@@ -244,6 +272,30 @@ describe('The document details decoder', () => {
 
       it('should refuse it', () => {
         assert.throws(act, { name: 'ResponseShapeError', message: "The api's answer holds no valid pages" });
+      });
+    });
+  });
+
+  describe('The decodeDocumentHtml() function', () => {
+    describe('When the answer holds the HTML', () => {
+      let sanitizedHtml: string;
+      beforeEach(() => {
+        sanitizedHtml = decodeDocumentHtml({ html: '<h1>Example Book</h1>' });
+      });
+
+      it('should give it as it is', () => {
+        assert.equal(sanitizedHtml, '<h1>Example Book</h1>');
+      });
+    });
+
+    describe('When the answer holds no HTML', () => {
+      let act: () => string;
+      beforeEach(() => {
+        act = () => decodeDocumentHtml({ markdown: '# Example Book' });
+      });
+
+      it('should refuse it, naming the field', () => {
+        assert.throws(act, { name: 'ResponseShapeError', message: "The api's answer holds no valid html" });
       });
     });
   });

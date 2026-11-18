@@ -5,7 +5,7 @@ import type { ServerStatusSource } from '../../application/engine-status.ts';
 import type { PageChanges, PageStore } from '../../application/page-store.ts';
 import type { PairingSource } from '../../application/pairing-source.ts';
 import type { SessionServer } from '../../application/session.ts';
-import { decodeDocumentDetails, decodeDocumentWithPages } from './document-details-decoder.ts';
+import { decodeDocumentDetails, decodeDocumentHtml, decodeDocumentWithPages } from './document-details-decoder.ts';
 import { decodeDocumentList, decodeDocumentSummary } from './document-summary-decoder.ts';
 import { decodeErrorDetail } from './error-detail.ts';
 import { decodePageDetails, decodePageHtml } from './page-details-decoder.ts';
@@ -39,7 +39,6 @@ function pagePath(pageId: string): string {
   return `${PAGES_PATH}/${encodeURIComponent(pageId)}`;
 }
 
-// The fields of the api keep their names (docs/API.md > Pages); a change left out is not sent.
 function pageChangesBody({ manualNumber, isExcluded, rotation }: PageChanges): Record<string, unknown> {
   return {
     ...(manualNumber === undefined ? {} : { manual_number: manualNumber }),
@@ -70,12 +69,10 @@ export function createApiClient(fetchFromApi: Fetch, onUnauthorized: () => void)
     try {
       response = await fetchFromApi(path, init);
     } catch (failure) {
-      // A request that its caller gave up is no failure of the network.
       if (signal?.aborted === true) throw failure;
       throw new NetworkError();
     }
     if (!response.ok) {
-      // A 401 on the sign-in itself only refuses a token; elsewhere, the session this browser held has ended.
       if (response.status === UNAUTHORIZED && path !== SESSION_PATH) onUnauthorized();
       throw new ApiError(response.status, decodeErrorDetail(await readJson(response)));
     }
@@ -111,6 +108,10 @@ export function createApiClient(fetchFromApi: Fetch, onUnauthorized: () => void)
     async readDocument(documentId, signal) {
       return decodeDocumentWithPages(await readJson(await request('GET', documentPath(documentId), undefined, signal)));
     },
+    async readDocumentHtml(documentId, signal) {
+      const path = `${documentPath(documentId)}/html`;
+      return decodeDocumentHtml(await readJson(await request('GET', path, undefined, signal)));
+    },
     async updateDocument(documentId, fields) {
       return decodeDocumentDetails(await readJson(await request('PATCH', documentPath(documentId), fields)));
     },
@@ -140,6 +141,6 @@ export function createApiClient(fetchFromApi: Fetch, onUnauthorized: () => void)
       await request('DELETE', pagePath(pageId));
     },
     markdownUrl: (documentId) => `${documentPath(documentId)}/markdown`,
-    archiveUrl: (documentId, withScans) => `${documentPath(documentId)}/export.zip?scans=${withScans ? 1 : 0}`,
+    archiveUrl: (documentId, includesScans) => `${documentPath(documentId)}/export.zip?scans=${includesScans ? 1 : 0}`,
   };
 }

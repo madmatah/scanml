@@ -128,7 +128,7 @@ function readManifestIcons(manifest: unknown): ManifestIcon[] {
 function readAppleTouchLink(page: string): string {
   const link = page.match(/<link\s[^>]*rel="apple-touch-icon"[^>]*>/)?.[0];
   if (link === undefined) {
-    throw new Error('no apple-touch-icon link in index.html');
+    throw new Error('no apple-touch-icon link in the template of the entry page');
   }
   return link;
 }
@@ -136,7 +136,7 @@ function readAppleTouchLink(page: string): string {
 const DRAWINGS = readdirSync(ICONS).filter((file) => file.endsWith('.svg'));
 
 const MANIFEST_ICONS = readManifestIcons(JSON.parse(readFileSync(new URL('static/manifest.webmanifest', WEB), 'utf8')));
-const APPLE_TOUCH_LINK = readAppleTouchLink(readFileSync(new URL('index.html', WEB), 'utf8'));
+const APPLE_TOUCH_LINK = readAppleTouchLink(readFileSync(new URL('src/index.html', WEB), 'utf8'));
 
 const PICTURES: readonly Picture[] = [
   ...MANIFEST_ICONS.filter((icon) => icon.type === 'image/png').map((icon) => ({

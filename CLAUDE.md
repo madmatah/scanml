@@ -12,9 +12,9 @@ comments, documentation, commit messages, file names, and the text users see. Us
 `behavior`, `organize`).
 
 The one exception is the French translation of the text users see. The English text is the reference, and its French
-translation lives only in the translation catalogs: `android/app/src/main/res/values-fr/` for the app, and
-`server/scanmylib/web/static/js/locales/fr.js` and `server/scanmylib/web/locales/fr.json` for the web UI, whose checks
-fail on an untranslated text and on French outside the catalogs. Never write French anywhere else in the repository.
+translation lives only in the translation catalogs: `android/app/src/main/res/values-fr/` for the app and
+`server/scanmylib/web/locales/fr.json` for the web UI, whose checks fail on an untranslated text and on French outside
+the catalog. Never write French anywhere else in the repository.
 
 ## Project
 

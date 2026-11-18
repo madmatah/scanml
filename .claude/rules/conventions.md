@@ -20,8 +20,7 @@ paths:
 
 These rules apply to code, tests and configuration, in every part of the repository, except a script copied from a
 template. Each language adds its own rules, and the idioms that override the naming rules below, in a rules file of its
-own: `python.md`, `kotlin.md`, `web.md` (TypeScript and React, and JavaScript until the web UI moves to them) and
-`bash.md`.
+own: `python.md`, `kotlin.md`, `web.md` (TypeScript and React) and `bash.md`.
 
 - **A script copied from a template is kept as it ships:** `.claude/skills/pull-request/scripts/pr_screenshots.py` is a
   copy of the template it comes from, so that each later version of that template replaces it whole. None of the
@@ -114,9 +113,10 @@ authors, page labels and ranges, folder names, messages), from `.env` files, and
 - **Outside text never reaches a parser of markup, script, queries, URLs or command lines,** nor a path. Markup is built
   with the platform's text APIs, queries with parameters, paths from checked ids, and a command's arguments are passed
   as a list, never through a shell. For example:
-  - the web UI sets `textContent`, never `innerHTML` or `insertAdjacentHTML`, and never builds an event-handler
-    attribute, an `href`, a `src` or a `srcdoc` from outside text; the HTML that the server's allowlist sanitizer
-    produces is the one exception, parsed in an inert `<template>`;
+  - the web UI renders text through JSX, which escapes it, never as markup (`dangerouslySetInnerHTML`, `innerHTML` or
+    `insertAdjacentHTML`), and never builds an event-handler attribute, an `href`, a `src` or a `srcdoc` from outside
+    text; the HTML that the server's allowlist sanitizer produces is the one exception, under the Content Security
+    Policy;
   - Python runs `subprocess.run` with a list, without `shell=True`, and SQLite with `?` parameters;
   - a path is built from an id checked against its format (a lowercase hyphenated UUID, a slug), never from a name the
     client or the sandbox sent;

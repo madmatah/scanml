@@ -4,7 +4,7 @@ the formatters write (standard library only).
 
 The formatters write only to a copy of the tracked files they format, so that nothing they create, and no link they
 make, reaches the checkout, where the host would run or read it, and so that they never touch a file they do not format,
-such as a vendored file, whose change git diff would not let a reader judge. bring-back then writes back the files whose
+such as a lock, whose change git diff would not let a reader judge. bring-back then writes back the files whose
 content they changed, or nothing at all: when a copied file is no longer a file, when a file they changed was also
 changed in the checkout meanwhile (an edit would be lost), when it cannot be written, when it holds or would hold a
 character a terminal does not show (such as a control character other than a tab or a line end the file already used, a

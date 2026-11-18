@@ -1,8 +1,5 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.5.15/schema.json",
-  "files": {
-    "includes": ["**", "!static/vendor"]
-  },
   "formatter": {
     "indentStyle": "space",
     "indentWidth": 2,
@@ -65,16 +62,6 @@
     },
     {
       "includes": ["i18next.config.ts"],
-      "linter": {
-        "rules": {
-          "style": {
-            "noDefaultExport": "off"
-          }
-        }
-      }
-    },
-    {
-      "includes": ["static/js/locales/**"],
       "linter": {
         "rules": {
           "style": {

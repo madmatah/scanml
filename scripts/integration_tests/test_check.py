@@ -348,8 +348,8 @@ class WhenGivenAreas(InstallationTestCase):
         self.assertIn(" --tmpfs /tmp ", self.checks[3])
         self.assertTrue(self.checks[3].endswith("node build.ts --outdir /tmp/build"), self.checks[3])
 
-    def test_should_run_the_typescript_tests_of_the_web_ui_beside_its_javascript_ones(self) -> None:
-        self.assertTrue(self.checks[4].endswith("node --test tests/*.test.js tests/**/*.test.ts"), self.checks[4])
+    def test_should_run_the_typescript_tests_of_the_web_ui(self) -> None:
+        self.assertTrue(self.checks[4].endswith("node --test tests/**/*.test.ts"), self.checks[4])
 
 
 class WhenGivenTheWebUiTheApiAndTheSandbox(InstallationTestCase):
@@ -1042,7 +1042,6 @@ class TheFixOptionWhenAFormatterCreatesAFile(InstallationTestCase):
 class TheFixOptionWhenAFormatterChangesAFileThatTheFormattersDoNotFormat(InstallationTestCase):
     container_paths: ClassVar[Mapping[str, str]] = MappingProxyType(
         {
-            "a vendored library": "/tools/web/static/vendor/library.min.js",
             "the lock of the web UI": "/tools/web/pnpm-lock.yaml",
         }
     )
@@ -1054,12 +1053,7 @@ class TheFixOptionWhenAFormatterChangesAFileThatTheFormattersDoNotFormat(Install
     def setUpClass(cls) -> None:
         installation = make_installation(cls)
         web = installation.worktree / "server" / "scanmylib" / "web"
-        vendored = web / "static" / "vendor" / "library.min.js"
-        vendored.parent.mkdir(parents=True)
-        vendored.write_text("library\n")
-        installation.run_git(installation.worktree, "add", str(vendored))
-        installation.run_git(installation.worktree, "commit", "--quiet", "--message", "Vendored library")
-        paths = {"a vendored library": vendored, "the lock of the web UI": web / "pnpm-lock.yaml"}
+        paths = {"the lock of the web UI": web / "pnpm-lock.yaml"}
         cls.fix_runs, cls.texts_before, cls.texts_after = {}, {}, {}
         for row, container_path in cls.container_paths.items():
             cls.texts_before[row] = paths[row].read_text()

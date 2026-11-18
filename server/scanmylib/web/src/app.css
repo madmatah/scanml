@@ -102,11 +102,6 @@ html {
   text-size-adjust: 100%;
 }
 
-/* The static text of index.html is shown once translated (js/lib/i18n.js). */
-html:not([data-i18n-ready]) [data-i18n] {
-  visibility: hidden;
-}
-
 body {
   margin: 0;
   min-height: 100vh;
@@ -1606,7 +1601,7 @@ textarea.input {
   font-weight: 600;
 }
 
-/* Organizing the pages (components/page-organizer.js) */
+/* Organizing the pages */
 .organizer {
   display: grid;
   gap: var(--space-4);
@@ -2145,7 +2140,7 @@ textarea.input {
   border-top: 1px solid var(--border);
 }
 
-/* Formulas, typeset by KaTeX (js/lib/math.js). A wide one scrolls sideways. */
+/* Formulas, typeset by KaTeX. A wide one scrolls sideways. */
 .ocr-render .math-display {
   margin: 0 0 0.85em;
   overflow-x: auto;
@@ -2166,8 +2161,8 @@ textarea.input {
 }
 
 /*
- * An inline formula and the text written against it (js/lib/math.js): no line
- * break between them, unless together they are wider than the line.
+ * An inline formula and the text written against it: no line break between
+ * them, unless together they are wider than the line.
  */
 .ocr-render .math-word {
   display: inline-block;
@@ -2209,7 +2204,7 @@ textarea.input {
 
 /* 8. Reading -------------------------------------------------------------- */
 
-/* The whole document (views/reader.js), in a column of comfortable line length. */
+/* The whole document, in a column of comfortable line length. */
 .reader-view {
   max-width: 46rem;
   margin-inline: auto;
@@ -2228,8 +2223,8 @@ textarea.input {
 }
 
 /*
- * The "Page" list sticks under the app header (offsets set by views/reader.js),
- * in a margin of page background that hides the text scrolling around it.
+ * The "Page" list sticks under the app header (offsets set by the reader), in a
+ * margin of page background that hides the text scrolling around it.
  */
 .reader-toolbar {
   position: sticky;

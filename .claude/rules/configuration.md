@@ -11,7 +11,6 @@ paths:
   - "android/gradle/**"
   - "android/gradle.properties"
   - "scripts/build-apk.sh"
-  - "scripts/vendor-katex.sh"
   - "scripts/check.sh"
   - "scripts/lib/commit_areas.py"
   - "scripts/lib/passed_commit_check.py"
@@ -23,7 +22,7 @@ paths:
   - "android/.editorconfig"
   - ".shellcheckrc"
   - "server/scanmylib/web/biome.json"
-  - "server/scanmylib/web/package*.json"
+  - "server/scanmylib/web/package.json"
   - "server/scanmylib/web/pnpm-*.yaml"
   - "server/scanmylib/web/tsconfig*.json"
   - "server/scanmylib/web/i18next.config.ts"
@@ -70,7 +69,6 @@ paths:
     `android/gradle/libs.versions.toml`;
   - the Gradle distribution, by the `distributionSha256Sum` of `android/gradle/wrapper/gradle-wrapper.properties`;
   - the signing tools, by the SHA-256 sums of `scripts/build-apk.sh`;
-  - KaTeX, by its SHA-512 in `scripts/vendor-katex.sh`;
   - the Python tools of the gate, by `scripts/lint/requirements.lock`, installed with
     `pip install --require-hashes --no-deps --only-binary :all:`;
   - the web UI's packages, by `server/scanmylib/web/pnpm-lock.yaml`, installed with `pnpm install --frozen-lockfile`

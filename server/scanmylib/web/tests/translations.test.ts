@@ -13,10 +13,9 @@ interface Line {
 }
 
 const WEB = new URL('../', import.meta.url);
-// The JavaScript UI keeps its own catalog until it is removed.
-const FRENCH_CATALOG_FILES = new Set(['locales/fr.json', 'static/js/locales/fr.js']);
-const SOURCE_DIRECTORIES = ['src/', 'static/js/'];
-const UNREAD_DIRECTORIES = new Set(['node_modules', 'vendor', 'icons']);
+const FRENCH_CATALOG_FILES = new Set(['locales/fr.json']);
+const SOURCE_DIRECTORIES = ['src/'];
+const UNREAD_DIRECTORIES = new Set(['node_modules', 'icons']);
 const TEXT_FILE = /\.(ts|tsx|js|json|html|css|webmanifest)$/;
 const SOURCE_FILE = /\.(ts|tsx|js)$/;
 // Letters and signs of French that English text does not use.

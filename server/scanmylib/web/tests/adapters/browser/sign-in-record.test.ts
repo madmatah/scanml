@@ -3,7 +3,7 @@ import { beforeEach, describe, it } from 'node:test';
 
 import { createSignInRecord, type KeyValueStorage } from '../../../src/adapters/browser/sign-in-record.ts';
 
-// The key and the value that the JavaScript UI wrote: a browser signed in before keeps them across the move.
+// The key and the value that browsers signed in to earlier releases hold: another one would sign them out.
 const SIGNED_IN_KEY = 'scanmylib.signed-in';
 const SIGNED_IN = '1';
 

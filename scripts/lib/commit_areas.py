@@ -66,9 +66,8 @@ PATH_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("scripts/lint/", ("lint",)),
     ("scripts/tests/", ("lint", "scripts")),
     ("scripts/integration_tests/", ("lint", "integration")),
-    # No integration test runs them.
+    # No integration test runs it.
     ("scripts/release.py", ("lint", "scripts")),
-    ("scripts/vendor-katex.sh", ("lint",)),
     # The integration tests run the other scripts and their files.
     ("scripts/", ("lint", "scripts", "integration")),
     ("ruff.toml", ("lint",)),

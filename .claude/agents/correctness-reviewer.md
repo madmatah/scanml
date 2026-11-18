@@ -36,7 +36,7 @@ documents say. Leave cited files and headings to the documentation expert.
     that swallows `asyncio.CancelledError`;
   - Kotlin: `==` against `===`; a `data class` copied with a mutable collection shared between the copies; a `Flow`
     collected without a lifecycle-aware scope; a `StateFlow` that never emits because the new value equals the old one;
-  - JavaScript: `||` where `??` was meant; an unhandled promise or a missing `await`; `-0` or `NaN` through JSON; `sort`
+  - TypeScript: `||` where `??` was meant; an unhandled promise or a missing `await`; `-0` or `NaN` through JSON; `sort`
     without a comparator; an event listener added on every render and never removed;
   - Bash: a command substitution whose failure `set -e` ignores, as in `local name=$(…)`; a pipeline whose exit status
     hides a failure on its left; a glob that matches nothing and stays as it is;

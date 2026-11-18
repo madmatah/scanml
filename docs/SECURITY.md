@@ -74,7 +74,6 @@ Rules applied by the api to every answer of the sandbox:
 - **Images re-encoded** with Pillow (JPEG): nothing but pixels reaches the disk.
 - **Markdown sanitized** before it is written: tags are rebuilt from scratch, and only an allowlist of formatting tags and attributes survives; script-like elements (`script`, `style`, `iframe`, `object`, `svg`, `math`, `template`, `textarea`, `select`…) are removed with their content, other tags (`embed`, `link`, `meta`, `base`, `form`, `input`, `button`…) without it; no `on*` attribute, `style` reduced to `text-align`, no `srcset`; HTML comments removed (they could fake the page markers of `document.md`); no URL except the page's own images: image `src` can only target them, and any other link or Markdown reference definition is neutralized.
 - **Web previews**: Markdown → HTML (markdown-it-py), then allowlist filtering (nh3); the web UI is served with a strict CSP (`default-src 'self'`, no inline script, `frame-ancestors 'none'`) and `X-Content-Type-Options: nosniff`.
-- **Formulas**: KaTeX 0.19.0 (MIT) typesets the LaTeX formulas of the previews; it is served by the PC (`scripts/vendor-katex.sh`: npm tarball checked against its SHA-512 hash, no CDN), receives the TeX as text and renders it without risky commands (`trust: false`: no `\href`, `\url`, `\includegraphics` or `\html…`).
 
 ## Known residual risks (low)
 
@@ -92,8 +91,8 @@ Rules applied by the api to every answer of the sandbox:
   being able to read or exfiltrate anything.
 - `scripts/check.sh --fix` runs the pinned formatters of `server/`, `ocr/` and
   `scripts/` on a copy of the tracked files they format (Python, shell, and the
-  web UI's own JavaScript, JSON and CSS, never a vendored file, a lock or a
-  Dockerfile), and brings back only their changes to those files
+  web UI's own TypeScript, JSON and CSS, never a lock or a Dockerfile), and
+  brings back only their changes to those files
   (`scripts/lib/formatting.py`): a file they create, or turn into a link, never
   reaches the checkout, and nothing comes back once a file they changed holds,
   or would hold, a character a terminal does not show (such as a control
@@ -381,9 +380,8 @@ them.
   - Paddle's GPU build comes from Paddle's own CDN, and its advisories are published under `paddlepaddle`: it is scanned
     under both names, at the version of its wheel;
   - not scanned: the CPython of the base images, built from source; the packages of `server/requirements-test.lock`
-    that the api's image lacks, such as pytest; the Gradle distribution; the Android SDK; the vendored KaTeX, which
-    the web UI still serves, where the scan reads the KaTeX of the lockfile; the models; the images of the gate's
-    tools;
+    that the api's image lacks, such as pytest; the Gradle distribution; the Android SDK; the models; the images of
+    the gate's tools;
   - the test of the workflow's calls to docker (`scripts/tests/test_workflows.py`) guards against mistakes in a branch,
     as the scripts' guards do ([Threat model of the development guards](#threat-model-of-the-development-guards)): it
     reads only the calls written in the workflow's scripts, and sees neither one assembled on purpose from fragments,

@@ -7,10 +7,12 @@ import { RouterProvider } from 'react-router/dom';
 
 import { takeSignInToken, watchSignInLinks } from './adapters/browser/address-bar.ts';
 import { createSignInRecord } from './adapters/browser/sign-in-record.ts';
+import { createTimerScheduler } from './adapters/browser/timer-scheduler.ts';
 import { createApiClient } from './adapters/http-api/api-client.ts';
 import { CATALOGS } from './adapters/i18next/catalogs.ts';
 import { createLocalization } from './adapters/i18next/localization.ts';
 import { createRoutes } from './adapters/react/shell/routes.tsx';
+import { createToasts } from './adapters/react/shell/toasts.ts';
 import { createSession } from './application/session.ts';
 
 function findElement(selector: string): Element {
@@ -30,6 +32,7 @@ watchSignInLinks(window, (token) => {
   void session.signInWithLink(token);
 });
 const started = session.start(linkToken);
+const toasts = createToasts(createTimerScheduler(window));
 
 const localization = await createLocalization(CATALOGS);
 const { t } = localization.i18next;
@@ -41,7 +44,7 @@ findElement('meta[name="description"]').setAttribute(
 
 createRoot(findElement('#app')).render(
   <I18nextProvider i18n={localization.i18next}>
-    <RouterProvider router={createHashRouter(createRoutes(session))} />
+    <RouterProvider router={createHashRouter(createRoutes({ session, toasts }))} />
   </I18nextProvider>,
 );
 await started;

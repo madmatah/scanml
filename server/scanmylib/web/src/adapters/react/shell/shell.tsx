@@ -3,15 +3,25 @@ import { useTranslation } from 'react-i18next';
 import { Outlet, useLocation, useMatches, useNavigate } from 'react-router';
 
 import type { Session } from '../../../application/session.ts';
+import { errorMessage } from './error-message.ts';
+import { Header } from './header.tsx';
 import { LoadingState } from './loading-state.tsx';
-import { isRouteName, PATHS, type RouteName, redirectFor } from './navigation.ts';
+import { type Access, isRouteName, PATHS, type RouteName, redirectFor, sectionOf } from './navigation.ts';
+import { ToastRegion } from './toast-region.tsx';
+import type { Toasts } from './toasts.ts';
+
+export interface ShellServices {
+  readonly session: Session;
+  readonly toasts: Toasts;
+}
 
 function useRouteName(): RouteName {
   const id = useMatches().at(-1)?.id ?? 'unknown';
   return isRouteName(id) ? id : 'unknown';
 }
 
-export function Shell({ session }: { readonly session: Session }) {
+export function Shell({ services }: { readonly services: ShellServices }) {
+  const { session, toasts } = services;
   const { t } = useTranslation();
   const state = useSyncExternalStore(session.subscribe, session.getSnapshot);
   const location = useLocation();
@@ -20,19 +30,23 @@ export function Shell({ session }: { readonly session: Session }) {
   const main = useRef<HTMLElement>(null);
   const returnTo = useRef<string | null>(null);
   const hasShownScreen = useRef(false);
+  const hasJustSignedOut = useRef(false);
   const isLoading = state.phase === 'loading';
   const isSignedIn = state.phase === 'signed-in';
-  const showsScreen = !isLoading && redirectFor(isSignedIn, route, location.pathname) === null;
+  const showsScreen =
+    !isLoading && redirectFor(isSignedIn ? 'signed-in' : 'signed-out', route, location.pathname) === null;
   const screenKey = showsScreen ? location.key : null;
 
   useEffect(() => {
     if (isLoading) return;
-    const redirect = redirectFor(isSignedIn, route, location.pathname);
+    let access: Access = 'signed-in';
+    if (!isSignedIn) access = hasJustSignedOut.current ? 'just-signed-out' : 'signed-out';
+    const redirect = redirectFor(access, route, location.pathname);
     if (redirect === null) return;
-    // Each redirect replaces its history entry, so that Back does not bounce on it.
     if (redirect.to === 'login') {
+      hasJustSignedOut.current = false;
       returnTo.current = redirect.returnTo;
-      void navigate(PATHS.login, { replace: true });
+      void navigate(PATHS.login, { replace: redirect.replacesEntry });
     } else {
       const target = returnTo.current ?? PATHS.home;
       returnTo.current = null;
@@ -49,15 +63,34 @@ export function Shell({ session }: { readonly session: Session }) {
     window.scrollTo(0, 0);
   }, [screenKey]);
 
+  async function signOut(): Promise<void> {
+    hasJustSignedOut.current = true;
+    try {
+      await session.signOut();
+    } catch (failure) {
+      hasJustSignedOut.current = false;
+      toasts.show(errorMessage(t, failure, t('Could not sign out.')), 'error');
+    }
+  }
+
   return (
     <>
       <button type="button" className="skip-link" onClick={() => main.current?.focus()}>
         {t('Skip to content')}
       </button>
+      <Header
+        isSignedIn={isSignedIn}
+        section={sectionOf(route)}
+        onSignOut={() => {
+          // signOut handles its own failures, so its promise never rejects.
+          void signOut();
+        }}
+      />
       <main className="app-main" id="main" tabIndex={-1} ref={main}>
         {isLoading && <LoadingState />}
         {showsScreen && <Outlet />}
       </main>
+      <ToastRegion toasts={toasts} />
     </>
   );
 }

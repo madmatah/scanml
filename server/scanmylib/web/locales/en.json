@@ -7,11 +7,13 @@
   "{{size}} GB": "{{size}} GB",
   "{{size}} KB": "{{size}} KB",
   "{{size}} MB": "{{size}} MB",
+  "Loading…": "Loading…",
   "No number": "No number",
   "p. {{label}}": "p. {{label}}",
   "Page {{label}}": "Page {{label}}",
   "Page not scanned yet: {{range}}": "Page not scanned yet: {{range}}",
   "Pages not scanned yet: {{range}}": "Pages not scanned yet: {{range}}",
+  "ScanMyLib: scan your books and documents with your phone; your PC reads their text.": "ScanMyLib: scan your books and documents with your phone; your PC reads their text.",
   "Unnumbered page": "Unnumbered page",
   "Unnumbered pages": "Unnumbered pages"
 }

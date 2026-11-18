@@ -7,11 +7,13 @@
   "{{size}} GB": "{{size}} Go",
   "{{size}} KB": "{{size}} Ko",
   "{{size}} MB": "{{size}} Mo",
+  "Loading…": "Chargement…",
   "No number": "Sans numéro",
   "p. {{label}}": "p. {{label}}",
   "Page {{label}}": "Page {{label}}",
   "Page not scanned yet: {{range}}": "Page pas encore scannée : {{range}}",
   "Pages not scanned yet: {{range}}": "Pages pas encore scannées : {{range}}",
+  "ScanMyLib: scan your books and documents with your phone; your PC reads their text.": "ScanMyLib : scannez vos livres et documents avec votre téléphone, votre PC en lit le texte.",
   "Unnumbered page": "Page non numérotée",
   "Unnumbered pages": "Pages non numérotées"
 }

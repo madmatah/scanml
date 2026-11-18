@@ -44,8 +44,10 @@ These constraints drive the choices in this document:
 | Ruff, mypy | 0.16.10, 2.4.0 | Formatting and lint of the Python, and its types, strict |
 | JavaScript (ES modules) | the browser's | The web UI, loaded as it is, without a build step |
 | TypeScript | 7.0.2 | The web UI's modules as they move to TypeScript, under `src/`, and their tests; `tsc --noEmit` checks their types, strict, and Node runs the tests with its type stripping |
+| React, React DOM | 19.3.1 | The web UI's screens in TypeScript, as function components, not yet loaded by the browser |
+| esbuild | 0.28.2 | The build of the web UI in TypeScript: one module script and one stylesheet, each named by a hash of its content |
 | KaTeX | 0.19.0 | Typesetting of the LaTeX formulas in the web UI, vendored |
-| i18next, i18next-browser-languagedetector | 26.7.1, 8.3.0 | The web UI's translations in TypeScript, with the English text as key and the language the browser prefers, not yet loaded by the browser |
+| i18next, i18next-browser-languagedetector, react-i18next | 26.7.1, 8.3.0, 17.1.12 | The web UI's translations in TypeScript, with the English text as key and the language the browser prefers, given to its React components, not yet loaded by the browser |
 | Node.js | 26 | The web UI's tools and unit tests (`node --test`), in `node:26-trixie-slim` pinned by digest |
 | pnpm | 12.17.0 | The web UI's package manager: installs its dependencies and tools from its lockfile, under the guards of `pnpm-workspace.yaml` |
 | PaddleOCR, PaddlePaddle | 3.7.0, 3.2.1 | The OCR pipeline: PP-DocLayoutV3 layout analysis, UVDoc unwarping, orientation |
@@ -85,10 +87,11 @@ Notes:
     writes, the security events of code scanning, and runs no command, so that no code the scan resolves, builds or
     runs holds a token that writes. It reports and never blocks a pull request. Its resolution is the day's, while an
     installation holds what resolved the day it was installed.
-- **The web UI has no build step:** the browser loads its modules as they are, and the api serves them. Its move to
-  TypeScript and React, built by a bundler whose output names carry a hash of their content, is planned: those files can
-  then be cached for good, and only the page that names them is revalidated, so a browser never mixes the modules of two
-  versions.
+- **The web UI the browser loads has no build step yet:** the browser loads its modules as they are, and the api serves
+  them. Its move to TypeScript and React has a build, `server/scanmylib/web/build.ts`, which the gate's `web` area runs
+  and nothing serves yet: esbuild writes one script and one stylesheet whose names carry a hash of their content, and the
+  entry page that names them. Those files can then be cached for good, and only the page that names them is
+  revalidated, so a browser never mixes the modules of two versions.
 - **The app is built in throwaway containers** (`eclipse-temurin` with the JDK 21), signed offline with a key kept
   outside the repository, without R8 shrinking.
 - **Every language has its formatter and its linter in the gate,** so that a review never discusses layout and the
@@ -163,6 +166,7 @@ states the rules, and `docs/SECURITY.md` the threat model, the guarantees and th
 | Sandbox's init | the image's command is the sandbox's own init, a few lines of the standard library that stop being dumpable, start the supervisor, pass it the stop signals and reap orphans, since every process that holds the container's output must be out of the sandbox's reach, the sandbox running as one user: Docker's init (`init: true`) holds that output and cannot be made undumpable; the supervisor as process 1 would have to reap orphans that its `subprocess` calls also wait for; a second user for the supervisor would need capabilities that the sandbox drops |
 | Sandbox upgrades | a release that needs a new sandbox is deployed with `scripts/deploy.sh --new-sandbox`, which installs it next to the running one while production runs, checks the new image against it, and swaps the two by renaming them at the restart, keeping the replaced one for a rollback: installing in place would leave production without OCR for the hour of downloads and with nothing to go back to; switching through `.env` would make a new writer of production's `.env`; a symbolic link would not recreate the container, and a later restart would switch silently; a separate script would be a second way to change production, while the image and the sandbox must switch at the same restart |
 | Releases | one version for the api and the app (`VERSION`), so that the app a PC offers always matches its api; a release is a pull request of its own, whose notes are drafted from the Conventional Commits since the last release (`scripts/release.py`) in the Keep a Changelog format, and a workflow publishes it once it is merged, so that a release is reviewed like any change and published by nothing but its merge |
+| Web UI's build | esbuild alone, called by a script of the repository (`server/scanmylib/web/build.ts`) that writes the hashed names of its script and stylesheet into the entry page, and copies the icons and the manifest, whose URLs the phone and the manifest name, as they are; no dev server, since the gate's build and the development stack check each change. Vite would bring a dev server and a plugin system that the UI does not use, and Rollup with them, for the same two files |
 | Development | changes are made in worktrees and tried on a development stack and app (`fr.scanmylib.dev`) beside production; the scripts' guards protect production from misconfiguration, mistakes in a branch and compromised build dependencies, not from a deliberately malicious branch (`docs/SECURITY.md`) |
 
 ### Layers and modules
@@ -198,6 +202,8 @@ them. The last row lists the scripts that the skills keep, which belong to no un
 | web UI | `lib/order.js`, `lib/reading.js`, `lib/math.js`, `lib/format.js`, `lib/labels.js` | Ordering, reading view, formulas, formatting and labels | Domain |
 | web UI | `router.js`, `session.js`, `status.js`, `uploads.js` | Navigation, session, engine status, uploads | Application |
 | web UI | `api.js`, `lib/i18n.js`, `lib/dom.js`, `lib/clipboard.js`, `lib/errors.js`, `lib/uuid.js`, `views/`, `components/` | Client of the api, translations, the DOM and its views | Adapters |
+| web UI, in TypeScript, not yet loaded by the browser | `src/main.tsx`, `src/index.html`, `src/stylesheet-imports.d.ts` | Entry point, and the template of the entry page | Composition root |
+| web UI, in TypeScript, not yet loaded by the browser | `build.ts` | The build: the bundle, the entry page that names its hashed files, and the copy of the files served under stable URLs | Tools |
 | web UI, in TypeScript, not yet loaded by the browser | `src/domain/reading-order` | The moves of the reading order: a block of pages, next to a page, one place, a range and a span of the selection | Domain |
 | web UI, in TypeScript, not yet loaded by the browser | `src/domain/formatting` | The locale of numbers, numbers and decimals, sizes in bytes and percentages | Domain |
 | web UI, in TypeScript, not yet loaded by the browser | `src/domain/formulas`, `src/domain/reading` | KaTeX's options for the formulas of the OCR, and the text written against an inline formula; the outline of a document being read, and the page at the reading line | Domain |
@@ -205,6 +211,7 @@ them. The last row lists the scripts that the skills keep, which belong to no un
 | web UI, in TypeScript, not yet loaded by the browser | `src/adapters/http-api/api-client`, `src/adapters/http-api/error-detail` | The client of the api: its requests, with the session cookie and the header that guards the changes of state, the calls of the session, and the detail of its error answers | Adapters |
 | web UI, in TypeScript, not yet loaded by the browser | `src/adapters/browser/sign-in-record` | The record of a sign-in in the browser's storage, under the JavaScript UI's key | Adapters |
 | web UI, in TypeScript, not yet loaded by the browser | `src/adapters/i18next/localization`, `src/adapters/i18next/catalogs`, `src/adapters/i18next/type-options`, `src/adapters/i18next/formatted-text`, `src/adapters/i18next/page-labels`, `src/adapters/i18next/reading-text` | The translations: the instance of i18next in the browser's language, its catalogs and the types of their keys, and the texts of sizes, durations, percentages, quotations, a page's short label, and the markers and outline of a document being read | Adapters |
+| web UI, in TypeScript, not yet loaded by the browser | `src/adapters/react/shell/loading-state` | The state of a screen that is loading | Adapters |
 | web UI, in TypeScript, not yet loaded by the browser | `src/adapters/react/shell/brand-mark-drawing` | The brand mark that the page draws: the group of `icon.svg` it names, and its frame | Adapters |
 | web UI, in TypeScript, not yet loaded by the browser | `src/adapters/react/sanitized-html/page-markers` | The page markers of the server's sanitized HTML, written in the UI's language | Adapters |
 | web UI, in TypeScript, not yet loaded by the browser | `src/adapters/react/organizer/grid-geometry` | The organizer's grid: its rows, where a dragged page would land, its insertion mark, and the scrolling speed at the edges | Adapters |

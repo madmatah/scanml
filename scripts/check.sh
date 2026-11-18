@@ -8,7 +8,8 @@
 #               Biome, tsc --noEmit and i18next-cli's checks of the translations for the web UI (ktlint, for the app,
 #               runs in the android area), and none of them on a script copied from a template, kept as it ships
 #   scripts     the unit tests of the scripts' files and of the workflows (scripts/tests/), on the host's python3
-#   web         the unit tests of the web UI (node --test, in the image of its tools, without network)
+#   web         the build of the web UI (esbuild, into a throwaway directory) and its unit tests (node --test), in the
+#               image of its tools, without network
 #   server      the api's tests, in its test image, without network, read-only
 #   ocr         the sandbox's unit tests, in its image, without network or models
 #   android     the app's unit and screenshot tests, lint and ktlint (scripts/build-apk.sh, never signed)
@@ -204,6 +205,8 @@ check_integration() {
 check_web() {
     local web_tools
     web_tools=$(build_web_tools)
+    # The build writes into a tmpfs and is then dropped: a broken build or entry page fails the gate.
+    run_web_tool --tmpfs /tmp "$web_tools" node build.ts --outdir /tmp/build
     run_web_tool "$web_tools" node --test 'tests/*.test.js' 'tests/**/*.test.ts'
 }
 

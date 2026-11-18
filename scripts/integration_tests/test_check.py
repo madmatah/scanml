@@ -314,18 +314,22 @@ class WhenGivenAreas(InstallationTestCase):
     def test_should_check_only_those_in_the_order_given(self) -> None:
         self.assertEqual(list_areas_checked(self.gate_run), ["server", "web"])
 
-    def test_should_build_and_run_the_tests_of_the_api_then_those_of_the_web_ui(self) -> None:
-        self.assertEqual(len(self.checks), 4)
+    def test_should_build_and_run_the_tests_of_the_api_then_build_and_test_the_web_ui(self) -> None:
+        self.assertEqual(len(self.checks), 5)
 
     def test_should_build_the_test_image_of_the_api_from_the_worktree(self) -> None:
         self.assertIn(f"--target test {self.worktree}/server", self.checks[0])
 
     def test_should_run_the_tests_of_the_web_ui_with_node_in_the_image_of_its_tools(self) -> None:
         self.assertIn("--file scripts/lint/Dockerfile.web", self.checks[2])
-        self.assertIn("node --test", self.checks[3])
+        self.assertIn("node --test", self.checks[4])
+
+    def test_should_build_the_web_ui_into_a_throwaway_directory_before_its_tests(self) -> None:
+        self.assertIn(" --tmpfs /tmp ", self.checks[3])
+        self.assertTrue(self.checks[3].endswith("node build.ts --outdir /tmp/build"), self.checks[3])
 
     def test_should_run_the_typescript_tests_of_the_web_ui_beside_its_javascript_ones(self) -> None:
-        self.assertTrue(self.checks[3].endswith("node --test tests/*.test.js tests/**/*.test.ts"), self.checks[3])
+        self.assertTrue(self.checks[4].endswith("node --test tests/*.test.js tests/**/*.test.ts"), self.checks[4])
 
 
 class WhenGivenTheWebUiTheApiAndTheSandbox(InstallationTestCase):
@@ -342,7 +346,7 @@ class WhenGivenTheWebUiTheApiAndTheSandbox(InstallationTestCase):
         self.assertEqual(self.gate_run.returncode, 0, self.gate_run.output)
 
     def test_should_run_their_tests_without_network_on_a_read_only_filesystem(self) -> None:
-        self.assertEqual(len(self.runs), 3)
+        self.assertEqual(len(self.runs), 4)
         for run in self.runs:
             with self.subTest(run):
                 self.assertIn("--network none --read-only", run)
@@ -383,30 +387,38 @@ class WhenGivenTheWebUiAndTheSandbox(InstallationTestCase):
     def test_should_succeed(self) -> None:
         self.assertEqual(self.gate_run.returncode, 0, self.gate_run.output)
 
-    def test_should_build_and_run_the_tests_of_the_web_ui_then_those_of_the_sandbox(self) -> None:
-        self.assertEqual([argv[0] for argv in self.checks], ["build", "run", "build", "run"])
+    def test_should_build_and_test_the_web_ui_then_build_and_run_the_tests_of_the_sandbox(self) -> None:
+        self.assertEqual([argv[0] for argv in self.checks], ["build", "run", "run", "build", "run"])
 
-    def test_should_run_the_tests_of_the_web_ui_in_the_image_that_its_build_wrote(self) -> None:
-        self.assertEqual(self.checks[1][self.checks[1].index("node") - 1], image_id(self.checks[0]))
+    def test_should_build_and_test_the_web_ui_in_the_image_that_its_build_wrote(self) -> None:
+        runs = {"build": self.checks[1], "tests": self.checks[2]}
+        for run_name, run in runs.items():
+            with self.subTest(run_name):
+                self.assertEqual(run[run.index("node") - 1], image_id(self.checks[0]))
 
     def test_should_build_the_image_of_the_sandbox_from_the_worktree(self) -> None:
-        self.assertTrue(self.checks[2][-1].endswith(f"{self.worktree}/ocr"), self.checks[2])
+        self.assertTrue(self.checks[3][-1].endswith(f"{self.worktree}/ocr"), self.checks[3])
 
     def test_should_test_the_image_the_sandbox_runs_not_its_setup_image(self) -> None:
-        self.assertIn(f"--target runtime {self.worktree}/ocr", " ".join(self.checks[2]))
+        self.assertIn(f"--target runtime {self.worktree}/ocr", " ".join(self.checks[3]))
 
     def test_should_run_each_without_network_or_privileges(self) -> None:
-        tests = {"web UI": self.checks[1], "sandbox": self.checks[3]}
-        for area, run in tests.items():
-            with self.subTest(area):
+        runs = {"web UI's build": self.checks[1], "web UI's tests": self.checks[2], "sandbox": self.checks[4]}
+        for run_name, run in runs.items():
+            with self.subTest(run_name):
                 self.assertEqual(list_isolation_breaches(run), [])
 
     def test_should_mount_its_own_sources_alone_read_only(self) -> None:
-        mounts = {"web UI": list_mounts(self.checks[1]), "sandbox": list_mounts(self.checks[3])}
+        mounts = {
+            "web UI's build": list_mounts(self.checks[1]),
+            "web UI's tests": list_mounts(self.checks[2]),
+            "sandbox": list_mounts(self.checks[4]),
+        }
         self.assertEqual(
             mounts,
             {
-                "web UI": [f"{self.worktree}/server/scanmylib/web:/tools/web:ro"],
+                "web UI's build": [f"{self.worktree}/server/scanmylib/web:/tools/web:ro"],
+                "web UI's tests": [f"{self.worktree}/server/scanmylib/web:/tools/web:ro"],
                 "sandbox": [f"{self.worktree}/ocr:/app:ro"],
             },
         )

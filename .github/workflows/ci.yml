@@ -55,7 +55,7 @@ jobs:
           persist-credentials: false
       # On a fresh runner the image of the web UI's tools downloads Node, pnpm and every package of the web UI on each
       # run, from npm's registry, with no package's install script; the tests run without network.
-      - name: Run the unit tests
+      - name: Build the web UI into a throwaway directory, then run its unit tests
         run: scripts/check.sh web
         timeout-minutes: 10
 

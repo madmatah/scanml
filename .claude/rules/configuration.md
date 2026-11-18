@@ -27,6 +27,7 @@ paths:
   - "server/scanmylib/web/pnpm-*.yaml"
   - "server/scanmylib/web/tsconfig*.json"
   - "server/scanmylib/web/i18next.config.ts"
+  - "server/scanmylib/web/build.ts"
   - ".github/workflows/**"
   - ".claude/settings.json"
   - ".claude/agents/**"

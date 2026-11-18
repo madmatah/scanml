@@ -1,0 +1,9 @@
+{
+  "“{{text}}”": "“{{text}}”",
+  "{{percent}}%": "{{percent}}%",
+  "{{seconds}} s": "{{seconds}} s",
+  "{{size}} B": "{{size}} B",
+  "{{size}} GB": "{{size}} GB",
+  "{{size}} KB": "{{size}} KB",
+  "{{size}} MB": "{{size}} MB"
+}

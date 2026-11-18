@@ -45,6 +45,7 @@ These constraints drive the choices in this document:
 | JavaScript (ES modules) | the browser's | The web UI, loaded as it is, without a build step |
 | TypeScript | 7.0.2 | The web UI's modules as they move to TypeScript, under `src/`, and their tests; `tsc --noEmit` checks their types, strict, and Node runs the tests with its type stripping |
 | KaTeX | 0.19.0 | Typesetting of the LaTeX formulas in the web UI, vendored |
+| i18next, i18next-browser-languagedetector | 26.7.1, 8.3.0 | The web UI's translations in TypeScript, with the English text as key and the language the browser prefers, not yet loaded by the browser |
 | Node.js | 26 | The web UI's tools and unit tests (`node --test`), in `node:26-trixie-slim` pinned by digest |
 | pnpm | 12.17.0 | The web UI's package manager: installs its dependencies and tools from its lockfile, under the guards of `pnpm-workspace.yaml` |
 | PaddleOCR, PaddlePaddle | 3.7.0, 3.2.1 | The OCR pipeline: PP-DocLayoutV3 layout analysis, UVDoc unwarping, orientation |
@@ -62,6 +63,7 @@ These constraints drive the choices in this document:
 | ShellCheck, shfmt | 0.11.0, 3.14.1 | Lint and formatting of the shell scripts |
 | ktlint | 1.8.0 | Formatting and lint of the app's Kotlin, in Android Studio's style with trailing commas |
 | Biome | 2.5.15 | Formatting and lint of the web UI |
+| i18next-cli | 1.82.4 | The checks of the web UI's translation catalogs: no key missing or unused, every French entry translated, no text of the TypeScript UI outside `t()`, the values of each call matching its placeholders; it parses with `@swc/core`, whose native addon the image of the web tools writes at its build |
 | zizmor | 1.30.1 | Audit of the GitHub workflows |
 | OSV-Scanner | 2.7.0 | The weekly report of the known vulnerabilities of what GitHub's dependency graph cannot read |
 | GitHub CLI (`gh`) | — | The pull requests, and the listing that comes before their screenshots are cleaned up; the release workflow's tag and release |
@@ -197,6 +199,8 @@ them. The last row lists the scripts that the skills keep, which belong to no un
 | web UI | `router.js`, `session.js`, `status.js`, `uploads.js` | Navigation, session, engine status, uploads | Application |
 | web UI | `api.js`, `lib/i18n.js`, `lib/dom.js`, `lib/clipboard.js`, `lib/errors.js`, `lib/uuid.js`, `views/`, `components/` | Client of the api, translations, the DOM and its views | Adapters |
 | web UI, in TypeScript, not yet loaded by the browser | `src/domain/reading-order` | The moves of the reading order: a block of pages, next to a page, one place, a range and a span of the selection | Domain |
+| web UI, in TypeScript, not yet loaded by the browser | `src/domain/formatting` | The locale of numbers, numbers and decimals, sizes in bytes and percentages | Domain |
+| web UI, in TypeScript, not yet loaded by the browser | `src/adapters/i18next/localization`, `src/adapters/i18next/catalogs`, `src/adapters/i18next/type-options`, `src/adapters/i18next/formatted-text` | The translations: the instance of i18next in the browser's language, its catalogs and the types of their keys, and the texts of sizes, durations, percentages and quotations | Adapters |
 | web UI, in TypeScript, not yet loaded by the browser | `src/adapters/react/organizer/grid-geometry` | The organizer's grid: its rows, where a dragged page would land, its insertion mark, and the scrolling speed at the edges | Adapters |
 | app | `ScanMyLibApplication`, `AppContainer`, `MainActivity` | Entry points and wiring | Composition roots |
 | app | `model/`, `library/PageNumbering`, `library/PageLabel`, `library/PageRanges` | Document kinds, scan sources, scanner modes, theme modes, the PC's address; page numbering, the pages a page's label names, and the page ranges of the PC's coverage label | Domain |
@@ -270,7 +274,7 @@ Each row names a rule, the rules file that states it, and what enforces it.
 | The dev app keeps its own application id (`.claude/rules/sandbox.md` > Development stacks and production) | The signing container of `scripts/build-apk.sh` |
 | Production runs published releases only (`.claude/rules/releases.md`) | `scripts/deploy.sh`, `scripts/setup.sh`, `scripts/prod.sh` and `scripts/build-apk.sh` |
 | Never weaken what the lockfile or the registry settings guarantee (`.claude/rules/configuration.md` > Dependencies) | `pip --require-hashes`, pnpm's frozen install with its integrity check and the guards of `server/scanmylib/web/pnpm-workspace.yaml`, Gradle's dependency verification, the image digests of `scripts/check.sh`, of `scripts/lint/Dockerfile.web` and of the scanner in `.github/workflows/vulnerability-scan.yml`, the checksums of `scripts/build-apk.sh`, `scripts/vendor-katex.sh` and of pnpm in `scripts/lint/Dockerfile.web` |
-| The French translation lives only in the catalogs (`CLAUDE.md` > Language) | The web UI's unit tests; Android lint for missing translations |
+| The French translation lives only in the catalogs (`CLAUDE.md` > Language) | The web UI's unit tests, the catalog test `tests/translations.test.ts` among them; i18next-cli in `scripts/check.sh lint`, whose `extract --ci` refuses a key missing from the catalogs or unused, `status fr` an untranslated entry, and `lint` a text of the TypeScript UI outside `t()` and the values of a call that do not match its placeholders; `tsc`, for a key outside the English catalog; Android lint for missing translations |
 | Part of the rules of the Python: PEP 8 at 120 columns, imports, typed signatures with no bare `Any`, no blind `except`, no mutable defaults (`.claude/rules/python.md`), no shell or SQL string built from input (`.claude/rules/conventions.md` > Input from outside the program), and, in part, no character a reader cannot see written as such (`.claude/rules/conventions.md` > Characters a reader cannot see) | Ruff and mypy `--strict`, in `scripts/check.sh lint` |
 | Part of the rules of the shell scripts: quoting and `[[ … ]]` (ShellCheck), indentation (shfmt) (`.claude/rules/bash.md`) | ShellCheck and shfmt, in `scripts/check.sh lint` |
 | The Kotlin conventions at 120 columns, file names (`.claude/rules/kotlin.md`) | ktlint, in `scripts/check.sh android` |

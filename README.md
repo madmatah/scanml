@@ -365,13 +365,14 @@ indexed in [`CLAUDE.md`](CLAUDE.md). A rehearsal of a deployment, on a throwaway
 `scripts/deploy.sh`.
 
 `scripts/check.sh` is the gate, and runs its areas in this order: `lint`, the formatters, linters and type checker of
-every language (Ruff and mypy for the Python, ShellCheck and shfmt for the shell scripts, Biome for the web UI, zizmor
-for the workflows); `scripts`, the unit tests of the scripts, on the host's `python3`; then, in throwaway containers,
+every language (Ruff and mypy for the Python, ShellCheck and shfmt for the shell scripts, Biome and tsc for the web UI,
+with i18next-cli's checks of its translation catalogs, zizmor for the workflows); `scripts`, the unit tests of the scripts, on the host's `python3`; then, in throwaway containers,
 `web`, the web UI's unit tests, `server`, the api's tests, `ocr`, the OCR sandbox's unit tests, without models, and
 `android`, the app's tests, lint and ktlint; and last `integration`, the integration tests of the scripts, on the host's
 `python3` (`scripts/check.sh server web` checks those areas only). `scripts/check.sh --fix` formats the code and applies
 the linters' safe fixes: ktlint to the app in place, the other formatters to the files git tracks in `server/`, `ocr/`,
-`scripts/` and `.claude/skills/`, but the script copied from a template, which is kept as it ships; read `git diff`
+`scripts/` and `.claude/skills/`, but the script copied from a template, which is kept as it ships, after i18next-cli
+has written the web UI's catalogs from its code; read `git diff`
 before running what it changed. Each commit of a pull request passes the areas that read what it changes
 (`scripts/check.sh --last-commit`), and every pull request runs the whole gate in the continuous integration
 (`.github/workflows/ci.yml`, one job per area). Pull requests are merged when it is green. `scripts/check.sh

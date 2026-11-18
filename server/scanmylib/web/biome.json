@@ -64,6 +64,16 @@
       }
     },
     {
+      "includes": ["i18next.config.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noDefaultExport": "off"
+          }
+        }
+      }
+    },
+    {
       "includes": ["static/js/locales/**"],
       "linter": {
         "rules": {

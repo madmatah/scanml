@@ -6,6 +6,7 @@ import {
   type DocumentLoad,
   type DocumentLoader,
   REFRESH_INTERVAL_MILLISECONDS,
+  UPLOAD_RELOAD_DELAY_MILLISECONDS,
 } from '../../../../src/adapters/react/document/document-loader.ts';
 import { ApiError, NetworkError } from '../../../../src/application/api-errors.ts';
 import type { DocumentWithPages } from '../../../../src/domain/document-details.ts';
@@ -31,6 +32,10 @@ interface Arrangement {
   readonly loads: DocumentLoad[];
   readonly deletions: string[];
   readonly loader: DocumentLoader;
+}
+
+interface ArrangementOptions {
+  readonly isUploading: boolean;
 }
 
 const NOT_FOUND = 404;
@@ -73,7 +78,7 @@ function documentWith(title: string, stats: Partial<DocumentStats> = {}): Docume
   };
 }
 
-function arrange(): Arrangement {
+function arrange({ isUploading }: ArrangementOptions = { isUploading: false }): Arrangement {
   const reader = createFakeReader();
   const scheduler = createFakeScheduler();
   const leaving = new AbortController();
@@ -82,6 +87,7 @@ function arrange(): Arrangement {
   const loader = createDocumentLoader({
     read: reader.read,
     scheduler,
+    isUploading: () => isUploading,
     leaving: leaving.signal,
     onChange: (load) => loads.push(load),
     onDeleted: () => deletions.push('deleted'),
@@ -136,6 +142,19 @@ describe('The document loader', () => {
         it('should drop the refresh', () => {
           assert.deepEqual(arrangement.scheduler.pendingDelaysMilliseconds(), []);
         });
+      });
+    });
+
+    describe('When photos of the document are being uploaded', () => {
+      let arrangement: Arrangement;
+      beforeEach(async () => {
+        arrangement = arrange({ isUploading: true });
+        arrangement.loader.load();
+        await arrangement.reader.reads[0]?.answer(documentWith('Example Book'));
+      });
+
+      it('should read it again a few seconds later, so that their pages show as they arrive', () => {
+        assert.deepEqual(arrangement.scheduler.pendingDelaysMilliseconds(), [REFRESH_INTERVAL_MILLISECONDS]);
       });
     });
 
@@ -235,6 +254,44 @@ describe('The document loader', () => {
             readCount: 1,
           },
         );
+      });
+    });
+  });
+
+  describe('The loadAfterUpload() method', () => {
+    describe('When photos are sent one after another', () => {
+      let arrangement: Arrangement;
+      beforeEach(async () => {
+        arrangement = arrange();
+        arrangement.loader.load();
+        await arrangement.reader.reads[0]?.answer(documentWith('Example Book'));
+        arrangement.loader.loadAfterUpload();
+        arrangement.loader.loadAfterUpload();
+      });
+
+      it('should wait a moment once, so that their pages show in one load', () => {
+        assert.deepEqual(arrangement.scheduler.pendingDelaysMilliseconds(), [UPLOAD_RELOAD_DELAY_MILLISECONDS]);
+      });
+
+      describe('When the moment has passed', () => {
+        beforeEach(async () => {
+          arrangement.scheduler.runPending();
+          await arrangement.reader.reads[1]?.answer(documentWith('Example Book, with its new pages'));
+        });
+
+        it('should read the document again', () => {
+          assert.deepEqual(titlesOf(arrangement.loads), ['Example Book', 'Example Book, with its new pages']);
+        });
+      });
+
+      describe('When the screen is left before the moment has passed', () => {
+        beforeEach(() => {
+          arrangement.leaving.abort();
+        });
+
+        it('should drop the load', () => {
+          assert.deepEqual(arrangement.scheduler.pendingDelaysMilliseconds(), []);
+        });
       });
     });
   });

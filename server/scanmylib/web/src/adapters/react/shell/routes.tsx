@@ -36,6 +36,8 @@ export function createRoutes(services: ShellServices): RouteObject[] {
               toasts={services.toasts}
               clipboard={services.clipboard}
               formatting={services.formatting}
+              uploads={services.uploads}
+              uuids={services.uuids}
             />
           ),
         },

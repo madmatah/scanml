@@ -6,6 +6,8 @@ import type { Clipboard } from '../../../application/clipboard.ts';
 import type { DocumentStore } from '../../../application/document-store.ts';
 import type { EngineStatus } from '../../../application/engine-status.ts';
 import type { Scheduler } from '../../../application/scheduler.ts';
+import { sentCountOf, type UploadQueue } from '../../../application/upload-queue.ts';
+import type { UuidSource } from '../../../application/uuid-source.ts';
 import { canOrganize, type DocumentDetails, type DocumentWithPages } from '../../../domain/document-details.ts';
 import type { NumberFormatting } from '../../../domain/formatting.ts';
 import { documentKindLabel } from '../../i18next/document-labels.ts';
@@ -20,6 +22,7 @@ import { Icon } from '../shell/icon.tsx';
 import { LoadingState } from '../shell/loading-state.tsx';
 import { documentTitle, idOfAddress, PATHS, readerPath } from '../shell/navigation.ts';
 import type { Toasts } from '../shell/toasts.ts';
+import { Uploader } from '../uploads/uploader.tsx';
 import { Coverage } from './coverage.tsx';
 import { createDocumentLoader, type DocumentLoad, type DocumentLoader, isNotFound } from './document-loader.ts';
 import { type StatTone, statTiles } from './document-text.ts';
@@ -32,6 +35,8 @@ export interface DocumentScreenProps {
   readonly toasts: Toasts;
   readonly clipboard: Clipboard;
   readonly formatting: NumberFormatting;
+  readonly uploads: UploadQueue<File>;
+  readonly uuids: UuidSource;
 }
 
 type OpenDialog = 'edit' | 'delete' | null;
@@ -58,6 +63,8 @@ function DocumentView({
   toasts,
   clipboard,
   formatting,
+  uploads,
+  uuids,
 }: DocumentViewProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -76,6 +83,7 @@ function DocumentView({
     const documentLoader = createDocumentLoader({
       read: (signal) => store.readDocument(documentId, signal),
       scheduler,
+      isUploading: () => uploads.isBusy(documentId),
       leaving: leaving.signal,
       onChange: setLoad,
       onDeleted: () => {
@@ -92,13 +100,21 @@ function DocumentView({
       if (hasQueueMoved(lastQueueKey, key)) documentLoader.load();
       lastQueueKey = key;
     });
+    // The pages of the photos sent from this screen show shortly after their upload.
+    let sentCount = sentCountOf(uploads.getSnapshot(), documentId);
+    const stopWatchingUploads = uploads.subscribe(() => {
+      const nextSentCount = sentCountOf(uploads.getSnapshot(), documentId);
+      if (nextSentCount > sentCount) documentLoader.loadAfterUpload();
+      sentCount = nextSentCount;
+    });
     loader.current = documentLoader;
     documentLoader.load();
     return () => {
       leaving.abort();
       stopWatchingQueue();
+      stopWatchingUploads();
     };
-  }, [documentId, store, engineStatus, scheduler, toasts, t, navigate]);
+  }, [documentId, store, engineStatus, scheduler, uploads, toasts, t, navigate]);
 
   function edited(saved: DocumentDetails | null): void {
     setOpenDialog(null);
@@ -187,7 +203,15 @@ function DocumentView({
           </button>
         </div>
       </header>
-      <DocumentOverview document={shown} store={store} toasts={toasts} clipboard={clipboard} formatting={formatting} />
+      <DocumentOverview
+        document={shown}
+        store={store}
+        toasts={toasts}
+        clipboard={clipboard}
+        formatting={formatting}
+        uploads={uploads}
+        uuids={uuids}
+      />
       <PagesSection document={shown} />
       {openDialog === 'edit' && (
         <DocumentDialog
@@ -220,9 +244,11 @@ interface DocumentOverviewProps {
   readonly toasts: Toasts;
   readonly clipboard: Clipboard;
   readonly formatting: NumberFormatting;
+  readonly uploads: UploadQueue<File>;
+  readonly uuids: UuidSource;
 }
 
-function DocumentOverview({ document, store, toasts, clipboard, formatting }: DocumentOverviewProps) {
+function DocumentOverview({ document, store, toasts, clipboard, formatting, uploads, uuids }: DocumentOverviewProps) {
   const { t } = useTranslation();
   const withScansId = useId();
   const [withScans, setWithScans] = useState(false);
@@ -255,21 +281,7 @@ function DocumentOverview({ document, store, toasts, clipboard, formatting }: Do
           <h2 id="upload-title" className="card-title">
             {t('Add pages')}
           </h2>
-          <div className="uploader">
-            <div className="button-row">
-              <button type="button" className="btn btn-primary">
-                <Icon name="upload" />
-                {t('Import photos')}
-              </button>
-              <button type="button" className="btn">
-                <Icon name="camera" />
-                {t('Take a photo')}
-              </button>
-            </div>
-            <p className="hint">
-              {t('JPEG, PNG or WebP, 40 MiB maximum per photo. Photos are uploaded in the order of their file names.')}
-            </p>
-          </div>
+          <Uploader documentId={document.id} uploads={uploads} uuids={uuids} formatting={formatting} />
         </section>
         <section className="card" aria-labelledby="export-title">
           <h2 id="export-title" className="card-title">

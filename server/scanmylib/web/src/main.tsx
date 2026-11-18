@@ -10,14 +10,17 @@ import { createPageVisibility } from './adapters/browser/page-visibility.ts';
 import { createRandomUuidSource } from './adapters/browser/random-uuid-source.ts';
 import { createSignInRecord } from './adapters/browser/sign-in-record.ts';
 import { createTimerScheduler } from './adapters/browser/timer-scheduler.ts';
+import { guardUnload } from './adapters/browser/unload-guard.ts';
 import { createWindowClipboard } from './adapters/browser/window-clipboard.ts';
 import { createApiClient } from './adapters/http-api/api-client.ts';
+import { createPageUploader } from './adapters/http-api/page-uploader.ts';
 import { CATALOGS } from './adapters/i18next/catalogs.ts';
 import { createLocalization } from './adapters/i18next/localization.ts';
 import { createRoutes } from './adapters/react/shell/routes.tsx';
 import { createToasts } from './adapters/react/shell/toasts.ts';
 import { createEngineStatus } from './application/engine-status.ts';
 import { createSession } from './application/session.ts';
+import { createUploadQueue } from './application/upload-queue.ts';
 
 function findElement(selector: string): Element {
   const element = document.querySelector(selector);
@@ -48,6 +51,16 @@ watchSignInLinks(window, (token) => {
 });
 const started = session.start(linkToken);
 const toasts = createToasts(scheduler);
+const uuids = createRandomUuidSource(window.crypto);
+const uploads = createUploadQueue(
+  createPageUploader(
+    () => new XMLHttpRequest(),
+    () => session.expire(),
+  ),
+  uuids,
+  { now: () => Date.now() },
+);
+guardUnload(window, () => uploads.isBusy());
 
 const localization = await createLocalization(CATALOGS);
 const { t } = localization.i18next;
@@ -70,9 +83,10 @@ createRoot(findElement('#app')).render(
           catalog: apiClient,
           documents: apiClient,
           scheduler,
-          uuids: createRandomUuidSource(window.crypto),
+          uuids,
           pairing: apiClient,
           clipboard: createWindowClipboard(window),
+          uploads,
         }),
       )}
     />

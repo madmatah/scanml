@@ -7,8 +7,8 @@ export interface ByteSize {
 }
 
 export interface NumberFormatting {
-  readonly formatNumber: (value: number) => string;
-  readonly formatDecimal: (value: number) => string;
+  readonly formatNumber: (number: number) => string;
+  readonly formatDecimal: (number: number) => string;
 }
 
 const DEFAULT_LOCALES: Readonly<Record<UiLanguage, string>> = { en: 'en-US', fr: 'fr-FR' };
@@ -28,8 +28,8 @@ export function createNumberFormatting(locale: string): NumberFormatting {
   const integers = new Intl.NumberFormat(locale);
   const decimals = new Intl.NumberFormat(locale, { maximumFractionDigits: 1 });
   return {
-    formatNumber: (value) => integers.format(value),
-    formatDecimal: (value) => decimals.format(value),
+    formatNumber: (number) => integers.format(number),
+    formatDecimal: (number) => decimals.format(number),
   };
 }
 
@@ -85,4 +85,31 @@ export function createDateFormatting(locale: string): DateFormatting {
     formatDateTime: (date) => dateTimes.format(date),
     formatRelativeTime: (amount, unit) => relativeTimes.format(amount, unit),
   };
+}
+
+export interface LocalDate {
+  getFullYear(): number;
+  getMonth(): number;
+  getDate(): number;
+  getHours(): number;
+  getMinutes(): number;
+  getSeconds(): number;
+  getTimezoneOffset(): number;
+}
+
+const MINUTES_PER_HOUR = 60;
+
+function twoDigits(number: number): string {
+  return String(number).padStart(2, '0');
+}
+
+// A time in ISO 8601 with the browser's local time and its offset from UTC, the form of a photo's `captured_at`.
+export function localIsoString(date: LocalDate): string {
+  const offset = -date.getTimezoneOffset();
+  const sign = offset >= 0 ? '+' : '-';
+  const offsetHours = twoDigits(Math.floor(Math.abs(offset) / MINUTES_PER_HOUR));
+  const offsetMinutes = twoDigits(Math.abs(offset) % MINUTES_PER_HOUR);
+  const day = `${date.getFullYear()}-${twoDigits(date.getMonth() + 1)}-${twoDigits(date.getDate())}`;
+  const time = `${twoDigits(date.getHours())}:${twoDigits(date.getMinutes())}:${twoDigits(date.getSeconds())}`;
+  return `${day}T${time}${sign}${offsetHours}:${offsetMinutes}`;
 }

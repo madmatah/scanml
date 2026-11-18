@@ -1,7 +1,13 @@
 import assert from 'node:assert/strict';
 import { beforeEach, describe, it } from 'node:test';
 
-import { createNumberFormatting, type ElapsedTime, elapsedTime } from '../../src/domain/formatting.ts';
+import {
+  createNumberFormatting,
+  type ElapsedTime,
+  elapsedTime,
+  type LocalDate,
+  localIsoString,
+} from '../../src/domain/formatting.ts';
 
 const ENGLISH_LOCALE = 'en-US';
 const FRENCH_LOCALE = 'fr-FR';
@@ -94,6 +100,54 @@ describe('The formatting', () => {
 
         it(rule, () => {
           assert.deepEqual(elapsed, expected);
+        });
+      });
+    }
+  });
+
+  describe('The localIsoString() function', () => {
+    function localDate(offsetMinutes: number): LocalDate {
+      return {
+        getFullYear: () => 2026,
+        getMonth: () => 2,
+        getDate: () => 7,
+        getHours: () => 9,
+        getMinutes: () => 5,
+        getSeconds: () => 3,
+        getTimezoneOffset: () => offsetMinutes,
+      };
+    }
+
+    const situations: { situation: string; offsetMinutes: number; rule: string; expected: string }[] = [
+      {
+        situation: 'When the browser is two hours ahead of UTC',
+        offsetMinutes: -120,
+        rule: 'should write the local time, padded, with a positive offset',
+        expected: '2026-03-07T09:05:03+02:00',
+      },
+      {
+        situation: 'When the browser is five hours and a half behind UTC',
+        offsetMinutes: 330,
+        rule: 'should write a negative offset with its minutes',
+        expected: '2026-03-07T09:05:03-05:30',
+      },
+      {
+        situation: 'When the browser is at UTC',
+        offsetMinutes: 0,
+        rule: 'should write a zero offset as positive',
+        expected: '2026-03-07T09:05:03+00:00',
+      },
+    ];
+
+    for (const { situation, offsetMinutes, rule, expected } of situations) {
+      describe(situation, () => {
+        let written: string;
+        beforeEach(() => {
+          written = localIsoString(localDate(offsetMinutes));
+        });
+
+        it(rule, () => {
+          assert.equal(written, expected);
         });
       });
     }

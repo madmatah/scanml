@@ -440,6 +440,26 @@ class TheVulnerabilityScanWorkflow(unittest.TestCase):
         ]
         self.checkouts = re.findall(r"uses: actions/checkout@", self.text)
         self.actions = TheWorkflowsOfTheRepository.action_reference_pattern.findall(self.text)
+        repository_locks_scan = re.search(r"^\s*scan repository-locks (.*?[^\\])$", self.text, re.MULTILINE | re.DOTALL)
+        self.scanned_repository_locks = (
+            [lock.rsplit(":", 1)[-1] for lock in re.findall(r"--lockfile (\S+)", repository_locks_scan.group(1))]
+            if repository_locks_scan
+            else []
+        )
+        self.watched_paths = re.findall(r"^      - (\S+)$", self.triggers, re.MULTILINE)
+
+    def test_should_scan_the_locks_the_graph_skips_and_the_lockfile_of_the_web_ui(self) -> None:
+        self.assertEqual(
+            self.scanned_repository_locks,
+            [
+                "scripts/lint/requirements.lock",
+                "android/gradle/verification-metadata.xml",
+                "server/scanmylib/web/pnpm-lock.yaml",
+            ],
+        )
+
+    def test_should_scan_them_again_on_a_push_to_main_that_changes_one(self) -> None:
+        self.assertEqual([lock for lock in self.scanned_repository_locks if lock not in self.watched_paths], [])
 
     def test_should_write_security_events_alone(self) -> None:
         self.assertEqual(re.findall(WRITING_PERMISSION_PATTERN, self.text), ["security-events: write"])
@@ -514,7 +534,8 @@ class TheVulnerabilityScanWorkflow(unittest.TestCase):
             "      - ocr/setup/requirements-*.in\n"
             "      - scripts/lint/requirements.lock\n"
             "      - server/Dockerfile\n"
-            "      - server/requirements.lock",
+            "      - server/requirements.lock\n"
+            "      - server/scanmylib/web/pnpm-lock.yaml",
         )
 
     def test_should_not_keep_the_credentials_of_its_checkouts(self) -> None:

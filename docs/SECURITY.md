@@ -341,8 +341,9 @@ packages yet: it is still the JavaScript UI, with its vendored KaTeX.
     would resolve them that day, without installing them, and that uv, by its version; the aliases the installation
     builds, which the scan cannot, are left out of the resolution of the environment it installs them in
     (`ocr/setup/aliases.txt`), and the distributions they require are scanned in their place;
-  - `repository-locks`: the gate's Python tools (`scripts/lint/requirements.lock`) and the app's libraries and Gradle
-    plugins (`android/gradle/verification-metadata.xml`);
+  - `repository-locks`: the gate's Python tools (`scripts/lint/requirements.lock`), the app's libraries and Gradle
+    plugins (`android/gradle/verification-metadata.xml`), and every package of the web UI's pnpm lockfile
+    (`server/scanmylib/web/pnpm-lock.yaml`), its tools and KaTeX's npm package included, which Dependabot reads too;
   - `api-image` and `sandbox-image`: the Debian and Python packages of the api's image, as production runs it, and of
     the image the sandbox runs.
 
@@ -365,8 +366,9 @@ packages yet: it is still the JavaScript UI, with its vendored KaTeX.
   - Paddle's GPU build comes from Paddle's own CDN, and its advisories are published under `paddlepaddle`: it is scanned
     under both names, at the version of its wheel;
   - not scanned: the CPython of the base images, built from source; the packages of `server/requirements-test.lock`
-    that the api's image lacks, such as pytest; the Gradle distribution; the Android SDK; the vendored KaTeX; the
-    models; the images of the gate's tools;
+    that the api's image lacks, such as pytest; the Gradle distribution; the Android SDK; the vendored KaTeX, which
+    the web UI still serves, where the scan reads the KaTeX of the lockfile; the models; the images of the gate's
+    tools;
   - the test of the workflow's calls to docker (`scripts/tests/test_workflows.py`) guards against mistakes in a branch,
     as the scripts' guards do ([Threat model of the development guards](#threat-model-of-the-development-guards)): it
     reads only the calls written in the workflow's scripts, and sees neither one assembled on purpose from fragments,

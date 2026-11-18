@@ -1,6 +1,6 @@
 import type { TFunction } from 'i18next';
 
-import { DOCUMENT_KINDS, type DocumentKind } from '../../domain/document-summary.ts';
+import { DOCUMENT_KINDS, type DocumentKind, isDocumentKind } from '../../domain/document-summary.ts';
 
 export interface DocumentKindChoice {
   readonly kind: DocumentKind;
@@ -14,10 +14,6 @@ function knownKindLabel(t: TFunction, kind: DocumentKind): string {
     case 'document':
       return t('Other');
   }
-}
-
-function isDocumentKind(kind: string): kind is DocumentKind {
-  return DOCUMENT_KINDS.some((documentKind) => documentKind === kind);
 }
 
 export function documentKindLabel(t: TFunction, kind: string): string {

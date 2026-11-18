@@ -5,25 +5,46 @@ import { useTranslation } from 'react-i18next';
 import type { DocumentFields } from '../../../application/document-catalog.ts';
 import { documentKindChoices } from '../../i18next/document-labels.ts';
 import { errorMessage } from '../shell/error-message.ts';
-import { type DocumentForm, newDocumentForm, submittedForm, withKind, withUnwarp } from './document-form.ts';
+import {
+  type DocumentForm,
+  type EditedDocument,
+  editedDocumentForm,
+  newDocumentForm,
+  submittedForm,
+  withKind,
+  withUnwarp,
+} from './document-form.ts';
 import { useModal } from './use-modal.ts';
 
 export interface DocumentDialogProps<Saved> {
   readonly heading: string;
   readonly submitLabel: string;
+  readonly initial?: EditedDocument;
+  readonly withNotes?: boolean;
   readonly onSubmit: (fields: DocumentFields) => Promise<Saved>;
   readonly onClosed: (saved: Saved | null) => void;
 }
 
 const TEXT_MAXIMUM_LENGTH = 300;
+const NOTES_MAXIMUM_LENGTH = 20_000;
+const NOTES_ROWS = 3;
 
-export function DocumentDialog<Saved>({ heading, submitLabel, onSubmit, onClosed }: DocumentDialogProps<Saved>) {
+export function DocumentDialog<Saved>({
+  heading,
+  submitLabel,
+  initial,
+  withNotes = false,
+  onSubmit,
+  onClosed,
+}: DocumentDialogProps<Saved>) {
   const { t } = useTranslation();
-  const ids = { heading: useId(), title: useId(), author: useId(), unwarpHint: useId() };
+  const ids = { heading: useId(), title: useId(), author: useId(), notes: useId(), unwarpHint: useId() };
   const dialog = useRef<HTMLDialogElement>(null);
   const titleInput = useRef<HTMLInputElement>(null);
-  const saved = useRef<{ readonly value: Saved } | null>(null);
-  const [form, setForm] = useState<DocumentForm>(newDocumentForm);
+  const saved = useRef<{ readonly answer: Saved } | null>(null);
+  const [form, setForm] = useState<DocumentForm>(() =>
+    initial === undefined ? newDocumentForm(withNotes) : editedDocumentForm(initial, withNotes),
+  );
   const [error, setError] = useState<string | null>(null);
   const [isBusy, setBusy] = useState(false);
   const returnFocus = useModal(dialog, titleInput);
@@ -32,7 +53,7 @@ export function DocumentDialog<Saved>({ heading, submitLabel, onSubmit, onClosed
     setBusy(true);
     setError(null);
     try {
-      saved.current = { value: await onSubmit(fields) };
+      saved.current = { answer: await onSubmit(fields) };
       dialog.current?.close();
     } catch (failure) {
       setError(errorMessage(t, failure, t('Could not save.')));
@@ -68,7 +89,7 @@ export function DocumentDialog<Saved>({ heading, submitLabel, onSubmit, onClosed
       }}
       onClose={() => {
         returnFocus();
-        onClosed(saved.current === null ? null : saved.current.value);
+        onClosed(saved.current === null ? null : saved.current.answer);
       }}
     >
       <form className="dialog-body" noValidate onSubmit={submit}>
@@ -138,6 +159,22 @@ export function DocumentDialog<Saved>({ heading, submitLabel, onSubmit, onClosed
             </span>
           </span>
         </label>
+        {form.notes !== null && (
+          <div className="field">
+            <label htmlFor={ids.notes}>
+              {t('Notes')} <span className="optional">{t('(optional)')}</span>
+            </label>
+            <textarea
+              id={ids.notes}
+              name="notes"
+              className="input"
+              rows={NOTES_ROWS}
+              maxLength={NOTES_MAXIMUM_LENGTH}
+              value={form.notes}
+              onChange={(event) => setForm({ ...form, notes: event.target.value })}
+            />
+          </div>
+        )}
         <p className="form-error" role="alert" hidden={error === null}>
           {error ?? ''}
         </p>

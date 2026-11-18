@@ -3,6 +3,7 @@ import { beforeEach, describe, it } from 'node:test';
 
 import { createApiClient, type Fetch } from '../../../src/adapters/http-api/api-client.ts';
 import type { SessionServer } from '../../../src/application/session.ts';
+import type { DocumentDetails, DocumentWithPages } from '../../../src/domain/document-details.ts';
 import type { DocumentSummary } from '../../../src/domain/document-summary.ts';
 import type { PairingDetails } from '../../../src/domain/pairing-details.ts';
 import type { ServerStatus } from '../../../src/domain/server-status.ts';
@@ -22,6 +23,7 @@ const DOCUMENT_ID = '95bbeb79-4351-432f-a53c-d3658892ff50';
 const NO_CONTENT = 204;
 const OK = 200;
 const UNAUTHORIZED = 401;
+const NOT_FOUND = 404;
 const UNPROCESSABLE = 422;
 const BAD_GATEWAY = 502;
 
@@ -44,6 +46,16 @@ function jsonResponse(status: number, body: unknown): Response {
 
 function noContent(): Response {
   return new Response(null, { status: NO_CONTENT });
+}
+
+function documentDetailsBody(): Record<string, unknown> {
+  return {
+    ...documentBody(),
+    slug: 'example-book',
+    notes: '',
+    unwarp: true,
+    folder: '/data/USER/scanmylib/library/example-book',
+  };
 }
 
 function documentBody(): Record<string, unknown> {
@@ -377,6 +389,115 @@ describe('The api client', () => {
       it('should give the decoded document', () => {
         assert.equal(document.id, DOCUMENT_ID);
       });
+    });
+  });
+
+  describe('The readDocument() call', () => {
+    describe('When the api answers the document with its pages', () => {
+      const screen = new AbortController();
+      let sent: Exchange;
+      let document: DocumentWithPages;
+      beforeEach(async () => {
+        sent = exchange(() => jsonResponse(OK, { ...documentDetailsBody(), pages: [] }));
+        document = await createApiClient(sent.fetchFromApi, ignoreUnauthorized).readDocument(
+          DOCUMENT_ID,
+          screen.signal,
+        );
+      });
+
+      it('should ask for the document, with the signal of the screen', () => {
+        assert.deepEqual(
+          sent.requests.map(({ path, init }) => ({ request: `${init.method} ${path}`, signal: init.signal })),
+          [{ request: `GET /api/documents/${DOCUMENT_ID}`, signal: screen.signal }],
+        );
+      });
+
+      it('should give the decoded document', () => {
+        assert.deepEqual({ slug: document.slug, pages: document.pages }, { slug: 'example-book', pages: [] });
+      });
+    });
+
+    describe('When the document does not exist', () => {
+      let act: () => Promise<DocumentWithPages>;
+      beforeEach(() => {
+        const client = createApiClient(
+          exchange(() => jsonResponse(NOT_FOUND, { detail: 'document not found' })).fetchFromApi,
+          ignoreUnauthorized,
+        );
+        act = () => client.readDocument(DOCUMENT_ID, new AbortController().signal);
+      });
+
+      it('should fail with its status, which the screen tells apart from other failures', async () => {
+        await assert.rejects(act(), { name: 'ApiError', status: NOT_FOUND });
+      });
+    });
+  });
+
+  describe('The updateDocument() call', () => {
+    const fields = { title: 'Example Book', author: 'Jane Doe', kind: 'book', unwarp: false, notes: 'Second edition' };
+
+    describe('When the api saves the changes', () => {
+      let sent: Exchange;
+      let document: DocumentDetails;
+      beforeEach(async () => {
+        sent = exchange(() => jsonResponse(OK, documentDetailsBody()));
+        document = await createApiClient(sent.fetchFromApi, ignoreUnauthorized).updateDocument(DOCUMENT_ID, fields);
+      });
+
+      it('should patch the document with the fields as JSON', () => {
+        assert.deepEqual(
+          sent.requests.map(({ path, init }) => ({ method: init.method, path, body: init.body })),
+          [{ method: 'PATCH', path: `/api/documents/${DOCUMENT_ID}`, body: JSON.stringify(fields) }],
+        );
+      });
+
+      it('should send the header that guards the changes of state', () => {
+        assert.equal(headersOf(sent.requests[0])['x-scanmylib'], '1');
+      });
+
+      it('should give the decoded document', () => {
+        assert.equal(document.folder, '/data/USER/scanmylib/library/example-book');
+      });
+    });
+  });
+
+  describe('The deleteDocument() call', () => {
+    describe('When the api moves the document to the trash', () => {
+      let sent: Exchange;
+      beforeEach(async () => {
+        sent = exchange(noContent);
+        await createApiClient(sent.fetchFromApi, ignoreUnauthorized).deleteDocument(DOCUMENT_ID);
+      });
+
+      it('should delete the document, with the header that guards the changes of state', () => {
+        assert.deepEqual(
+          sent.requests.map(({ path, init }) => ({
+            request: `${init.method} ${path}`,
+            guard: headersOf({ path, init })['x-scanmylib'],
+          })),
+          [{ request: `DELETE /api/documents/${DOCUMENT_ID}`, guard: '1' }],
+        );
+      });
+    });
+  });
+
+  describe('The addresses of the exports of a document', () => {
+    let addresses: string[];
+    beforeEach(() => {
+      const client = createApiClient(exchange(noContent).fetchFromApi, ignoreUnauthorized);
+      addresses = [
+        client.markdownUrl(DOCUMENT_ID),
+        client.archiveUrl(DOCUMENT_ID, false),
+        client.archiveUrl(DOCUMENT_ID, true),
+      ];
+    });
+
+    it('should name its Markdown, and its archive with or without the original photos', () => {
+      assert.deepEqual(addresses, [
+        `/api/documents/${DOCUMENT_ID}/markdown`,
+        `/api/documents/${DOCUMENT_ID}/export.zip?scans=0`,
+        `/api/documents/${DOCUMENT_ID}/export.zip?scans=1`,
+      ]);
     });
   });
 

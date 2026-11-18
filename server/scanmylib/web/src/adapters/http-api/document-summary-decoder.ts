@@ -1,13 +1,5 @@
 import type { DocumentSummary, PageCoverage } from '../../domain/document-summary.ts';
-import { type ResponseFields, ResponseShapeError, readResponseFields } from './response-fields.ts';
-
-// The image of a cover reaches an <img> as it is: it may only be one of the api's own files.
-const API_PATH_PREFIX = '/api/';
-
-function decodeApiPath(path: string | null, field: string): string | null {
-  if (path !== null && !path.startsWith(API_PATH_PREFIX)) throw new ResponseShapeError(field);
-  return path;
-}
+import { type ResponseFields, readResponseFields } from './response-fields.ts';
 
 function decodeCoverage(coverage: ResponseFields): PageCoverage {
   return {
@@ -15,11 +7,12 @@ function decodeCoverage(coverage: ResponseFields): PageCoverage {
     label: coverage.string('label'),
     gaps: coverage.numberPairs('gaps'),
     lowestNumber: coverage.nullableNumber('min'),
+    highestNumber: coverage.nullableNumber('max'),
     unnumberedCount: coverage.number('unnumbered'),
   };
 }
 
-function decodeDocument(document: ResponseFields): DocumentSummary {
+export function readDocumentSummary(document: ResponseFields): DocumentSummary {
   const stats = document.object('stats');
   return {
     id: document.string('id'),
@@ -37,14 +30,14 @@ function decodeDocument(document: ResponseFields): DocumentSummary {
       duplicateCount: stats.number('duplicates'),
     },
     coverage: decodeCoverage(document.object('coverage')),
-    coverThumbnailUrl: decodeApiPath(document.nullableString('cover_thumb_url'), 'cover_thumb_url'),
+    coverThumbnailUrl: document.nullableApiPath('cover_thumb_url'),
   };
 }
 
 export function decodeDocumentSummary(body: unknown): DocumentSummary {
-  return decodeDocument(readResponseFields(body));
+  return readDocumentSummary(readResponseFields(body));
 }
 
 export function decodeDocumentList(body: unknown): DocumentSummary[] {
-  return readResponseFields(body).objectList('documents').map(decodeDocument);
+  return readResponseFields(body).objectList('documents').map(readDocumentSummary);
 }

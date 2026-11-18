@@ -1,6 +1,6 @@
 export const PATHS = { home: '/', login: '/login', pairing: '/pairing' } as const;
 
-export type RouteName = 'home' | 'pairing' | 'login' | 'unknown';
+export type RouteName = 'home' | 'document' | 'pairing' | 'login' | 'unknown';
 
 export type Section = 'library' | 'pairing';
 
@@ -12,12 +12,34 @@ export type Redirect =
 
 export const BRAND_NAME = 'ScanMyLib';
 
+// The api names its documents and pages by lowercase hyphenated UUIDs; an address may write them in capitals.
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export function documentPath(documentId: string): string {
   return `/documents/${documentId}`;
 }
 
-export function isRouteName(name: string): name is RouteName {
-  return name === 'home' || name === 'pairing' || name === 'login' || name === 'unknown';
+export function readerPath(documentId: string): string {
+  return `/documents/${documentId}/read`;
+}
+
+export function pagePath(pageId: string): string {
+  return `/pages/${pageId}`;
+}
+
+export function idOfAddress(segment: string | undefined): string | null {
+  return segment !== undefined && UUID.test(segment) ? segment.toLowerCase() : null;
+}
+
+function isRouteName(name: string): name is RouteName {
+  return name === 'home' || name === 'document' || name === 'pairing' || name === 'login' || name === 'unknown';
+}
+
+// A route whose address names no valid id is an unknown address, as one that matches no route.
+export function routeNameOf(matchedId: string, documentId: string | undefined): RouteName {
+  if (!isRouteName(matchedId)) return 'unknown';
+  if (matchedId === 'document' && idOfAddress(documentId) === null) return 'unknown';
+  return matchedId;
 }
 
 export function redirectFor(access: Access, route: RouteName, path: string): Redirect | null {
@@ -35,6 +57,7 @@ export function redirectFor(access: Access, route: RouteName, path: string): Red
 export function sectionOf(route: RouteName): Section | null {
   switch (route) {
     case 'home':
+    case 'document':
       return 'library';
     case 'pairing':
       return 'pairing';

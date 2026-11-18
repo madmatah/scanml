@@ -1,8 +1,24 @@
 {
   "name": "scanmylib-web",
   "private": true,
-  "description": "The tools of the web UI's checks; the UI itself is served as it is, without a build.",
+  "description": "The web UI's dependencies and the tools of its checks; the UI itself is served as it is, without a build.",
+  "packageManager": "pnpm@12.17.0",
+  "dependencies": {
+    "i18next": "26.7.1",
+    "i18next-browser-languagedetector": "8.3.0",
+    "katex": "0.19.1",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "react-i18next": "17.1.12",
+    "react-router": "8.5.1"
+  },
   "devDependencies": {
-    "@biomejs/biome": "2.5.15"
+    "@biomejs/biome": "2.5.15",
+    "@types/node": "26.6.6",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "esbuild": "0.28.2",
+    "i18next-cli": "1.82.4",
+    "typescript": "7.0.2"
   }
 }

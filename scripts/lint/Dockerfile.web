@@ -1,8 +1,23 @@
-# No package's install script runs: Biome needs none, and one would run with the build's network.
-FROM node:22-trixie-slim
+# The web UI's tools, installed by pnpm from its frozen lockfile under the guards of pnpm-workspace.yaml: no package's
+# install script runs, since one would run with the build's network, and the install fails on an unreviewed one.
+#
+# Node is pinned by digest and pnpm's standalone build by its SHA-256, since this image never reaches production and is
+# rebuilt only when they change. The stage `pnpm` alone serves the command that regenerates the lockfile (README.md >
+# Development).
+FROM node:26-trixie-slim@sha256:e6bedef217677b276c591795e169840edd9096dbf13f29df8ef8d1856b8820bc AS pnpm
+ADD --checksum=sha256:2c58959fd5df5cb9f4e72784c08a60ffc7ee558fed9b04b22254e29112203a51 \
+    https://github.com/pnpm/pnpm/releases/download/v12.17.0/pnpm-linux-x64.tar.gz /tmp/pnpm.tar.gz
+RUN mkdir /opt/pnpm \
+ && tar -xzf /tmp/pnpm.tar.gz -C /opt/pnpm --no-same-owner \
+ && rm /tmp/pnpm.tar.gz \
+ && ln -s /opt/pnpm/pnpm /usr/local/bin/pnpm
+
+FROM pnpm AS tools
 WORKDIR /tools
-COPY server/scanmylib/web/package.json server/scanmylib/web/package-lock.json ./
-RUN npm ci --ignore-scripts --no-audit --no-fund \
- && npm cache clean --force
+COPY server/scanmylib/web/package.json server/scanmylib/web/pnpm-lock.yaml server/scanmylib/web/pnpm-workspace.yaml \
+    ./
+RUN pnpm install --frozen-lockfile --store-dir /tmp/pnpm-store \
+ && rm -rf /tmp/pnpm-store /root/.cache /root/.local
 USER 1000:1000
-WORKDIR /web
+# The gate mounts the web UI here, so that its tools resolve /tools/node_modules by walking up the tree.
+WORKDIR /tools/web

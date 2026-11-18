@@ -24,6 +24,7 @@ paths:
   - ".shellcheckrc"
   - "server/scanmylib/web/biome.json"
   - "server/scanmylib/web/package*.json"
+  - "server/scanmylib/web/pnpm-*.yaml"
   - ".github/workflows/**"
   - ".claude/settings.json"
   - ".claude/agents/**"
@@ -37,7 +38,8 @@ paths:
 - **A module** is one of the units below, each of which builds or is tested on its own. Neither a directory nor a file
   is a module, whatever the language calls it, such as a Python module or package, or a Kotlin package.
 - **The repository holds five units:** the api (`server/`: `pyproject.toml`, its locks and its `Dockerfile`), the web UI
-  that the api serves (`server/scanmylib/web/`, with its own tests and the `package.json` of its tools), the app
+  that the api serves (`server/scanmylib/web/`, with its own tests, and the `package.json` of its dependencies and tools
+  with pnpm's lockfile and settings), the app
   (`android/`: its Gradle build and version catalog), the OCR sandbox (`ocr/`: its `Dockerfile` and `ocr/setup/`, which
   installs its engines), and the scripts (`scripts/`: Bash and the host's Python standard library, and `scripts/lint/`,
   the images of the gate's tools). `compose.yaml` assembles the services of a stack from the first and the fourth.
@@ -67,8 +69,16 @@ paths:
   - the signing tools, by the SHA-256 sums of `scripts/build-apk.sh`;
   - KaTeX, by its SHA-512 in `scripts/vendor-katex.sh`;
   - the Python tools of the gate, by `scripts/lint/requirements.lock`, installed with
-    `pip install --require-hashes --no-deps --only-binary :all:`, and Biome, by
-    `server/scanmylib/web/package-lock.json`, installed with `npm ci --ignore-scripts`;
+    `pip install --require-hashes --no-deps --only-binary :all:`;
+  - the web UI's packages, by `server/scanmylib/web/pnpm-lock.yaml`, installed with `pnpm install --frozen-lockfile`
+    under the guards of `server/scanmylib/web/pnpm-workspace.yaml`, which every install applies, the frozen ones
+    included, to every entry of the lockfile (`trustLockfile` stays unset): no install script runs, each one refused by
+    name in `allowBuilds` and any other failing the install (`strictDepBuilds`); a version published less than seven
+    days ago fails it (`minimumReleaseAge`, strict), as does a version that lost the provenance or the trusted publisher
+    of an earlier one (`trustPolicy: no-downgrade`) and an indirect dependency from a Git repository or a tarball URL
+    (`blockExoticSubdeps`); and pnpm never downloads another pnpm (`pmOnFail: ignore`);
+  - Node.js, by the image digest of `node:26-trixie-slim`, and pnpm, by the SHA-256 of its standalone build, in
+    `scripts/lint/Dockerfile.web`;
   - ShellCheck and shfmt, by the image digests of `scripts/check.sh`;
   - OSV-Scanner, by the image digest of `.github/workflows/vulnerability-scan.yml`.
 
@@ -84,9 +94,10 @@ paths:
   `tzdata-legacy`, are the release's current ones as of the first build on each base image. No setting lets an install
   bypass or override a pin, such as another registry or index, or `--no-verify`.
 - **A lock is regenerated, never edited by hand,** so that every hash comes from the file it pins: the api's locks with
-  the `uv pip compile` command of `server/README.md`, the tools' lock with the one of `README.md` > Development, the web
-  UI's lockfile with `npm install --package-lock-only --ignore-scripts`, the app's verification metadata with
-  `scripts/build-apk.sh --write-verification-metadata`, as the header of `scripts/build-apk.sh` shows.
+  the `uv pip compile` command of `server/README.md`, the tools' lock and the web UI's lockfile with the commands of
+  `README.md` > Development, the latter's `pnpm install --lockfile-only` running in a container that writes nothing but
+  the lockfile, the app's verification metadata with `scripts/build-apk.sh --write-verification-metadata`, as the
+  header of `scripts/build-apk.sh` shows.
 
 ## Continuous integration
 
@@ -144,10 +155,9 @@ paths:
     given areas and a full run neither skip nor record;
   - the record, `passed-commit-check` in the repository's common git directory, lies outside the working tree and is
     shared by every worktree: delete it after a change outside the repository that the areas depend on, such as a new
-    build of an image that the gate pulls by tag, `node:22-trixie-slim`, which runs the web UI's tests, or
-    `python:3.12-slim-trixie`, the base of the images of the api, the sandbox and the gate's tools, a new `python3` on
-    the host, or a new Android SDK, and after a change to an ignored file that the areas read, such as the worktree's
-    `.env` or `android/local.properties`.
+    build of an image that the gate pulls by tag, `python:3.12-slim-trixie`, the base of the images of the api, the
+    sandbox and the gate's Python tools, a new `python3` on the host, or a new Android SDK, and after a change to an
+    ignored file that the areas read, such as the worktree's `.env` or `android/local.properties`.
 
 ## Claude Code automation
 

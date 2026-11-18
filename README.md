@@ -389,15 +389,29 @@ tab, under Code scanning, next to the Dependabot alerts, and `gh workflow run vu
 time. It reports and never blocks a pull request.
 
 The tools of the gate are pinned. `scripts/lint/requirements.lock`, the Python tools with their hashes, is regenerated
-from `scripts/lint/requirements.in` in a container, and the web UI's `server/scanmylib/web/package-lock.json` the same
-way:
+from `scripts/lint/requirements.in` in a container:
 
 ```bash
 docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD/scripts/lint:/work" -w /work \
     python:3.12-slim-trixie sh -c 'pip install --quiet --target /tmp/uv uv==0.13.0 && /tmp/uv/bin/uv pip compile \
     requirements.in --generate-hashes --python-version 3.12 --no-header -o requirements.lock'
-docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm \
-    -v "$PWD/server/scanmylib/web:/web" -w /web node:22-trixie-slim npm install --package-lock-only --ignore-scripts
+```
+
+The web UI's dependencies and tools are managed by pnpm 12.17.0 on Node.js 26, both pinned in
+`scripts/lint/Dockerfile.web`, whose image the `lint` and `web` areas build: pnpm installs them from
+`server/scanmylib/web/pnpm-lock.yaml` under the guards of `server/scanmylib/web/pnpm-workspace.yaml`, which run no
+package's install script and refuse a version published less than seven days ago, a trust downgrade and an indirect
+dependency from a Git repository or a tarball URL. After a change to `server/scanmylib/web/package.json`, the lockfile
+is regenerated in a container of that image's `pnpm` stage, which resolves with the network under the same guards, runs
+no package's code and writes nothing but the lockfile, through its standard output:
+
+```bash
+docker build --target pnpm --tag scanmylib-pnpm - < scripts/lint/Dockerfile.web
+docker run --rm --user "$(id -u):$(id -g)" --read-only --cap-drop ALL --security-opt no-new-privileges:true \
+    --tmpfs /tmp -e HOME=/tmp -v "$PWD/server/scanmylib/web:/web:ro" -w /tmp scanmylib-pnpm sh -c 'mkdir work \
+    && cd work && cp /web/package.json /web/pnpm-workspace.yaml /web/pnpm-lock.yaml . \
+    && pnpm install --lockfile-only >&2 && cat pnpm-lock.yaml' > pnpm-lock.yaml.new \
+    && mv pnpm-lock.yaml.new server/scanmylib/web/pnpm-lock.yaml
 ```
 
 ## Releasing

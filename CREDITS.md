@@ -111,7 +111,8 @@ Tools that build and test the project, run in containers and never shipped.
 | Tool | Role | License | Source |
 |---|---|---|---|
 | pytest | The api's tests | MIT | https://github.com/pytest-dev/pytest |
-| Node.js (`node:22-trixie-slim`) | The web UI's unit tests; the image of Biome (`scripts/lint/Dockerfile.web`), and the regeneration of its lockfile | MIT | https://nodejs.org |
+| Node.js (`node:26-trixie-slim`, pinned by digest) | The web UI's tools and unit tests, in the image of its tools (`scripts/lint/Dockerfile.web`), and the regeneration of its lockfile | MIT | https://nodejs.org |
+| pnpm 12.17.0 | Installs the web UI's dependencies and tools, and regenerates its lockfile; its standalone build for Linux, checked against its SHA-256 in `scripts/lint/Dockerfile.web` | MIT | https://pnpm.io |
 | Eclipse Temurin JDK 21 (`eclipse-temurin:21-jdk`) | The app's build | GPL-2.0 with the Classpath Exception | https://adoptium.net |
 | Gradle, Android Gradle Plugin | The app's build | Apache-2.0 | https://gradle.org, https://developer.android.com/build |
 | Android SDK | The app's build and signing tools | Android Software Development Kit License | https://developer.android.com/studio |
@@ -125,7 +126,7 @@ Tools that build and test the project, run in containers and never shipped.
 | ShellCheck | Lints the shell scripts; its author's image `koalaman/shellcheck`, pinned by digest in `scripts/check.sh` | GPL-3.0 (a tool run in a container, never shipped or linked) | https://github.com/koalaman/shellcheck |
 | shfmt | Formats the shell scripts; its author's image `mvdan/shfmt`, pinned by digest in `scripts/check.sh` | BSD-3-Clause | https://github.com/mvdan/sh |
 | ktlint, and the libraries it runs on: logback, JNA, SLF4J, colormath, Clikt, Mordant, kotlin-logging, ec4j, sarif4k, Poko, the Kotlin compiler and standard library, kotlinx.serialization, kotlinx.coroutines, JetBrains annotations | Formats and lints the app's Kotlin; from Maven Central, through the version catalog (`android/gradle/libs.versions.toml`) | MIT; logback EPL-1.0 or LGPL-2.1; JNA LGPL-2.1-or-later or Apache-2.0; SLF4J and colormath MIT; the others Apache-2.0 | https://github.com/pinterest/ktlint |
-| Biome | Formats and lints the web UI; installed from `server/scanmylib/web/package-lock.json` | MIT or Apache-2.0 | https://github.com/biomejs/biome |
+| Biome | Formats and lints the web UI; installed from `server/scanmylib/web/pnpm-lock.yaml` | MIT or Apache-2.0 | https://github.com/biomejs/biome |
 
 ## Agent guidance
 

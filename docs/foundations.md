@@ -349,7 +349,11 @@ against the domain. `.claude/rules/conventions.md` states them, and a rules file
   with the others: every pull request must pass it there anyway, so it runs once per push rather than on each machine
   at each rewrite of the branch, and `scripts/check.sh --last-commit` skips a commit that already passed it. The
   integration tests of the scripts run for each commit that changes a script they run, since a commit that a
-  `git bisect` checks out may then run that script on the machine of production, whose guards it holds.
+  `git bisect` checks out may then run that script on the machine of production, whose guards it holds. So does the
+  build of the api's runtime image, the `api-image` area, for each commit that changes a file only that build reads, its
+  Dockerfile, its `.dockerignore` and the web UI's package files, since a broken image would otherwise first show at a
+  deployment; the sources it builds are checked on each commit by the `lint` and `web` areas, and the CI runs it on
+  every pull request.
 - **A header that says what the change achieves, under the scope it belongs to,** lets a reader find a change in
   `git log --oneline` without opening it, since the diff already lists the files. The release notes that
   `scripts/release.py` drafts are the subjects of the features and fixes, each prefixed with its scope.

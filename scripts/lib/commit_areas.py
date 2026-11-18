@@ -18,7 +18,7 @@ import sys
 from collections.abc import Iterable, Sequence
 from pathlib import Path
 
-GATE_AREAS = ("lint", "scripts", "web", "server", "ocr", "android", "integration")
+GATE_AREAS = ("lint", "scripts", "web", "server", "api-image", "ocr", "android", "integration")
 # A narrower prefix comes before the wider one it sits in, since the first that matches wins. A prefix is an fnmatch
 # pattern: its `*` matches any characters, `/` included.
 PATH_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
@@ -42,10 +42,16 @@ PATH_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("ocr/setup/", ("lint", "scripts", "ocr")),
     ("ocr/Dockerfile", ("scripts", "ocr")),
     ("ocr/", ("lint", "ocr")),
-    # scripts/tests/test_web_toolchain_pins.py reads the pnpm it names, and the pins of the Dockerfile below.
-    ("server/scanmylib/web/package.json", ("lint", "scripts", "web", "server")),
+    # Only the build of the api's runtime image reads the web UI's package files, the Dockerfile and .dockerignore as
+    # that build does, so they alone pick its area: the sources it builds are checked by lint's tsc and by the web
+    # area's build. scripts/tests/test_web_toolchain_pins.py reads the pnpm that package.json names, and the pins of
+    # the Dockerfile.
+    ("server/scanmylib/web/package.json", ("lint", "scripts", "web", "server", "api-image")),
+    ("server/scanmylib/web/pnpm-lock.yaml", ("lint", "web", "server", "api-image")),
+    ("server/scanmylib/web/pnpm-workspace.yaml", ("lint", "web", "server", "api-image")),
     ("server/scanmylib/web/", ("lint", "web", "server")),
-    ("server/Dockerfile", ("lint", "scripts", "server")),
+    ("server/Dockerfile", ("lint", "scripts", "server", "api-image")),
+    ("server/.dockerignore", ("lint", "server", "api-image")),
     ("server/", ("lint", "server")),
     # check.sh runs every area, and every area runs with common.sh.
     ("scripts/check.sh", GATE_AREAS),

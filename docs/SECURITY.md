@@ -337,7 +337,10 @@ still write to a cache. The tools then run in containers without network, on rea
 
 In the api's image, the type check and the build of the web UI run without network, and only the files the build writes
 reach the runtime image: its entry page, the hashed script and stylesheet that bundle the UI's packages, its icons and
-its manifest. No Node, no `node_modules`, no source, `package.json` or lockfile of the UI reaches it. A deployment, which
+its manifest. No Node, no `node_modules`, no source, `package.json` or lockfile of the UI reaches it, which the gate's
+`api-image` area checks on every pull request: it builds the runtime image, then searches its root filesystem for them,
+without network, on a read-only root and with no mount, as root with every capability dropped but the one that reads
+every directory. A deployment, which
 builds that image, therefore downloads the UI's packages from npm's registry, unless Docker's build cache already holds
 them.
 

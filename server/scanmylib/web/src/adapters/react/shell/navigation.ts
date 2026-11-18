@@ -1,6 +1,6 @@
 export const PATHS = { home: '/', login: '/login', pairing: '/pairing' } as const;
 
-export type RouteName = 'home' | 'login' | 'unknown';
+export type RouteName = 'home' | 'pairing' | 'login' | 'unknown';
 
 export type Section = 'library' | 'pairing';
 
@@ -17,13 +17,13 @@ export function documentPath(documentId: string): string {
 }
 
 export function isRouteName(name: string): name is RouteName {
-  return name === 'home' || name === 'login' || name === 'unknown';
+  return name === 'home' || name === 'pairing' || name === 'login' || name === 'unknown';
 }
 
 export function redirectFor(access: Access, route: RouteName, path: string): Redirect | null {
   switch (access) {
     case 'signed-in':
-      return route === 'home' ? null : { to: 'return-path' };
+      return route === 'login' || route === 'unknown' ? { to: 'return-path' } : null;
     case 'signed-out':
       if (route === 'login') return null;
       return { to: 'login', returnTo: route === 'unknown' ? null : path, replacesEntry: true };
@@ -36,6 +36,8 @@ export function sectionOf(route: RouteName): Section | null {
   switch (route) {
     case 'home':
       return 'library';
+    case 'pairing':
+      return 'pairing';
     case 'login':
     case 'unknown':
       return null;

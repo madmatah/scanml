@@ -2,8 +2,10 @@ import { useEffect, useLayoutEffect, useRef, useSyncExternalStore } from 'react'
 import { useTranslation } from 'react-i18next';
 import { Outlet, useLocation, useMatches, useNavigate } from 'react-router';
 
+import type { Clipboard } from '../../../application/clipboard.ts';
 import type { DocumentCatalog } from '../../../application/document-catalog.ts';
 import type { EngineStatus } from '../../../application/engine-status.ts';
+import type { PairingSource } from '../../../application/pairing-source.ts';
 import type { Session } from '../../../application/session.ts';
 import type { UuidSource } from '../../../application/uuid-source.ts';
 import type { DateFormatting, NumberFormatting } from '../../../domain/formatting.ts';
@@ -23,6 +25,8 @@ export interface ShellServices {
   readonly dates: DateFormatting;
   readonly catalog: DocumentCatalog;
   readonly uuids: UuidSource;
+  readonly pairing: PairingSource;
+  readonly clipboard: Clipboard;
 }
 
 function useRouteName(): RouteName {

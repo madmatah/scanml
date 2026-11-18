@@ -77,10 +77,11 @@ Notes:
     graph reads only the api's direct dependencies in `pyproject.toml`, the web UI's lockfile and the actions. It scans
     the OCR sandbox's two environments, which it resolves from their requirements as a new installation would that day,
     and the uv that installs them, the Debian and Python packages of the api's image and of the image the sandbox runs,
-    and the locks of the gate's Python tools and of the app's libraries. Its upload job alone writes, the security
-    events of code scanning, and runs no command, so that no code the scan resolves, builds or runs holds a token that
-    writes. It reports and never blocks a pull request. Its resolution is the day's, while an installation holds what
-    resolved the day it was installed.
+    and the locks of the gate's Python tools and of the app's libraries; it scans the web UI's pnpm lockfile too,
+    which the graph reads, so that its packages are also checked against OSV's advisories. Its upload job alone
+    writes, the security events of code scanning, and runs no command, so that no code the scan resolves, builds or
+    runs holds a token that writes. It reports and never blocks a pull request. Its resolution is the day's, while an
+    installation holds what resolved the day it was installed.
 - **The web UI has no build step:** the browser loads its modules as they are, and the api serves them. Its move to
   TypeScript and React, built by a bundler whose output names carry a hash of their content, is planned: those files can
   then be cached for good, and only the page that names them is revalidated, so a browser never mixes the modules of two

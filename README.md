@@ -384,7 +384,8 @@ directory of the repository: after a change outside the repository that the chec
 Every Monday, and on a push to `main` that changes what it scans, `.github/workflows/vulnerability-scan.yml` runs
 Google's OSV-Scanner on what Dependabot cannot see: the OCR sandbox's environments, resolved as a new installation would
 resolve them that day, and the uv that installs them, the packages of the api's image and of the image the sandbox runs,
-and the locks of the gate's Python tools and of the app's libraries. Its results appear in the repository's Security
+and the locks of the gate's Python tools and of the app's libraries, and, beside Dependabot, the web UI's pnpm lockfile.
+Its results appear in the repository's Security
 tab, under Code scanning, next to the Dependabot alerts, and `gh workflow run vulnerability-scan.yml` runs it at any
 time. It reports and never blocks a pull request.
 

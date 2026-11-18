@@ -1,18 +1,21 @@
 import { ApiError, NetworkError } from '../../application/api-errors.ts';
+import type { DocumentCatalog } from '../../application/document-catalog.ts';
 import type { ServerStatusSource } from '../../application/engine-status.ts';
 import type { SessionServer } from '../../application/session.ts';
+import { decodeDocumentList, decodeDocumentSummary } from './document-summary-decoder.ts';
 import { decodeErrorDetail } from './error-detail.ts';
 import { decodeServerStatus } from './server-status-decoder.ts';
 
 export type Fetch = (path: string, init: RequestInit) => Promise<Response>;
 
-export type ApiClient = SessionServer & ServerStatusSource;
+export type ApiClient = SessionServer & ServerStatusSource & DocumentCatalog;
 
 // The api refuses a request that changes state, authenticated by the session cookie, without this header: another page
 // cannot add it without the api's consent (docs/API.md > Authentication).
 const CSRF_HEADER = 'X-ScanMyLib';
 const SESSION_PATH = '/api/session';
 const STATUS_PATH = '/api/status';
+const DOCUMENTS_PATH = '/api/documents';
 const UNAUTHORIZED = 401;
 
 async function readJson(response: Response): Promise<unknown> {
@@ -24,7 +27,7 @@ async function readJson(response: Response): Promise<unknown> {
 }
 
 export function createApiClient(fetchFromApi: Fetch, onUnauthorized: () => void): ApiClient {
-  async function request(method: string, path: string, json?: unknown): Promise<Response> {
+  async function request(method: string, path: string, json?: unknown, signal?: AbortSignal): Promise<Response> {
     const headers: Record<string, string> = { Accept: 'application/json' };
     if (method !== 'GET') headers[CSRF_HEADER] = '1';
     const init: RequestInit = { method, headers, credentials: 'same-origin', cache: 'no-store' };
@@ -32,10 +35,13 @@ export function createApiClient(fetchFromApi: Fetch, onUnauthorized: () => void)
       headers['Content-Type'] = 'application/json';
       init.body = JSON.stringify(json);
     }
+    if (signal !== undefined) init.signal = signal;
     let response: Response;
     try {
       response = await fetchFromApi(path, init);
-    } catch {
+    } catch (failure) {
+      // A request that its caller gave up is no failure of the network.
+      if (signal?.aborted === true) throw failure;
       throw new NetworkError();
     }
     if (!response.ok) {
@@ -58,6 +64,14 @@ export function createApiClient(fetchFromApi: Fetch, onUnauthorized: () => void)
     },
     async readStatus() {
       return decodeServerStatus(await readJson(await request('GET', STATUS_PATH)));
+    },
+    async listDocuments(signal) {
+      return decodeDocumentList(await readJson(await request('GET', DOCUMENTS_PATH, undefined, signal)));
+    },
+    async createDocument(id, fields) {
+      // PUT with an id that the browser chose: a request sent again creates no second document.
+      const path = `${DOCUMENTS_PATH}/${encodeURIComponent(id)}`;
+      return decodeDocumentSummary(await readJson(await request('PUT', path, fields)));
     },
   };
 }

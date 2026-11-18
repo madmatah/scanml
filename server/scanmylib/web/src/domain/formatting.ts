@@ -46,3 +46,43 @@ export function byteSize(sizeBytes: number): ByteSize {
 export function wholePercent(ratio: number): number {
   return Math.round(ratio * 100);
 }
+
+export type RelativeTimeUnit = 'second' | 'minute' | 'hour' | 'day';
+
+export type ElapsedTime =
+  | { readonly kind: 'just-now' }
+  | { readonly kind: 'relative'; readonly amount: number; readonly unit: RelativeTimeUnit }
+  | { readonly kind: 'absolute' };
+
+export interface DateFormatting {
+  readonly formatDateTime: (date: Date) => string;
+  readonly formatRelativeTime: (amount: number, unit: RelativeTimeUnit) => string;
+}
+
+const MILLISECONDS_PER_SECOND = 1000;
+const JUST_NOW_SECONDS = 45;
+const RELATIVE_TIME_UNITS: readonly (readonly [unit: RelativeTimeUnit, countInNextUnit: number])[] = [
+  ['second', 60],
+  ['minute', 60],
+  ['hour', 24],
+  ['day', 7],
+];
+
+export function elapsedTime(dateMilliseconds: number, nowMilliseconds: number): ElapsedTime {
+  let amount = (dateMilliseconds - nowMilliseconds) / MILLISECONDS_PER_SECOND;
+  if (Math.abs(amount) < JUST_NOW_SECONDS) return { kind: 'just-now' };
+  for (const [unit, countInNextUnit] of RELATIVE_TIME_UNITS) {
+    if (Math.abs(amount) < countInNextUnit) return { kind: 'relative', amount: Math.round(amount), unit };
+    amount /= countInNextUnit;
+  }
+  return { kind: 'absolute' };
+}
+
+export function createDateFormatting(locale: string): DateFormatting {
+  const dateTimes = new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' });
+  const relativeTimes = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' });
+  return {
+    formatDateTime: (date) => dateTimes.format(date),
+    formatRelativeTime: (amount, unit) => relativeTimes.format(amount, unit),
+  };
+}

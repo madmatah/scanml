@@ -3,6 +3,7 @@ import { beforeEach, describe, it } from 'node:test';
 
 import {
   type Access,
+  documentPath,
   documentTitle,
   type Redirect,
   type RouteName,
@@ -158,6 +159,17 @@ describe('The navigation', () => {
       it('should be the name of the product', () => {
         assert.equal(title, 'ScanMyLib');
       });
+    });
+  });
+
+  describe('The documentPath() function', () => {
+    let path: string;
+    beforeEach(() => {
+      path = documentPath('95bbeb79-4351-432f-a53c-d3658892ff50');
+    });
+
+    it('should be the address of the document screen, as the earlier releases named it', () => {
+      assert.equal(path, '/documents/95bbeb79-4351-432f-a53c-d3658892ff50');
     });
   });
 });

@@ -1,9 +1,17 @@
 {
   "“{{text}}”": "« {{text}} »",
+  "{{label}} (position {{position}})": "{{label}} (position {{position}})",
   "{{percent}}%": "{{percent}} %",
   "{{seconds}} s": "{{seconds}} s",
   "{{size}} B": "{{size}} o",
   "{{size}} GB": "{{size}} Go",
   "{{size}} KB": "{{size}} Ko",
-  "{{size}} MB": "{{size}} Mo"
+  "{{size}} MB": "{{size}} Mo",
+  "No number": "Sans numéro",
+  "p. {{label}}": "p. {{label}}",
+  "Page {{label}}": "Page {{label}}",
+  "Page not scanned yet: {{range}}": "Page pas encore scannée : {{range}}",
+  "Pages not scanned yet: {{range}}": "Pages pas encore scannées : {{range}}",
+  "Unnumbered page": "Page non numérotée",
+  "Unnumbered pages": "Pages non numérotées"
 }

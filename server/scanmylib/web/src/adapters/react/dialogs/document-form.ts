@@ -25,25 +25,25 @@ export interface EditedDocument {
 
 export type SubmittedForm = { readonly fields: DocumentFields } | { readonly missing: 'title' };
 
-export function newDocumentForm(withNotes = false): DocumentForm {
+export function newDocumentForm(showsNotes = false): DocumentForm {
   return {
     title: '',
     author: '',
     kind: NEW_DOCUMENT_KIND,
     unwarp: unwarpsByDefault(NEW_DOCUMENT_KIND),
     isUnwarpChosen: false,
-    notes: withNotes ? '' : null,
+    notes: showsNotes ? '' : null,
   };
 }
 
-export function editedDocumentForm(document: EditedDocument, withNotes: boolean): DocumentForm {
+export function editedDocumentForm(document: EditedDocument, showsNotes: boolean): DocumentForm {
   return {
     title: document.title,
     author: document.author,
     kind: isDocumentKind(document.kind) ? document.kind : NEW_DOCUMENT_KIND,
     unwarp: document.unwarp,
     isUnwarpChosen: true,
-    notes: withNotes ? document.notes : null,
+    notes: showsNotes ? document.notes : null,
   };
 }
 

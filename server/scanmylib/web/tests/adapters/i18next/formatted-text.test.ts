@@ -6,6 +6,7 @@ import frenchCatalog from '../../../locales/fr.json' with { type: 'json' };
 import { CATALOGS } from '../../../src/adapters/i18next/catalogs.ts';
 import {
   formatBytes,
+  formatDateTime,
   formatPercent,
   formatRelativeTime,
   formatSeconds,
@@ -16,7 +17,7 @@ import { createLocalizationFor } from './browser-languages.ts';
 
 const ENGLISH_LANGUAGES = ['en-US'];
 const FRENCH_LANGUAGES = ['fr-FR'];
-const NO_BREAK_SPACE = ' ';
+const NO_BREAK_SPACE = '\u00a0';
 const FRENCH_DECIMALS = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 1 });
 
 describe('The formatted text', () => {
@@ -224,6 +225,35 @@ describe('The formatted text', () => {
 
       it('should say just now from the catalog', () => {
         assert.equal(text, frenchCatalog['just now']);
+      });
+    });
+  });
+  describe('The formatDateTime() function', () => {
+    let localization: Localization;
+    beforeEach(async () => {
+      localization = await createLocalizationFor(ENGLISH_LANGUAGES, CATALOGS);
+    });
+
+    describe('When the date can be read', () => {
+      const isoDate = '2026-10-12T20:15:00Z';
+      let text: string;
+      beforeEach(() => {
+        text = formatDateTime(localization.dates, isoDate);
+      });
+
+      it('should give the date and the time in the formatting locale', () => {
+        assert.equal(text, localization.dates.formatDateTime(new Date(isoDate)));
+      });
+    });
+
+    describe('When the api gives no date', () => {
+      let text: string;
+      beforeEach(() => {
+        text = formatDateTime(localization.dates, '');
+      });
+
+      it('should show no value rather than an invalid date', () => {
+        assert.equal(text, '\u2014');
       });
     });
   });

@@ -1,6 +1,6 @@
-import { ApiError } from '../../../application/api-errors.ts';
-import type { CancelTask, Scheduler } from '../../../application/scheduler.ts';
-import { type DocumentWithPages, isTextPending } from '../../../domain/document-details.ts';
+import { type DocumentWithPages, isTextPending } from '../domain/document-details.ts';
+import { ApiError } from './api-errors.ts';
+import type { CancelTask, Scheduler } from './scheduler.ts';
 
 export type DocumentLoad =
   | { readonly phase: 'loading' }

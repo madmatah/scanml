@@ -24,7 +24,7 @@ export interface PageUploader<F extends PhotoFile> {
 }
 
 export interface Clock {
-  now(): number;
+  readTimeMilliseconds(): number;
 }
 
 export type UploadState = 'pending' | 'uploading' | 'sent' | 'failed' | 'rejected';
@@ -230,7 +230,7 @@ export function createUploadQueue<F extends PhotoFile>(
         const pageId = uuids.createUuid();
         const problem = checkPhoto(file);
         if (problem !== null) settled = { ...settled, rejectedCount: settled.rejectedCount + 1 };
-        const capturedAt = localIsoString(new Date(file.lastModified || clock.now()));
+        const capturedAt = localIsoString(new Date(file.lastModified || clock.readTimeMilliseconds()));
         return {
           pageId,
           documentId,

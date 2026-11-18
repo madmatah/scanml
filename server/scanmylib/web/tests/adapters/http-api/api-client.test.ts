@@ -2,9 +2,11 @@ import assert from 'node:assert/strict';
 import { beforeEach, describe, it } from 'node:test';
 
 import { createApiClient, type Fetch } from '../../../src/adapters/http-api/api-client.ts';
+import type { PageChanges } from '../../../src/application/page-store.ts';
 import type { SessionServer } from '../../../src/application/session.ts';
 import type { DocumentDetails, DocumentWithPages } from '../../../src/domain/document-details.ts';
 import type { DocumentSummary } from '../../../src/domain/document-summary.ts';
+import type { PageDetails } from '../../../src/domain/page-details.ts';
 import type { PairingDetails } from '../../../src/domain/pairing-details.ts';
 import type { ServerStatus } from '../../../src/domain/server-status.ts';
 
@@ -20,8 +22,10 @@ interface Exchange {
 
 const TOKEN = 'a-token';
 const DOCUMENT_ID = '95bbeb79-4351-432f-a53c-d3658892ff50';
+const PAGE_ID = 'de215798-031a-4b20-a867-49c12e3baabe';
 const NO_CONTENT = 204;
 const OK = 200;
+const ACCEPTED = 202;
 const UNAUTHORIZED = 401;
 const NOT_FOUND = 404;
 const CONFLICT = 409;
@@ -69,6 +73,36 @@ function documentBody(): Record<string, unknown> {
     stats: { pages: 1, done: 1, queued: 0, processing: 0, error: 0, excluded: 0, duplicates: 0 },
     coverage: { ranges: [[11, 11]], label: '11', gaps: [], min: 11, max: 11, unnumbered: 0 },
     cover_thumb_url: null,
+  };
+}
+
+function pageBody(): Record<string, unknown> {
+  return {
+    id: PAGE_ID,
+    document_id: DOCUMENT_ID,
+    key: 'p0011',
+    session_id: null,
+    seq: null,
+    captured_at: '2026-11-14T15:31:00+00:00',
+    uploaded_at: '2026-11-14T15:31:05+00:00',
+    status: 'queued',
+    error: null,
+    number: null,
+    number_end: null,
+    page_label: null,
+    number_source: null,
+    detected_numbers: [],
+    hint_number: null,
+    manual_number: null,
+    excluded: false,
+    duplicate_of: null,
+    placement: null,
+    rotation: 0,
+    width: 800,
+    height: 1011,
+    ocr: null,
+    image_url: `/api/pages/${PAGE_ID}/image`,
+    markdown: '',
   };
 }
 
@@ -553,6 +587,151 @@ describe('The api client', () => {
 
       it('should give the decoded document', () => {
         assert.equal(document.slug, 'example-book');
+      });
+    });
+  });
+
+  describe('The readPage() call', () => {
+    describe('When the api answers the page', () => {
+      const screen = new AbortController();
+      let sent: Exchange;
+      let page: PageDetails;
+      beforeEach(async () => {
+        sent = exchange(() => jsonResponse(OK, pageBody()));
+        page = await createApiClient(sent.fetchFromApi, ignoreUnauthorized).readPage(PAGE_ID, screen.signal);
+      });
+
+      it('should ask for the page, with the signal of the screen', () => {
+        assert.deepEqual(
+          sent.requests.map(({ path, init }) => ({ request: `${init.method} ${path}`, signal: init.signal })),
+          [{ request: `GET /api/pages/${PAGE_ID}`, signal: screen.signal }],
+        );
+      });
+
+      it('should give the decoded page', () => {
+        assert.deepEqual(
+          { documentId: page.documentId, markdown: page.markdown },
+          { documentId: DOCUMENT_ID, markdown: '' },
+        );
+      });
+    });
+
+    describe('When the page does not exist', () => {
+      let act: () => Promise<PageDetails>;
+      beforeEach(() => {
+        const client = createApiClient(
+          exchange(() => jsonResponse(NOT_FOUND, { detail: 'page not found' })).fetchFromApi,
+          ignoreUnauthorized,
+        );
+        act = () => client.readPage(PAGE_ID, new AbortController().signal);
+      });
+
+      it('should fail with its status, which the screen tells apart from other failures', async () => {
+        await assert.rejects(act(), { name: 'ApiError', status: NOT_FOUND });
+      });
+    });
+  });
+
+  describe('The readPageHtml() call', () => {
+    describe('When the api answers the HTML of the page', () => {
+      const screen = new AbortController();
+      let sent: Exchange;
+      let sanitizedHtml: string;
+      beforeEach(async () => {
+        sent = exchange(() => jsonResponse(OK, { html: '<p>Example text.</p>' }));
+        sanitizedHtml = await createApiClient(sent.fetchFromApi, ignoreUnauthorized).readPageHtml(
+          PAGE_ID,
+          screen.signal,
+        );
+      });
+
+      it('should ask for the HTML of the page, with the signal of the screen', () => {
+        assert.deepEqual(
+          sent.requests.map(({ path, init }) => ({ request: `${init.method} ${path}`, signal: init.signal })),
+          [{ request: `GET /api/pages/${PAGE_ID}/html`, signal: screen.signal }],
+        );
+      });
+
+      it('should give the HTML as the api wrote it', () => {
+        assert.equal(sanitizedHtml, '<p>Example text.</p>');
+      });
+    });
+  });
+
+  describe('The updatePage() call', () => {
+    const rows: { situation: string; changes: PageChanges; expectedBody: Record<string, unknown> }[] = [
+      {
+        situation: 'When a number is typed by hand',
+        changes: { manualNumber: 42 },
+        expectedBody: { manual_number: 42 },
+      },
+      {
+        situation: 'When the number typed by hand is cleared',
+        changes: { manualNumber: null },
+        expectedBody: { manual_number: null },
+      },
+      { situation: 'When the page is excluded', changes: { isExcluded: true }, expectedBody: { excluded: true } },
+      { situation: 'When the page is turned', changes: { rotation: 270 }, expectedBody: { rotation: 270 } },
+    ];
+
+    for (const { situation, changes, expectedBody } of rows) {
+      describe(situation, () => {
+        let sent: Exchange;
+        beforeEach(async () => {
+          sent = exchange(() => jsonResponse(OK, pageBody()));
+          await createApiClient(sent.fetchFromApi, ignoreUnauthorized).updatePage(PAGE_ID, changes);
+        });
+
+        it('should patch the page with that change alone, in the names of the api, and the guard header', () => {
+          assert.deepEqual(
+            sent.requests.map(({ path, init }) => ({
+              request: `${init.method} ${path}`,
+              body: init.body,
+              guard: headersOf({ path, init })['x-scanmylib'],
+            })),
+            [{ request: `PATCH /api/pages/${PAGE_ID}`, body: JSON.stringify(expectedBody), guard: '1' }],
+          );
+        });
+      });
+    }
+  });
+
+  describe('The readPageAgain() call', () => {
+    describe('When the api queues the page again', () => {
+      let sent: Exchange;
+      beforeEach(async () => {
+        sent = exchange(() => jsonResponse(ACCEPTED, pageBody()));
+        await createApiClient(sent.fetchFromApi, ignoreUnauthorized).readPageAgain(PAGE_ID);
+      });
+
+      it('should ask the api to read its text again, with the header that guards the changes of state', () => {
+        assert.deepEqual(
+          sent.requests.map(({ path, init }) => ({
+            request: `${init.method} ${path}`,
+            guard: headersOf({ path, init })['x-scanmylib'],
+          })),
+          [{ request: `POST /api/pages/${PAGE_ID}/reprocess`, guard: '1' }],
+        );
+      });
+    });
+  });
+
+  describe('The deletePage() call', () => {
+    describe('When the api moves the page to the trash', () => {
+      let sent: Exchange;
+      beforeEach(async () => {
+        sent = exchange(noContent);
+        await createApiClient(sent.fetchFromApi, ignoreUnauthorized).deletePage(PAGE_ID);
+      });
+
+      it('should delete the page, with the header that guards the changes of state', () => {
+        assert.deepEqual(
+          sent.requests.map(({ path, init }) => ({
+            request: `${init.method} ${path}`,
+            guard: headersOf({ path, init })['x-scanmylib'],
+          })),
+          [{ request: `DELETE /api/pages/${PAGE_ID}`, guard: '1' }],
+        );
       });
     });
   });

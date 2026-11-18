@@ -4,6 +4,12 @@ import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router';
 
 import type { Clipboard } from '../../../application/clipboard.ts';
+import {
+  createDocumentLoader,
+  type DocumentLoad,
+  type DocumentLoader,
+  isNotFound,
+} from '../../../application/document-loader.ts';
 import type { DocumentStore } from '../../../application/document-store.ts';
 import type { EngineStatus } from '../../../application/engine-status.ts';
 import type { Scheduler } from '../../../application/scheduler.ts';
@@ -27,7 +33,6 @@ import { documentTitle, idOfAddress, PATHS, readerPath } from '../shell/navigati
 import type { Toasts } from '../shell/toasts.ts';
 import { Uploader } from '../uploads/uploader.tsx';
 import { Coverage } from './coverage.tsx';
-import { createDocumentLoader, type DocumentLoad, type DocumentLoader, isNotFound } from './document-loader.ts';
 import { type StatTone, statTiles } from './document-text.ts';
 import { PageGrid } from './page-grid.tsx';
 
@@ -256,7 +261,7 @@ function DocumentView({
           heading={t('Edit document')}
           submitLabel={t('Save')}
           initial={shown}
-          withNotes
+          showsNotes
           onSubmit={(fields) => store.updateDocument(documentId, fields)}
           onClosed={edited}
         />

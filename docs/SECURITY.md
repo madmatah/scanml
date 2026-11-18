@@ -74,6 +74,7 @@ Rules applied by the api to every answer of the sandbox:
 - **Images re-encoded** with Pillow (JPEG): nothing but pixels reaches the disk.
 - **Markdown sanitized** before it is written: tags are rebuilt from scratch, and only an allowlist of formatting tags and attributes survives; script-like elements (`script`, `style`, `iframe`, `object`, `svg`, `math`, `template`, `textarea`, `select`…) are removed with their content, other tags (`embed`, `link`, `meta`, `base`, `form`, `input`, `button`…) without it; no `on*` attribute, `style` reduced to `text-align`, no `srcset`; HTML comments removed (they could fake the page markers of `document.md`); no URL except the page's own images: image `src` can only target them, and any other link or Markdown reference definition is neutralized.
 - **Web previews**: Markdown → HTML (markdown-it-py), then allowlist filtering (nh3); the web UI is served with a strict CSP (`default-src 'self'`, no inline script, `frame-ancestors 'none'`) and `X-Content-Type-Options: nosniff`.
+- **Formulas**: KaTeX 0.19.1 (MIT) typesets the LaTeX formulas of the previews; it is bundled into the web UI's script, its stylesheet and fonts beside it under hashed names, from the pnpm lockfile that the vulnerability scan reads, and served by the PC, never by a CDN. It receives the TeX as text and renders it without risky commands (`trust: false`: no `\href`, `\url`, `\includegraphics` or `\html…`), and the `style` attributes it writes go through the CSSOM, so that the CSP keeps refusing every inline `style` attribute and element.
 
 ## Known residual risks (low)
 
@@ -335,8 +336,8 @@ first, so that no run of i18next-cli needs a writable, executable directory; the
 still write to a cache. The tools then run in containers without network, on read-only sources and a read-only root.
 
 In the api's image, the type check and the build of the web UI run without network, and only the files the build writes
-reach the runtime image: its entry page, the hashed script and stylesheet that bundle the UI's packages, its icons and
-its manifest. No Node, no `node_modules`, no source, `package.json` or lockfile of the UI reaches it, which the gate's
+reach the runtime image: its entry page, the hashed script and stylesheet that bundle the UI's packages, KaTeX's hashed fonts,
+its icons and its manifest. No Node, no `node_modules`, no source, `package.json` or lockfile of the UI reaches it, which the gate's
 `api-image` area checks on every pull request: it builds the runtime image, then searches its root filesystem for them,
 without network, on a read-only root and with no mount, as root with every capability dropped but the one that reads
 every directory. A deployment, which

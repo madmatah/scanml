@@ -20,7 +20,7 @@ export interface DocumentDialogProps<Saved> {
   readonly heading: string;
   readonly submitLabel: string;
   readonly initial?: EditedDocument;
-  readonly withNotes?: boolean;
+  readonly showsNotes?: boolean;
   readonly onSubmit: (fields: DocumentFields) => Promise<Saved>;
   readonly onClosed: (saved: Saved | null) => void;
 }
@@ -33,7 +33,7 @@ export function DocumentDialog<Saved>({
   heading,
   submitLabel,
   initial,
-  withNotes = false,
+  showsNotes = false,
   onSubmit,
   onClosed,
 }: DocumentDialogProps<Saved>) {
@@ -43,7 +43,7 @@ export function DocumentDialog<Saved>({
   const titleInput = useRef<HTMLInputElement>(null);
   const saved = useRef<{ readonly answer: Saved } | null>(null);
   const [form, setForm] = useState<DocumentForm>(() =>
-    initial === undefined ? newDocumentForm(withNotes) : editedDocumentForm(initial, withNotes),
+    initial === undefined ? newDocumentForm(showsNotes) : editedDocumentForm(initial, showsNotes),
   );
   const [error, setError] = useState<string | null>(null);
   const [isBusy, setBusy] = useState(false);

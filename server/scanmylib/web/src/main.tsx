@@ -26,7 +26,10 @@ function findElement(selector: string): Element {
 // Before anything else, so that the secret of a sign-in link never lingers in the address bar or the history; and the
 // links opened later are watched before the router listens, so that it never reads one.
 const linkToken = takeSignInToken(window);
-const apiClient = createApiClient((path, init) => fetch(path, init));
+const apiClient = createApiClient(
+  (path, init) => fetch(path, init),
+  () => session.expire(),
+);
 const scheduler = createTimerScheduler(window);
 const session = createSession(
   apiClient,

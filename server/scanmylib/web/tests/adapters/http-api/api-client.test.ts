@@ -22,6 +22,8 @@ const UNAUTHORIZED = 401;
 const UNPROCESSABLE = 422;
 const BAD_GATEWAY = 502;
 
+function ignoreUnauthorized(): void {}
+
 function exchange(answer: () => Response): Exchange {
   const requests: SentRequest[] = [];
   return {
@@ -51,7 +53,7 @@ describe('The api client', () => {
       let sent: Exchange;
       beforeEach(async () => {
         sent = exchange(() => jsonResponse(OK, { ocr: 'ready' }));
-        await createApiClient(sent.fetchFromApi).checkSession();
+        await createApiClient(sent.fetchFromApi, ignoreUnauthorized).checkSession();
       });
 
       it('should ask for the status of the api', () => {
@@ -78,6 +80,7 @@ describe('The api client', () => {
       beforeEach(() => {
         const client = createApiClient(
           exchange(() => jsonResponse(UNAUTHORIZED, { detail: 'unauthorized' })).fetchFromApi,
+          ignoreUnauthorized,
         );
         act = () => client.checkSession();
       });
@@ -92,6 +95,7 @@ describe('The api client', () => {
       beforeEach(() => {
         const client = createApiClient(
           exchange(() => new Response('<html>Bad gateway</html>', { status: BAD_GATEWAY })).fetchFromApi,
+          ignoreUnauthorized,
         );
         act = () => client.checkSession();
       });
@@ -111,7 +115,7 @@ describe('The api client', () => {
       beforeEach(() => {
         const client = createApiClient(async () => {
           throw new TypeError('fetch failed');
-        });
+        }, ignoreUnauthorized);
         act = () => client.checkSession();
       });
 
@@ -126,7 +130,7 @@ describe('The api client', () => {
       let sent: Exchange;
       beforeEach(async () => {
         sent = exchange(noContent);
-        await createApiClient(sent.fetchFromApi).signIn(TOKEN);
+        await createApiClient(sent.fetchFromApi, ignoreUnauthorized).signIn(TOKEN);
       });
 
       it('should post the token as JSON to the session of the api', () => {
@@ -149,7 +153,10 @@ describe('The api client', () => {
       let act: () => Promise<void>;
       beforeEach(() => {
         const body = { detail: [{ msg: 'Field required' }, { msg: 'String too short' }] };
-        const client: SessionServer = createApiClient(exchange(() => jsonResponse(UNPROCESSABLE, body)).fetchFromApi);
+        const client: SessionServer = createApiClient(
+          exchange(() => jsonResponse(UNPROCESSABLE, body)).fetchFromApi,
+          ignoreUnauthorized,
+        );
         act = () => client.signIn(TOKEN);
       });
 
@@ -163,12 +170,54 @@ describe('The api client', () => {
     });
   });
 
+  describe('When the api refuses the token of a sign-in', () => {
+    let unauthorizedCount: number;
+    beforeEach(async () => {
+      unauthorizedCount = 0;
+      const client = createApiClient(
+        exchange(() => jsonResponse(UNAUTHORIZED, { detail: 'unauthorized' })).fetchFromApi,
+        () => {
+          unauthorizedCount += 1;
+        },
+      );
+      await client.signIn(TOKEN).catch(() => {});
+    });
+
+    it('should not report an ended session, since the refusal only means a wrong token', () => {
+      assert.equal(unauthorizedCount, 0);
+    });
+  });
+
+  describe('When the api no longer knows the session of a signed-in call', () => {
+    let unauthorizedCount: number;
+    let act: () => Promise<ServerStatus>;
+    beforeEach(async () => {
+      unauthorizedCount = 0;
+      const client = createApiClient(
+        exchange(() => jsonResponse(UNAUTHORIZED, { detail: 'unauthorized' })).fetchFromApi,
+        () => {
+          unauthorizedCount += 1;
+        },
+      );
+      act = () => client.readStatus();
+      await act().catch(() => {});
+    });
+
+    it('should report that the session has ended, so that the browser goes back to the login', () => {
+      assert.equal(unauthorizedCount, 1);
+    });
+
+    it('should still fail with the refusal', async () => {
+      await assert.rejects(act(), { name: 'ApiError', status: UNAUTHORIZED });
+    });
+  });
+
   describe('The signOut() call', () => {
     describe('When the api closes the session', () => {
       let sent: Exchange;
       beforeEach(async () => {
         sent = exchange(noContent);
-        await createApiClient(sent.fetchFromApi).signOut();
+        await createApiClient(sent.fetchFromApi, ignoreUnauthorized).signOut();
       });
 
       it('should delete the session of the api, without a body', () => {
@@ -196,7 +245,7 @@ describe('The api client', () => {
             library_dir: '/library',
           }),
         );
-        status = await createApiClient(sent.fetchFromApi).readStatus();
+        status = await createApiClient(sent.fetchFromApi, ignoreUnauthorized).readStatus();
       });
 
       it('should ask for the status of the api', () => {
@@ -214,7 +263,10 @@ describe('The api client', () => {
     describe('When the api answers a body that is not JSON', () => {
       let act: () => Promise<ServerStatus>;
       beforeEach(() => {
-        const client = createApiClient(exchange(() => new Response('<html>Hello</html>', { status: OK })).fetchFromApi);
+        const client = createApiClient(
+          exchange(() => new Response('<html>Hello</html>', { status: OK })).fetchFromApi,
+          ignoreUnauthorized,
+        );
         act = () => client.readStatus();
       });
 
@@ -228,7 +280,7 @@ describe('The api client', () => {
       beforeEach(() => {
         const client = createApiClient(async () => {
           throw new TypeError('fetch failed');
-        });
+        }, ignoreUnauthorized);
         act = () => client.readStatus();
       });
 

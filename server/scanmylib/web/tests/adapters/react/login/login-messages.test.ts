@@ -64,6 +64,12 @@ describe('The login messages', () => {
   describe('The signedOutNoticeText() function', () => {
     const notices: { situation: string; notice: SignedOutNotice; rule: string; expectedText: string }[] = [
       {
+        situation: 'When the session of a signed-in browser has expired',
+        notice: { reason: 'expired' },
+        rule: 'should ask to sign in again',
+        expectedText: 'Your session has expired: please sign in again.',
+      },
+      {
         situation: 'When the api refused the token of a sign-in link',
         notice: { reason: 'link-refused' },
         rule: 'should say that the link holds an invalid or expired token',

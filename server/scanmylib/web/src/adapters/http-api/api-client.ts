@@ -13,6 +13,7 @@ export type ApiClient = SessionServer & ServerStatusSource;
 const CSRF_HEADER = 'X-ScanMyLib';
 const SESSION_PATH = '/api/session';
 const STATUS_PATH = '/api/status';
+const UNAUTHORIZED = 401;
 
 async function readJson(response: Response): Promise<unknown> {
   try {
@@ -22,7 +23,7 @@ async function readJson(response: Response): Promise<unknown> {
   }
 }
 
-export function createApiClient(fetchFromApi: Fetch): ApiClient {
+export function createApiClient(fetchFromApi: Fetch, onUnauthorized: () => void): ApiClient {
   async function request(method: string, path: string, json?: unknown): Promise<Response> {
     const headers: Record<string, string> = { Accept: 'application/json' };
     if (method !== 'GET') headers[CSRF_HEADER] = '1';
@@ -37,7 +38,11 @@ export function createApiClient(fetchFromApi: Fetch): ApiClient {
     } catch {
       throw new NetworkError();
     }
-    if (!response.ok) throw new ApiError(response.status, decodeErrorDetail(await readJson(response)));
+    if (!response.ok) {
+      // A 401 on the sign-in itself only refuses a token; elsewhere, the session this browser held has ended.
+      if (response.status === UNAUTHORIZED && path !== SESSION_PATH) onUnauthorized();
+      throw new ApiError(response.status, decodeErrorDetail(await readJson(response)));
+    }
     return response;
   }
 

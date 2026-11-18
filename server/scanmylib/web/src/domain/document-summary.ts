@@ -10,12 +10,12 @@ export interface DocumentStats {
   readonly duplicateCount: number;
 }
 
-// The printed page numbers that a document's scans cover, and those missing between them.
 export interface PageCoverage {
   readonly ranges: readonly PageRange[];
   readonly label: string;
   readonly gaps: readonly PageRange[];
   readonly lowestNumber: number | null;
+  readonly highestNumber: number | null;
   readonly unnumberedCount: number;
 }
 
@@ -33,6 +33,16 @@ export interface DocumentSummary {
 export const DOCUMENT_KINDS = ['book', 'document'] as const;
 
 export type DocumentKind = (typeof DOCUMENT_KINDS)[number];
+
+export function isDocumentKind(kind: string): kind is DocumentKind {
+  return DOCUMENT_KINDS.some((documentKind) => documentKind === kind);
+}
+
+export const NEW_DOCUMENT_KIND: DocumentKind = 'book';
+
+export function unwarpsByDefault(kind: DocumentKind): boolean {
+  return kind === 'book';
+}
 
 export function countPages(documents: readonly DocumentSummary[]): number {
   return documents.reduce((total, document) => total + document.stats.pageCount, 0);

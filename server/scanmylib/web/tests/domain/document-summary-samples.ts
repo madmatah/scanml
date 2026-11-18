@@ -34,6 +34,7 @@ export function sampleDocument(changes: DocumentChanges = {}): DocumentSummary {
       label: '11–15, 18–21',
       gaps: [[16, 17]],
       lowestNumber: 11,
+      highestNumber: 21,
       unnumberedCount: 0,
       ...changes.coverage,
     },

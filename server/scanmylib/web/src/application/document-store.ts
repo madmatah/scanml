@@ -1,0 +1,10 @@
+import type { DocumentDetails, DocumentWithPages } from '../domain/document-details.ts';
+import type { DocumentFields } from './document-catalog.ts';
+
+export interface DocumentStore {
+  readDocument(documentId: string, signal: AbortSignal): Promise<DocumentWithPages>;
+  updateDocument(documentId: string, fields: DocumentFields): Promise<DocumentDetails>;
+  deleteDocument(documentId: string): Promise<void>;
+  markdownUrl(documentId: string): string;
+  archiveUrl(documentId: string, withScans: boolean): string;
+}

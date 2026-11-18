@@ -6,6 +6,9 @@ export class ResponseShapeError extends Error {
   }
 }
 
+// An address of the api reaches an <img> or a link as it is: it may only name one of the api's own files.
+const API_PATH_PREFIX = '/api/';
+
 export interface ResponseFields {
   object(name: string): ResponseFields;
   nullableObject(name: string): ResponseFields | null;
@@ -14,6 +17,8 @@ export interface ResponseFields {
   number(name: string): number;
   nullableNumber(name: string): number | null;
   boolean(name: string): boolean;
+  apiPath(name: string): string;
+  nullableApiPath(name: string): string | null;
   objectList(name: string): ResponseFields[];
   numberPairs(name: string): (readonly [number, number])[];
 }
@@ -34,6 +39,7 @@ function readFields(json: unknown, path: string): ResponseFields {
   }
 
   const isString = (field: unknown): field is string => typeof field === 'string';
+  const isApiPath = (field: unknown): field is string => isString(field) && field.startsWith(API_PATH_PREFIX);
   const isNumber = (field: unknown): field is number => typeof field === 'number' && Number.isFinite(field);
 
   function readList(name: string): readonly unknown[] {
@@ -57,6 +63,8 @@ function readFields(json: unknown, path: string): ResponseFields {
     number: (name) => read(name, isNumber),
     nullableNumber: (name) => read(name, (field): field is number | null => field === null || isNumber(field)),
     boolean: (name) => read(name, (field): field is boolean => typeof field === 'boolean'),
+    apiPath: (name) => read(name, isApiPath),
+    nullableApiPath: (name) => read(name, (field): field is string | null => field === null || isApiPath(field)),
     objectList: (name) => readList(name).map((entry, index) => readFields(entry, `${pathOf(name)}[${index}]`)),
     numberPairs: (name) => readList(name).map((pair, index) => readNumberPair(pair, `${pathOf(name)}[${index}]`)),
   };

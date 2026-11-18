@@ -1,7 +1,14 @@
 import assert from 'node:assert/strict';
 import { beforeEach, describe, it } from 'node:test';
 
-import { countPages, doneRatio, formatPageRanges } from '../../src/domain/document-summary.ts';
+import {
+  countPages,
+  type DocumentKind,
+  doneRatio,
+  formatPageRanges,
+  NEW_DOCUMENT_KIND,
+  unwarpsByDefault,
+} from '../../src/domain/document-summary.ts';
 import { sampleDocument } from './document-summary-samples.ts';
 
 describe('The document summary', () => {
@@ -60,5 +67,39 @@ describe('The document summary', () => {
         assert.equal(text, '12, 13–44');
       });
     });
+  });
+
+  describe('The NEW_DOCUMENT_KIND constant', () => {
+    it('should be a book, so that a new document starts as one', () => {
+      assert.equal(NEW_DOCUMENT_KIND, 'book');
+    });
+  });
+
+  describe('The unwarpsByDefault() function', () => {
+    const rows: { kind: DocumentKind; rule: string; isUnwarped: boolean }[] = [
+      {
+        kind: 'book',
+        rule: 'should flatten the pages of a book, since a book is photographed open, its pages curved near the binding',
+        isUnwarped: true,
+      },
+      {
+        kind: 'document',
+        rule: 'should leave the pages of a document as they are, since a document lies flat',
+        isUnwarped: false,
+      },
+    ];
+
+    for (const { kind, rule, isUnwarped } of rows) {
+      describe(`When the document is a ${kind}`, () => {
+        let unwarps: boolean;
+        beforeEach(() => {
+          unwarps = unwarpsByDefault(kind);
+        });
+
+        it(rule, () => {
+          assert.equal(unwarps, isUnwarped);
+        });
+      });
+    }
   });
 });

@@ -5,9 +5,13 @@ import {
   type Access,
   documentPath,
   documentTitle,
+  idOfAddress,
+  pagePath,
   type Redirect,
   type RouteName,
+  readerPath,
   redirectFor,
+  routeNameOf,
   type Section,
   sectionOf,
 } from '../../../../src/adapters/react/shell/navigation.ts';
@@ -79,6 +83,18 @@ describe('The navigation', () => {
         expectedRedirect: null,
       },
       {
+        situation: 'When a signed-out browser opens a document',
+        access: 'signed-out',
+        route: 'document',
+        path: '/documents/95bbeb79-4351-432f-a53c-d3658892ff50',
+        rule: 'should go to the login, and come back to the document once signed in',
+        expectedRedirect: {
+          to: 'login',
+          returnTo: '/documents/95bbeb79-4351-432f-a53c-d3658892ff50',
+          replacesEntry: true,
+        },
+      },
+      {
         situation: 'When a signed-out browser opens the pairing',
         access: 'signed-out',
         route: 'pairing',
@@ -124,6 +140,12 @@ describe('The navigation', () => {
         situation: 'When the route is the home',
         route: 'home',
         rule: 'should be the library, so that the header marks it as current',
+        expectedSection: 'library',
+      },
+      {
+        situation: 'When the route is a document',
+        route: 'document',
+        rule: 'should be the library, which the document belongs to',
         expectedSection: 'library',
       },
       {
@@ -192,6 +214,84 @@ describe('The navigation', () => {
 
     it('should be the address of the document screen, as the earlier releases named it', () => {
       assert.equal(path, '/documents/95bbeb79-4351-432f-a53c-d3658892ff50');
+    });
+  });
+
+  describe('The routeNameOf() function', () => {
+    const rows: { situation: string; matchedId: string; documentId: string | undefined; expected: RouteName }[] = [
+      {
+        situation: 'When the address names a document by its id',
+        matchedId: 'document',
+        documentId: '95bbeb79-4351-432f-a53c-d3658892ff50',
+        expected: 'document',
+      },
+      {
+        situation: 'When the address names a document by something else than an id',
+        matchedId: 'document',
+        documentId: 'example-book',
+        expected: 'unknown',
+      },
+      { situation: 'When the route is the pairing', matchedId: 'pairing', documentId: undefined, expected: 'pairing' },
+      { situation: 'When the route has no name', matchedId: '0-1', documentId: undefined, expected: 'unknown' },
+    ];
+
+    for (const { situation, matchedId, documentId, expected } of rows) {
+      describe(situation, () => {
+        let route: RouteName;
+        beforeEach(() => {
+          route = routeNameOf(matchedId, documentId);
+        });
+
+        it(`should be ${expected}`, () => {
+          assert.equal(route, expected);
+        });
+      });
+    }
+  });
+
+  describe('The idOfAddress() function', () => {
+    describe('When the address writes the id in capitals', () => {
+      let id: string | null;
+      beforeEach(() => {
+        id = idOfAddress('95BBEB79-4351-432F-A53C-D3658892FF50');
+      });
+
+      it('should give it in lowercase, as the api names it', () => {
+        assert.equal(id, '95bbeb79-4351-432f-a53c-d3658892ff50');
+      });
+    });
+
+    describe('When the address holds something else than an id', () => {
+      let id: string | null;
+      beforeEach(() => {
+        id = idOfAddress('95bbeb79-4351-432f-a53c-d3658892ff50/../pairing');
+      });
+
+      it('should give none', () => {
+        assert.equal(id, null);
+      });
+    });
+  });
+
+  describe('The readerPath() function', () => {
+    let path: string;
+    beforeEach(() => {
+      path = readerPath('95bbeb79-4351-432f-a53c-d3658892ff50');
+    });
+
+    it('should be the address of the reader, as the earlier releases named it', () => {
+      assert.equal(path, '/documents/95bbeb79-4351-432f-a53c-d3658892ff50/read');
+    });
+  });
+
+  describe('The pagePath() function', () => {
+    let path: string;
+    beforeEach(() => {
+      path = pagePath('de215798-031a-4b20-a867-49c12e3baabe');
+    });
+
+    it('should be the address of the page screen, as the earlier releases named it', () => {
+      assert.equal(path, '/pages/de215798-031a-4b20-a867-49c12e3baabe');
     });
   });
 });

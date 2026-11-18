@@ -4,8 +4,10 @@ import { Outlet, useLocation, useMatches, useNavigate } from 'react-router';
 
 import type { Clipboard } from '../../../application/clipboard.ts';
 import type { DocumentCatalog } from '../../../application/document-catalog.ts';
+import type { DocumentStore } from '../../../application/document-store.ts';
 import type { EngineStatus } from '../../../application/engine-status.ts';
 import type { PairingSource } from '../../../application/pairing-source.ts';
+import type { Scheduler } from '../../../application/scheduler.ts';
 import type { Session } from '../../../application/session.ts';
 import type { UuidSource } from '../../../application/uuid-source.ts';
 import type { DateFormatting, NumberFormatting } from '../../../domain/formatting.ts';
@@ -13,7 +15,7 @@ import { EngineBanners } from '../engine-status/engine-banners.tsx';
 import { errorMessage } from './error-message.ts';
 import { Header } from './header.tsx';
 import { LoadingState } from './loading-state.tsx';
-import { type Access, isRouteName, PATHS, type RouteName, redirectFor, sectionOf } from './navigation.ts';
+import { type Access, PATHS, type RouteName, redirectFor, routeNameOf, sectionOf } from './navigation.ts';
 import { ToastRegion } from './toast-region.tsx';
 import type { Toasts } from './toasts.ts';
 
@@ -24,14 +26,16 @@ export interface ShellServices {
   readonly formatting: NumberFormatting;
   readonly dates: DateFormatting;
   readonly catalog: DocumentCatalog;
+  readonly documents: DocumentStore;
+  readonly scheduler: Scheduler;
   readonly uuids: UuidSource;
   readonly pairing: PairingSource;
   readonly clipboard: Clipboard;
 }
 
 function useRouteName(): RouteName {
-  const id = useMatches().at(-1)?.id ?? 'unknown';
-  return isRouteName(id) ? id : 'unknown';
+  const match = useMatches().at(-1);
+  return match === undefined ? 'unknown' : routeNameOf(match.id, match.params.documentId);
 }
 
 export function Shell({ services }: { readonly services: ShellServices }) {

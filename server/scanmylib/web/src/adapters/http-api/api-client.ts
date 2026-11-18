@@ -1,8 +1,10 @@
 import { ApiError, NetworkError } from '../../application/api-errors.ts';
 import type { DocumentCatalog } from '../../application/document-catalog.ts';
+import type { DocumentStore } from '../../application/document-store.ts';
 import type { ServerStatusSource } from '../../application/engine-status.ts';
 import type { PairingSource } from '../../application/pairing-source.ts';
 import type { SessionServer } from '../../application/session.ts';
+import { decodeDocumentDetails, decodeDocumentWithPages } from './document-details-decoder.ts';
 import { decodeDocumentList, decodeDocumentSummary } from './document-summary-decoder.ts';
 import { decodeErrorDetail } from './error-detail.ts';
 import { decodePairingDetails } from './pairing-decoder.ts';
@@ -10,7 +12,7 @@ import { decodeServerStatus } from './server-status-decoder.ts';
 
 export type Fetch = (path: string, init: RequestInit) => Promise<Response>;
 
-export type ApiClient = SessionServer & ServerStatusSource & DocumentCatalog & PairingSource;
+export type ApiClient = SessionServer & ServerStatusSource & DocumentCatalog & DocumentStore & PairingSource;
 
 // The api refuses a request that changes state, authenticated by the session cookie, without this header: another page
 // cannot add it without the api's consent (docs/API.md > Authentication).
@@ -20,6 +22,10 @@ const STATUS_PATH = '/api/status';
 const DOCUMENTS_PATH = '/api/documents';
 const PAIRING_PATH = '/api/pairing';
 const UNAUTHORIZED = 401;
+
+function documentPath(documentId: string): string {
+  return `${DOCUMENTS_PATH}/${encodeURIComponent(documentId)}`;
+}
 
 async function readJson(response: Response): Promise<unknown> {
   try {
@@ -79,8 +85,18 @@ export function createApiClient(fetchFromApi: Fetch, onUnauthorized: () => void)
     },
     async createDocument(id, fields) {
       // PUT with an id that the browser chose: a request sent again creates no second document.
-      const path = `${DOCUMENTS_PATH}/${encodeURIComponent(id)}`;
-      return decodeDocumentSummary(await readJson(await request('PUT', path, fields)));
+      return decodeDocumentSummary(await readJson(await request('PUT', documentPath(id), fields)));
     },
+    async readDocument(documentId, signal) {
+      return decodeDocumentWithPages(await readJson(await request('GET', documentPath(documentId), undefined, signal)));
+    },
+    async updateDocument(documentId, fields) {
+      return decodeDocumentDetails(await readJson(await request('PATCH', documentPath(documentId), fields)));
+    },
+    async deleteDocument(documentId) {
+      await request('DELETE', documentPath(documentId));
+    },
+    markdownUrl: (documentId) => `${documentPath(documentId)}/markdown`,
+    archiveUrl: (documentId, withScans) => `${documentPath(documentId)}/export.zip?scans=${withScans ? 1 : 0}`,
   };
 }

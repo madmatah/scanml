@@ -38,7 +38,14 @@ const DECODED_DOCUMENT: DocumentSummary = {
     excludedCount: 0,
     duplicateCount: 1,
   },
-  coverage: { ranges: [[11, 15]], label: '11–15', gaps: [[16, 17]], lowestNumber: 11, unnumberedCount: 0 },
+  coverage: {
+    ranges: [[11, 15]],
+    label: '11–15',
+    gaps: [[16, 17]],
+    lowestNumber: 11,
+    highestNumber: 15,
+    unnumberedCount: 0,
+  },
   coverThumbnailUrl: '/api/pages/de215798-031a-4b20-a867-49c12e3baabe/thumb',
 };
 
@@ -64,10 +71,14 @@ describe('The document summary decoder', () => {
         document = decodeDocumentSummary(body);
       });
 
-      it('should keep the absence of a lowest number and of a cover', () => {
+      it('should keep the absence of a lowest and a highest number and of a cover', () => {
         assert.deepEqual(
-          { lowestNumber: document.coverage.lowestNumber, coverThumbnailUrl: document.coverThumbnailUrl },
-          { lowestNumber: null, coverThumbnailUrl: null },
+          {
+            lowestNumber: document.coverage.lowestNumber,
+            highestNumber: document.coverage.highestNumber,
+            coverThumbnailUrl: document.coverThumbnailUrl,
+          },
+          { lowestNumber: null, highestNumber: null, coverThumbnailUrl: null },
         );
       });
     });

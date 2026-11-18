@@ -68,6 +68,8 @@ createRoot(findElement('#app')).render(
           formatting: localization.formatting,
           dates: localization.dates,
           catalog: apiClient,
+          documents: apiClient,
+          scheduler,
           uuids: createRandomUuidSource(window.crypto),
           pairing: apiClient,
           clipboard: createWindowClipboard(window),

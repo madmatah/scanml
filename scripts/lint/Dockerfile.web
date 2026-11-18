@@ -2,8 +2,9 @@
 # install script runs, since one would run with the build's network, and the install fails on an unreviewed one.
 #
 # Node is pinned by digest and pnpm's standalone build by its SHA-256, since this image never reaches production and is
-# rebuilt only when they change. The stage `pnpm` alone serves the command that regenerates the lockfile (README.md >
-# Development).
+# rebuilt only when they change. The api's image (server/Dockerfile) builds the web UI with the same two, which
+# scripts/tests/test_web_toolchain_pins.py holds together. The stage `pnpm` alone serves the command that regenerates
+# the lockfile (README.md > Development).
 FROM node:26-trixie-slim@sha256:e6bedef217677b276c591795e169840edd9096dbf13f29df8ef8d1856b8820bc AS pnpm
 ADD --checksum=sha256:2c58959fd5df5cb9f4e72784c08a60ffc7ee558fed9b04b22254e29112203a51 \
     https://github.com/pnpm/pnpm/releases/download/v12.17.0/pnpm-linux-x64.tar.gz /tmp/pnpm.tar.gz

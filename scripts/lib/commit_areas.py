@@ -42,7 +42,10 @@ PATH_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("ocr/setup/", ("lint", "scripts", "ocr")),
     ("ocr/Dockerfile", ("scripts", "ocr")),
     ("ocr/", ("lint", "ocr")),
+    # scripts/tests/test_web_toolchain_pins.py reads the pnpm it names, and the pins of the Dockerfile below.
+    ("server/scanmylib/web/package.json", ("lint", "scripts", "web", "server")),
     ("server/scanmylib/web/", ("lint", "web", "server")),
+    ("server/Dockerfile", ("lint", "scripts", "server")),
     ("server/", ("lint", "server")),
     # check.sh runs every area, and every area runs with common.sh.
     ("scripts/check.sh", GATE_AREAS),
@@ -51,8 +54,9 @@ PATH_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("scripts/build-apk.sh", ("lint", "scripts", "android", "integration")),
     ("scripts/lib/stack.py", ("lint", "scripts", "android", "integration")),
     ("scripts/lib/version.py", ("lint", "scripts", "android", "integration")),
-    # The image of the web UI's tools runs its unit tests too.
-    ("scripts/lint/Dockerfile.web", ("lint", "web")),
+    # The image of the web UI's tools runs its unit tests too, and scripts/tests/test_web_toolchain_pins.py reads its
+    # pins.
+    ("scripts/lint/Dockerfile.web", ("lint", "scripts", "web")),
     ("scripts/lint/", ("lint",)),
     ("scripts/tests/", ("lint", "scripts")),
     ("scripts/integration_tests/", ("lint", "integration")),

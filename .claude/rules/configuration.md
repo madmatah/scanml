@@ -81,7 +81,9 @@ paths:
     of an earlier one (`trustPolicy: no-downgrade`) and an indirect dependency from a Git repository or a tarball URL
     (`blockExoticSubdeps`); and pnpm never downloads another pnpm (`pmOnFail: ignore`);
   - Node.js, by the image digest of `node:26-trixie-slim`, and pnpm, by the SHA-256 of its standalone build, in
-    `scripts/lint/Dockerfile.web`;
+    `scripts/lint/Dockerfile.web` and in `server/Dockerfile`, which build the web UI with the same two:
+    `scripts/tests/test_web_toolchain_pins.py` holds both, and the pnpm that the web UI's `package.json` names,
+    together;
   - ShellCheck and shfmt, by the image digests of `scripts/check.sh`;
   - OSV-Scanner, by the image digest of `.github/workflows/vulnerability-scan.yml`.
 

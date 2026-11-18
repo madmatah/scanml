@@ -9,7 +9,7 @@ organize the results on disk as Markdown + illustrations that AI agents can read
  (ML Kit scanner,                           (FastAPI, our code)                          network_mode: none, GPU only
   offline upload queue)                      ├─ SQLite state  (/state)                    ├─ supervisor (stdlib HTTP on UDS)
                                              ├─ library files (/library)                  ├─ vLLM server (127.0.0.1 inside)
- Web UI (PC or phone browser) ──────────────▶└─ web UI static files                       └─ PaddleOCR-VL pipeline worker
+ Web UI (PC or phone browser) ──────────────▶└─ web UI, built (hashed files)              └─ PaddleOCR-VL pipeline worker
 ```
 
 ## Components
@@ -18,7 +18,7 @@ organize the results on disk as Markdown + illustrations that AI agents can read
 |---|---|---|---|---|
 | `ocr` (sandbox) | `ocr/` → image `scanmylib-ocr` (its runtime target: no uv, no pip) | **untrusted** (Paddle, vLLM, model code) | **none** (only `lo`) | `/opt/sandbox` (ro: venvs+models), `/run/scanmylib` (socket), `/var/cache/ocr` (rw cache), tmpfs `/tmp` |
 | `ocr-setup` | `ocr/` → image `scanmylib-ocr-setup` (its setup target: the same base, with uv and the installer), profile `setup` | untrusted | yes (downloads only) | only `/opt/sandbox` (rw: `SANDBOX_SETUP_DIR`, set in production's `.env` only, or `SANDBOX_DIR.new` through the temporary copy of `.env` of `scripts/deploy.sh --new-sandbox`) |
-| `api` | `server/` → image `scanmylib-api` | ours | LAN (published port) | `/library`, `/state`, `/run/scanmylib`, `/app-dist` (ro) |
+| `api` | `server/` → image `scanmylib-api` (its runtime target, which serves the web UI that its Node stages build, and holds no Node) | ours | LAN (published port) | `/library`, `/state`, `/run/scanmylib`, `/app-dist` (ro) |
 | `ocr-fake` (development only) | api image, profile `fake-ocr`: canned results instead of `ocr`; refuses the production project and a socket that a sandbox serves | ours | **none** | `/run/scanmylib` (socket), tmpfs `/tmp` |
 | Android app | `android/` | ours | LAN | its own app storage |
 | APK builder | throwaway `eclipse-temurin` container | Google/Gradle toolchain (checksums verified) | yes (build only) | `android/`, `VERSION` (ro), SDK/Gradle caches under `ANDROID_DIR` (the development stack has its own) |

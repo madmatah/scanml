@@ -314,7 +314,8 @@ data or library; an `--api` URL without an explicit port is refused) without
 ## The web UI's packages
 
 pnpm installs the web UI's dependencies and tools from its lockfile, `server/scanmylib/web/pnpm-lock.yaml`, in the image
-of the gate's web tools (`scripts/lint/Dockerfile.web`), with the build's network. The guards of
+of the gate's web tools (`scripts/lint/Dockerfile.web`) and in the stage of the api's image that builds the web UI
+(`server/Dockerfile`), each with the build's network. The guards of
 `server/scanmylib/web/pnpm-workspace.yaml` apply to every install, the frozen ones included, which check every entry of
 the lockfile again (`trustLockfile` stays unset), so that a lockfile written under weaker settings is refused:
 
@@ -325,14 +326,20 @@ the lockfile again (`trustLockfile` stays unset), so that a lockfile written und
 - so does a version that lost the provenance or the trusted publisher of an earlier one (`trustPolicy: no-downgrade`),
   and an indirect dependency from a Git repository or a tarball URL (`blockExoticSubdeps`);
 - pnpm never downloads another pnpm (`pmOnFail: ignore`); Node.js comes from `node:26-trixie-slim` pinned by digest,
-  and pnpm from its standalone build, checked against its SHA-256.
+  and pnpm from its standalone build, checked against its SHA-256, the same in both images
+  (`scripts/tests/test_web_toolchain_pins.py`).
 
 The image's build then runs package code once, without network: `@swc/core`, the parser of i18next-cli, ships its native
 addon for Linux compressed, and writes it on its first load into a cache from which it must then execute it. Its loader
 runs at the build into a scratch directory, and the addon it writes is copied beside its `binding.js`, where it looks
 first, so that no run of i18next-cli needs a writable, executable directory; the build fails when a second load would
-still write to a cache. The tools then run in containers without network, on read-only sources and a read-only root. The
-page the browser loads uses none of these packages yet: it is still the JavaScript UI, with its vendored KaTeX.
+still write to a cache. The tools then run in containers without network, on read-only sources and a read-only root.
+
+In the api's image, the type check and the build of the web UI run without network, and only the files the build writes
+reach the runtime image: its entry page, the hashed script and stylesheet that bundle the UI's packages, its icons and
+its manifest. No Node, no `node_modules`, no source, `package.json` or lockfile of the UI reaches it. A deployment, which
+builds that image, therefore downloads the UI's packages from npm's registry, unless Docker's build cache already holds
+them.
 
 ## Known vulnerabilities of the dependencies
 
@@ -349,7 +356,8 @@ page the browser loads uses none of these packages yet: it is still the JavaScri
     plugins (`android/gradle/verification-metadata.xml`), and every package of the web UI's pnpm lockfile
     (`server/scanmylib/web/pnpm-lock.yaml`), its tools and KaTeX's npm package included, which Dependabot reads too;
   - `api-image` and `sandbox-image`: the Debian and Python packages of the api's image, as production runs it, and of
-    the image the sandbox runs.
+    the image the sandbox runs; the build of the api's image runs the stages that build the web UI too, whose packages
+    the `repository-locks` scan reads in the lockfile.
 
   The scan only reports: it runs on no pull request, and fails only when a scan itself fails. The container that
   resolves the sandbox's environments mounts nothing of the runner but the read-only requirements and a work directory

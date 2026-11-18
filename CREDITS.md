@@ -41,7 +41,147 @@ The api's Python packages, pinned with their hashes in `server/requirements.lock
 
 | Library | Version | Role | License | Where |
 |---|---|---|---|---|
+| React, React DOM, and their scheduler and `use-sync-external-store` | 19.3.1, 19.3.1, 0.28.0, 1.7.0 | The screens, as function components | MIT | bundled into the web UI's script by esbuild, from `server/scanmylib/web/pnpm-lock.yaml`; https://react.dev |
+| React Router | 8.5.1 | The navigation, in the URL's fragment | MIT | bundled into the web UI's script by esbuild, from `server/scanmylib/web/pnpm-lock.yaml`; https://reactrouter.com |
+| i18next | 26.7.1 | The translations | MIT | bundled into the web UI's script by esbuild, from `server/scanmylib/web/pnpm-lock.yaml`; https://www.i18next.com |
+| react-i18next, and `html-parse-stringify`, which reads the elements of a translated sentence | 17.1.12, 4.0.1 | The translations of the React components | MIT | bundled into the web UI's script by esbuild, from `server/scanmylib/web/pnpm-lock.yaml`; https://react.i18next.com |
+| i18next-browser-languagedetector | 8.3.0 | The language the browser prefers | MIT | bundled into the web UI's script by esbuild, from `server/scanmylib/web/pnpm-lock.yaml`; https://github.com/i18next/i18next-browser-languageDetector |
 | KaTeX, with its fonts | 0.19.0 | Typesetting of LaTeX formulas | MIT | `server/scanmylib/web/static/vendor/katex/`, from the npm package `katex`, fetched and checked by `scripts/vendor-katex.sh`; https://katex.org |
+
+The notices of the packages bundled into the web UI's script:
+
+React, React DOM, their scheduler and `use-sync-external-store`:
+
+```
+MIT License
+
+Copyright (c) Meta Platforms, Inc. and affiliates.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+React Router:
+
+```
+MIT License
+
+Copyright (c) React Training LLC 2015-2019
+Copyright (c) Remix Software Inc. 2020-2021
+Copyright (c) Shopify Inc. 2022-2023
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+i18next:
+
+```
+The MIT License (MIT)
+
+Copyright (c) 2011-present i18next
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+react-i18next and i18next-browser-languagedetector:
+
+```
+The MIT License (MIT)
+
+Copyright (c) 2015-present i18next
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+`html-parse-stringify`:
+
+```
+MIT License
+
+Copyright (c) 2025 Henrik Joreteg <henrik@joreteg.com>
+Copyright (c) 2026-present i18next (https://github.com/i18next)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
 
 KaTeX's notice, also in `server/scanmylib/web/static/vendor/katex/LICENSE`:
 
@@ -111,8 +251,8 @@ Tools that build and test the project, run in containers and never shipped.
 | Tool | Role | License | Source |
 |---|---|---|---|
 | pytest | The api's tests | MIT | https://github.com/pytest-dev/pytest |
-| Node.js (`node:26-trixie-slim`, pinned by digest) | The web UI's tools and unit tests, in the image of its tools (`scripts/lint/Dockerfile.web`), and the regeneration of its lockfile | MIT | https://nodejs.org |
-| pnpm 12.17.0 | Installs the web UI's dependencies and tools, and regenerates its lockfile; its standalone build for Linux, checked against its SHA-256 in `scripts/lint/Dockerfile.web` | MIT | https://pnpm.io |
+| Node.js (`node:26-trixie-slim`, pinned by digest) | The web UI's tools and unit tests, in the image of its tools (`scripts/lint/Dockerfile.web`), its build, in the stages of the api's image that build it (`server/Dockerfile`), and the regeneration of its lockfile | MIT | https://nodejs.org |
+| pnpm 12.17.0 | Installs the web UI's dependencies and tools, and regenerates its lockfile; its standalone build for Linux, checked against its SHA-256 in `scripts/lint/Dockerfile.web` and `server/Dockerfile` | MIT | https://pnpm.io |
 | Eclipse Temurin JDK 21 (`eclipse-temurin:21-jdk`) | The app's build | GPL-2.0 with the Classpath Exception | https://adoptium.net |
 | Gradle, Android Gradle Plugin | The app's build | Apache-2.0 | https://gradle.org, https://developer.android.com/build |
 | Android SDK | The app's build and signing tools | Android Software Development Kit License | https://developer.android.com/studio |

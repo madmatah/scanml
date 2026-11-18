@@ -191,7 +191,8 @@ photographed flat, turn it off in the document's details.
 ## Web UI
 
 The web UI is served by the PC on port 8765 (`http://localhost:8765`), and can be opened from the phone's browser too.
-Its header shows the state of the OCR engine.
+Its header shows the state of the OCR engine. It is built from its TypeScript and React sources with the api's image,
+and served as hashed files that the browser keeps until the next deployment changes them.
 
 - **Library**: every document with its cover, its pages and its coverage.
 - **Document**: the grid of pages (in the document, unnumbered, waiting to be read or failed, excluded, duplicates), the
@@ -274,7 +275,8 @@ a release published on GitHub (the commit of its tag on `origin`), on a release 
 (unless `--allow-downgrade`), or when `.env` is not production's. It then:
 
 1. builds the images from the commit (`git archive HEAD`), on the current image of each base tag, which it pulls from
-   Docker Hub; if the build fails, Docker Hub out of reach included, production is unchanged;
+   Docker Hub, and the web UI with them, whose packages come from npm's registry unless Docker's build cache holds
+   them; if the build fails, Docker Hub or npm's registry out of reach included, production is unchanged;
 2. checks that the new sandbox image imports the engine's libraries from the sandbox it will run, in a container of
    its own, isolated as the sandbox is; if it cannot, production is unchanged, and the deployment prints the
    `docker run` that shows why;
@@ -400,7 +402,9 @@ docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD/scripts/lint:/w
 ```
 
 The web UI's dependencies and tools are managed by pnpm 12.17.0 on Node.js 26, both pinned in
-`scripts/lint/Dockerfile.web`, whose image the `lint` and `web` areas build: pnpm installs them from
+`scripts/lint/Dockerfile.web`, whose image the `lint` and `web` areas build, and in `server/Dockerfile`, whose stages
+build the web UI into the api's image (`scripts/tests/test_web_toolchain_pins.py` fails when the two Dockerfiles, or
+the `packageManager` of `server/scanmylib/web/package.json`, disagree): pnpm installs them from
 `server/scanmylib/web/pnpm-lock.yaml` under the guards of `server/scanmylib/web/pnpm-workspace.yaml`, which run no
 package's install script and refuse a version published less than seven days ago, a trust downgrade and an indirect
 dependency from a Git repository or a tarball URL. After a change to `server/scanmylib/web/package.json`, the lockfile

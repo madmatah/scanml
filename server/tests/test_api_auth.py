@@ -47,6 +47,9 @@ QR_CODE_PATHS = ["/api/pairing/qr.svg", "/api/pairing/apk-qr.svg"]
 APK = b"PK\x03\x04 fake apk"
 JSON_CONTENT = {"Content-Type": "application/json"}
 CSRF_HEADER = {"X-ScanMyLib": "1"}
+HASHED_FILE_PATHS = ("/static/assets/main-5HQ2LQ4N.js", "/static/assets/main-7JX4PB2C.css")
+MISSING_HASHED_FILE_PATH = "/static/assets/main-0000AAAA.js"
+ICON_PATH = "/static/icons/icon.svg"
 OPEN_FILE_DESCRIPTOR = os.fdopen
 
 
@@ -136,6 +139,11 @@ class WebUi:
     script_status: int
     script_type: str
     escape_statuses: dict[str, int]
+    page_cache_control: str
+    hashed_file_cache_controls: dict[str, str]
+    missing_hashed_file_status: int
+    missing_hashed_file_cache_control: str
+    icon_cache_control: str
 
 
 @dataclass(frozen=True)
@@ -302,18 +310,30 @@ def web_ui(tmp_path_factory: pytest.TempPathFactory) -> WebUi:
     with running_api(tmp_path_factory.mktemp("api")) as api:
         placeholder = api.client.get("/")
         static = api.settings.web_dir / "static"
-        static.mkdir(parents=True)
+        (static / "assets").mkdir(parents=True)
+        (static / "icons").mkdir()
         (api.settings.web_dir / "index.html").write_text("<!doctype html><title>ScanMyLib UI</title>")
         (static / "app.js").write_text("console.log('ok')")
-        page = api.client.get("/").text
+        for path in HASHED_FILE_PATHS:
+            (api.settings.web_dir / path.removeprefix("/")).write_text("/* built */")
+        (static / "icons" / "icon.svg").write_text("<svg xmlns='http://www.w3.org/2000/svg'/>")
+        page = api.client.get("/")
         script = api.client.get("/static/app.js")
         escapes = ["/static/../index.html", "/static/%2e%2e/index.html"]
+        missing_hashed_file = api.client.get(MISSING_HASHED_FILE_PATH)
         return WebUi(
             placeholder=Answer(placeholder.status_code, placeholder.text),
-            page=page,
+            page=page.text,
             script_status=script.status_code,
             script_type=script.headers["content-type"],
             escape_statuses={path: api.client.get(path).status_code for path in escapes},
+            page_cache_control=page.headers["cache-control"],
+            hashed_file_cache_controls={
+                path: api.client.get(path).headers["cache-control"] for path in HASHED_FILE_PATHS
+            },
+            missing_hashed_file_status=missing_hashed_file.status_code,
+            missing_hashed_file_cache_control=missing_hashed_file.headers["cache-control"],
+            icon_cache_control=api.client.get(ICON_PATH).headers["cache-control"],
         )
 
 
@@ -782,6 +802,33 @@ class TestThePublicRoutes:
                 served_paths = [path for path, status in web_ui.escape_statuses.items() if status != 404]
                 assert len(web_ui.escape_statuses) == 2
                 assert served_paths == []
+
+            def test_should_have_the_browser_revalidate_its_page_so_that_the_next_load_takes_a_new_version(
+                self, web_ui: WebUi
+            ) -> None:
+                assert web_ui.page_cache_control == "no-cache"
+
+            def test_should_let_the_browser_keep_its_hashed_files_for_a_year_without_asking_again(
+                self, web_ui: WebUi
+            ) -> None:
+                revalidated_paths = [
+                    path
+                    for path, cache_control in web_ui.hashed_file_cache_controls.items()
+                    if cache_control != "public, max-age=31536000, immutable"
+                ]
+                assert len(web_ui.hashed_file_cache_controls) == 2
+                assert revalidated_paths == []
+
+            def test_should_answer_a_missing_hashed_file_without_marking_it_immutable_so_that_a_later_build_can_add_it(
+                self, web_ui: WebUi
+            ) -> None:
+                missing_hashed_file = (web_ui.missing_hashed_file_status, web_ui.missing_hashed_file_cache_control)
+                assert missing_hashed_file == (404, "no-cache")
+
+            def test_should_have_the_browser_revalidate_its_icons_since_the_manifest_names_them_at_a_stable_url(
+                self, web_ui: WebUi
+            ) -> None:
+                assert web_ui.icon_cache_control == "no-cache"
 
     class TestWhenTheApiDocumentationIsRequested:
         @pytest.fixture(scope="class")

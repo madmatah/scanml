@@ -81,5 +81,6 @@
   "Unnumbered pages": "Pages non numérotées",
   "Unsupported format (JPEG, PNG or WebP only).": "Format non pris en charge (JPEG, PNG ou WebP uniquement).",
   "Version": "Version",
-  "Your digitized library": "Votre bibliothèque numérisée"
+  "Your digitized library": "Votre bibliothèque numérisée",
+  "Your session has expired: please sign in again.": "Votre session a expiré : reconnectez-vous."
 }

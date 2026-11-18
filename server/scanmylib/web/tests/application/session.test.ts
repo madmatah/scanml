@@ -373,6 +373,49 @@ describe('The session', () => {
     });
   });
 
+  describe('The expire() method', () => {
+    describe('When the session is signed in', () => {
+      let arrangement: Arrangement;
+      beforeEach(async () => {
+        arrangement = await startSignedIn();
+        arrangement.session.expire();
+      });
+
+      it('should be signed out, with a notice of the expired session', () => {
+        assert.deepEqual(arrangement.session.getSnapshot(), { phase: 'signed-out', notice: { reason: 'expired' } });
+      });
+
+      it('should forget the sign-in, so that the next visit shows the login at once', () => {
+        assert.equal(arrangement.signInRecord.recorded(), false);
+      });
+    });
+
+    describe('When the session is still loading', () => {
+      let session: Session;
+      beforeEach(() => {
+        ({ session } = arrange(true));
+        session.expire();
+      });
+
+      it('should keep loading, since the check of the session decides', () => {
+        assert.deepEqual(session.getSnapshot(), { phase: 'loading' });
+      });
+    });
+
+    describe('When the session is signed out with a notice', () => {
+      let session: Session;
+      beforeEach(async () => {
+        ({ session } = arrange(false, { signIn: new ApiError(UNAUTHORIZED, 'invalid token') }));
+        await session.start(TOKEN);
+        session.expire();
+      });
+
+      it('should keep its notice, which says why the login shows', () => {
+        assert.deepEqual(session.getSnapshot(), { phase: 'signed-out', notice: { reason: 'link-refused' } });
+      });
+    });
+  });
+
   describe('The dismissNotice() method', () => {
     describe('When the session is signed out with a notice', () => {
       let session: Session;

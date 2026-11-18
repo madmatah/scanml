@@ -23,6 +23,8 @@ export function loginErrorText(t: TFunction, error: LoginError): string {
 
 export function signedOutNoticeText(t: TFunction, notice: SignedOutNotice): string {
   switch (notice.reason) {
+    case 'expired':
+      return t('Your session has expired: please sign in again.');
     case 'link-refused':
       return t('The sign-in link contains an invalid or expired token.');
     case 'link-failed':

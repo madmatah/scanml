@@ -12,6 +12,7 @@ export interface SignInRecord {
 }
 
 export type SignedOutNotice =
+  | { readonly reason: 'expired' }
   | { readonly reason: 'link-refused' }
   | { readonly reason: 'link-failed'; readonly failure: unknown }
   | { readonly reason: 'check-failed'; readonly failure: unknown };
@@ -28,6 +29,7 @@ export interface Session {
   signIn(token: string): Promise<void>;
   signInWithLink(token: string): Promise<void>;
   signOut(): Promise<void>;
+  expire(): void;
   dismissNotice(): void;
 }
 
@@ -109,6 +111,11 @@ export function createSession(server: SessionServer, signInRecord: SignInRecord)
       }
       signInRecord.record(false);
       enter(SIGNED_OUT);
+    },
+    expire() {
+      if (state.phase !== 'signed-in') return;
+      signInRecord.record(false);
+      enter({ phase: 'signed-out', notice: { reason: 'expired' } });
     },
     dismissNotice() {
       if (state.phase === 'signed-out' && state.notice !== null) enter(SIGNED_OUT);

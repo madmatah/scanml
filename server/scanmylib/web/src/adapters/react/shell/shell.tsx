@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useSyncExternalStore } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Outlet, useLocation, useMatches, useNavigate } from 'react-router';
 
@@ -9,9 +9,12 @@ import type { EngineStatus } from '../../../application/engine-status.ts';
 import type { PairingSource } from '../../../application/pairing-source.ts';
 import type { Scheduler } from '../../../application/scheduler.ts';
 import type { Session } from '../../../application/session.ts';
+import { hasFailures, type UploadQueue } from '../../../application/upload-queue.ts';
 import type { UuidSource } from '../../../application/uuid-source.ts';
 import type { DateFormatting, NumberFormatting } from '../../../domain/formatting.ts';
+import { ConfirmDialog } from '../dialogs/confirm-dialog.tsx';
 import { EngineBanners } from '../engine-status/engine-banners.tsx';
+import { settledUploadsText } from '../uploads/upload-text.ts';
 import { errorMessage } from './error-message.ts';
 import { Header } from './header.tsx';
 import { LoadingState } from './loading-state.tsx';
@@ -31,6 +34,7 @@ export interface ShellServices {
   readonly uuids: UuidSource;
   readonly pairing: PairingSource;
   readonly clipboard: Clipboard;
+  readonly uploads: UploadQueue<File>;
 }
 
 function useRouteName(): RouteName {
@@ -39,7 +43,7 @@ function useRouteName(): RouteName {
 }
 
 export function Shell({ services }: { readonly services: ShellServices }) {
-  const { session, toasts, engineStatus, formatting } = services;
+  const { session, toasts, engineStatus, formatting, uploads } = services;
   const { t } = useTranslation();
   const state = useSyncExternalStore(session.subscribe, session.getSnapshot);
   const location = useLocation();
@@ -49,6 +53,7 @@ export function Shell({ services }: { readonly services: ShellServices }) {
   const returnTo = useRef<string | null>(null);
   const hasShownScreen = useRef(false);
   const hasJustSignedOut = useRef(false);
+  const [isConfirmingSignOut, setConfirmingSignOut] = useState(false);
   const isLoading = state.phase === 'loading';
   const isSignedIn = state.phase === 'signed-in';
   const showsScreen =
@@ -72,6 +77,15 @@ export function Shell({ services }: { readonly services: ShellServices }) {
     }
   }, [isLoading, isSignedIn, route, location.pathname, navigate]);
 
+  // Uploads go on from one screen to the next: their outcome is told wherever the user is.
+  useEffect(
+    () =>
+      uploads.watchSettled((settled) => {
+        toasts.show(settledUploadsText(t, settled), hasFailures(settled) ? 'error' : 'success');
+      }),
+    [uploads, toasts, t],
+  );
+
   // A layout effect, so that the screen's own effects, which run later, can move the focus further.
   useLayoutEffect(() => {
     if (screenKey === null) return;
@@ -91,6 +105,12 @@ export function Shell({ services }: { readonly services: ShellServices }) {
     }
   }
 
+  function signOutClosed(isConfirmed: boolean): void {
+    setConfirmingSignOut(false);
+    // signOut handles its own failures, so its promise never rejects.
+    if (isConfirmed) void signOut();
+  }
+
   return (
     <>
       <button type="button" className="skip-link" onClick={() => main.current?.focus()}>
@@ -102,8 +122,10 @@ export function Shell({ services }: { readonly services: ShellServices }) {
         engineStatus={engineStatus}
         formatting={formatting}
         onSignOut={() => {
+          // The photos still being sent would fail once the session ends.
+          if (uploads.isBusy()) setConfirmingSignOut(true);
           // signOut handles its own failures, so its promise never rejects.
-          void signOut();
+          else void signOut();
         }}
       />
       <EngineBanners engineStatus={engineStatus} />
@@ -112,6 +134,15 @@ export function Shell({ services }: { readonly services: ShellServices }) {
         {showsScreen && <Outlet />}
       </main>
       <ToastRegion toasts={toasts} />
+      {isConfirmingSignOut && (
+        <ConfirmDialog
+          title={t('Sign out now?')}
+          message={t('Photos are still being uploaded: they will fail if you sign out.')}
+          confirmLabel={t('Sign out')}
+          isDanger
+          onClosed={signOutClosed}
+        />
+      )}
     </>
   );
 }

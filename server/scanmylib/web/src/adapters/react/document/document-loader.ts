@@ -10,6 +10,7 @@ export type DocumentLoad =
 export interface DocumentLoaderOptions {
   readonly read: (signal: AbortSignal) => Promise<DocumentWithPages>;
   readonly scheduler: Scheduler;
+  readonly isUploading: () => boolean;
   readonly leaving: AbortSignal;
   readonly onChange: (load: DocumentLoad) => void;
   readonly onDeleted: () => void;
@@ -17,11 +18,14 @@ export interface DocumentLoaderOptions {
 
 export interface DocumentLoader {
   load(): void;
+  loadAfterUpload(): void;
   replace(document: DocumentWithPages): void;
 }
 
 // While the PC reads the text of its pages, the document refreshes itself at the pace of the engine's status.
 export const REFRESH_INTERVAL_MILLISECONDS = 3000;
+// The pages of photos sent one after another show together, in one load.
+export const UPLOAD_RELOAD_DELAY_MILLISECONDS = 400;
 const NOT_FOUND = 404;
 
 export function isNotFound(failure: unknown): boolean {
@@ -31,6 +35,7 @@ export function isNotFound(failure: unknown): boolean {
 export function createDocumentLoader({
   read,
   scheduler,
+  isUploading,
   leaving,
   onChange,
   onDeleted,
@@ -39,16 +44,32 @@ export function createDocumentLoader({
   let loading: Promise<void> | null = null;
   let isReloadQueued = false;
   let cancelRefresh: CancelTask | null = null;
+  let cancelUploadReload: CancelTask | null = null;
 
   function stopRefresh(): void {
     cancelRefresh?.();
     cancelRefresh = null;
   }
 
+  function stopUploadReload(): void {
+    cancelUploadReload?.();
+    cancelUploadReload = null;
+  }
+
   function scheduleRefresh(): void {
     stopRefresh();
-    if (leaving.aborted || document === null || !isTextPending(document.stats)) return;
+    if (leaving.aborted || document === null) return;
+    if (!isTextPending(document.stats) && !isUploading()) return;
     cancelRefresh = scheduler.schedule(load, REFRESH_INTERVAL_MILLISECONDS);
+  }
+
+  function loadAfterUpload(): void {
+    stopUploadReload();
+    if (leaving.aborted) return;
+    cancelUploadReload = scheduler.schedule(() => {
+      cancelUploadReload = null;
+      load();
+    }, UPLOAD_RELOAD_DELAY_MILLISECONDS);
   }
 
   function show(next: DocumentWithPages): void {
@@ -90,7 +111,14 @@ export function createDocumentLoader({
     });
   }
 
-  leaving.addEventListener('abort', stopRefresh, { once: true });
+  leaving.addEventListener(
+    'abort',
+    () => {
+      stopRefresh();
+      stopUploadReload();
+    },
+    { once: true },
+  );
 
-  return { load, replace: show };
+  return { load, loadAfterUpload, replace: show };
 }

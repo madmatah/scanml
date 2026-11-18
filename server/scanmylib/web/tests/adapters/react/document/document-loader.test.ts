@@ -39,9 +39,9 @@ interface ArrangementOptions {
 }
 
 const NOT_FOUND = 404;
+const CONFLICT = 409;
 const SERVER_ERROR = 500;
 
-// Lets the loader take the answer and run what follows it before the test goes on.
 async function settle(): Promise<void> {
   await new Promise((resolve) => setImmediate(resolve));
 }
@@ -93,6 +93,32 @@ function arrange({ isUploading }: ArrangementOptions = { isUploading: false }): 
     onDeleted: () => deletions.push('deleted'),
   });
   return { reader, scheduler, leaving, loads, deletions, loader };
+}
+
+interface PendingWrite {
+  readonly request: () => Promise<DocumentWithPages>;
+  readonly answer: (document: DocumentWithPages) => Promise<void>;
+  readonly fail: (failure: unknown) => Promise<void>;
+}
+
+function pendingWrite(): PendingWrite {
+  let resolveWrite: (document: DocumentWithPages) => void = () => {};
+  let rejectWrite: (failure: unknown) => void = () => {};
+  const written = new Promise<DocumentWithPages>((resolve, reject) => {
+    resolveWrite = resolve;
+    rejectWrite = reject;
+  });
+  return {
+    request: () => written,
+    answer: async (document) => {
+      resolveWrite(document);
+      await settle();
+    },
+    fail: async (failure) => {
+      rejectWrite(failure);
+      await settle();
+    },
+  };
 }
 
 function titlesOf(loads: readonly DocumentLoad[]): string[] {
@@ -292,6 +318,108 @@ describe('The document loader', () => {
         it('should drop the load', () => {
           assert.deepEqual(arrangement.scheduler.pendingDelaysMilliseconds(), []);
         });
+      });
+    });
+  });
+
+  describe('The writeOrder() method', () => {
+    describe('When the new order is saved', () => {
+      let arrangement: Arrangement;
+      let writtenTitle: string;
+      beforeEach(async () => {
+        arrangement = arrange();
+        arrangement.loader.load();
+        await arrangement.reader.reads[0]?.answer(documentWith('Example Book'));
+        const write = pendingWrite();
+        const written = arrangement.loader.writeOrder(write.request);
+        await write.answer(documentWith('Example Book, reordered'));
+        writtenTitle = (await written).title;
+      });
+
+      it('should show the document that the api answers', () => {
+        assert.deepEqual(titlesOf(arrangement.loads), ['Example Book', 'Example Book, reordered']);
+      });
+
+      it('should give that document to the organizer, which shows its order', () => {
+        assert.equal(writtenTitle, 'Example Book, reordered');
+      });
+    });
+
+    describe('When a refresh answers while the new order is sent', () => {
+      let arrangement: Arrangement;
+      let readCountBeforeTheAnswer: number;
+      beforeEach(async () => {
+        arrangement = arrange();
+        arrangement.loader.load();
+        await arrangement.reader.reads[0]?.answer(documentWith('Example Book'));
+        const write = pendingWrite();
+        const written = arrangement.loader.writeOrder(write.request);
+        arrangement.loader.load();
+        await arrangement.reader.reads[1]?.answer(documentWith('Example Book, in its old order'));
+        readCountBeforeTheAnswer = arrangement.reader.reads.length;
+        await write.answer(documentWith('Example Book, reordered'));
+        await written;
+        await arrangement.reader.reads[2]?.answer(documentWith('Example Book, read again'));
+      });
+
+      it('should wait for the answer before reading the document again', () => {
+        assert.equal(readCountBeforeTheAnswer, 2);
+      });
+
+      it('should drop the refresh, then read the document again, so that the old order never comes back', () => {
+        assert.deepEqual(titlesOf(arrangement.loads), [
+          'Example Book',
+          'Example Book, reordered',
+          'Example Book, read again',
+        ]);
+      });
+    });
+
+    describe('When a refresh sent before the new order answers after it', () => {
+      let arrangement: Arrangement;
+      beforeEach(async () => {
+        arrangement = arrange();
+        arrangement.loader.load();
+        await arrangement.reader.reads[0]?.answer(documentWith('Example Book'));
+        arrangement.loader.load();
+        const write = pendingWrite();
+        const written = arrangement.loader.writeOrder(write.request);
+        await write.answer(documentWith('Example Book, reordered'));
+        await written;
+        await arrangement.reader.reads[1]?.answer(documentWith('Example Book, in its old order'));
+        await arrangement.reader.reads[2]?.answer(documentWith('Example Book, read again'));
+      });
+
+      it('should drop the older answer and read the document again', () => {
+        assert.deepEqual(titlesOf(arrangement.loads), [
+          'Example Book',
+          'Example Book, reordered',
+          'Example Book, read again',
+        ]);
+      });
+    });
+
+    describe('When the api refuses the new order', () => {
+      const failure = new ApiError(CONFLICT, 'page set changed');
+      let arrangement: Arrangement;
+      let written: Promise<DocumentWithPages>;
+      beforeEach(async () => {
+        arrangement = arrange();
+        arrangement.loader.load();
+        await arrangement.reader.reads[0]?.answer(documentWith('Example Book'));
+        const write = pendingWrite();
+        written = arrangement.loader.writeOrder(write.request);
+        // The rejection is the test's to read: caught here only so that it never goes unhandled meanwhile.
+        written.catch(() => {});
+        await write.fail(failure);
+      });
+
+      it('should fail with the refusal, which the organizer tells', async () => {
+        await assert.rejects(written, { name: 'ApiError', status: CONFLICT });
+      });
+
+      it('should change nothing on screen', () => {
+        assert.deepEqual(titlesOf(arrangement.loads), ['Example Book']);
       });
     });
   });

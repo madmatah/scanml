@@ -24,6 +24,7 @@ const NO_CONTENT = 204;
 const OK = 200;
 const UNAUTHORIZED = 401;
 const NOT_FOUND = 404;
+const CONFLICT = 409;
 const UNPROCESSABLE = 422;
 const BAD_GATEWAY = 502;
 
@@ -477,6 +478,81 @@ describe('The api client', () => {
           })),
           [{ request: `DELETE /api/documents/${DOCUMENT_ID}`, guard: '1' }],
         );
+      });
+    });
+  });
+
+  describe('The reorderPages() call', () => {
+    const pageIds = ['3c1f0e2a-1111-4c0d-8d3e-0a1b2c3d4e5f', '3c1f0e2a-2222-4c0d-8d3e-0a1b2c3d4e5f'];
+
+    describe('When the api saves the new order', () => {
+      let sent: Exchange;
+      let document: DocumentWithPages;
+      beforeEach(async () => {
+        sent = exchange(() => jsonResponse(OK, { ...documentDetailsBody(), pages: [] }));
+        document = await createApiClient(sent.fetchFromApi, ignoreUnauthorized).reorderPages(DOCUMENT_ID, pageIds);
+      });
+
+      it('should put the ids of the reading order, in their new order, with the header that guards the changes', () => {
+        assert.deepEqual(
+          sent.requests.map(({ path, init }) => ({
+            request: `${init.method} ${path}`,
+            body: init.body,
+            guard: headersOf({ path, init })['x-scanmylib'],
+          })),
+          [
+            {
+              request: `PUT /api/documents/${DOCUMENT_ID}/order`,
+              body: JSON.stringify({ page_ids: pageIds }),
+              guard: '1',
+            },
+          ],
+        );
+      });
+
+      it('should give the decoded document', () => {
+        assert.deepEqual({ slug: document.slug, pages: document.pages }, { slug: 'example-book', pages: [] });
+      });
+    });
+
+    describe('When pages joined or left the reading order meanwhile', () => {
+      let act: () => Promise<DocumentWithPages>;
+      beforeEach(() => {
+        const client = createApiClient(
+          exchange(() => jsonResponse(CONFLICT, { detail: 'page set changed' })).fetchFromApi,
+          ignoreUnauthorized,
+        );
+        act = () => client.reorderPages(DOCUMENT_ID, pageIds);
+      });
+
+      it('should fail with its status, which the organizer tells apart from other failures', async () => {
+        await assert.rejects(act(), { name: 'ApiError', status: CONFLICT });
+      });
+    });
+  });
+
+  describe('The resetPageOrder() call', () => {
+    describe('When the api restores the automatic order', () => {
+      let sent: Exchange;
+      let document: DocumentWithPages;
+      beforeEach(async () => {
+        sent = exchange(() => jsonResponse(OK, { ...documentDetailsBody(), pages: [] }));
+        document = await createApiClient(sent.fetchFromApi, ignoreUnauthorized).resetPageOrder(DOCUMENT_ID);
+      });
+
+      it('should delete the order chosen by hand, with the header that guards the changes', () => {
+        assert.deepEqual(
+          sent.requests.map(({ path, init }) => ({
+            request: `${init.method} ${path}`,
+            body: init.body,
+            guard: headersOf({ path, init })['x-scanmylib'],
+          })),
+          [{ request: `DELETE /api/documents/${DOCUMENT_ID}/order`, body: undefined, guard: '1' }],
+        );
+      });
+
+      it('should give the decoded document', () => {
+        assert.equal(document.slug, 'example-book');
       });
     });
   });

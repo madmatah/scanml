@@ -17,11 +17,13 @@ function readPageSummary(page: ResponseFields): PageSummary {
     id: page.string('id'),
     status: page.string('status'),
     pageLabel: page.nullableString('page_label'),
+    numberEnd: page.nullableNumber('number_end'),
     numberSource: page.nullableString('number_source'),
     isExcluded: page.boolean('excluded'),
     duplicateOf: page.nullableString('duplicate_of'),
     isInDocument: page.boolean('in_document'),
     placement: page.nullableString('placement'),
+    position: page.nullableNumber('position'),
     rotation: page.number('rotation'),
     thumbnailUrl: page.apiPath('thumb_url'),
   };

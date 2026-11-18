@@ -65,11 +65,13 @@ const DECODED_PAGE: PageSummary = {
   id: PAGE_ID,
   status: 'done',
   pageLabel: '11',
+  numberEnd: null,
   numberSource: 'detected',
   isExcluded: false,
   duplicateOf: null,
   isInDocument: true,
   placement: 'number',
+  position: 0,
   rotation: 90,
   thumbnailUrl: `/api/pages/${PAGE_ID}/thumb`,
 };
@@ -150,6 +152,32 @@ describe('The document details decoder', () => {
           { pageLabel: page?.pageLabel, numberSource: page?.numberSource, placement: page?.placement },
           { pageLabel: null, numberSource: null, placement: null },
         );
+      });
+    });
+
+    describe('When a page keeps its automatic place and holds two numbers', () => {
+      let page: PageSummary | undefined;
+      beforeEach(() => {
+        const body = { ...pageBody(), number: 11, number_end: 12, page_label: '11-12', position: null };
+        page = decodeDocumentWithPages({ ...documentBody(), pages: [body] }).pages[0];
+      });
+
+      it('should keep its last number and the absence of a place chosen by hand', () => {
+        assert.deepEqual({ numberEnd: page?.numberEnd, position: page?.position }, { numberEnd: 12, position: null });
+      });
+    });
+
+    describe('When the place of a page has the wrong type', () => {
+      let act: () => DocumentWithPages;
+      beforeEach(() => {
+        act = () => decodeDocumentWithPages({ ...documentBody(), pages: [{ ...pageBody(), position: '0' }] });
+      });
+
+      it('should refuse it, naming the field with its path', () => {
+        assert.throws(act, {
+          name: 'ResponseShapeError',
+          message: "The api's answer holds no valid pages[0].position",
+        });
       });
     });
 

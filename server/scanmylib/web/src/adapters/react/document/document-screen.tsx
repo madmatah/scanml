@@ -1,4 +1,5 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { type ReactNode, type RefObject, useEffect, useId, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router';
 
@@ -10,11 +11,13 @@ import { sentCountOf, type UploadQueue } from '../../../application/upload-queue
 import type { UuidSource } from '../../../application/uuid-source.ts';
 import { canOrganize, type DocumentDetails, type DocumentWithPages } from '../../../domain/document-details.ts';
 import type { NumberFormatting } from '../../../domain/formatting.ts';
+import type { ReadingOrder } from '../../../domain/reading-order.ts';
 import { documentKindLabel } from '../../i18next/document-labels.ts';
 import { quoted } from '../../i18next/formatted-text.ts';
 import { ConfirmDialog } from '../dialogs/confirm-dialog.tsx';
 import { DocumentDialog } from '../dialogs/document-dialog.tsx';
 import { hasQueueMoved, queueKeyOf } from '../library/library-loading.ts';
+import { PageOrganizer } from '../organizer/page-organizer.tsx';
 import { EmptyState } from '../shell/empty-state.tsx';
 import { errorMessage } from '../shell/error-message.ts';
 import { ErrorState } from '../shell/error-state.tsx';
@@ -70,7 +73,10 @@ function DocumentView({
   const navigate = useNavigate();
   const [load, setLoad] = useState<DocumentLoad>({ phase: 'loading' });
   const [openDialog, setOpenDialog] = useState<OpenDialog>(null);
+  const [isOrganizing, setOrganizing] = useState(false);
   const loader = useRef<DocumentLoader | null>(null);
+  const heading = useRef<HTMLHeadingElement>(null);
+  const organizeButton = useRef<HTMLButtonElement>(null);
   const title = load.phase === 'loaded' ? load.document.title : null;
 
   // The title of the previous screen stays until the document's own is known.
@@ -133,6 +139,20 @@ function DocumentView({
     }
   }
 
+  // A change of the order and a refresh cannot cross: the loader tells them apart.
+  async function writeOrder(request: () => Promise<DocumentWithPages>): Promise<DocumentWithPages> {
+    const documentLoader = loader.current;
+    if (documentLoader === null) throw new Error('The document is organized before it is loaded');
+    return await documentLoader.writeOrder(request);
+  }
+
+  function stopOrganizing(): void {
+    flushSync(() => setOrganizing(false));
+    const button = organizeButton.current;
+    // The button stays hidden when too few pages are left to organize.
+    (button === null || button.hidden ? heading.current : button)?.focus();
+  }
+
   function deleteClosed(isConfirmed: boolean, deletedTitle: string): void {
     setOpenDialog(null);
     // deleteDocument tells its failures in a toast, so its promise never rejects.
@@ -175,7 +195,9 @@ function DocumentView({
       </nav>
       <header className="doc-header">
         <div className="view-heading">
-          <h1 tabIndex={-1}>{shown.title}</h1>
+          <h1 ref={heading} tabIndex={-1}>
+            {shown.title}
+          </h1>
           <p className="doc-author" hidden={shown.author === ''}>
             {shown.author}
           </p>
@@ -212,7 +234,23 @@ function DocumentView({
         uploads={uploads}
         uuids={uuids}
       />
-      <PagesSection document={shown} />
+      <PagesSection
+        document={shown}
+        organizeButton={organizeButton}
+        onOrganize={isOrganizing ? null : () => setOrganizing(true)}
+        organizer={
+          isOrganizing && (
+            <PageOrganizer
+              document={shown}
+              save={(order: ReadingOrder) => writeOrder(() => store.reorderPages(documentId, order))}
+              reset={() => writeOrder(() => store.resetPageOrder(documentId))}
+              reload={() => loader.current?.load()}
+              toasts={toasts}
+              onDone={stopOrganizing}
+            />
+          )
+        }
+      />
       {openDialog === 'edit' && (
         <DocumentDialog
           heading={t('Edit document')}
@@ -334,7 +372,14 @@ function statClass(count: number, tone: StatTone | null): string {
   return tone === null ? 'stat' : `stat stat-${tone}`;
 }
 
-function PagesSection({ document }: { readonly document: DocumentWithPages }) {
+interface PagesSectionProps {
+  readonly document: DocumentWithPages;
+  readonly organizeButton: RefObject<HTMLButtonElement | null>;
+  readonly onOrganize: (() => void) | null;
+  readonly organizer: ReactNode;
+}
+
+function PagesSection({ document, organizeButton, onOrganize, organizer }: PagesSectionProps) {
   const { t } = useTranslation();
   const { pages } = document;
   return (
@@ -343,22 +388,32 @@ function PagesSection({ document }: { readonly document: DocumentWithPages }) {
         <h2 id="pages-title" className="section-title">
           {t('Pages')} <span className="section-count">{pages.length > 0 ? `(${pages.length})` : ''}</span>
         </h2>
-        <button type="button" className="btn btn-small" hidden={!canOrganize(pages)}>
+        <button
+          ref={organizeButton}
+          type="button"
+          className="btn btn-small"
+          hidden={onOrganize === null || !canOrganize(pages)}
+          onClick={() => onOrganize?.()}
+        >
           <Icon name="reorder" />
           {t('Organize')}
         </button>
       </div>
-      {pages.length === 0 ? (
-        <div className="page-groups">
-          <EmptyState
-            iconName="camera"
-            title={t('No pages yet')}
-            message={t('Import photos above, or scan this document with the Android app.')}
-          />
-        </div>
-      ) : (
-        <PageGrid pages={pages} />
-      )}
+      {organizer || <PageGroups pages={pages} />}
     </section>
+  );
+}
+
+function PageGroups({ pages }: { readonly pages: DocumentWithPages['pages'] }) {
+  const { t } = useTranslation();
+  if (pages.length > 0) return <PageGrid pages={pages} />;
+  return (
+    <div className="page-groups">
+      <EmptyState
+        iconName="camera"
+        title={t('No pages yet')}
+        message={t('Import photos above, or scan this document with the Android app.')}
+      />
+    </div>
   );
 }

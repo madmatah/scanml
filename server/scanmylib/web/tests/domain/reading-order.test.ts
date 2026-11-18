@@ -7,10 +7,15 @@ import {
   moveByOne,
   moveNextTo,
   type PageId,
+  type Placement,
+  placeSelection,
+  type ReadingOrderGroups,
   rangeOf,
+  readingOrderGroups,
   sameOrder,
   spanOf,
 } from '../../src/domain/reading-order.ts';
+import { samplePage } from './document-details-samples.ts';
 
 const PAGES = ['a', 'b', 'c', 'd', 'e', 'f'];
 
@@ -439,5 +444,87 @@ describe('The reading order', () => {
         assert.equal(isSameOrder, false);
       });
     });
+  });
+
+  describe('The readingOrderGroups() function', () => {
+    const rows: {
+      situation: string;
+      rule: string;
+      placements: Record<string, string>;
+      expected: ReadingOrderGroups;
+    }[] = [
+      {
+        situation: 'the reading order ends with pages that nothing places',
+        rule: 'should put only the pages at the end that nothing places in a group of their own',
+        placements: { a: 'number', b: 'unplaced', c: 'number', d: 'unplaced', e: 'unplaced' },
+        expected: { placed: ['a', 'b', 'c'], unplaced: ['d', 'e'], hasPlacedPages: true },
+      },
+      {
+        situation: 'no page has a place',
+        rule: 'should keep every page in one group, since the reading order is then the capture order',
+        placements: { a: 'unplaced', b: 'unplaced' },
+        expected: { placed: ['a', 'b'], unplaced: [], hasPlacedPages: false },
+      },
+    ];
+
+    for (const { situation, rule, placements, expected } of rows) {
+      describe(`When ${situation}`, () => {
+        let groups: ReadingOrderGroups;
+        beforeEach(() => {
+          const order = Object.keys(placements);
+          const pages = new Map(
+            order.map((pageId) => [pageId, samplePage(pageId, { placement: placements[pageId] ?? null })]),
+          );
+          groups = readingOrderGroups(order, pages);
+        });
+
+        it(rule, () => {
+          assert.deepEqual(groups, expected);
+        });
+      });
+    }
+  });
+
+  describe('The placeSelection() function', () => {
+    const order = ['a', 'b', 'c', 'd'];
+    const rows: { situation: string; moving: string[]; targetId: string; expected: Placement }[] = [
+      {
+        situation: 'the pages go after a later page',
+        moving: ['a', 'b'],
+        targetId: 'c',
+        expected: { kind: 'moved', order: ['c', 'a', 'b', 'd'], moved: ['a', 'b'] },
+      },
+      {
+        situation: 'the pages are already there',
+        moving: ['b'],
+        targetId: 'a',
+        expected: { kind: 'unchanged' },
+      },
+      {
+        situation: 'the target page left the reading order while the dialog was open',
+        moving: ['a'],
+        targetId: 'x',
+        expected: { kind: 'conflict' },
+      },
+      {
+        situation: 'a moving page left the reading order while the dialog was open',
+        moving: ['a', 'x'],
+        targetId: 'c',
+        expected: { kind: 'conflict' },
+      },
+    ];
+
+    for (const { situation, moving, targetId, expected } of rows) {
+      describe(`When ${situation}`, () => {
+        let placement: Placement;
+        beforeEach(() => {
+          placement = placeSelection(order, moving, targetId, 'after');
+        });
+
+        it(`should give "${expected.kind}"`, () => {
+          assert.deepEqual(placement, expected);
+        });
+      });
+    }
   });
 });

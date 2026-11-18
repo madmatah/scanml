@@ -42,12 +42,11 @@ These constraints drive the choices in this document:
 | qrcode | 8.2 | The QR codes of pairing |
 | pytest | 9.1.1 | The api's tests |
 | Ruff, mypy | 0.16.10, 2.4.0 | Formatting and lint of the Python, and its types, strict |
-| JavaScript (ES modules) | the browser's | The web UI's screens not yet moved to TypeScript, which the api no longer serves |
 | TypeScript | 7.0.2 | The web UI's modules, under `src/`, and their tests; `tsc --noEmit` checks their types, strict, and Node runs the tests with its type stripping |
 | React, React DOM | 19.3.1 | The web UI's screens, as function components |
 | React Router | 8.5.1 | The web UI's navigation, in the URL's fragment (`#/login`), on the browser alone |
 | esbuild | 0.28.2 | The build of the web UI, in the api's image and in the gate: one module script and one stylesheet, each named by a hash of its content |
-| KaTeX | 0.19.0 | Typesetting of the LaTeX formulas in the web UI, vendored |
+| KaTeX | 0.19.1 | Typesetting of the LaTeX formulas in the web UI, installed from its lockfile |
 | i18next, i18next-browser-languagedetector, react-i18next | 26.7.1, 8.3.0, 17.1.12 | The web UI's translations, with the English text as key and the language the browser prefers, given to its React components |
 | Node.js | 26 | The web UI's tools, unit tests (`node --test`) and build, in `node:26-trixie-slim` pinned by digest; never in the api's runtime image |
 | pnpm | 12.17.0 | The web UI's package manager: installs its dependencies and tools from its lockfile, under the guards of `pnpm-workspace.yaml` |
@@ -105,10 +104,10 @@ Notes:
   ktlint runs through Gradle in the app's build container, with its network and its writable `android/`, and Gradle's
   verification metadata checks it as it checks the app's dependencies. `scripts/check.sh --fix` runs the other
   formatters on a copy of the tracked files they format in `server/`, `ocr/`, `scripts/` and `.claude/skills/` (never a
-  vendored file, a lock or the script copied from a template), and brings back only their changes to those files, so
-  that nothing they create reaches the checkout, where the host would run it, and no change reaches a file whose diff a
-  reader could not judge. Biome's `noDescendingSpecificity` is off: the stylesheet orders its rules by component, and
-  reordering them to satisfy it would change which rule wins.
+  lock or the script copied from a template), and brings back only their changes to those files, so that nothing they
+  create reaches the checkout, where the host would run it, and no change reaches a file whose diff a reader could not
+  judge. Biome's `noDescendingSpecificity` is off: the stylesheet orders its rules by component, and reordering them to
+  satisfy it would change which rule wins.
 - **`CLAUDE.md` and `.claude/` are the agent guidance** ([Agent guidance](#agent-guidance)).
 
 ## Architecture
@@ -116,9 +115,9 @@ Notes:
 ### Principles
 
 The project follows Clean Architecture: the rules live in a pure domain at the center, and each technology stays at the
-edge, behind an interface that an inner layer owns. `.claude/rules/architecture.md` states the rules. The api follows
-them; the code of the other units keeps its layout until it is restructured: the app's restructuring is planned, and the
-web UI's comes with its move to TypeScript and React; none is planned yet for the OCR sandbox.
+edge, behind an interface that an inner layer owns. `.claude/rules/architecture.md` states the rules. The api and the
+web UI follow them; the code of the other units keeps its layout until it is restructured: the app's restructuring is
+planned, and none is planned yet for the OCR sandbox.
 
 - **The domain is pure,** so it runs anywhere the language runs, and its tests need no I/O, no network and no framework.
   The rules of page numbering and of the reading order are its heart.
@@ -174,10 +173,11 @@ states the rules, and `docs/SECURITY.md` the threat model, the guarantees and th
 
 ### Layers and modules
 
-Each unit's source files as they are, grouped by responsibility, and the layer of each group. The api's files live in
-their layer's directory, but the composition roots at its top and the test support. The restructuring of
-[Principles](#principles) moves the other units' files where one is planned; a file that mixes two layers splits along
-them. The last row lists the scripts that the skills keep, which belong to no unit.
+Each unit's source files as they are, grouped by responsibility, and the layer of each group. The api's and the web UI's
+files live in their layer's directory, but the composition roots at the top of their source trees, the web UI's build
+script and the test support. The restructuring of [Principles](#principles) moves the other units' files where one is
+planned; a file that mixes two layers splits along them. The last row lists the scripts that the skills keep, which
+belong to no unit.
 
 | Unit | Source files | Responsibility | Layer |
 |---|---|---|---|
@@ -201,11 +201,7 @@ them. The last row lists the scripts that the skills keep, which belong to no un
 | api | `adapters/zip_archives`, `adapters/qr_codes` | Zip archives, QR codes | Adapters |
 | api | `adapters/http_api/documents`, `adapters/http_api/pages`, `adapters/http_api/system`, `adapters/http_api/web`, `adapters/http_api/schemas`, `adapters/http_api/serializers`, `adapters/http_api/dependencies`, `adapters/http_api/authentication`, `adapters/http_api/middleware`, `adapters/http_api/static_files`, `adapters/http_api/error_answers`, `adapters/http_api/fastapi_application` | HTTP routes, the times that clients send, the credential of each request, security headers and body limits, the web UI's static files and their caching, the answers to errors, and the FastAPI application that assembles them | Adapters |
 | api | `devtools/fake_ocr` | The fake OCR sandbox of the development stack and the tests | Test support |
-| web UI, in JavaScript, served by nothing | `main.js` | Entry point | Composition root |
-| web UI, in JavaScript, served by nothing | `lib/order.js`, `lib/reading.js`, `lib/math.js`, `lib/format.js`, `lib/labels.js` | Ordering, reading view, formulas, formatting and labels | Domain |
-| web UI, in JavaScript, served by nothing | `router.js`, `session.js`, `status.js`, `uploads.js` | Navigation, session, engine status, uploads | Application |
-| web UI, in JavaScript, served by nothing | `api.js`, `lib/i18n.js`, `lib/dom.js`, `lib/clipboard.js`, `lib/errors.js`, `lib/uuid.js`, `views/`, `components/` | Client of the api, translations, the DOM and its views | Adapters |
-| web UI | `src/main.tsx`, `src/index.html`, `src/stylesheet-imports.d.ts` | Entry point, and the template of the entry page | Composition root |
+| web UI | `src/main.tsx`, `src/index.html`, `src/app.css`, `src/stylesheet-imports.d.ts` | Entry point, the template of the entry page, and the stylesheet | Composition root |
 | web UI | `build.ts` | The build: the bundle, the entry page that names its hashed files, and the copy of the files served under stable URLs | Tools |
 | web UI | `src/domain/reading-order` | The moves of the reading order: a block of pages, next to a page, one place, a range and a span of the selection | Domain |
 | web UI | `src/domain/formatting` | The locale of numbers, numbers and decimals, sizes in bytes and percentages | Domain |
@@ -215,7 +211,7 @@ them. The last row lists the scripts that the skills keep, which belong to no un
 | web UI | `src/application/scheduler` | The port that runs a task after a delay, and cancels it | Application |
 | web UI | `src/application/engine-status` | The engine's status, polled every three seconds while the page is visible, one request at a time, online, offline or unknown, and its ports: the api's status, the page's visibility | Application |
 | web UI | `src/adapters/http-api/api-client`, `src/adapters/http-api/error-detail`, `src/adapters/http-api/response-fields`, `src/adapters/http-api/server-status-decoder` | The client of the api: its requests, with the session cookie and the header that guards the changes of state, the calls of the session and of the status, the detail of its error answers, the check of each answer's shape, and the report of a signed-in call whose session the api no longer knows | Adapters |
-| web UI | `src/adapters/browser/sign-in-record`, `src/adapters/browser/address-bar`, `src/adapters/browser/timer-scheduler`, `src/adapters/browser/page-visibility` | The record of a sign-in in the browser's storage, under the JavaScript UI's key; the token of a sign-in link, taken from the address bar and the history before the router reads them; the browser's timers behind the scheduler; the visibility of the page | Adapters |
+| web UI | `src/adapters/browser/sign-in-record`, `src/adapters/browser/address-bar`, `src/adapters/browser/timer-scheduler`, `src/adapters/browser/page-visibility` | The record of a sign-in in the browser's storage, under the key that browsers signed in to earlier releases hold; the token of a sign-in link, taken from the address bar and the history before the router reads them; the browser's timers behind the scheduler; the visibility of the page | Adapters |
 | web UI | `src/adapters/i18next/localization`, `src/adapters/i18next/catalogs`, `src/adapters/i18next/type-options`, `src/adapters/i18next/formatted-text`, `src/adapters/i18next/page-labels`, `src/adapters/i18next/reading-text` | The translations: the instance of i18next in the browser's language, its catalogs and the types of their keys, and the texts of sizes, durations, percentages, quotations, a page's short label, and the markers and outline of a document being read | Adapters |
 | web UI | `src/adapters/react/shell/routes`, `src/adapters/react/shell/shell`, `src/adapters/react/shell/navigation`, `src/adapters/react/shell/header`, `src/adapters/react/shell/use-document-title`, `src/adapters/react/shell/home` | The routes, the frame of every screen with its skip link, the header with its navigation, the current section and sign-out, the redirects to and from the login, the focus and the scroll of a new screen, and its title | Adapters |
 | web UI | `src/adapters/react/shell/loading-state`, `src/adapters/react/shell/error-state`, `src/adapters/react/shell/empty-state`, `src/adapters/react/shell/error-message`, `src/adapters/react/shell/toasts`, `src/adapters/react/shell/toast-region`, `src/adapters/react/shell/brand-mark`, `src/adapters/react/shell/icon` | The states of a screen that is loading, that failed or that has nothing to show, the text of a failed call to the api, the toasts and their region, the brand mark and the icons | Adapters |
@@ -236,7 +232,7 @@ them. The last row lists the scripts that the skills keep, which belong to no un
 | OCR sandbox | `engines/paddleocr_vl`, `engines/images` | PaddleOCR-VL-1.6, and its image handling | Adapters |
 | OCR sandbox | `setup/install.sh`, `setup/distribution_alias.py` | The installation of the sandbox's environments and models, which only the setup image holds, and the alias distribution it installs in place of OpenCV's GUI build | Tools |
 | scripts | `lib/stack.py`, `lib/version.py`, `lib/formatting.py`, `lib/parallel_tests.py`, `lib/commit_areas.py`, `lib/passed_commit_check.py`, `lib/common.sh`, `lib/engine_check.sh` | The `.env` format and its copy with a setting changed, production's checkout and the isolation of a stack, where a deployment installs a new sandbox, and the settings that the check of a sandbox before a restart takes from the `ocr` service; the version of a build; what the gate hands to its formatters and linters, and what comes back; the gate's parallel run of the tests of the scripts; the areas a commit touches; the commits that already passed their per-commit check; shared shell functions; the check of the engine's environment in a new `ocr` container, and of a sandbox with a new image before a restart | Tools |
-| scripts | `setup.sh`, `dev-env.sh`, `dev.sh`, `build-apk.sh`, `check.sh`, `deploy.sh`, `prod.sh`, `release.py`, `e2e_test.py`, `verify-sandbox.sh`, `vendor-katex.sh` | Install, develop, build the app, check, deploy, operate, release, test end to end, verify the sandbox, vendor KaTeX | Tools |
+| scripts | `setup.sh`, `dev-env.sh`, `dev.sh`, `build-apk.sh`, `check.sh`, `deploy.sh`, `prod.sh`, `release.py`, `e2e_test.py`, `verify-sandbox.sh` | Install, develop, build the app, check, deploy, operate, release, test end to end, verify the sandbox | Tools |
 | — (the skills) | `pull-request/scripts/pr_screenshots.py` in `.claude/skills/` | Publish the screenshots of a pull request, copy them without their hidden data, and clean the branch that holds them: the copy of a template's script, kept as it ships, whose tests live with the template | Tools |
 
 ## Repository layout
@@ -295,12 +291,12 @@ Each row names a rule, the rules file that states it, and what enforces it.
 | Production is operated by hand only through `scripts/prod.sh compose` (`.claude/rules/sandbox.md` > Development stacks and production) | `scripts/lib/stack.py check-compose-command --production`, through `scripts/prod.sh` |
 | The dev app keeps its own application id (`.claude/rules/sandbox.md` > Development stacks and production) | The signing container of `scripts/build-apk.sh` |
 | Production runs published releases only (`.claude/rules/releases.md`) | `scripts/deploy.sh`, `scripts/setup.sh`, `scripts/prod.sh` and `scripts/build-apk.sh` |
-| Never weaken what the lockfile or the registry settings guarantee (`.claude/rules/configuration.md` > Dependencies) | `pip --require-hashes`, pnpm's frozen install with its integrity check and the guards of `server/scanmylib/web/pnpm-workspace.yaml`, Gradle's dependency verification, the image digests of `scripts/check.sh`, of `scripts/lint/Dockerfile.web`, of `server/Dockerfile`'s Node stage and of the scanner in `.github/workflows/vulnerability-scan.yml`, the checksums of `scripts/build-apk.sh`, `scripts/vendor-katex.sh` and of pnpm in `scripts/lint/Dockerfile.web` and `server/Dockerfile`, which `scripts/tests/test_web_toolchain_pins.py` holds together |
+| Never weaken what the lockfile or the registry settings guarantee (`.claude/rules/configuration.md` > Dependencies) | `pip --require-hashes`, pnpm's frozen install with its integrity check and the guards of `server/scanmylib/web/pnpm-workspace.yaml`, Gradle's dependency verification, the image digests of `scripts/check.sh`, of `scripts/lint/Dockerfile.web`, of `server/Dockerfile`'s Node stage and of the scanner in `.github/workflows/vulnerability-scan.yml`, the checksums of `scripts/build-apk.sh` and of pnpm in `scripts/lint/Dockerfile.web` and `server/Dockerfile`, which `scripts/tests/test_web_toolchain_pins.py` holds together |
 | The French translation lives only in the catalogs (`CLAUDE.md` > Language) | The web UI's unit tests, the catalog test `tests/translations.test.ts` among them; i18next-cli in `scripts/check.sh lint`, whose `extract --ci` refuses a key missing from the catalogs or unused, `status fr` an untranslated entry, and `lint` a text of the TypeScript UI outside `t()` and the values of a call that do not match its placeholders; `tsc`, for a key outside the English catalog; Android lint for missing translations |
 | Part of the rules of the Python: PEP 8 at 120 columns, imports, typed signatures with no bare `Any`, no blind `except`, no mutable defaults (`.claude/rules/python.md`), no shell or SQL string built from input (`.claude/rules/conventions.md` > Input from outside the program), and, in part, no character a reader cannot see written as such (`.claude/rules/conventions.md` > Characters a reader cannot see) | Ruff and mypy `--strict`, in `scripts/check.sh lint` |
 | Part of the rules of the shell scripts: quoting and `[[ … ]]` (ShellCheck), indentation (shfmt) (`.claude/rules/bash.md`) | ShellCheck and shfmt, in `scripts/check.sh lint` |
 | The Kotlin conventions at 120 columns, file names (`.claude/rules/kotlin.md`) | ktlint, in `scripts/check.sh android` |
-| The rules of the web UI: layout, `const`, strict equality, named exports, and in TypeScript no `any`, type-only imports marked, no `@ts-ignore`, no `enum` or `namespace`, no floating promise, the rules of hooks, keys from the data, no `dangerouslySetInnerHTML` (`.claude/rules/web.md`) | Biome, in `scripts/check.sh lint` |
+| The rules of the web UI: layout, named exports, no `any`, type-only imports marked, no `@ts-ignore`, no `enum` or `namespace`, no floating promise, the rules of hooks, keys from the data, no `dangerouslySetInnerHTML` (`.claude/rules/web.md`) | Biome, in `scripts/check.sh lint` |
 | The web UI's TypeScript is strict, with `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes` and erasable syntax only (`.claude/rules/web.md` > TypeScript and React) | `tsc --noEmit` on the sources and on the tests, each with the types of its runtime, in `scripts/check.sh lint` |
 | Part of the rules of the api's tests: a broad exception asserted with its message, its raising call alone in its block, no assertion in an `except` (`.claude/rules/tests.md` > pytest) | Ruff's PT011, PT012 and PT017, in `scripts/check.sh lint` |
 | The hook that runs once in the api's tests is a fixture of `scope="class"` written as a `@classmethod` (`.claude/rules/tests.md` > pytest) | `filterwarnings = ["error::pytest.PytestRemovedIn10Warning"]` in `server/pyproject.toml`, in `scripts/check.sh server` |

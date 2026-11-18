@@ -5,10 +5,8 @@ paths:
 
 # The web UI
 
-The web UI (`server/scanmylib/web/`) is written in JavaScript, as ES modules that the browser loads as they are. Its
-move to TypeScript and React, built by a bundler, has begun in `src/`, which the browser does not load yet:
-[TypeScript and React](#typescript-and-react) governs the code written in them, and [JavaScript](#javascript) the
-current code until the move, which removes that section. These rules come on top of `conventions.md`.
+The web UI (`server/scanmylib/web/`) is written in TypeScript and React, in `src/`, and built by a bundler into the
+files that the api serves. These rules come on top of `conventions.md`.
 
 ## TypeScript and React
 
@@ -51,28 +49,3 @@ From the TypeScript handbook and React's "Rules of React" (react.dev).
 - **Directives:** the linter's suppression comment, with its reason, and `@ts-expect-error`, which fails once its error
   is gone. `@ts-ignore` and `@ts-nocheck` are refused: they outlive the errors they silence.
 
-## JavaScript
-
-- **Layout:** 2-space indentation, semicolons, single quotes, template literals for interpolation, 120 columns.
-- **Casing:** `camelCase` for functions and variables, `PascalCase` for classes, `UPPER_SNAKE_CASE` for module
-  constants. Files are named in `kebab-case` (`page-organizer.js`), and their tests `<module>.test.js`. Acronyms are
-  written as words (`ApiError`).
-- **Named exports only,** except the catalog `locales/fr.js`. Imports are relative and carry their `.js` extension,
-  which the browser needs.
-- **`const` by default, `let` when the variable is reassigned, never `var`;** `===` and `!==` only.
-- **`async` and `await` rather than `.then` chains, and no floating promise:** every promise is awaited, or handled
-  where it is created. A caught exception is named `error`.
-- **The DOM is built with `h()` (`lib/dom.js`) and `textContent`,** never with `innerHTML`, `insertAdjacentHTML` or an
-  event-handler attribute, and events are listened to with `addEventListener`. The one exception is the HTML that the
-  server's allowlist sanitizer produced, parsed in an inert `<template>` in `views/page.js` and `views/reader.js`, under
-  the Content Security Policy.
-- **Every text of the UI goes through `t()`** (`lib/i18n.js`), so that its French translation lives in the catalog, as
-  `CLAUDE.md` > Language says.
-- **No JSDoc types.** No type checker reads them, so they are comments that nothing checks, and `@param` tags are
-  forbidden by `conventions.md` > Comments.
-- **A function passed as a callback does not depend on `this`.** A component is a function that builds its DOM and
-  closes over its state; classes only describe errors, such as `ApiError`.
-- **Idioms that override the naming rules:** `h()`, the function that builds an element, and `t()`, the translation
-  function; and the names the DOM imposes.
-- **Directives:** Biome's suppression comment, `// biome-ignore lint/<group>/<rule>: <reason>` (`/* … */` in CSS), with
-  its reason.

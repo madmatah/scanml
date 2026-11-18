@@ -103,7 +103,7 @@ The section of each test framework below gives its own words for them, and how i
   it reads as one sentence: `The ordering > The roman_to_int() function > When the numeral is not canonical > should
   return None, so that a stray word never numbers a page`, whose Python form is
   `test_should_return_none_so_that_a_stray_word_never_numbers_a_page`. A name is `` `should hint the next page` `` in
-  Kotlin, and `'should keep the selection in reading order'` in JavaScript.
+  Kotlin, and `'should keep the selection in reading order'` in TypeScript.
 - **One rule per test.** Neither a test nor its hooks branch, and every expectation can fail: an expectation on a value
   that the test built itself checks nothing. Inputs are named values, not unexplained literals.
 - **Every test asserts:** the gate fails a test that runs no assertion, wherever the test framework can tell, so that a
@@ -331,14 +331,14 @@ The web UI's tests, in `server/scanmylib/web/tests/`, run on Node's own runner, 
 
 For example:
 
-```js
+```ts
 describe('The reading order', () => {
   describe('The moveBlock() function', () => {
     describe('When the pages were selected in click order', () => {
       const pages = ['a', 'b', 'c', 'd', 'e', 'f'];
       const clickedPages = ['e', 'b'];
       const firstPosition = 0;
-      let order;
+      let order: string[];
       beforeEach(() => {
         order = moveBlock(pages, clickedPages, firstPosition);
       });

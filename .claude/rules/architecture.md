@@ -10,7 +10,7 @@ paths:
 
 The project follows Clean Architecture, in four layers, and applies SOLID to functions, types, files and directories.
 The api (`server/scanmylib/`), the app (`android/app/src/main/kotlin/fr/scanmylib/`), the web UI
-(`server/scanmylib/web/`) and the OCR sandbox (`ocr/scanmylib_ocr/`) each follow these rules within their own source
+(`server/scanmylib/web/src/`) and the OCR sandbox (`ocr/scanmylib_ocr/`) each follow these rules within their own source
 tree. The scripts of `scripts/` are tools: their logic lives in `scripts/lib/`, and they follow the rules of SOLID.
 
 ## Layers
@@ -22,7 +22,7 @@ tree. The scripts of `scripts/` are tools: their logic lives in `scripts/lib/`, 
   depends only on the domain, the application on the domain, the adapters on the application and the domain, and the
   composition roots on every layer. A library of plain values that does no I/O and reads no clock may serve any layer.
 - **No dependency cycle:** neither between the units nor, inside a unit, between its files, where the language imports
-  file by file, as Python and JavaScript do, nor between the app's Kotlin packages, whose files use the names of their
+  file by file, as Python and TypeScript do, nor between the app's Kotlin packages, whose files use the names of their
   own package without an import; those of the same layer included. A path that only passes through a package to reach a
   file, as an import of `adapters.sqlite.catalog` passes through `adapters`, is no dependency on that package; using a
   name defined in a file or a package is one.
@@ -30,11 +30,11 @@ tree. The scripts of `scripts/` are tools: their logic lives in `scripts/lib/`, 
   OCR ports: the sandbox implements the protocol in its own process, and so does the fake OCR in the development stack.
   The api never depends on a particular engine or model, so that another one can be plugged in by implementing a new
   worker.
-- **The code written before these layers keeps its layout until it is restructured,** which is planned for the app and
-  the web UI, not yet for the OCR sandbox. Until then, a new file follows the layers, and a change to an older one adds
-  no coupling that they forbid: no technology reached from code that holds a rule, no rule in an adapter, no framework
-  type across a port. A file in a layer's directory, moved or new, imports none that is still outside the layers, which
-  would bring it that file's couplings.
+- **The code written before these layers keeps its layout until it is restructured,** which is planned for the app, not
+  yet for the OCR sandbox. Until then, a new file follows the layers, and a change to an older one adds no coupling that
+  they forbid: no technology reached from code that holds a rule, no rule in an adapter, no framework type across a
+  port. A file in a layer's directory, moved or new, imports none that is still outside the layers, which would bring it
+  that file's couplings.
 
 ## Ports and wiring
 
@@ -47,7 +47,7 @@ tree. The scripts of `scripts/` are tools: their logic lives in `scripts/lib/`, 
   records no rule reads and whose handlers the composition root sets; and `secrets`, the secure random source, on which
   no rule depends. asyncio's servers, connections and subprocesses stay behind ports, like every other technology.
 - **Only composition roots wire.** The entry points of each unit (the api's `scanmylib.__main__` and the application
-  factory it calls, the app's `ScanMyLibApplication`, `AppContainer` and `MainActivity`, the web UI's `main.js`, the
+  factory it calls, the app's `ScanMyLibApplication`, `AppContainer` and `MainActivity`, the web UI's `main.tsx`, the
   sandbox's `container_init`, `supervisor`, `worker` and `engine_environment`) and the tests choose and connect the
   concrete adapters, by hand: written by hand, the graph stays in one place and checked by the types, where a DI
   container would resolve it at run time, by tokens. No DI container, no service locator, no singleton, and no global
@@ -61,7 +61,7 @@ tree. The scripts of `scripts/` are tools: their logic lives in `scripts/lib/`, 
   its exported names or the names its package shares within itself, never through a name kept to its own file or
   package, such as a Python name that starts with `_` or a Kotlin `private` one; a Kotlin `internal` name is visible to
   every file of the app. A directory adds no entry point of its own: no file, such as an `__init__.py` or an
-  `index.js`, re-exports the names of a directory's files.
+  `index.ts`, re-exports the names of a directory's files.
 
 ## Responsibilities
 

@@ -1,7 +1,8 @@
 {
   "name": "scanmylib-web",
   "private": true,
-  "description": "The web UI's dependencies and the tools of its checks; the UI itself is served as it is, without a build.",
+  "description": "The web UI's dependencies, the tools of its checks and of its build.",
+  "type": "module",
   "packageManager": "pnpm@12.17.0",
   "dependencies": {
     "i18next": "26.7.1",

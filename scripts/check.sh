@@ -48,13 +48,12 @@ readonly FORMATTED_DIRECTORIES=(server ocr scripts .claude/skills)
 # The copy of a template's script, which no formatter or type checker reads (.claude/rules/conventions.md, "A script
 # copied from a template is kept as it ships").
 readonly TEMPLATE_SCRIPT=.claude/skills/pull-request/scripts/pr_screenshots.py
-# The files the formatters of the copy format, and nothing else: no other file comes back, such as a vendored file or a
-# lock, whose change git diff would not let a reader judge.
+# The files the formatters of the copy format, and nothing else: no other file comes back, such as a lock or an image,
+# whose change git diff would not let a reader judge.
 readonly FORMATTED_PATHSPECS=('server/*.py' 'ocr/*.py' 'scripts/*.py' '.claude/skills/*.py' 'ocr/*.sh' 'scripts/*.sh'
     '.claude/skills/*.sh' ":(exclude)$TEMPLATE_SCRIPT"
     'server/scanmylib/web/*.js' 'server/scanmylib/web/*.ts' 'server/scanmylib/web/*.tsx' 'server/scanmylib/web/*.json'
-    'server/scanmylib/web/*.css'
-    ':(exclude)server/scanmylib/web/static/vendor/')
+    'server/scanmylib/web/*.css')
 # Without .env (CI only), scripts/build-apk.sh reads its settings from the environment, which
 # common.sh clears: they are handed back to it.
 readonly CI_ANDROID_SETTINGS=("DATA_DIR=${DATA_DIR:-}" "ANDROID_DIR=${ANDROID_DIR:-}" "APP_VARIANT=${APP_VARIANT:-}")
@@ -209,7 +208,7 @@ check_web() {
     web_tools=$(build_web_tools)
     # The build writes into a tmpfs and is then dropped: a broken build or entry page fails the gate.
     run_web_tool --tmpfs /tmp "$web_tools" node build.ts --outdir /tmp/build
-    run_web_tool "$web_tools" node --test 'tests/*.test.js' 'tests/**/*.test.ts'
+    run_web_tool "$web_tools" node --test 'tests/**/*.test.ts'
 }
 
 check_server() {

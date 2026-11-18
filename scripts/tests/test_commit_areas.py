@@ -55,7 +55,6 @@ AREAS_OF_EACH_PATH = {
     "scripts/tests/test_release.py": ["lint", "scripts"],
     "scripts/integration_tests/test_deploy.py": ["lint", "integration"],
     "scripts/release.py": ["lint", "scripts"],
-    "scripts/vendor-katex.sh": ["lint"],
     "scripts/dev.sh": ["lint", "scripts", "integration"],
     "ruff.toml": ["lint"],
     "mypy.ini": ["lint"],

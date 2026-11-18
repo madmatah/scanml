@@ -10,6 +10,7 @@ import { createPageVisibility } from './adapters/browser/page-visibility.ts';
 import { createRandomUuidSource } from './adapters/browser/random-uuid-source.ts';
 import { createSignInRecord } from './adapters/browser/sign-in-record.ts';
 import { createTimerScheduler } from './adapters/browser/timer-scheduler.ts';
+import { createWindowClipboard } from './adapters/browser/window-clipboard.ts';
 import { createApiClient } from './adapters/http-api/api-client.ts';
 import { CATALOGS } from './adapters/i18next/catalogs.ts';
 import { createLocalization } from './adapters/i18next/localization.ts';
@@ -68,6 +69,8 @@ createRoot(findElement('#app')).render(
           dates: localization.dates,
           catalog: apiClient,
           uuids: createRandomUuidSource(window.crypto),
+          pairing: apiClient,
+          clipboard: createWindowClipboard(window),
         }),
       )}
     />

@@ -4,6 +4,7 @@ import { beforeEach, describe, it } from 'node:test';
 import { createApiClient, type Fetch } from '../../../src/adapters/http-api/api-client.ts';
 import type { SessionServer } from '../../../src/application/session.ts';
 import type { DocumentSummary } from '../../../src/domain/document-summary.ts';
+import type { PairingDetails } from '../../../src/domain/pairing-details.ts';
 import type { ServerStatus } from '../../../src/domain/server-status.ts';
 
 interface SentRequest {
@@ -376,6 +377,49 @@ describe('The api client', () => {
       it('should give the decoded document', () => {
         assert.equal(document.id, DOCUMENT_ID);
       });
+    });
+  });
+
+  describe('The readPairing() call', () => {
+    describe('When the api answers the pairing', () => {
+      const screen = new AbortController();
+      let sent: Exchange;
+      let pairing: PairingDetails;
+      beforeEach(async () => {
+        sent = exchange(() =>
+          jsonResponse(OK, {
+            url: 'http://192.168.1.10:8765',
+            token: 'EXAMPLE-TOKEN',
+            pair_uri: 'scanmylib://pair',
+            apk_available: false,
+            apk_url: 'http://192.168.1.10:8765/download/scanmylib.apk',
+          }),
+        );
+        pairing = await createApiClient(sent.fetchFromApi, ignoreUnauthorized).readPairing(screen.signal);
+      });
+
+      it('should ask for the pairing of the api, with the signal of the screen', () => {
+        assert.deepEqual(
+          sent.requests.map(({ path, init }) => ({ request: `${init.method} ${path}`, signal: init.signal })),
+          [{ request: 'GET /api/pairing', signal: screen.signal }],
+        );
+      });
+
+      it('should give the decoded pairing', () => {
+        assert.equal(pairing.isApkAvailable, false);
+      });
+    });
+  });
+
+  describe('The addresses that the pairing screen shows as they are', () => {
+    let addresses: string[];
+    beforeEach(() => {
+      const client = createApiClient(exchange(noContent).fetchFromApi, ignoreUnauthorized);
+      addresses = [client.pairingQrCodeUrl, client.apkQrCodeUrl, client.apkDownloadUrl];
+    });
+
+    it('should name the QR codes of the api and the download of the app', () => {
+      assert.deepEqual(addresses, ['/api/pairing/qr.svg', '/api/pairing/apk-qr.svg', '/download/scanmylib.apk']);
     });
   });
 });

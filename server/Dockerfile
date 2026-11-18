@@ -1,12 +1,15 @@
 # ScanMyLib API image.
 #
 # Stages:
-#   deps     virtualenv with the pinned runtime dependencies (hash-checked)
-#   test     deps + pytest + the test suite:  docker build --target test ...
-#   project  the repository's VERSION file (see below)
-#   runtime  the production image (default, last stage): non-root, no build
-#            tools and no pip, runs with a read-only root filesystem and a
-#            tmpfs /tmp.
+#   deps         virtualenv with the pinned runtime dependencies (hash-checked)
+#   test         deps + pytest + the test suite:  docker build --target test ...
+#   web-tools    Node and pnpm, which build the web UI
+#   web-build    the web UI, type-checked and built into /out
+#   api-sources  the api's Python package, without the web UI's sources
+#   project      the repository's VERSION file (see below)
+#   runtime      the production image (default, last stage): non-root, no build
+#                tools, no pip and no Node, runs with a read-only root
+#                filesystem and a tmpfs /tmp.
 #
 # Wheels only: building a package from its source would fetch its build
 # dependencies without checking their hashes.
@@ -45,6 +48,41 @@ USER ${UID}:${GID}
 CMD ["python", "-m", "pytest"]
 
 
+# Node and pnpm, pinned as in scripts/lint/Dockerfile.web, the image of the
+# gate's web tools (scripts/tests/test_web_toolchain_pins.py holds the two
+# together): Node by digest, pnpm's standalone build by its SHA-256. No stage
+# that holds them reaches the runtime image.
+FROM node:26-trixie-slim@sha256:e6bedef217677b276c591795e169840edd9096dbf13f29df8ef8d1856b8820bc AS web-tools
+ADD --checksum=sha256:2c58959fd5df5cb9f4e72784c08a60ffc7ee558fed9b04b22254e29112203a51 \
+    https://github.com/pnpm/pnpm/releases/download/v12.17.0/pnpm-linux-x64.tar.gz /tmp/pnpm.tar.gz
+RUN mkdir /opt/pnpm \
+ && tar -xzf /tmp/pnpm.tar.gz -C /opt/pnpm --no-same-owner \
+ && rm /tmp/pnpm.tar.gz \
+ && ln -s /opt/pnpm/pnpm /usr/local/bin/pnpm
+
+
+# The packages install from the frozen lockfile, under the guards of
+# pnpm-workspace.yaml: no package's install script runs, so no package's code
+# runs while the network is on. The type check and the build then run without
+# it.
+FROM web-tools AS web-build
+WORKDIR /web
+COPY scanmylib/web/package.json scanmylib/web/pnpm-lock.yaml scanmylib/web/pnpm-workspace.yaml ./
+RUN pnpm install --frozen-lockfile --store-dir /tmp/pnpm-store \
+ && rm -rf /tmp/pnpm-store /root/.cache /root/.local
+COPY scanmylib/web ./
+RUN --network=none node_modules/.bin/tsc --noEmit --project tsconfig.json \
+ && node build.ts --outdir /out
+
+
+# A stage of its own, since the built-in Dockerfile frontend has no
+# COPY --exclude, and a .dockerignore entry would hide the sources from
+# web-build too.
+FROM base AS api-sources
+COPY scanmylib /app/scanmylib
+RUN rm -r /app/scanmylib/web
+
+
 # The version the api reports is the repository's VERSION file, outside this
 # build context: compose.yaml passes the repository root as the additional build
 # context "project", which replaces this stage. A plain `docker build` of this
@@ -70,7 +108,9 @@ COPY --from=deps /opt/venv /opt/venv
 RUN python -m pip uninstall --yes pip \
  && /usr/local/bin/python3 -m pip uninstall --yes pip \
  && rm /usr/local/lib/python3.12/ensurepip/_bundled/pip-*.whl
-COPY scanmylib /app/scanmylib
+COPY --from=api-sources /app/scanmylib /app/scanmylib
+# Only the built files of the web UI: its entry page and static/.
+COPY --from=web-build /out /app/scanmylib/web
 RUN python -m compileall -q /app/scanmylib
 COPY --from=project /VERSION /app/VERSION
 ARG DEV_VERSION=

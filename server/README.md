@@ -3,7 +3,7 @@
 FastAPI server (Python 3.12) implementing `docs/API.md`: it receives scans from
 the phone, drives the OCR sandbox over its Unix socket (`docs/OCR_SANDBOX.md`),
 organizes the library on disk (`docs/ARCHITECTURE.md`) and serves the web UI
-(`scanmylib/web/`, owned by the web UI). Security rules: `docs/SECURITY.md`.
+(`scanmylib/web/`, owned by the web UI), which its image builds. Security rules: `docs/SECURITY.md`.
 
 Everything runs in Docker; nothing is installed on the host.
 
@@ -58,6 +58,11 @@ passes the version of a development build instead, derived from git (build argum
 `DEV_VERSION`, `scripts/lib/version.py`). A plain `docker build` of this directory reports
 `unknown`.
 
+The image builds the web UI from its TypeScript sources in stages of its own (`web-tools`,
+`web-build`), with Node and pnpm, and keeps only what the build writes: the entry page and
+`static/`, in place of `scanmylib/web/`. No Node, no package and no source of the UI reaches
+the runtime image.
+
 Dependencies are pinned with hashes in `requirements.lock` / `requirements-test.lock`,
 generated from `pyproject.toml` in a throwaway container:
 
@@ -80,7 +85,7 @@ docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD:/work" -w /work
 | `SCANMYLIB_PUBLIC_URL` | request origin | URL the phone uses (pairing QR code) |
 | `SCANMYLIB_APK_PATH` | `/app-dist/scanmylib.apk` | served at `/download/scanmylib.apk` |
 | `SCANMYLIB_TOKEN` | generated in `/state/token` | fixed token (development) |
-| `SCANMYLIB_WEB_DIR` | `scanmylib/web` in the image | web UI files (`index.html`, `static/`) |
+| `SCANMYLIB_WEB_DIR` | `scanmylib/web` in the image | the built web UI (`index.html`, `static/`), as `scanmylib/web/build.ts` writes it |
 | `SCANMYLIB_OCR_MAX_SIDE` | `4096` | longest side of the image sent to the sandbox |
 | `SCANMYLIB_OCR_TIMEOUT_S` | `900` | timeout of one `/v1/parse` call |
 | `SCANMYLIB_ASSEMBLE_DELAY_S` | `2` | quiet time before `document.md` / `INDEX.md` are rewritten |
@@ -136,12 +141,21 @@ docker run -d --name webui-api --read-only --tmpfs /tmp \
   --cap-drop ALL --security-opt no-new-privileges:true --user 1000:1000 \
   -p 127.0.0.1:8780:8765 \
   -v $DEV/library:/library -v $DEV/state:/state -v $DEV/run:/run/scanmylib \
-  -v "$PWD/server/scanmylib/web:/web:ro" -e SCANMYLIB_WEB_DIR=/web \
   -e SCANMYLIB_TOKEN=dev-token -e SCANMYLIB_PUBLIC_URL=http://127.0.0.1:8780 \
   scanmylib-webui:latest
 ```
 
-Mounting the web directory makes UI edits visible without rebuilding. Some data:
+The api serves the web UI that its image built from the worktree's sources: build the image
+again to see a UI change. To serve another build, mount its directory and name it in
+`SCANMYLIB_WEB_DIR` (`-v $DEV/web:/web:ro -e SCANMYLIB_WEB_DIR=/web`); this exports the one of
+an image:
+
+```sh
+container=$(docker create scanmylib-webui:latest) \
+  && docker cp "$container:/app/scanmylib/web" $DEV/web; docker rm "$container"
+```
+
+Some data:
 
 ```sh
 T='Authorization: Bearer dev-token'; U=http://127.0.0.1:8780

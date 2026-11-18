@@ -28,7 +28,7 @@ Pairing URI (QR code shown by the web UI): `scanmylib://pair?url=<urlencoded PUB
 
 The web UI's caching: `/` answers `Cache-Control: no-cache`, so that the browser revalidates the page, by its `ETag`,
 on each load. A file found under `/static/assets/` answers `Cache-Control: public, max-age=31536000, immutable`, so
-that the browser keeps it for a year without asking again: only the web UI's build writes there (planned), and it names
+that the browser keeps it for a year without asking again: only the web UI's build writes there, and it names
 each file by a hash of its content, so a new version is a new name. Every other static file, such as the icons and the
 manifest, whose URLs stay stable, answers `no-cache`, and so does a missing file.
 

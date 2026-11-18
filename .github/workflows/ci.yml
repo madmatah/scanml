@@ -45,6 +45,20 @@ jobs:
         run: scripts/check.sh server
         timeout-minutes: 10
 
+  api-image:
+    name: Api's runtime image
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # On a fresh runner the build downloads every base image and package on each run, the web UI's from npm's
+      # registry, with no package's install script; the search of the built image runs without network.
+      - name: Build the image production runs, and check that it holds no Node and none of the web UI's sources
+        run: scripts/check.sh api-image
+        timeout-minutes: 10
+
   web:
     name: Web UI
     runs-on: ubuntu-latest

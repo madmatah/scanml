@@ -18,7 +18,7 @@ from git_environment import isolated_git_environment, run_git
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
 import commit_areas
 
-EVERY_AREA = ["lint", "scripts", "web", "server", "ocr", "android", "integration"]
+EVERY_AREA = ["lint", "scripts", "web", "server", "api-image", "ocr", "android", "integration"]
 
 
 # One path for each rule of commit_areas.PATH_RULES, and the areas a commit that changes it alone is checked on.
@@ -38,9 +38,12 @@ AREAS_OF_EACH_PATH = {
     "ocr/setup/requirements-vllm.in": ["lint", "scripts", "ocr"],
     "ocr/Dockerfile": ["scripts", "ocr"],
     "ocr/scanmylib_ocr/manager.py": ["lint", "ocr"],
-    "server/scanmylib/web/package.json": ["lint", "scripts", "web", "server"],
-    "server/scanmylib/web/static/js/main.js": ["lint", "web", "server"],
-    "server/Dockerfile": ["lint", "scripts", "server"],
+    "server/scanmylib/web/package.json": ["lint", "scripts", "web", "server", "api-image"],
+    "server/scanmylib/web/pnpm-lock.yaml": ["lint", "web", "server", "api-image"],
+    "server/scanmylib/web/pnpm-workspace.yaml": ["lint", "web", "server", "api-image"],
+    "server/scanmylib/web/src/main.tsx": ["lint", "web", "server"],
+    "server/Dockerfile": ["lint", "scripts", "server", "api-image"],
+    "server/.dockerignore": ["lint", "server", "api-image"],
     "server/README.md": ["lint", "server"],
     "scripts/check.sh": EVERY_AREA,
     "scripts/lib/common.sh": EVERY_AREA,

@@ -7,6 +7,7 @@ Needs git, bash and the docker CLI with its compose plugin. Standard library onl
 
 from __future__ import annotations
 
+import itertools
 import os
 import re
 import shutil
@@ -30,6 +31,18 @@ _OPTIONS_WITH_ALLOWED_VALUES = {
     "--tmpfs": {"/tmp"},
 }
 _OPTIONS_GIVEN_ONCE = ("--network", "--read-only", "--cap-drop", "--security-opt", "--user")
+#: The whole option list of the search of the api's runtime image, which runs as root with one capability, where the
+#: other runs of the gate are checked against the table above, which allows neither.
+API_IMAGE_RUN_OPTIONS = (
+    "--rm",
+    "--network", "none",
+    "--read-only",
+    "--cap-drop", "ALL",
+    "--cap-add", "DAC_READ_SEARCH",
+    "--security-opt", "no-new-privileges:true",
+    "--user", "0:0",
+)  # fmt: skip
+API_IMAGE_SEARCH = r"^run .* find / -xdev "
 FIXER_COMMANDS = (
     "ruff check --fix .",
     "ruff format .",
@@ -75,11 +88,18 @@ def list_tool_runs(calls: list[LoggedCall]) -> list[list[str]]:
 
 
 def list_areas_checked(gate_run: ScriptRun) -> list[str]:
-    return re.findall(r"Checking (\w+)", gate_run.stdout)
+    return re.findall(r"Checking ([\w-]+)", gate_run.stdout)
 
 
 def list_mounts(run: list[str]) -> list[str]:
     return [run[index + 1] for index, argument in enumerate(run) if argument == "-v"]
+
+
+def list_options(run: list[str]) -> list[str]:
+    index = 1
+    while run[index].startswith("-"):
+        index += 1 if run[index] in _ISOLATED_FLAGS else 2
+    return run[1:index]
 
 
 def list_isolation_breaches(run: list[str]) -> list[str]:
@@ -372,6 +392,94 @@ class WhenGivenTheApi(InstallationTestCase):
         self.assertEqual(self.checks[1][-1], image_id(self.checks[0]))
 
 
+class WhenGivenTheApiImage(InstallationTestCase):
+    worktree: ClassVar[Path]
+    gate_run: ClassVar[ScriptRun]
+    checks: ClassVar[list[list[str]]]
+    run_options: ClassVar[list[str]]
+    run_image_and_command: ClassVar[list[str]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        installation = make_installation(cls)
+        cls.worktree = installation.worktree
+        cls.gate_run = check(installation, "api-image")
+        cls.checks = list_checks(installation.read_docker_calls())
+        search = cls.checks[-1]
+        cls.run_options = list_options(search)
+        cls.run_image_and_command = search[len(cls.run_options) + 1 :]
+
+    def test_should_succeed(self) -> None:
+        self.assertEqual(self.gate_run.returncode, 0, self.gate_run.output)
+
+    def test_should_build_the_image_once_then_search_it_once_so_that_no_looser_run_of_it_goes_unchecked(self) -> None:
+        self.assertEqual([argv[0] for argv in self.checks], ["build", "run"])
+
+    def test_should_build_the_image_that_production_runs_from_the_worktree(self) -> None:
+        self.assertTrue(" ".join(self.checks[0]).endswith(f"--target runtime {self.worktree}/server"), self.checks[0])
+
+    def test_should_search_the_image_that_its_build_wrote(self) -> None:
+        self.assertEqual(self.run_image_and_command[0], image_id(self.checks[0]))
+
+    def test_should_search_it_as_root_with_no_capability_but_reading_every_directory_no_network_and_no_mount(
+        self,
+    ) -> None:
+        self.assertEqual(self.run_options, list(API_IMAGE_RUN_OPTIONS))
+
+    def test_should_search_its_root_filesystem_alone(self) -> None:
+        self.assertEqual(self.run_image_and_command[1:4], ["find", "/", "-xdev"])
+
+    def test_should_search_for_node_its_packages_and_the_sources_package_files_and_lockfile_of_the_web_ui(self) -> None:
+        searched_names = [
+            argument for option, argument in itertools.pairwise(self.run_image_and_command) if option == "-name"
+        ]
+        self.assertEqual(
+            searched_names,
+            [
+                "node",
+                "nodejs",
+                "node_modules",
+                "*.ts",
+                "*.tsx",
+                "package.json",
+                "pnpm-lock.yaml",
+                "pnpm-workspace.yaml",
+            ],
+        )
+
+
+class WhenTheApiImageHoldsWhatOnlyTheBuildOfTheWebUiNeeds(InstallationTestCase):
+    found_paths: ClassVar[tuple[str, ...]] = ("/usr/local/bin/node", "/app/scanmylib/web/package.json")
+    gate_run: ClassVar[ScriptRun]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        installation = make_installation(cls)
+        installation.answer_docker(
+            [{"match": API_IMAGE_SEARCH, "stdout": "".join(f"{path}\n" for path in cls.found_paths)}]
+        )
+        cls.gate_run = check(installation, "api-image")
+
+    def test_should_fail_and_name_what_it_found(self) -> None:
+        self.assertNotEqual(self.gate_run.returncode, 0)
+        self.assertIn(" ".join(self.found_paths), self.gate_run.stderr)
+
+
+class WhenTheApiImageCannotBeSearched(InstallationTestCase):
+    gate_run: ClassVar[ScriptRun]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        installation = make_installation(cls)
+        unreadable_directory = "find: '/app/hidden': Permission denied\n"
+        installation.answer_docker([{"match": API_IMAGE_SEARCH, "stderr": unreadable_directory, "exit": 1}])
+        cls.gate_run = check(installation, "api-image")
+
+    def test_should_fail_and_say_so_rather_than_pass_on_what_it_could_not_read(self) -> None:
+        self.assertNotEqual(self.gate_run.returncode, 0)
+        self.assertIn("cannot search the api's runtime image", self.gate_run.stderr)
+
+
 class WhenGivenTheWebUiAndTheSandbox(InstallationTestCase):
     worktree: ClassVar[Path]
     gate_run: ClassVar[ScriptRun]
@@ -633,7 +741,16 @@ class WhenALintToolReportsFindings(InstallationTestCase):
 
 
 class WhenGivenNoArea(InstallationTestCase):
-    areas_in_order: ClassVar[tuple[str, ...]] = ("lint", "scripts", "web", "server", "ocr", "android", "integration")
+    areas_in_order: ClassVar[tuple[str, ...]] = (
+        "lint",
+        "scripts",
+        "web",
+        "server",
+        "api-image",
+        "ocr",
+        "android",
+        "integration",
+    )
     gate_run: ClassVar[ScriptRun]
     is_scripts_mark_left: ClassVar[bool]
     is_integration_mark_left: ClassVar[bool]

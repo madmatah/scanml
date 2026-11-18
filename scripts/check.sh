@@ -11,6 +11,8 @@
 #   web         the build of the web UI (esbuild, into a throwaway directory) and its unit tests (node --test), in the
 #               image of its tools, without network
 #   server      the api's tests, in its test image, without network, read-only
+#   api-image   the api's runtime image, as production runs it: built, then searched without network for what only
+#               the web UI's build needs, Node, node_modules, and the UI's sources, package files and lockfile
 #   ocr         the sandbox's unit tests, in its image, without network or models
 #   android     the app's unit and screenshot tests, lint and ktlint (scripts/build-apk.sh, never signed)
 #   integration the integration tests of the scripts (scripts/integration_tests/): the scripts themselves, those the
@@ -36,7 +38,7 @@
 #        git rebase --exec 'scripts/check.sh --last-commit' origin/main   each commit of a branch
 set -euo pipefail
 
-readonly AREAS=(lint scripts web server ocr android integration)
+readonly AREAS=(lint scripts web server api-image ocr android integration)
 readonly MUST_CHECK_STATUS=3
 readonly SHELLCHECK_DIGEST=sha256:61862eba1fcf09a484ebcc6feea46f1782532571a34ed51fedf90dd25f925a8d
 readonly SHELLCHECK_IMAGE=koalaman/shellcheck:v0.11.0@$SHELLCHECK_DIGEST
@@ -216,6 +218,23 @@ check_server() {
     docker run --rm --network none --read-only --tmpfs /tmp "$image"
 }
 
+# The image is the api's own, built from the repository, and the search runs with no mount and no network on its
+# read-only root, as root with every capability dropped but the one that reads every directory, which the image's own
+# user cannot: the test of this run in scripts/integration_tests/test_check.py pins those options.
+check_api_image() {
+    local image
+    local found
+    image=$(build_image --target runtime "$ROOT/server")
+    found=$(docker run --rm --network none --read-only --cap-drop ALL --cap-add DAC_READ_SEARCH \
+        --security-opt no-new-privileges:true --user 0:0 "$image" find / -xdev \( \
+        \( -type f -o -type l \) \( -name node -o -name nodejs \) -o -type d -name node_modules -o -path '/app/*' \
+        \( -name '*.ts' -o -name '*.tsx' -o -name package.json -o -name pnpm-lock.yaml -o -name pnpm-workspace.yaml \) \
+        \) -print) || die "cannot search the api's runtime image: fix what find reports above, then run \
+scripts/check.sh api-image again"
+    [[ -z $found ]] || die "the api's runtime image holds what only the web UI's build needs, which server/Dockerfile \
+must leave in its build stages: ${found//$'\n'/ }"
+}
+
 check_ocr() {
     local image
     image=$(build_image --target runtime "$ROOT/ocr")
@@ -241,6 +260,7 @@ check_area() {
         scripts) check_scripts ;;
         web) check_web ;;
         server) check_server ;;
+        api-image) check_api_image ;;
         ocr) check_ocr ;;
         android) check_android ;;
         integration) check_integration ;;

@@ -44,7 +44,8 @@ These constraints drive the choices in this document:
 | Ruff, mypy | 0.16.10, 2.4.0 | Formatting and lint of the Python, and its types, strict |
 | JavaScript (ES modules) | the browser's | The web UI, loaded as it is, without a build step |
 | KaTeX | 0.19.0 | Typesetting of the LaTeX formulas in the web UI, vendored |
-| Node.js | 22 | The web UI's unit tests (`node --test`) |
+| Node.js | 26 | The web UI's tools and unit tests (`node --test`), in `node:26-trixie-slim` pinned by digest |
+| pnpm | 12.17.0 | The web UI's package manager: installs its dependencies and tools from its lockfile, under the guards of `pnpm-workspace.yaml` |
 | PaddleOCR, PaddlePaddle | 3.7.0, 3.2.1 | The OCR pipeline: PP-DocLayoutV3 layout analysis, UVDoc unwarping, orientation |
 | OpenCV (headless build) | 4.10.0.84 | The pipeline's image processing, without the GUI and so without libGL, Mesa and the X libraries; installed under the name of the GUI build that PaddleX requires, through an alias distribution |
 | PaddleOCR-VL-1.6, vLLM | 0.9B, 0.31.0 | The recognition model, served by vLLM inside the sandbox |
@@ -89,7 +90,8 @@ Notes:
 - **Every language has its formatter and its linter in the gate,** so that a review never discusses layout and the
   tools catch what they can; review checks the rest of the conventions. The tools of the `lint` area run in containers
   without network or privileges, on read-only sources: the Python tools and the api's dependencies, which mypy needs,
-  from hashed locks; Biome from the web UI's lockfile; ShellCheck and shfmt from their authors' images, by digest.
+  from hashed locks; Biome from the web UI's pnpm lockfile, without any package's install script; ShellCheck and shfmt
+  from their authors' images, by digest.
   ktlint runs through Gradle in the app's build container, with its network and its writable `android/`, and Gradle's
   verification metadata checks it as it checks the app's dependencies. `scripts/check.sh --fix` runs the other
   formatters on a copy of the tracked files they format in `server/`, `ocr/`, `scripts/` and `.claude/skills/` (never a
@@ -263,7 +265,7 @@ Each row names a rule, the rules file that states it, and what enforces it.
 | Production is operated by hand only through `scripts/prod.sh compose` (`.claude/rules/sandbox.md` > Development stacks and production) | `scripts/lib/stack.py check-compose-command --production`, through `scripts/prod.sh` |
 | The dev app keeps its own application id (`.claude/rules/sandbox.md` > Development stacks and production) | The signing container of `scripts/build-apk.sh` |
 | Production runs published releases only (`.claude/rules/releases.md`) | `scripts/deploy.sh`, `scripts/setup.sh`, `scripts/prod.sh` and `scripts/build-apk.sh` |
-| Never weaken what the lockfile or the registry settings guarantee (`.claude/rules/configuration.md` > Dependencies) | `pip --require-hashes`, `npm ci`'s integrity check, Gradle's dependency verification, the image digests of `scripts/check.sh` and of the scanner in `.github/workflows/vulnerability-scan.yml`, the checksums of `scripts/build-apk.sh` and `scripts/vendor-katex.sh` |
+| Never weaken what the lockfile or the registry settings guarantee (`.claude/rules/configuration.md` > Dependencies) | `pip --require-hashes`, pnpm's frozen install with its integrity check and the guards of `server/scanmylib/web/pnpm-workspace.yaml`, Gradle's dependency verification, the image digests of `scripts/check.sh`, of `scripts/lint/Dockerfile.web` and of the scanner in `.github/workflows/vulnerability-scan.yml`, the checksums of `scripts/build-apk.sh`, `scripts/vendor-katex.sh` and of pnpm in `scripts/lint/Dockerfile.web` |
 | The French translation lives only in the catalogs (`CLAUDE.md` > Language) | The web UI's unit tests; Android lint for missing translations |
 | Part of the rules of the Python: PEP 8 at 120 columns, imports, typed signatures with no bare `Any`, no blind `except`, no mutable defaults (`.claude/rules/python.md`), no shell or SQL string built from input (`.claude/rules/conventions.md` > Input from outside the program), and, in part, no character a reader cannot see written as such (`.claude/rules/conventions.md` > Characters a reader cannot see) | Ruff and mypy `--strict`, in `scripts/check.sh lint` |
 | Part of the rules of the shell scripts: quoting and `[[ … ]]` (ShellCheck), indentation (shfmt) (`.claude/rules/bash.md`) | ShellCheck and shfmt, in `scripts/check.sh lint` |

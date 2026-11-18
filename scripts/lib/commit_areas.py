@@ -51,6 +51,8 @@ PATH_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("scripts/build-apk.sh", ("lint", "scripts", "android", "integration")),
     ("scripts/lib/stack.py", ("lint", "scripts", "android", "integration")),
     ("scripts/lib/version.py", ("lint", "scripts", "android", "integration")),
+    # The image of the web UI's tools runs its unit tests too.
+    ("scripts/lint/Dockerfile.web", ("lint", "web")),
     ("scripts/lint/", ("lint",)),
     ("scripts/tests/", ("lint", "scripts")),
     ("scripts/integration_tests/", ("lint", "integration")),

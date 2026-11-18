@@ -66,7 +66,8 @@ COPIED = (
     "scripts/lint/requirements.lock",
     "server/requirements-test.lock",
     "server/scanmylib/web/package.json",
-    "server/scanmylib/web/package-lock.json",
+    "server/scanmylib/web/pnpm-lock.yaml",
+    "server/scanmylib/web/pnpm-workspace.yaml",
     # A skill, so that .claude/skills/ exists to mount, as in the repository.
     ".claude/skills/deliver-branch/SKILL.md",
 )

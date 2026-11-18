@@ -1,0 +1,20 @@
+# The guards of every install, the frozen ones of the gate and of the api's image included.
+# A version published less than seven days ago is refused, never replaced by an older one.
+minimumReleaseAge: 10080
+minimumReleaseAgeStrict: true
+# A package whose new version lost the provenance or the trusted publisher of an earlier one is refused.
+trustPolicy: no-downgrade
+# trustLockfile stays at its default, false: every entry of the lockfile is checked again against the release age and
+# the trust policy, even in a frozen install.
+blockExoticSubdeps: true
+# No install script runs: each one is listed and refused, and an unlisted one fails the install.
+strictDepBuilds: true
+allowBuilds:
+  esbuild: false
+  '@swc/core': false
+# pnpm never downloads another pnpm than the one it is, whatever packageManager names; the images pin pnpm themselves.
+# Any other value would also write pnpm's own resolution into the lockfile as a second YAML document, which GitHub's
+# dependency graph does not read.
+pmOnFail: ignore
+# pnpm never asks the registry for a newer pnpm: the images pin it, and the answer would only add noise to their logs.
+updateNotifier: false

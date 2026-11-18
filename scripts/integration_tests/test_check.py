@@ -307,14 +307,15 @@ class WhenGivenAreas(InstallationTestCase):
     def test_should_check_only_those_in_the_order_given(self) -> None:
         self.assertEqual(list_areas_checked(self.gate_run), ["server", "web"])
 
-    def test_should_build_and_run_the_tests_of_the_api_then_run_those_of_the_web_ui(self) -> None:
-        self.assertEqual(len(self.checks), 3)
+    def test_should_build_and_run_the_tests_of_the_api_then_those_of_the_web_ui(self) -> None:
+        self.assertEqual(len(self.checks), 4)
 
     def test_should_build_the_test_image_of_the_api_from_the_worktree(self) -> None:
         self.assertIn(f"--target test {self.worktree}/server", self.checks[0])
 
-    def test_should_run_the_tests_of_the_web_ui_with_node(self) -> None:
-        self.assertIn("node --test", self.checks[2])
+    def test_should_run_the_tests_of_the_web_ui_with_node_in_the_image_of_its_tools(self) -> None:
+        self.assertIn("--file scripts/lint/Dockerfile.web", self.checks[2])
+        self.assertIn("node --test", self.checks[3])
 
 
 class WhenGivenTheWebUiTheApiAndTheSandbox(InstallationTestCase):
@@ -372,26 +373,32 @@ class WhenGivenTheWebUiAndTheSandbox(InstallationTestCase):
     def test_should_succeed(self) -> None:
         self.assertEqual(self.gate_run.returncode, 0, self.gate_run.output)
 
-    def test_should_run_the_tests_of_the_web_ui_then_build_and_run_those_of_the_sandbox(self) -> None:
-        self.assertEqual([argv[0] for argv in self.checks], ["run", "build", "run"])
+    def test_should_build_and_run_the_tests_of_the_web_ui_then_those_of_the_sandbox(self) -> None:
+        self.assertEqual([argv[0] for argv in self.checks], ["build", "run", "build", "run"])
+
+    def test_should_run_the_tests_of_the_web_ui_in_the_image_that_its_build_wrote(self) -> None:
+        self.assertEqual(self.checks[1][self.checks[1].index("node") - 1], image_id(self.checks[0]))
 
     def test_should_build_the_image_of_the_sandbox_from_the_worktree(self) -> None:
-        self.assertTrue(self.checks[1][-1].endswith(f"{self.worktree}/ocr"), self.checks[1])
+        self.assertTrue(self.checks[2][-1].endswith(f"{self.worktree}/ocr"), self.checks[2])
 
     def test_should_test_the_image_the_sandbox_runs_not_its_setup_image(self) -> None:
-        self.assertIn(f"--target runtime {self.worktree}/ocr", " ".join(self.checks[1]))
+        self.assertIn(f"--target runtime {self.worktree}/ocr", " ".join(self.checks[2]))
 
     def test_should_run_each_without_network_or_privileges(self) -> None:
-        tests = {"web UI": self.checks[0], "sandbox": self.checks[2]}
+        tests = {"web UI": self.checks[1], "sandbox": self.checks[3]}
         for area, run in tests.items():
             with self.subTest(area):
                 self.assertEqual(list_isolation_breaches(run), [])
 
     def test_should_mount_its_own_sources_alone_read_only(self) -> None:
-        mounts = {"web UI": list_mounts(self.checks[0]), "sandbox": list_mounts(self.checks[2])}
+        mounts = {"web UI": list_mounts(self.checks[1]), "sandbox": list_mounts(self.checks[3])}
         self.assertEqual(
             mounts,
-            {"web UI": [f"{self.worktree}/server/scanmylib/web:/web:ro"], "sandbox": [f"{self.worktree}/ocr:/app:ro"]},
+            {
+                "web UI": [f"{self.worktree}/server/scanmylib/web:/tools/web:ro"],
+                "sandbox": [f"{self.worktree}/ocr:/app:ro"],
+            },
         )
 
 
@@ -495,8 +502,9 @@ class WhenGivenTheLint(InstallationTestCase):
                 ["scripts/lint/Dockerfile", "scripts/lint/requirements.lock", "server/requirements-test.lock"],
                 [
                     "scripts/lint/Dockerfile.web",
-                    "server/scanmylib/web/package-lock.json",
                     "server/scanmylib/web/package.json",
+                    "server/scanmylib/web/pnpm-lock.yaml",
+                    "server/scanmylib/web/pnpm-workspace.yaml",
                 ],
             ],
         )
@@ -806,7 +814,7 @@ class TheFixOption(InstallationTestCase):
     def test_should_let_biome_write_to_the_copy_of_the_web_ui_alone(self) -> None:
         biome = self.tool_runs[0]
         tree = find_formatted_copy(self.tool_runs) / "tree"
-        self.assertEqual(list_mounts(biome), [f"{tree}/server/scanmylib/web:/web"])
+        self.assertEqual(list_mounts(biome), [f"{tree}/server/scanmylib/web:/tools/web"])
 
     def test_should_let_ruff_and_shfmt_write_to_the_copy_alone_and_read_the_worktree_read_only(self) -> None:
         tree = find_formatted_copy(self.tool_runs) / "tree"
@@ -839,7 +847,7 @@ class TheFixOptionWhenAFormatterChangesATrackedFile(InstallationTestCase):
             ),
             "shfmt": FormatterChange(r" -w -- ", "/src/scripts/dev.sh", "scripts/dev.sh", "# formatted\n"),
             "biome": FormatterChange(
-                "biome check --write", "/web/package.json", "server/scanmylib/web/package.json", "{}\n"
+                "biome check --write", "/tools/web/package.json", "server/scanmylib/web/package.json", "{}\n"
             ),
         }
     )
@@ -889,8 +897,8 @@ class TheFixOptionWhenAFormatterCreatesAFile(InstallationTestCase):
 class TheFixOptionWhenAFormatterChangesAFileThatTheFormattersDoNotFormat(InstallationTestCase):
     container_paths: ClassVar[Mapping[str, str]] = MappingProxyType(
         {
-            "a vendored library": "/web/static/vendor/library.min.js",
-            "the lock of the web UI": "/web/package-lock.json",
+            "a vendored library": "/tools/web/static/vendor/library.min.js",
+            "the lock of the web UI": "/tools/web/pnpm-lock.yaml",
         }
     )
     fix_runs: ClassVar[dict[str, ScriptRun]]
@@ -906,7 +914,7 @@ class TheFixOptionWhenAFormatterChangesAFileThatTheFormattersDoNotFormat(Install
         vendored.write_text("library\n")
         installation.run_git(installation.worktree, "add", str(vendored))
         installation.run_git(installation.worktree, "commit", "--quiet", "--message", "Vendored library")
-        paths = {"a vendored library": vendored, "the lock of the web UI": web / "package-lock.json"}
+        paths = {"a vendored library": vendored, "the lock of the web UI": web / "pnpm-lock.yaml"}
         cls.fix_runs, cls.texts_before, cls.texts_after = {}, {}, {}
         for row, container_path in cls.container_paths.items():
             cls.texts_before[row] = paths[row].read_text()

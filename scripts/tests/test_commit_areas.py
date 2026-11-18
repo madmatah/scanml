@@ -45,6 +45,7 @@ AREAS_OF_EACH_PATH = {
     "scripts/build-apk.sh": ["lint", "scripts", "android", "integration"],
     "scripts/lib/stack.py": ["lint", "scripts", "android", "integration"],
     "scripts/lib/version.py": ["lint", "scripts", "android", "integration"],
+    "scripts/lint/Dockerfile.web": ["lint", "web"],
     "scripts/lint/requirements.lock": ["lint"],
     "scripts/tests/test_release.py": ["lint", "scripts"],
     "scripts/integration_tests/test_deploy.py": ["lint", "integration"],

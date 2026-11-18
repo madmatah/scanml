@@ -8,7 +8,7 @@
 #               Biome for the web UI (ktlint, for the app, runs in the android area), and none of them on a script
 #               copied from a template, kept as it ships
 #   scripts     the unit tests of the scripts' files and of the workflows (scripts/tests/), on the host's python3
-#   web         the unit tests of the web UI (node --test, in a container without network)
+#   web         the unit tests of the web UI (node --test, in the image of its tools, without network)
 #   server      the api's tests, in its test image, without network, read-only
 #   ocr         the sandbox's unit tests, in its image, without network or models
 #   android     the app's unit and screenshot tests, lint and ktlint (scripts/build-apk.sh, never signed)
@@ -50,7 +50,7 @@ readonly TEMPLATE_SCRIPT=.claude/skills/pull-request/scripts/pr_screenshots.py
 readonly FORMATTED_PATHSPECS=('server/*.py' 'ocr/*.py' 'scripts/*.py' '.claude/skills/*.py' 'ocr/*.sh' 'scripts/*.sh'
     '.claude/skills/*.sh' ":(exclude)$TEMPLATE_SCRIPT"
     'server/scanmylib/web/*.js' 'server/scanmylib/web/*.json' 'server/scanmylib/web/*.css'
-    ':(exclude)server/scanmylib/web/static/vendor/' ':(exclude)server/scanmylib/web/package-lock.json')
+    ':(exclude)server/scanmylib/web/static/vendor/')
 # Without .env (CI only), scripts/build-apk.sh reads its settings from the environment, which
 # common.sh clears: they are handed back to it.
 readonly CI_ANDROID_SETTINGS=("DATA_DIR=${DATA_DIR:-}" "ANDROID_DIR=${ANDROID_DIR:-}" "APP_VARIANT=${APP_VARIANT:-}")
@@ -95,7 +95,7 @@ build_python_tools() {
 
 build_web_tools() {
     tar -C "$ROOT" -c scripts/lint/Dockerfile.web server/scanmylib/web/package.json \
-        server/scanmylib/web/package-lock.json \
+        server/scanmylib/web/pnpm-lock.yaml server/scanmylib/web/pnpm-workspace.yaml \
         | build_image --file scripts/lint/Dockerfile.web -
 }
 
@@ -140,7 +140,7 @@ check_lint() {
     run_tool "${CHECKED_SOURCES[@]}" -w /src "$SHELLCHECK_IMAGE" -- "${shell_scripts[@]}"
     run_tool "${CHECKED_SOURCES[@]}" -w /src "$SHFMT_IMAGE" -d -- "${shell_scripts[@]}"
     web_tools=$(build_web_tools)
-    run_tool -v "$ROOT/server/scanmylib/web:/web:ro" "$web_tools" /tools/node_modules/.bin/biome ci --colors=off .
+    run_tool -v "$ROOT/server/scanmylib/web:/tools/web:ro" "$web_tools" /tools/node_modules/.bin/biome ci --colors=off .
 }
 
 # ktlint writes android/ in place through scripts/build-apk.sh, which runs on the host: it runs before anything comes
@@ -162,7 +162,7 @@ fix_everything() {
         "$digests_file" "${FORMATTED_PATHSPECS[@]}")
     wait "$!" || die "only ktlint formatted (android/): fix what the error above says, then run --fix again"
     # Biome runs first on the copy, before any other formatter could turn a directory of it into a link.
-    run_tool -v "$tree/server/scanmylib/web:/web" "$web_tools" /tools/node_modules/.bin/biome check --write \
+    run_tool -v "$tree/server/scanmylib/web:/tools/web" "$web_tools" /tools/node_modules/.bin/biome check --write \
         --colors=off . || findings_remain=1
     fixed_sources=("${CHECKED_SOURCES[@]}")
     for directory in "${FORMATTED_DIRECTORIES[@]}"; do
@@ -188,7 +188,9 @@ check_integration() {
 }
 
 check_web() {
-    run_tool -v "$ROOT/server/scanmylib/web:/web:ro" node:22-trixie-slim node --test '/web/tests/*.test.js'
+    local web_tools
+    web_tools=$(build_web_tools)
+    run_tool -v "$ROOT/server/scanmylib/web:/tools/web:ro" "$web_tools" node --test 'tests/*.test.js'
 }
 
 check_server() {

@@ -311,6 +311,25 @@ data or library; an `--api` URL without an explicit port is refused) without
   12, 2026, before this setting, it most likely sent a usage report to Google
   (commands and options, no files).
 
+## The web UI's packages
+
+pnpm installs the web UI's dependencies and tools from its lockfile, `server/scanmylib/web/pnpm-lock.yaml`, in the image
+of the gate's web tools (`scripts/lint/Dockerfile.web`), with the build's network. The guards of
+`server/scanmylib/web/pnpm-workspace.yaml` apply to every install, the frozen ones included, which check every entry of
+the lockfile again (`trustLockfile` stays unset), so that a lockfile written under weaker settings is refused:
+
+- no package's install script runs: those of esbuild and `@swc/core`, which only check their native binary, are refused
+  by name (`allowBuilds`), and any other fails the install (`strictDepBuilds`);
+- a version published less than seven days ago fails the install, rather than being replaced by an older one
+  (`minimumReleaseAge`, strict), which leaves a hijacked release time to be found and withdrawn;
+- so does a version that lost the provenance or the trusted publisher of an earlier one (`trustPolicy: no-downgrade`),
+  and an indirect dependency from a Git repository or a tarball URL (`blockExoticSubdeps`);
+- pnpm never downloads another pnpm (`pmOnFail: ignore`); Node.js comes from `node:26-trixie-slim` pinned by digest,
+  and pnpm from its standalone build, checked against its SHA-256.
+
+The tools then run in containers without network, on read-only sources. The page the browser loads uses none of these
+packages yet: it is still the JavaScript UI, with its vendored KaTeX.
+
 ## Known vulnerabilities of the dependencies
 
 - **Dependabot** reports the known vulnerabilities of what GitHub's dependency graph reads: the api's direct

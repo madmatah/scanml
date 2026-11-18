@@ -5,8 +5,8 @@
 #
 #   lint        the formatters and linters, without network, on read-only sources: Ruff (format and lint) and
 #               mypy --strict for the Python, zizmor for the workflows, ShellCheck and shfmt for the shell scripts,
-#               Biome for the web UI (ktlint, for the app, runs in the android area), and none of them on a script
-#               copied from a template, kept as it ships
+#               Biome and tsc --noEmit for the web UI (ktlint, for the app, runs in the android area), and none of them
+#               on a script copied from a template, kept as it ships
 #   scripts     the unit tests of the scripts' files and of the workflows (scripts/tests/), on the host's python3
 #   web         the unit tests of the web UI (node --test, in the image of its tools, without network)
 #   server      the api's tests, in its test image, without network, read-only
@@ -49,7 +49,8 @@ readonly TEMPLATE_SCRIPT=.claude/skills/pull-request/scripts/pr_screenshots.py
 # lock, whose change git diff would not let a reader judge.
 readonly FORMATTED_PATHSPECS=('server/*.py' 'ocr/*.py' 'scripts/*.py' '.claude/skills/*.py' 'ocr/*.sh' 'scripts/*.sh'
     '.claude/skills/*.sh' ":(exclude)$TEMPLATE_SCRIPT"
-    'server/scanmylib/web/*.js' 'server/scanmylib/web/*.json' 'server/scanmylib/web/*.css'
+    'server/scanmylib/web/*.js' 'server/scanmylib/web/*.ts' 'server/scanmylib/web/*.tsx' 'server/scanmylib/web/*.json'
+    'server/scanmylib/web/*.css'
     ':(exclude)server/scanmylib/web/static/vendor/')
 # Without .env (CI only), scripts/build-apk.sh reads its settings from the environment, which
 # common.sh clears: they are handed back to it.
@@ -104,6 +105,10 @@ run_tool() {
         --user "$(id -u):$(id -g)" "$@"
 }
 
+run_web_tool() {
+    run_tool -v "$ROOT/server/scanmylib/web:/tools/web:ro" "$@"
+}
+
 run_python_tool() {
     local image=$1 directory=$3
     local -n mounts=$2
@@ -140,7 +145,10 @@ check_lint() {
     run_tool "${CHECKED_SOURCES[@]}" -w /src "$SHELLCHECK_IMAGE" -- "${shell_scripts[@]}"
     run_tool "${CHECKED_SOURCES[@]}" -w /src "$SHFMT_IMAGE" -d -- "${shell_scripts[@]}"
     web_tools=$(build_web_tools)
-    run_tool -v "$ROOT/server/scanmylib/web:/tools/web:ro" "$web_tools" /tools/node_modules/.bin/biome ci --colors=off .
+    run_web_tool "$web_tools" /tools/node_modules/.bin/biome ci --colors=off .
+    # The sources run in the browser and the tests in Node: each project has the types of its own runtime.
+    run_web_tool "$web_tools" /tools/node_modules/.bin/tsc --noEmit --project tsconfig.json
+    run_web_tool "$web_tools" /tools/node_modules/.bin/tsc --noEmit --project tsconfig.tools.json
 }
 
 # ktlint writes android/ in place through scripts/build-apk.sh, which runs on the host: it runs before anything comes
@@ -190,7 +198,7 @@ check_integration() {
 check_web() {
     local web_tools
     web_tools=$(build_web_tools)
-    run_tool -v "$ROOT/server/scanmylib/web:/tools/web:ro" "$web_tools" node --test 'tests/*.test.js'
+    run_web_tool "$web_tools" node --test 'tests/*.test.js' 'tests/**/*.test.ts'
 }
 
 check_server() {

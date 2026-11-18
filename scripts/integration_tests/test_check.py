@@ -317,6 +317,9 @@ class WhenGivenAreas(InstallationTestCase):
         self.assertIn("--file scripts/lint/Dockerfile.web", self.checks[2])
         self.assertIn("node --test", self.checks[3])
 
+    def test_should_run_the_typescript_tests_of_the_web_ui_beside_its_javascript_ones(self) -> None:
+        self.assertTrue(self.checks[3].endswith("node --test tests/*.test.js tests/**/*.test.ts"), self.checks[3])
+
 
 class WhenGivenTheWebUiTheApiAndTheSandbox(InstallationTestCase):
     gate_run: ClassVar[ScriptRun]
@@ -459,6 +462,8 @@ class WhenGivenTheLint(InstallationTestCase):
         "koalaman/shellcheck:",
         "-d -- ",
         "biome ci",
+        "tsc --noEmit --project tsconfig.json",
+        "tsc --noEmit --project tsconfig.tools.json",
     )
     gate_run: ClassVar[ScriptRun]
     tool_runs: ClassVar[list[list[str]]]

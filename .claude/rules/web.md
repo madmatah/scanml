@@ -6,9 +6,9 @@ paths:
 # The web UI
 
 The web UI (`server/scanmylib/web/`) is written in JavaScript, as ES modules that the browser loads as they are. Its
-move to TypeScript and React, built by a bundler, is planned: [TypeScript and React](#typescript-and-react) governs the
-code written in them, and [JavaScript](#javascript) the current code until the move, which removes that section. These
-rules come on top of `conventions.md`.
+move to TypeScript and React, built by a bundler, has begun in `src/`, which the browser does not load yet:
+[TypeScript and React](#typescript-and-react) governs the code written in them, and [JavaScript](#javascript) the
+current code until the move, which removes that section. These rules come on top of `conventions.md`.
 
 ## TypeScript and React
 

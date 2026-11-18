@@ -43,6 +43,7 @@ These constraints drive the choices in this document:
 | pytest | 9.1.1 | The api's tests |
 | Ruff, mypy | 0.16.10, 2.4.0 | Formatting and lint of the Python, and its types, strict |
 | JavaScript (ES modules) | the browser's | The web UI, loaded as it is, without a build step |
+| TypeScript | 7.0.2 | The web UI's modules as they move to TypeScript, under `src/`, and their tests; `tsc --noEmit` checks their types, strict, and Node runs the tests with its type stripping |
 | KaTeX | 0.19.0 | Typesetting of the LaTeX formulas in the web UI, vendored |
 | Node.js | 26 | The web UI's tools and unit tests (`node --test`), in `node:26-trixie-slim` pinned by digest |
 | pnpm | 12.17.0 | The web UI's package manager: installs its dependencies and tools from its lockfile, under the guards of `pnpm-workspace.yaml` |
@@ -195,6 +196,8 @@ them. The last row lists the scripts that the skills keep, which belong to no un
 | web UI | `lib/order.js`, `lib/reading.js`, `lib/math.js`, `lib/format.js`, `lib/labels.js` | Ordering, reading view, formulas, formatting and labels | Domain |
 | web UI | `router.js`, `session.js`, `status.js`, `uploads.js` | Navigation, session, engine status, uploads | Application |
 | web UI | `api.js`, `lib/i18n.js`, `lib/dom.js`, `lib/clipboard.js`, `lib/errors.js`, `lib/uuid.js`, `views/`, `components/` | Client of the api, translations, the DOM and its views | Adapters |
+| web UI, in TypeScript, not yet loaded by the browser | `src/domain/reading-order` | The moves of the reading order: a block of pages, next to a page, one place, a range and a span of the selection | Domain |
+| web UI, in TypeScript, not yet loaded by the browser | `src/adapters/react/organizer/grid-geometry` | The organizer's grid: its rows, where a dragged page would land, its insertion mark, and the scrolling speed at the edges | Adapters |
 | app | `ScanMyLibApplication`, `AppContainer`, `MainActivity` | Entry points and wiring | Composition roots |
 | app | `model/`, `library/PageNumbering`, `library/PageLabel`, `library/PageRanges` | Document kinds, scan sources, scanner modes, theme modes, the PC's address; page numbering, the pages a page's label names, and the page ranges of the PC's coverage label | Domain |
 | app | `library/`, `pairing/`, `sync/`, `update/`, `settings/` | The library and its staging area, pairing, the upload queue, app updates, settings | Application, with their technology parts as adapters |
@@ -271,7 +274,8 @@ Each row names a rule, the rules file that states it, and what enforces it.
 | Part of the rules of the Python: PEP 8 at 120 columns, imports, typed signatures with no bare `Any`, no blind `except`, no mutable defaults (`.claude/rules/python.md`), no shell or SQL string built from input (`.claude/rules/conventions.md` > Input from outside the program), and, in part, no character a reader cannot see written as such (`.claude/rules/conventions.md` > Characters a reader cannot see) | Ruff and mypy `--strict`, in `scripts/check.sh lint` |
 | Part of the rules of the shell scripts: quoting and `[[ … ]]` (ShellCheck), indentation (shfmt) (`.claude/rules/bash.md`) | ShellCheck and shfmt, in `scripts/check.sh lint` |
 | The Kotlin conventions at 120 columns, file names (`.claude/rules/kotlin.md`) | ktlint, in `scripts/check.sh android` |
-| The rules of the web UI: layout, `const`, strict equality, named exports (`.claude/rules/web.md`) | Biome, in `scripts/check.sh lint` |
+| The rules of the web UI: layout, `const`, strict equality, named exports, and in TypeScript no `any`, type-only imports marked, no `@ts-ignore`, no `enum` or `namespace`, no floating promise, the rules of hooks, keys from the data, no `dangerouslySetInnerHTML` (`.claude/rules/web.md`) | Biome, in `scripts/check.sh lint` |
+| The web UI's TypeScript is strict, with `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes` and erasable syntax only (`.claude/rules/web.md` > TypeScript and React) | `tsc --noEmit` on the sources and on the tests, each with the types of its runtime, in `scripts/check.sh lint` |
 | Part of the rules of the api's tests: a broad exception asserted with its message, its raising call alone in its block, no assertion in an `except` (`.claude/rules/tests.md` > pytest) | Ruff's PT011, PT012 and PT017, in `scripts/check.sh lint` |
 | The hook that runs once in the api's tests is a fixture of `scope="class"` written as a `@classmethod` (`.claude/rules/tests.md` > pytest) | `filterwarnings = ["error::pytest.PytestRemovedIn10Warning"]` in `server/pyproject.toml`, in `scripts/check.sh server` |
 | Part of the rules of the web UI's tests: assertions in tests only, no test focused or skipped by its name, no hook twice in a group, five levels at most (`.claude/rules/tests.md` > node:test) | Biome, in `scripts/check.sh lint` |

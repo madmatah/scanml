@@ -17,11 +17,17 @@
   },
   "linter": {
     "enabled": true,
+    "domains": {
+      "react": "recommended"
+    },
     "rules": {
       "style": {
         "useConst": "error",
         "noDefaultExport": "error",
-        "noDescendingSpecificity": "off"
+        "noDescendingSpecificity": "off",
+        "useImportType": "error",
+        "noEnum": "error",
+        "noNamespace": "error"
       },
       "suspicious": {
         "noVar": "error",
@@ -29,14 +35,34 @@
         "noMisplacedAssertion": "error",
         "noFocusedTests": "error",
         "noSkippedTests": "error",
-        "noDuplicateTestHooks": "error"
+        "noDuplicateTestHooks": "error",
+        "noExplicitAny": "error",
+        "noTsIgnore": "error",
+        "noArrayIndexKey": "error"
       },
       "complexity": {
         "noExcessiveNestedTestSuites": "error"
+      },
+      "correctness": {
+        "useHookAtTopLevel": "error",
+        "useExhaustiveDependencies": "error"
+      },
+      "security": {
+        "noDangerouslySetInnerHtml": "error"
       }
     }
   },
   "overrides": [
+    {
+      "includes": ["**/*.ts", "**/*.tsx"],
+      "linter": {
+        "rules": {
+          "nursery": {
+            "noFloatingPromises": "error"
+          }
+        }
+      }
+    },
     {
       "includes": ["static/js/locales/**"],
       "linter": {

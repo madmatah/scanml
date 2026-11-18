@@ -25,6 +25,7 @@ paths:
   - "server/scanmylib/web/biome.json"
   - "server/scanmylib/web/package*.json"
   - "server/scanmylib/web/pnpm-*.yaml"
+  - "server/scanmylib/web/tsconfig*.json"
   - ".github/workflows/**"
   - ".claude/settings.json"
   - ".claude/agents/**"

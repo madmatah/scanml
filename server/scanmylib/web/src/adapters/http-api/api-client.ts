@@ -2,17 +2,24 @@ import { ApiError, NetworkError } from '../../application/api-errors.ts';
 import type { DocumentCatalog } from '../../application/document-catalog.ts';
 import type { DocumentStore } from '../../application/document-store.ts';
 import type { ServerStatusSource } from '../../application/engine-status.ts';
+import type { PageChanges, PageStore } from '../../application/page-store.ts';
 import type { PairingSource } from '../../application/pairing-source.ts';
 import type { SessionServer } from '../../application/session.ts';
 import { decodeDocumentDetails, decodeDocumentWithPages } from './document-details-decoder.ts';
 import { decodeDocumentList, decodeDocumentSummary } from './document-summary-decoder.ts';
 import { decodeErrorDetail } from './error-detail.ts';
+import { decodePageDetails, decodePageHtml } from './page-details-decoder.ts';
 import { decodePairingDetails } from './pairing-decoder.ts';
 import { decodeServerStatus } from './server-status-decoder.ts';
 
 export type Fetch = (path: string, init: RequestInit) => Promise<Response>;
 
-export type ApiClient = SessionServer & ServerStatusSource & DocumentCatalog & DocumentStore & PairingSource;
+export type ApiClient = SessionServer &
+  ServerStatusSource &
+  DocumentCatalog &
+  DocumentStore &
+  PageStore &
+  PairingSource;
 
 // The api refuses a request that changes state, authenticated by the session cookie, without this header: another page
 // cannot add it without the api's consent (docs/API.md > Authentication).
@@ -20,11 +27,25 @@ const CSRF_HEADER = 'X-ScanMyLib';
 const SESSION_PATH = '/api/session';
 const STATUS_PATH = '/api/status';
 const DOCUMENTS_PATH = '/api/documents';
+const PAGES_PATH = '/api/pages';
 const PAIRING_PATH = '/api/pairing';
 const UNAUTHORIZED = 401;
 
 function documentPath(documentId: string): string {
   return `${DOCUMENTS_PATH}/${encodeURIComponent(documentId)}`;
+}
+
+function pagePath(pageId: string): string {
+  return `${PAGES_PATH}/${encodeURIComponent(pageId)}`;
+}
+
+// The fields of the api keep their names (docs/API.md > Pages); a change left out is not sent.
+function pageChangesBody({ manualNumber, isExcluded, rotation }: PageChanges): Record<string, unknown> {
+  return {
+    ...(manualNumber === undefined ? {} : { manual_number: manualNumber }),
+    ...(isExcluded === undefined ? {} : { excluded: isExcluded }),
+    ...(rotation === undefined ? {} : { rotation }),
+  };
 }
 
 async function readJson(response: Response): Promise<unknown> {
@@ -102,6 +123,21 @@ export function createApiClient(fetchFromApi: Fetch, onUnauthorized: () => void)
     },
     async resetPageOrder(documentId) {
       return decodeDocumentWithPages(await readJson(await request('DELETE', `${documentPath(documentId)}/order`)));
+    },
+    async readPage(pageId, signal) {
+      return decodePageDetails(await readJson(await request('GET', pagePath(pageId), undefined, signal)));
+    },
+    async readPageHtml(pageId, signal) {
+      return decodePageHtml(await readJson(await request('GET', `${pagePath(pageId)}/html`, undefined, signal)));
+    },
+    async updatePage(pageId, changes) {
+      await request('PATCH', pagePath(pageId), pageChangesBody(changes));
+    },
+    async readPageAgain(pageId) {
+      await request('POST', `${pagePath(pageId)}/reprocess`);
+    },
+    async deletePage(pageId) {
+      await request('DELETE', pagePath(pageId));
     },
     markdownUrl: (documentId) => `${documentPath(documentId)}/markdown`,
     archiveUrl: (documentId, withScans) => `${documentPath(documentId)}/export.zip?scans=${withScans ? 1 : 0}`,

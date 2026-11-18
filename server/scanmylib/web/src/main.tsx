@@ -1,3 +1,5 @@
+// KaTeX's stylesheet comes first, so that the UI's own rules win where both style the formulas.
+import 'katex/dist/katex.min.css';
 import './app.css';
 
 import { createRoot } from 'react-dom/client';
@@ -16,6 +18,7 @@ import { createApiClient } from './adapters/http-api/api-client.ts';
 import { createPageUploader } from './adapters/http-api/page-uploader.ts';
 import { CATALOGS } from './adapters/i18next/catalogs.ts';
 import { createLocalization } from './adapters/i18next/localization.ts';
+import { renderMath } from './adapters/katex/render-math.ts';
 import { createRoutes } from './adapters/react/shell/routes.tsx';
 import { createToasts } from './adapters/react/shell/toasts.ts';
 import { createEngineStatus } from './application/engine-status.ts';
@@ -58,7 +61,7 @@ const uploads = createUploadQueue(
     () => session.expire(),
   ),
   uuids,
-  { now: () => Date.now() },
+  { readTimeMilliseconds: () => Date.now() },
 );
 guardUnload(window, () => uploads.isBusy());
 
@@ -82,11 +85,13 @@ createRoot(findElement('#app')).render(
           dates: localization.dates,
           catalog: apiClient,
           documents: apiClient,
+          pages: apiClient,
           scheduler,
           uuids,
           pairing: apiClient,
           clipboard: createWindowClipboard(window),
           uploads,
+          typesetFormulas: renderMath,
         }),
       )}
     />

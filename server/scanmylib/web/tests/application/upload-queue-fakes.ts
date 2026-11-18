@@ -59,7 +59,7 @@ export function createCountingUuidSource(): UuidSource {
 }
 
 export function createFixedClock(nowMilliseconds: number): Clock {
-  return { now: () => nowMilliseconds };
+  return { readTimeMilliseconds: () => nowMilliseconds };
 }
 
 export function photo(name: string, overrides: Partial<PhotoFile> = {}): PhotoFile {

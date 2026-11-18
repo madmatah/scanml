@@ -54,3 +54,8 @@ export function formatRelativeTime(
       return dates.formatDateTime(date);
   }
 }
+
+export function formatDateTime(dates: DateFormatting, isoDate: string): string {
+  const date = new Date(isoDate);
+  return Number.isNaN(date.getTime()) ? NO_VALUE : dates.formatDateTime(date);
+}

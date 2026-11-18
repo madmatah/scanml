@@ -6,6 +6,7 @@ import type { Clipboard } from '../../../application/clipboard.ts';
 import type { DocumentCatalog } from '../../../application/document-catalog.ts';
 import type { DocumentStore } from '../../../application/document-store.ts';
 import type { EngineStatus } from '../../../application/engine-status.ts';
+import type { PageStore } from '../../../application/page-store.ts';
 import type { PairingSource } from '../../../application/pairing-source.ts';
 import type { Scheduler } from '../../../application/scheduler.ts';
 import type { Session } from '../../../application/session.ts';
@@ -14,6 +15,7 @@ import type { UuidSource } from '../../../application/uuid-source.ts';
 import type { DateFormatting, NumberFormatting } from '../../../domain/formatting.ts';
 import { ConfirmDialog } from '../dialogs/confirm-dialog.tsx';
 import { EngineBanners } from '../engine-status/engine-banners.tsx';
+import type { FormulaTypesetter } from '../sanitized-html/use-sanitized-html.ts';
 import { settledUploadsText } from '../uploads/upload-text.ts';
 import { errorMessage } from './error-message.ts';
 import { Header } from './header.tsx';
@@ -30,16 +32,18 @@ export interface ShellServices {
   readonly dates: DateFormatting;
   readonly catalog: DocumentCatalog;
   readonly documents: DocumentStore;
+  readonly pages: PageStore;
   readonly scheduler: Scheduler;
   readonly uuids: UuidSource;
   readonly pairing: PairingSource;
   readonly clipboard: Clipboard;
   readonly uploads: UploadQueue<File>;
+  readonly typesetFormulas: FormulaTypesetter;
 }
 
 function useRouteName(): RouteName {
   const match = useMatches().at(-1);
-  return match === undefined ? 'unknown' : routeNameOf(match.id, match.params.documentId);
+  return match === undefined ? 'unknown' : routeNameOf(match.id, match.params);
 }
 
 export function Shell({ services }: { readonly services: ShellServices }) {

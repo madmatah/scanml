@@ -3,6 +3,7 @@ import { beforeEach, describe, it } from 'node:test';
 
 import {
   type Access,
+  type AddressIds,
   documentPath,
   documentTitle,
   idOfAddress,
@@ -149,6 +150,12 @@ describe('The navigation', () => {
         expectedSection: 'library',
       },
       {
+        situation: 'When the route is a page',
+        route: 'page',
+        rule: 'should be the library, which the page belongs to',
+        expectedSection: 'library',
+      },
+      {
         situation: 'When the route is the pairing',
         route: 'pairing',
         rule: 'should be the pairing, so that the header marks it as current',
@@ -218,28 +225,40 @@ describe('The navigation', () => {
   });
 
   describe('The routeNameOf() function', () => {
-    const rows: { situation: string; matchedId: string; documentId: string | undefined; expected: RouteName }[] = [
+    const rows: { situation: string; matchedId: string; ids: AddressIds; expected: RouteName }[] = [
       {
         situation: 'When the address names a document by its id',
         matchedId: 'document',
-        documentId: '95bbeb79-4351-432f-a53c-d3658892ff50',
+        ids: { documentId: '95bbeb79-4351-432f-a53c-d3658892ff50' },
         expected: 'document',
       },
       {
         situation: 'When the address names a document by something else than an id',
         matchedId: 'document',
-        documentId: 'example-book',
+        ids: { documentId: 'example-book' },
         expected: 'unknown',
       },
-      { situation: 'When the route is the pairing', matchedId: 'pairing', documentId: undefined, expected: 'pairing' },
-      { situation: 'When the route has no name', matchedId: '0-1', documentId: undefined, expected: 'unknown' },
+      {
+        situation: 'When the address names a page by its id',
+        matchedId: 'page',
+        ids: { pageId: 'de215798-031a-4b20-a867-49c12e3baabe' },
+        expected: 'page',
+      },
+      {
+        situation: 'When the address names a page by something else than an id',
+        matchedId: 'page',
+        ids: { pageId: 'p0011' },
+        expected: 'unknown',
+      },
+      { situation: 'When the route is the pairing', matchedId: 'pairing', ids: {}, expected: 'pairing' },
+      { situation: 'When the route has no name', matchedId: '0-1', ids: {}, expected: 'unknown' },
     ];
 
-    for (const { situation, matchedId, documentId, expected } of rows) {
+    for (const { situation, matchedId, ids, expected } of rows) {
       describe(situation, () => {
         let route: RouteName;
         beforeEach(() => {
-          route = routeNameOf(matchedId, documentId);
+          route = routeNameOf(matchedId, ids);
         });
 
         it(`should be ${expected}`, () => {

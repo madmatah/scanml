@@ -1,18 +1,17 @@
 import assert from 'node:assert/strict';
 import { beforeEach, describe, it } from 'node:test';
-
+import { ApiError, NetworkError } from '../../src/application/api-errors.ts';
 import {
   createDocumentLoader,
   type DocumentLoad,
   type DocumentLoader,
   REFRESH_INTERVAL_MILLISECONDS,
   UPLOAD_RELOAD_DELAY_MILLISECONDS,
-} from '../../../../src/adapters/react/document/document-loader.ts';
-import { ApiError, NetworkError } from '../../../../src/application/api-errors.ts';
-import type { DocumentWithPages } from '../../../../src/domain/document-details.ts';
-import type { DocumentStats } from '../../../../src/domain/document-summary.ts';
-import { createFakeScheduler, type FakeScheduler } from '../../../application/scheduler-fake.ts';
-import { sampleDocument } from '../../../domain/document-summary-samples.ts';
+} from '../../src/application/document-loader.ts';
+import type { DocumentWithPages } from '../../src/domain/document-details.ts';
+import type { DocumentStats } from '../../src/domain/document-summary.ts';
+import { sampleDocument } from '../domain/document-summary-samples.ts';
+import { createFakeScheduler, type FakeScheduler } from './scheduler-fake.ts';
 
 interface PendingRead {
   readonly signal: AbortSignal;

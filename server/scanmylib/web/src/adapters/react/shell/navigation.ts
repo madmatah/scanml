@@ -1,6 +1,6 @@
 export const PATHS = { home: '/', login: '/login', pairing: '/pairing' } as const;
 
-export type RouteName = 'home' | 'document' | 'pairing' | 'login' | 'unknown';
+export type RouteName = 'home' | 'document' | 'page' | 'pairing' | 'login' | 'unknown';
 
 export type Section = 'library' | 'pairing';
 
@@ -32,13 +32,27 @@ export function idOfAddress(segment: string | undefined): string | null {
 }
 
 function isRouteName(name: string): name is RouteName {
-  return name === 'home' || name === 'document' || name === 'pairing' || name === 'login' || name === 'unknown';
+  return (
+    name === 'home' ||
+    name === 'document' ||
+    name === 'page' ||
+    name === 'pairing' ||
+    name === 'login' ||
+    name === 'unknown'
+  );
+}
+
+// The ids that the addresses of the routes name, as react-router reads them.
+export interface AddressIds {
+  readonly documentId?: string | undefined;
+  readonly pageId?: string | undefined;
 }
 
 // A route whose address names no valid id is an unknown address, as one that matches no route.
-export function routeNameOf(matchedId: string, documentId: string | undefined): RouteName {
+export function routeNameOf(matchedId: string, { documentId, pageId }: AddressIds): RouteName {
   if (!isRouteName(matchedId)) return 'unknown';
   if (matchedId === 'document' && idOfAddress(documentId) === null) return 'unknown';
+  if (matchedId === 'page' && idOfAddress(pageId) === null) return 'unknown';
   return matchedId;
 }
 
@@ -58,6 +72,7 @@ export function sectionOf(route: RouteName): Section | null {
   switch (route) {
     case 'home':
     case 'document':
+    case 'page':
       return 'library';
     case 'pairing':
       return 'pairing';

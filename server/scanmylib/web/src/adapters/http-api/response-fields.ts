@@ -20,6 +20,7 @@ export interface ResponseFields {
   apiPath(name: string): string;
   nullableApiPath(name: string): string | null;
   objectList(name: string): ResponseFields[];
+  stringList(name: string): string[];
   numberPairs(name: string): (readonly [number, number])[];
 }
 
@@ -66,6 +67,11 @@ function readFields(json: unknown, path: string): ResponseFields {
     apiPath: (name) => read(name, isApiPath),
     nullableApiPath: (name) => read(name, (field): field is string | null => field === null || isApiPath(field)),
     objectList: (name) => readList(name).map((entry, index) => readFields(entry, `${pathOf(name)}[${index}]`)),
+    stringList: (name) =>
+      readList(name).map((entry, index) => {
+        if (!isString(entry)) throw new ResponseShapeError(`${pathOf(name)}[${index}]`);
+        return entry;
+      }),
     numberPairs: (name) => readList(name).map((pair, index) => readNumberPair(pair, `${pathOf(name)}[${index}]`)),
   };
 }

@@ -46,8 +46,9 @@ The api's Python packages, pinned with their hashes in `server/requirements.lock
 | i18next | 26.7.1 | The translations | MIT | bundled into the web UI's script by esbuild, from `server/scanmylib/web/pnpm-lock.yaml`; https://www.i18next.com |
 | react-i18next, and `html-parse-stringify`, which reads the elements of a translated sentence | 17.1.12, 4.0.1 | The translations of the React components | MIT | bundled into the web UI's script by esbuild, from `server/scanmylib/web/pnpm-lock.yaml`; https://react.i18next.com |
 | i18next-browser-languagedetector | 8.3.0 | The language the browser prefers | MIT | bundled into the web UI's script by esbuild, from `server/scanmylib/web/pnpm-lock.yaml`; https://github.com/i18next/i18next-browser-languageDetector |
+| KaTeX, with its stylesheet and its fonts | 0.19.1 | Typesets the LaTeX formulas of the page and the reader, and of the web UI's unit tests, which check the options it is given | MIT | bundled into the web UI's script, its stylesheet and its fonts into hashed files beside it, by esbuild, from `server/scanmylib/web/pnpm-lock.yaml`; https://katex.org |
 
-The notices of the packages bundled into the web UI's script:
+The notices of the packages bundled into the web UI's script and stylesheet:
 
 React, React DOM, their scheduler and `use-sync-external-store`:
 
@@ -182,6 +183,32 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
+KaTeX:
+
+```
+The MIT License (MIT)
+
+Copyright (c) 2013-2020 Khan Academy and other contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
 ### The app
 
 The app's direct libraries, with their versions in `android/gradle/libs.versions.toml`; Gradle checks them and their
@@ -243,7 +270,6 @@ Tools that build and test the project, run in containers and never shipped.
 | i18next-cli, and `@swc/core`, its parser, with its native addon for Linux | Checks the web UI's translation catalogs against its code, and writes them in `scripts/check.sh --fix`; installed from `server/scanmylib/web/pnpm-lock.yaml` | MIT; `@swc/core` Apache-2.0 and its addon Apache-2.0 AND MIT | https://github.com/i18next/i18next-cli, https://github.com/swc-project/swc |
 | TypeScript, and the types of Node.js, React and React DOM (`@types/node`, `@types/react`, `@types/react-dom`, from DefinitelyTyped) | Checks the types of the web UI's TypeScript and of its tests; installed from `server/scanmylib/web/pnpm-lock.yaml` | Apache-2.0; the types MIT | https://github.com/microsoft/TypeScript, https://github.com/DefinitelyTyped/DefinitelyTyped |
 | esbuild, with its native binary for Linux (`@esbuild/linux-x64`) | Builds the web UI (`server/scanmylib/web/build.ts`): bundles its TypeScript, its packages and its stylesheet into files whose names carry a hash of their content; installed from `server/scanmylib/web/pnpm-lock.yaml` | MIT | https://github.com/evanw/esbuild |
-| KaTeX 0.19.1 | Typesets formulas in the unit tests of the web UI, which check the options it is given; installed from `server/scanmylib/web/pnpm-lock.yaml` | MIT | https://katex.org |
 
 ## Agent guidance
 

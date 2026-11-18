@@ -327,8 +327,12 @@ the lockfile again (`trustLockfile` stays unset), so that a lockfile written und
 - pnpm never downloads another pnpm (`pmOnFail: ignore`); Node.js comes from `node:26-trixie-slim` pinned by digest,
   and pnpm from its standalone build, checked against its SHA-256.
 
-The tools then run in containers without network, on read-only sources. The page the browser loads uses none of these
-packages yet: it is still the JavaScript UI, with its vendored KaTeX.
+The image's build then runs package code once, without network: `@swc/core`, the parser of i18next-cli, ships its native
+addon for Linux compressed, and writes it on its first load into a cache from which it must then execute it. Its loader
+runs at the build into a scratch directory, and the addon it writes is copied beside its `binding.js`, where it looks
+first, so that no run of i18next-cli needs a writable, executable directory; the build fails when a second load would
+still write to a cache. The tools then run in containers without network, on read-only sources and a read-only root. The
+page the browser loads uses none of these packages yet: it is still the JavaScript UI, with its vendored KaTeX.
 
 ## Known vulnerabilities of the dependencies
 

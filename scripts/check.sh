@@ -5,8 +5,8 @@
 #
 #   lint        the formatters and linters, without network, on read-only sources: Ruff (format and lint) and
 #               mypy --strict for the Python, zizmor for the workflows, ShellCheck and shfmt for the shell scripts,
-#               Biome and tsc --noEmit for the web UI (ktlint, for the app, runs in the android area), and none of them
-#               on a script copied from a template, kept as it ships
+#               Biome, tsc --noEmit and i18next-cli's checks of the translations for the web UI (ktlint, for the app,
+#               runs in the android area), and none of them on a script copied from a template, kept as it ships
 #   scripts     the unit tests of the scripts' files and of the workflows (scripts/tests/), on the host's python3
 #   web         the unit tests of the web UI (node --test, in the image of its tools, without network)
 #   server      the api's tests, in its test image, without network, read-only
@@ -149,6 +149,9 @@ check_lint() {
     # The sources run in the browser and the tests in Node: each project has the types of its own runtime.
     run_web_tool "$web_tools" /tools/node_modules/.bin/tsc --noEmit --project tsconfig.json
     run_web_tool "$web_tools" /tools/node_modules/.bin/tsc --noEmit --project tsconfig.tools.json
+    run_web_tool "$web_tools" /tools/node_modules/.bin/i18next-cli extract --ci --dry-run --quiet
+    run_web_tool "$web_tools" /tools/node_modules/.bin/i18next-cli status fr --hide-translated
+    run_web_tool "$web_tools" /tools/node_modules/.bin/i18next-cli lint --quiet
 }
 
 # ktlint writes android/ in place through scripts/build-apk.sh, which runs on the host: it runs before anything comes
@@ -169,7 +172,10 @@ fix_everything() {
     mapfile -d '' -t shell_scripts < <(python3 "$ROOT/scripts/lib/formatting.py" make-copy "$ROOT" "$tree" \
         "$digests_file" "${FORMATTED_PATHSPECS[@]}")
     wait "$!" || die "only ktlint formatted (android/): fix what the error above says, then run --fix again"
-    # Biome runs first on the copy, before any other formatter could turn a directory of it into a link.
+    # The web UI's tools run first on the copy, before any other formatter could turn a directory of it into a link:
+    # i18next-cli writes the catalogs from the code, then Biome formats them with the rest.
+    run_tool -v "$tree/server/scanmylib/web:/tools/web" "$web_tools" /tools/node_modules/.bin/i18next-cli extract \
+        --quiet || findings_remain=1
     run_tool -v "$tree/server/scanmylib/web:/tools/web" "$web_tools" /tools/node_modules/.bin/biome check --write \
         --colors=off . || findings_remain=1
     fixed_sources=("${CHECKED_SOURCES[@]}")

@@ -18,6 +18,40 @@ COPY server/scanmylib/web/package.json server/scanmylib/web/pnpm-lock.yaml serve
     ./
 RUN pnpm install --frozen-lockfile --store-dir /tmp/pnpm-store \
  && rm -rf /tmp/pnpm-store /root/.cache /root/.local
+# i18next-cli parses with @swc/core, whose Linux addon ships compressed and, on its first load, writes the real addon into
+# a cache it must then execute from: on the gate's read-only root, every run would need a writable, executable
+# directory. Its loader runs here once instead, without network, and its addon is copied beside binding.js, the path
+# binding.js tries before that self-extracting package; a second load into an empty cache must then call the binding and
+# write nothing. A second copy of @swc/core, or a new version that loads otherwise, fails this step.
+RUN --network=none <<'EOF'
+set -eu
+stores=$(find /tools/node_modules/.pnpm -mindepth 1 -maxdepth 1 -name '@swc+core@*')
+if [ "$(printf '%s\n' "$stores" | grep -c .)" -ne 1 ]; then
+    echo "pnpm's store must hold exactly one @swc/core, which i18next-cli and i18next-resources-for-ts share: $stores" >&2
+    exit 1
+fi
+core=$(node -p 'path.dirname(require.resolve("@swc/core", { paths: [fs.realpathSync("/tools/node_modules/i18next-cli")] }))')
+case $core in
+    "$stores"/*) ;;
+    *) echo "i18next-cli resolves @swc/core at $core, outside pnpm's store directory $stores" >&2; exit 1 ;;
+esac
+scratch=$(mktemp -d)
+SWC_NATIVE_BINDING_CACHE=$scratch node -e 'require(process.argv[1])' "$core"
+addons=$(find "$scratch" -type f -exec sh -c '[ "$(head -c 4 "$1" | od -An -tx1 | tr -d " \n")" = 7f454c46 ]' sh {} \; -print)
+if [ "$(printf '%s\n' "$addons" | grep -c .)" -ne 1 ]; then
+    echo "@swc/core's first load must write exactly one ELF addon into its cache: $addons" >&2
+    exit 1
+fi
+install -m 0644 "$addons" "$core/swc.linux-x64-gnu.node"
+rm -rf "$scratch"
+empty=$(mktemp -d)
+SWC_NATIVE_BINDING_CACHE=$empty node -e 'require(process.argv[1]).parseSync("const page = 1;")' "$core"
+if [ -n "$(find "$empty" -mindepth 1 -print -quit)" ]; then
+    echo "@swc/core still writes its cache beside the copied addon: $(find "$empty" -mindepth 1)" >&2
+    exit 1
+fi
+rmdir "$empty"
+EOF
 USER 1000:1000
 # The gate mounts the web UI here, so that its tools resolve /tools/node_modules by walking up the tree.
 WORKDIR /tools/web

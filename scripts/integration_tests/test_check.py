@@ -30,7 +30,14 @@ _OPTIONS_WITH_ALLOWED_VALUES = {
     "--tmpfs": {"/tmp"},
 }
 _OPTIONS_GIVEN_ONCE = ("--network", "--read-only", "--cap-drop", "--security-opt", "--user")
-FIXER_COMMANDS = ("ruff check --fix .", "ruff format .", "-w -- ", "biome check --write", "ktlintFormat")
+FIXER_COMMANDS = (
+    "ruff check --fix .",
+    "ruff format .",
+    "-w -- ",
+    "i18next-cli extract --quiet",
+    "biome check --write",
+    "ktlintFormat",
+)
 #: The copy of a template's script, which no formatter or type checker reads (.claude/rules/conventions.md, "A script
 #: copied from a template is kept as it ships").
 TEMPLATE_SCRIPT = ".claude/skills/pull-request/scripts/pr_screenshots.py"
@@ -464,6 +471,9 @@ class WhenGivenTheLint(InstallationTestCase):
         "biome ci",
         "tsc --noEmit --project tsconfig.json",
         "tsc --noEmit --project tsconfig.tools.json",
+        "i18next-cli extract --ci --dry-run --quiet",
+        "i18next-cli status fr --hide-translated",
+        "i18next-cli lint --quiet",
     )
     gate_run: ClassVar[ScriptRun]
     tool_runs: ClassVar[list[list[str]]]
@@ -804,7 +814,8 @@ class TheFixOption(InstallationTestCase):
                 self.assertTrue(any(fixer_command in run for run in self.runs), self.runs)
 
     def test_should_run_no_check(self) -> None:
-        self.assertEqual([run for run in self.runs if "ruff format --check" in run or "biome ci" in run], [])
+        checks = ("ruff format --check", "biome ci", "--dry-run")
+        self.assertEqual([run for run in self.runs if any(check in run for check in checks)], [])
 
     def test_should_check_no_area(self) -> None:
         self.assertEqual(list_areas_checked(self.fix_run), [])
@@ -813,13 +824,13 @@ class TheFixOption(InstallationTestCase):
         formatted_copy = find_formatted_copy(self.tool_runs)
         self.assertFalse(formatted_copy.is_relative_to(self.home), formatted_copy)
 
-    def test_should_run_biome_ruff_and_shfmt_besides_ktlint(self) -> None:
-        self.assertEqual(len(self.tool_runs), 4)
+    def test_should_run_i18next_cli_biome_ruff_and_shfmt_besides_ktlint(self) -> None:
+        self.assertEqual(len(self.tool_runs), 5)
 
-    def test_should_let_biome_write_to_the_copy_of_the_web_ui_alone(self) -> None:
-        biome = self.tool_runs[0]
+    def test_should_let_i18next_cli_and_biome_write_to_the_copy_of_the_web_ui_alone(self) -> None:
         tree = find_formatted_copy(self.tool_runs) / "tree"
-        self.assertEqual(list_mounts(biome), [f"{tree}/server/scanmylib/web:/tools/web"])
+        mounts = [f"{tree}/server/scanmylib/web:/tools/web"]
+        self.assertEqual([list_mounts(run) for run in self.tool_runs[:2]], [mounts, mounts])
 
     def test_should_let_ruff_and_shfmt_write_to_the_copy_alone_and_read_the_worktree_read_only(self) -> None:
         tree = find_formatted_copy(self.tool_runs) / "tree"
@@ -830,10 +841,10 @@ class TheFixOption(InstallationTestCase):
             f"{tree}/scripts:/src/scripts",
             f"{tree}/.claude/skills:/src/.claude/skills",
         ]
-        self.assertEqual([list_mounts(run) for run in self.tool_runs[1:]], [mounts, mounts, mounts])
+        self.assertEqual([list_mounts(run) for run in self.tool_runs[2:]], [mounts, mounts, mounts])
 
     def test_should_run_the_formatters_without_network_or_privileges(self) -> None:
-        self.assertEqual(len(self.tool_runs), 4)
+        self.assertEqual(len(self.tool_runs), 5)
         for run in self.tool_runs:
             with self.subTest(run=run):
                 self.assertEqual(list_isolation_breaches(run), [])
@@ -1180,7 +1191,9 @@ class TheFixOptionWhenEveryToolLeavesFindings(InstallationTestCase):
     @classmethod
     def setUpClass(cls) -> None:
         installation = make_installation(cls)
-        fixer_command_pattern = r"ruff check --fix|ruff format \.$| -w -- |biome check --write|ktlintFormat"
+        fixer_command_pattern = (
+            r"ruff check --fix|ruff format \.$| -w -- |i18next-cli extract --quiet|biome check --write|ktlintFormat"
+        )
         installation.answer_docker([{"match": fixer_command_pattern, "exit": 1}])
         fix(installation)
         cls.runs = [" ".join(argv) for argv in list_runs(installation.read_docker_calls())]
@@ -1197,6 +1210,7 @@ class TheFixOptionWhenOneToolLeavesFindings(InstallationTestCase):
             "ruff check": r" ruff check --fix \.$",
             "ruff format": r" ruff format \.$",
             "shfmt": r" -w -- ",
+            "i18next-cli": "i18next-cli extract --quiet",
             "biome": "biome check --write",
             "ktlint": "ktlintFormat",
         }

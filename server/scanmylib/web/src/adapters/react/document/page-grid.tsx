@@ -7,10 +7,11 @@ import {
   hasPlacedPages,
   type PageSummary,
 } from '../../../domain/document-details.ts';
-import { numberSourceLabel, pagePlacementLabel, pageShortLabel, pageStatusLabel } from '../../i18next/page-labels.ts';
+import { numberSourceLabel, pageShortLabel, pageStatusLabel } from '../../i18next/page-labels.ts';
 import { pagePath } from '../shell/navigation.ts';
 import { versionedUrl } from '../shell/versioned-url.ts';
 import { pageGroupHeading } from './document-text.ts';
+import { PlacementChip } from './placement-chip.tsx';
 
 export interface PageGridProps {
   readonly pages: readonly PageSummary[];
@@ -45,7 +46,6 @@ export function PageGrid({ pages }: PageGridProps) {
 
 interface PageCardProps {
   readonly page: PageSummary;
-  // "To place" only means something when other pages have a place.
   readonly showsUnplaced: boolean;
 }
 
@@ -53,7 +53,6 @@ function PageCard({ page, showsUnplaced }: PageCardProps) {
   const { t } = useTranslation();
   const status = pageStatusLabel(t, page.status);
   const source = numberSourceLabel(t, page.numberSource);
-  const placement = page.placement === 'unplaced' && !showsUnplaced ? null : pagePlacementLabel(t, page.placement);
   const isDuplicate = page.duplicateOf !== null;
   const cardClasses = ['page-card', page.isExcluded && 'is-excluded', isDuplicate && 'is-duplicate'];
   return (
@@ -75,11 +74,7 @@ function PageCard({ page, showsUnplaced }: PageCardProps) {
               {source.label}
             </span>
           )}
-          {placement !== null && (
-            <span className={`chip chip-placement placement-${page.placement}`} title={placement.description}>
-              {placement.label}
-            </span>
-          )}
+          <PlacementChip page={page} showsUnplaced={showsUnplaced} />
           {page.status !== 'done' && <span className={`chip chip-${status.tone}`}>{status.label}</span>}
           {page.isExcluded && <span className="chip chip-outline">{t('Excluded', { context: 'one page' })}</span>}
           {isDuplicate && <span className="chip chip-warn">{t('Duplicate')}</span>}

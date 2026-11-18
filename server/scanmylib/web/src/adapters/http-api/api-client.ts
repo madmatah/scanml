@@ -96,6 +96,13 @@ export function createApiClient(fetchFromApi: Fetch, onUnauthorized: () => void)
     async deleteDocument(documentId) {
       await request('DELETE', documentPath(documentId));
     },
+    async reorderPages(documentId, pageIds) {
+      const path = `${documentPath(documentId)}/order`;
+      return decodeDocumentWithPages(await readJson(await request('PUT', path, { page_ids: pageIds })));
+    },
+    async resetPageOrder(documentId) {
+      return decodeDocumentWithPages(await readJson(await request('DELETE', `${documentPath(documentId)}/order`)));
+    },
     markdownUrl: (documentId) => `${documentPath(documentId)}/markdown`,
     archiveUrl: (documentId, withScans) => `${documentPath(documentId)}/export.zip?scans=${withScans ? 1 : 0}`,
   };

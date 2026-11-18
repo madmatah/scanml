@@ -11,6 +11,7 @@ import {
   type PageStatusLabel,
   pagePlacementLabel,
   pageStatusLabel,
+  pageTitle,
 } from '../../../src/adapters/i18next/page-labels.ts';
 import { createLocalizationFor } from './browser-languages.ts';
 
@@ -119,6 +120,23 @@ describe('The page labels', () => {
 
       it('should give no label, since its number says its place', () => {
         assert.equal(label, null);
+      });
+    });
+  });
+
+  describe('The pageTitle() function', () => {
+    describe('When given a page with one number, a spread and a page with no number', () => {
+      let titles: string[];
+      beforeEach(() => {
+        titles = [
+          { pageLabel: '11', numberEnd: null },
+          { pageLabel: '12-13', numberEnd: 13 },
+          { pageLabel: null, numberEnd: null },
+        ].map((page) => pageTitle(englishT, page));
+      });
+
+      it('should name each, a spread in the plural', () => {
+        assert.deepEqual(titles, ['Page 11', 'Pages 12-13', 'Page with no number']);
       });
     });
   });

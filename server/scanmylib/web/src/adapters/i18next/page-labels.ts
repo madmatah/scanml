@@ -20,7 +20,18 @@ export function pageShortLabel(t: TFunction, page: LabeledPage): string {
   return page.page_label ? t('p. {{label}}', { label: page.page_label }) : t('No number');
 }
 
-// A value that a newer api sends and this UI does not know yet is shown as it is.
+export interface TitledPage {
+  readonly pageLabel: string | null;
+  readonly numberEnd: number | null;
+}
+
+export function pageTitle(t: TFunction, page: TitledPage): string {
+  if (!page.pageLabel) return t('Page with no number');
+  return page.numberEnd === null
+    ? t('Page {{label}}', { label: page.pageLabel })
+    : t('Pages {{label}}', { label: page.pageLabel });
+}
+
 export function pageStatusLabel(t: TFunction, status: string): PageStatusLabel {
   switch (status) {
     case 'queued':
@@ -56,7 +67,6 @@ export function numberSourceLabel(t: TFunction, source: string | null): Describe
   }
 }
 
-// A page placed by its number needs no badge, and neither does one outside the reading order.
 export function pagePlacementLabel(t: TFunction, placement: string | null): DescribedLabel | null {
   switch (placement) {
     case 'manual':

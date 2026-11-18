@@ -5,6 +5,7 @@ import {
   canOrganize,
   groupPages,
   hasPagesPlacedByHand,
+  hasPagesPositionedByHand,
   hasPlacedPages,
   isTextPending,
   type PageGroup,
@@ -141,6 +142,30 @@ describe('The document details', () => {
 
       it('should say no', () => {
         assert.equal(isPlacedByHand, false);
+      });
+    });
+  });
+
+  describe('The hasPagesPositionedByHand() function', () => {
+    describe('When a page outside the reading order keeps a place chosen by hand', () => {
+      let isPositioned: boolean;
+      beforeEach(() => {
+        isPositioned = hasPagesPositionedByHand([PLACED, samplePage('excluded', { ...EXCLUDED, position: 2.5 })]);
+      });
+
+      it('should say yes, since restoring the automatic order would still forget that place', () => {
+        assert.equal(isPositioned, true);
+      });
+    });
+
+    describe('When every page has its automatic place', () => {
+      let isPositioned: boolean;
+      beforeEach(() => {
+        isPositioned = hasPagesPositionedByHand([PLACED, UNPLACED, EXCLUDED]);
+      });
+
+      it('should say no', () => {
+        assert.equal(isPositioned, false);
       });
     });
   });

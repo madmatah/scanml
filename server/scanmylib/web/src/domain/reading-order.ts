@@ -1,6 +1,19 @@
+import type { PageSummary } from './document-details.ts';
+
 export type PageId = string;
 export type ReadingOrder = readonly PageId[];
 export type Side = 'before' | 'after';
+
+export type Placement =
+  | { readonly kind: 'conflict' }
+  | { readonly kind: 'unchanged' }
+  | { readonly kind: 'moved'; readonly order: ReadingOrder; readonly moved: readonly PageId[] };
+
+export interface ReadingOrderGroups {
+  readonly placed: readonly PageId[];
+  readonly unplaced: readonly PageId[];
+  readonly hasPlacedPages: boolean;
+}
 
 export function sameOrder(first: ReadingOrder, second: ReadingOrder): boolean {
   return first.length === second.length && first.every((pageId, index) => pageId === second[index]);
@@ -48,4 +61,26 @@ export function spanOf(order: ReadingOrder, pageIds: Iterable<PageId>): PageId[]
   const last = positions.at(-1);
   if (first === undefined || last === undefined) return [];
   return order.slice(first, last + 1);
+}
+
+export function readingOrderGroups(order: ReadingOrder, pages: ReadonlyMap<PageId, PageSummary>): ReadingOrderGroups {
+  const isUnplaced = (pageId: PageId | undefined): boolean =>
+    pageId !== undefined && pages.get(pageId)?.placement === 'unplaced';
+  const hasPlacedPages = order.some((pageId) => !isUnplaced(pageId));
+  let split = order.length;
+  if (hasPlacedPages) while (split > 0 && isUnplaced(order[split - 1])) split -= 1;
+  return { placed: order.slice(0, split), unplaced: order.slice(split), hasPlacedPages };
+}
+
+export function placeSelection(
+  order: ReadingOrder,
+  moving: readonly PageId[],
+  targetId: PageId,
+  side: Side,
+): Placement {
+  const stillMoving = inOrder(order, moving);
+  if (!order.includes(targetId) || stillMoving.length !== moving.length) return { kind: 'conflict' };
+  const placed = moveNextTo(order, stillMoving, targetId, side);
+  if (sameOrder(placed, order)) return { kind: 'unchanged' };
+  return { kind: 'moved', order: placed, moved: stillMoving };
 }

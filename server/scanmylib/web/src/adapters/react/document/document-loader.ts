@@ -20,6 +20,7 @@ export interface DocumentLoader {
   load(): void;
   loadAfterUpload(): void;
   replace(document: DocumentWithPages): void;
+  writeOrder(request: () => Promise<DocumentWithPages>): Promise<DocumentWithPages>;
 }
 
 // While the PC reads the text of its pages, the document refreshes itself at the pace of the engine's status.
@@ -45,6 +46,11 @@ export function createDocumentLoader({
   let isReloadQueued = false;
   let cancelRefresh: CancelTask | null = null;
   let cancelUploadReload: CancelTask | null = null;
+  // A change of the order and a refresh can cross: a refresh sent before the change, or answered while it is sent,
+  // would bring the old order back.
+  let orderWriteCount = 0;
+  let orderVersion = 0;
+  let isReloadAfterWritesQueued = false;
 
   function stopRefresh(): void {
     cancelRefresh?.();
@@ -79,8 +85,12 @@ export function createDocumentLoader({
 
   async function fetchDocument(): Promise<void> {
     stopRefresh();
+    const version = orderVersion;
     try {
-      show(await read(leaving));
+      const fresh = await read(leaving);
+      if (orderWriteCount > 0) isReloadAfterWritesQueued = true;
+      else if (version !== orderVersion) isReloadQueued = true;
+      else show(fresh);
     } catch (failure) {
       if (leaving.aborted) return;
       if (document === null) {
@@ -96,7 +106,6 @@ export function createDocumentLoader({
     scheduleRefresh();
   }
 
-  // A load asked while another runs comes once more after it, so that its answer is never older than the request.
   function load(): void {
     if (loading !== null) {
       isReloadQueued = true;
@@ -111,6 +120,22 @@ export function createDocumentLoader({
     });
   }
 
+  async function writeOrder(request: () => Promise<DocumentWithPages>): Promise<DocumentWithPages> {
+    orderWriteCount += 1;
+    orderVersion += 1;
+    try {
+      const written = await request();
+      show(written);
+      return written;
+    } finally {
+      orderWriteCount -= 1;
+      if (orderWriteCount === 0 && isReloadAfterWritesQueued) {
+        isReloadAfterWritesQueued = false;
+        load();
+      }
+    }
+  }
+
   leaving.addEventListener(
     'abort',
     () => {
@@ -120,5 +145,5 @@ export function createDocumentLoader({
     { once: true },
   );
 
-  return { load, loadAfterUpload, replace: show };
+  return { load, loadAfterUpload, replace: show, writeOrder };
 }

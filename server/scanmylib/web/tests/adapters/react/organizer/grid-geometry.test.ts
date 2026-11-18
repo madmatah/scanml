@@ -149,7 +149,7 @@ describe('The grid of the organizer', () => {
       describe(situation, () => {
         let target: DropTarget | null;
         beforeEach(() => {
-          target = dropTarget(CARDS, pointerPixels.x, pointerPixels.y);
+          target = dropTarget(CARDS, pointerPixels);
         });
 
         it(rule, () => {
@@ -163,7 +163,7 @@ describe('The grid of the organizer', () => {
       const pointerPixels = { x: 0, y: 0 };
       let target: DropTarget | null;
       beforeEach(() => {
-        target = dropTarget(noCards, pointerPixels.x, pointerPixels.y);
+        target = dropTarget(noCards, pointerPixels);
       });
 
       it('should give no target', () => {

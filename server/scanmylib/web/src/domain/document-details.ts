@@ -12,11 +12,15 @@ export interface PageSummary {
   readonly id: string;
   readonly status: string;
   readonly pageLabel: string | null;
+  // The last number of a page that holds several, such as a spread.
+  readonly numberEnd: number | null;
   readonly numberSource: string | null;
   readonly isExcluded: boolean;
   readonly duplicateOf: string | null;
   readonly isInDocument: boolean;
   readonly placement: string | null;
+  // The place chosen by hand on the line of the page numbers, or null when the page has its automatic place.
+  readonly position: number | null;
   readonly rotation: number;
   readonly thumbnailUrl: string;
 }
@@ -76,4 +80,8 @@ export function canOrganize(pages: readonly PageSummary[]): boolean {
 
 export function isTextPending(stats: DocumentStats): boolean {
   return stats.queuedCount > 0 || stats.processingCount > 0;
+}
+
+export function hasPagesPositionedByHand(pages: readonly PageSummary[]): boolean {
+  return pages.some((page) => page.position !== null);
 }

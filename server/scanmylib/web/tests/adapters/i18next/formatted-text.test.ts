@@ -4,7 +4,13 @@ import { beforeEach, describe, it } from 'node:test';
 
 import frenchCatalog from '../../../locales/fr.json' with { type: 'json' };
 import { CATALOGS } from '../../../src/adapters/i18next/catalogs.ts';
-import { formatBytes, formatPercent, formatSeconds, quoted } from '../../../src/adapters/i18next/formatted-text.ts';
+import {
+  formatBytes,
+  formatPercent,
+  formatRelativeTime,
+  formatSeconds,
+  quoted,
+} from '../../../src/adapters/i18next/formatted-text.ts';
 import type { Localization } from '../../../src/adapters/i18next/localization.ts';
 import { createLocalizationFor } from './browser-languages.ts';
 
@@ -146,6 +152,78 @@ describe('The formatted text', () => {
 
       it('should put the text between the quotation marks of the catalog', () => {
         assert.equal(text, frenchCatalog['“{{text}}”'].replace('{{text}}', title));
+      });
+    });
+  });
+
+  describe('The formatRelativeTime() function', () => {
+    const nowMilliseconds = Date.parse('2026-11-18T12:00:00Z');
+
+    describe('When the UI is in English', () => {
+      let localization: Localization;
+      beforeEach(async () => {
+        localization = await createLocalizationFor(ENGLISH_LANGUAGES, CATALOGS);
+      });
+
+      describe('When the date is a few seconds old', () => {
+        let text: string;
+        beforeEach(() => {
+          const { i18next, dates } = localization;
+          text = formatRelativeTime(i18next.t, dates, '2026-11-18T11:59:50Z', nowMilliseconds);
+        });
+
+        it('should say just now', () => {
+          assert.equal(text, 'just now');
+        });
+      });
+
+      describe('When the date is minutes old', () => {
+        let text: string;
+        beforeEach(() => {
+          const { i18next, dates } = localization;
+          text = formatRelativeTime(i18next.t, dates, '2026-11-18T11:51:00Z', nowMilliseconds);
+        });
+
+        it('should count them as Intl does', () => {
+          assert.equal(text, '9 minutes ago');
+        });
+      });
+
+      describe('When the date is weeks old', () => {
+        const isoDate = '2026-10-12T20:15:00Z';
+        let text: string;
+        beforeEach(() => {
+          const { i18next, dates } = localization;
+          text = formatRelativeTime(i18next.t, dates, isoDate, nowMilliseconds);
+        });
+
+        it('should give the date and the time', () => {
+          assert.equal(text, localization.dates.formatDateTime(new Date(isoDate)));
+        });
+      });
+
+      describe('When the date cannot be read', () => {
+        let text: string;
+        beforeEach(() => {
+          const { i18next, dates } = localization;
+          text = formatRelativeTime(i18next.t, dates, 'not a date', nowMilliseconds);
+        });
+
+        it('should show no value rather than an invalid date', () => {
+          assert.equal(text, '\u2014');
+        });
+      });
+    });
+
+    describe('When the UI is in French', () => {
+      let text: string;
+      beforeEach(async () => {
+        const { i18next, dates } = await createLocalizationFor(FRENCH_LANGUAGES, CATALOGS);
+        text = formatRelativeTime(i18next.t, dates, '2026-11-18T11:59:50Z', nowMilliseconds);
+      });
+
+      it('should say just now from the catalog', () => {
+        assert.equal(text, frenchCatalog['just now']);
       });
     });
   });

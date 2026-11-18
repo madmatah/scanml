@@ -7,6 +7,7 @@ import { RouterProvider } from 'react-router/dom';
 
 import { takeSignInToken, watchSignInLinks } from './adapters/browser/address-bar.ts';
 import { createPageVisibility } from './adapters/browser/page-visibility.ts';
+import { createRandomUuidSource } from './adapters/browser/random-uuid-source.ts';
 import { createSignInRecord } from './adapters/browser/sign-in-record.ts';
 import { createTimerScheduler } from './adapters/browser/timer-scheduler.ts';
 import { createApiClient } from './adapters/http-api/api-client.ts';
@@ -58,7 +59,17 @@ findElement('meta[name="description"]').setAttribute(
 createRoot(findElement('#app')).render(
   <I18nextProvider i18n={localization.i18next}>
     <RouterProvider
-      router={createHashRouter(createRoutes({ session, toasts, engineStatus, formatting: localization.formatting }))}
+      router={createHashRouter(
+        createRoutes({
+          session,
+          toasts,
+          engineStatus,
+          formatting: localization.formatting,
+          dates: localization.dates,
+          catalog: apiClient,
+          uuids: createRandomUuidSource(window.crypto),
+        }),
+      )}
     />
   </I18nextProvider>,
 );

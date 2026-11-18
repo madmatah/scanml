@@ -3,6 +3,7 @@ import { beforeEach, describe, it } from 'node:test';
 
 import { createApiClient, type Fetch } from '../../../src/adapters/http-api/api-client.ts';
 import type { SessionServer } from '../../../src/application/session.ts';
+import type { DocumentSummary } from '../../../src/domain/document-summary.ts';
 import type { ServerStatus } from '../../../src/domain/server-status.ts';
 
 interface SentRequest {
@@ -16,6 +17,7 @@ interface Exchange {
 }
 
 const TOKEN = 'a-token';
+const DOCUMENT_ID = '95bbeb79-4351-432f-a53c-d3658892ff50';
 const NO_CONTENT = 204;
 const OK = 200;
 const UNAUTHORIZED = 401;
@@ -41,6 +43,19 @@ function jsonResponse(status: number, body: unknown): Response {
 
 function noContent(): Response {
   return new Response(null, { status: NO_CONTENT });
+}
+
+function documentBody(): Record<string, unknown> {
+  return {
+    id: DOCUMENT_ID,
+    title: 'Example Book',
+    author: 'Jane Doe',
+    kind: 'book',
+    updated_at: '2026-11-14T15:41:03+00:00',
+    stats: { pages: 1, done: 1, queued: 0, processing: 0, error: 0, excluded: 0, duplicates: 0 },
+    coverage: { ranges: [[11, 11]], label: '11', gaps: [], min: 11, max: 11, unnumbered: 0 },
+    cover_thumb_url: null,
+  };
 }
 
 function headersOf(request: SentRequest | undefined): Record<string, string> {
@@ -286,6 +301,80 @@ describe('The api client', () => {
 
       it('should fail with a network failure, so that the header says the server is unreachable', async () => {
         await assert.rejects(act(), { name: 'NetworkError' });
+      });
+    });
+  });
+
+  describe('The listDocuments() call', () => {
+    describe('When the api lists the documents', () => {
+      const screen = new AbortController();
+      let sent: Exchange;
+      let documents: DocumentSummary[];
+      beforeEach(async () => {
+        sent = exchange(() => jsonResponse(OK, { documents: [documentBody()] }));
+        documents = await createApiClient(sent.fetchFromApi, ignoreUnauthorized).listDocuments(screen.signal);
+      });
+
+      it('should give the request the signal of the screen, so that the browser cancels it when the screen is left', () => {
+        assert.equal(sent.requests[0]?.init.signal, screen.signal);
+      });
+
+      it('should ask for the documents of the library', () => {
+        assert.deepEqual(
+          sent.requests.map(({ path, init }) => `${init.method} ${path}`),
+          ['GET /api/documents'],
+        );
+      });
+
+      it('should give the decoded documents', () => {
+        assert.deepEqual(
+          documents.map((document) => document.title),
+          ['Example Book'],
+        );
+      });
+    });
+
+    describe('When the screen that asked is left before the answer', () => {
+      let act: () => Promise<DocumentSummary[]>;
+      beforeEach(() => {
+        const leaving = new AbortController();
+        const client = createApiClient(async () => {
+          leaving.abort();
+          throw new DOMException('The operation was aborted.', 'AbortError');
+        }, ignoreUnauthorized);
+        act = () => client.listDocuments(leaving.signal);
+      });
+
+      it('should fail with the abort, not with a network failure that the screen would show', async () => {
+        await assert.rejects(act(), { name: 'AbortError' });
+      });
+    });
+  });
+
+  describe('The createDocument() call', () => {
+    const fields = { title: 'Example Book', author: 'Jane Doe', kind: 'book', unwarp: true };
+
+    describe('When the api creates the document', () => {
+      let sent: Exchange;
+      let document: DocumentSummary;
+      beforeEach(async () => {
+        sent = exchange(() => jsonResponse(OK, documentBody()));
+        document = await createApiClient(sent.fetchFromApi, ignoreUnauthorized).createDocument(DOCUMENT_ID, fields);
+      });
+
+      it('should put the fields as JSON at the id the browser chose, so that a request sent again creates no second document', () => {
+        assert.deepEqual(
+          sent.requests.map(({ path, init }) => ({ method: init.method, path, body: init.body })),
+          [{ method: 'PUT', path: `/api/documents/${DOCUMENT_ID}`, body: JSON.stringify(fields) }],
+        );
+      });
+
+      it('should send the header that guards the changes of state', () => {
+        assert.equal(headersOf(sent.requests[0])['x-scanmylib'], '1');
+      });
+
+      it('should give the decoded document', () => {
+        assert.equal(document.id, DOCUMENT_ID);
       });
     });
   });

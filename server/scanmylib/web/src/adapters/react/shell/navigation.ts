@@ -12,6 +12,10 @@ export type Redirect =
 
 export const BRAND_NAME = 'ScanMyLib';
 
+export function documentPath(documentId: string): string {
+  return `/documents/${documentId}`;
+}
+
 export function isRouteName(name: string): name is RouteName {
   return name === 'home' || name === 'login' || name === 'unknown';
 }

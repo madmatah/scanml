@@ -14,6 +14,8 @@ export interface ResponseFields {
   number(name: string): number;
   nullableNumber(name: string): number | null;
   boolean(name: string): boolean;
+  objectList(name: string): ResponseFields[];
+  numberPairs(name: string): (readonly [number, number])[];
 }
 
 function isObject(json: unknown): json is { readonly [name: string]: unknown } {
@@ -34,6 +36,19 @@ function readFields(json: unknown, path: string): ResponseFields {
   const isString = (field: unknown): field is string => typeof field === 'string';
   const isNumber = (field: unknown): field is number => typeof field === 'number' && Number.isFinite(field);
 
+  function readList(name: string): readonly unknown[] {
+    const field = fields[name];
+    if (!Array.isArray(field)) throw new ResponseShapeError(pathOf(name));
+    return field;
+  }
+
+  function readNumberPair(pair: unknown, path: string): readonly [number, number] {
+    if (!Array.isArray(pair) || pair.length !== 2) throw new ResponseShapeError(path);
+    const [first, second]: readonly unknown[] = pair;
+    if (!isNumber(first) || !isNumber(second)) throw new ResponseShapeError(path);
+    return [first, second];
+  }
+
   return {
     object: (name) => readFields(fields[name], pathOf(name)),
     nullableObject: (name) => (fields[name] === null ? null : readFields(fields[name], pathOf(name))),
@@ -42,6 +57,8 @@ function readFields(json: unknown, path: string): ResponseFields {
     number: (name) => read(name, isNumber),
     nullableNumber: (name) => read(name, (field): field is number | null => field === null || isNumber(field)),
     boolean: (name) => read(name, (field): field is boolean => typeof field === 'boolean'),
+    objectList: (name) => readList(name).map((entry, index) => readFields(entry, `${pathOf(name)}[${index}]`)),
+    numberPairs: (name) => readList(name).map((pair, index) => readNumberPair(pair, `${pathOf(name)}[${index}]`)),
   };
 }
 

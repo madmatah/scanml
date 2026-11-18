@@ -2,7 +2,9 @@ import { createInstance, type i18n, type Resource } from 'i18next';
 import LanguageDetector from 'i18next-browser-languagedetector';
 
 import {
+  createDateFormatting,
   createNumberFormatting,
+  type DateFormatting,
   formattingLocale,
   type NumberFormatting,
   type UiLanguage,
@@ -13,6 +15,7 @@ export interface Localization {
   readonly language: UiLanguage;
   readonly locale: string;
   readonly formatting: NumberFormatting;
+  readonly dates: DateFormatting;
 }
 
 export async function createLocalization(catalogs: Resource): Promise<Localization> {
@@ -35,5 +38,5 @@ export async function createLocalization(catalogs: Resource): Promise<Localizati
   instance.services.formatter?.add('number', (value) =>
     typeof value === 'number' ? formatting.formatNumber(value) : String(value),
   );
-  return { i18next: instance, language, locale, formatting };
+  return { i18next: instance, language, locale, formatting, dates: createDateFormatting(locale) };
 }

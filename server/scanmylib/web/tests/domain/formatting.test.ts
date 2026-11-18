@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { beforeEach, describe, it } from 'node:test';
 
-import { createNumberFormatting } from '../../src/domain/formatting.ts';
+import { createNumberFormatting, type ElapsedTime, elapsedTime } from '../../src/domain/formatting.ts';
 
 const ENGLISH_LOCALE = 'en-US';
 const FRENCH_LOCALE = 'fr-FR';
@@ -32,5 +32,70 @@ describe('The formatting', () => {
         assert.equal(text, frenchIntegers.format(number));
       });
     });
+  });
+
+  describe('The elapsedTime() function', () => {
+    const nowMilliseconds = Date.UTC(2026, 10, 18, 12, 0, 0);
+    const secondMilliseconds = 1000;
+    const minuteMilliseconds = 60 * secondMilliseconds;
+    const hourMilliseconds = 60 * minuteMilliseconds;
+    const dayMilliseconds = 24 * hourMilliseconds;
+    const situations: { situation: string; ageMilliseconds: number; rule: string; expected: ElapsedTime }[] = [
+      {
+        situation: 'When the date is less than 45 seconds old',
+        ageMilliseconds: 44 * secondMilliseconds,
+        rule: 'should be just now',
+        expected: { kind: 'just-now' },
+      },
+      {
+        situation: 'When the date is less than 45 seconds ahead',
+        ageMilliseconds: -44 * secondMilliseconds,
+        rule: 'should be just now too, so that a clock slightly behind the api says nothing odd',
+        expected: { kind: 'just-now' },
+      },
+      {
+        situation: 'When the date is 50 seconds old',
+        ageMilliseconds: 50 * secondMilliseconds,
+        rule: 'should count the seconds before now',
+        expected: { kind: 'relative', amount: -50, unit: 'second' },
+      },
+      {
+        situation: 'When the date is 9 minutes and 20 seconds old',
+        ageMilliseconds: 9 * minuteMilliseconds + 20 * secondMilliseconds,
+        rule: 'should count the whole minutes, rounded',
+        expected: { kind: 'relative', amount: -9, unit: 'minute' },
+      },
+      {
+        situation: 'When the date is 5 hours old',
+        ageMilliseconds: 5 * hourMilliseconds,
+        rule: 'should count the hours',
+        expected: { kind: 'relative', amount: -5, unit: 'hour' },
+      },
+      {
+        situation: 'When the date is 4 days old',
+        ageMilliseconds: 4 * dayMilliseconds,
+        rule: 'should count the days',
+        expected: { kind: 'relative', amount: -4, unit: 'day' },
+      },
+      {
+        situation: 'When the date is a week old',
+        ageMilliseconds: 7 * dayMilliseconds,
+        rule: 'should give the date itself',
+        expected: { kind: 'absolute' },
+      },
+    ];
+
+    for (const { situation, ageMilliseconds, rule, expected } of situations) {
+      describe(situation, () => {
+        let elapsed: ElapsedTime;
+        beforeEach(() => {
+          elapsed = elapsedTime(nowMilliseconds - ageMilliseconds, nowMilliseconds);
+        });
+
+        it(rule, () => {
+          assert.deepEqual(elapsed, expected);
+        });
+      });
+    }
   });
 });

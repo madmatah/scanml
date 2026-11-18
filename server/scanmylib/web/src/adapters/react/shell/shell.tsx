@@ -2,7 +2,10 @@ import { useEffect, useLayoutEffect, useRef, useSyncExternalStore } from 'react'
 import { useTranslation } from 'react-i18next';
 import { Outlet, useLocation, useMatches, useNavigate } from 'react-router';
 
+import type { EngineStatus } from '../../../application/engine-status.ts';
 import type { Session } from '../../../application/session.ts';
+import type { NumberFormatting } from '../../../domain/formatting.ts';
+import { EngineBanners } from '../engine-status/engine-banners.tsx';
 import { errorMessage } from './error-message.ts';
 import { Header } from './header.tsx';
 import { LoadingState } from './loading-state.tsx';
@@ -13,6 +16,8 @@ import type { Toasts } from './toasts.ts';
 export interface ShellServices {
   readonly session: Session;
   readonly toasts: Toasts;
+  readonly engineStatus: EngineStatus;
+  readonly formatting: NumberFormatting;
 }
 
 function useRouteName(): RouteName {
@@ -21,7 +26,7 @@ function useRouteName(): RouteName {
 }
 
 export function Shell({ services }: { readonly services: ShellServices }) {
-  const { session, toasts } = services;
+  const { session, toasts, engineStatus, formatting } = services;
   const { t } = useTranslation();
   const state = useSyncExternalStore(session.subscribe, session.getSnapshot);
   const location = useLocation();
@@ -81,11 +86,14 @@ export function Shell({ services }: { readonly services: ShellServices }) {
       <Header
         isSignedIn={isSignedIn}
         section={sectionOf(route)}
+        engineStatus={engineStatus}
+        formatting={formatting}
         onSignOut={() => {
           // signOut handles its own failures, so its promise never rejects.
           void signOut();
         }}
       />
+      <EngineBanners engineStatus={engineStatus} />
       <main className="app-main" id="main" tabIndex={-1} ref={main}>
         {isLoading && <LoadingState />}
         {showsScreen && <Outlet />}

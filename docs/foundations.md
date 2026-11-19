@@ -175,9 +175,10 @@ states the rules, and `docs/SECURITY.md` the threat model, the guarantees and th
 
 Each unit's source files as they are, grouped by responsibility, and the layer of each group. The api's and the web UI's
 files live in their layer's directory, but the composition roots at the top of their source trees, the web UI's build
-script and the test support. The restructuring of [Principles](#principles) moves the other units' files where one is
-planned; a file that mixes two layers splits along them. The last row lists the scripts that the skills keep, which
-belong to no unit.
+script and the api's test support; the web UI's tests and their support sit beside the module they test, and those of
+its build, its catalogs and its icons beside its build script. The restructuring of [Principles](#principles) moves the
+other units' files where one is planned; a file that mixes two layers splits along them. The last row lists the scripts
+that the skills keep, which belong to no unit.
 
 | Unit | Source files | Responsibility | Layer |
 |---|---|---|---|
@@ -316,7 +317,7 @@ Each row names a rule, the rules file that states it, and what enforces it.
 | The dev app keeps its own application id (`.claude/rules/sandbox.md` > Development stacks and production) | The signing container of `scripts/build-apk.sh` |
 | Production runs published releases only (`.claude/rules/releases.md`) | `scripts/deploy.sh`, `scripts/setup.sh`, `scripts/prod.sh` and `scripts/build-apk.sh` |
 | Never weaken what the lockfile or the registry settings guarantee (`.claude/rules/configuration.md` > Dependencies) | `pip --require-hashes`, pnpm's frozen install with its integrity check and the guards of `server/scanmylib/web/pnpm-workspace.yaml`, Gradle's dependency verification, the image digests of `scripts/check.sh`, of `scripts/lint/Dockerfile.web`, of `server/Dockerfile`'s Node stage and of the scanner in `.github/workflows/vulnerability-scan.yml`, the checksums of `scripts/build-apk.sh` and of pnpm in `scripts/lint/Dockerfile.web` and `server/Dockerfile`, which `scripts/tests/test_web_toolchain_pins.py` holds together |
-| The French translation lives only in the catalogs (`CLAUDE.md` > Language) | The web UI's unit tests, the catalog test `tests/translations.test.ts` among them; i18next-cli in `scripts/check.sh lint`, whose `extract --ci` refuses a key missing from the catalogs or unused, `status fr` an untranslated entry, and `lint` a text of the TypeScript UI outside `t()` and the values of a call that do not match its placeholders; `tsc`, for a key outside the English catalog; Android lint for missing translations |
+| The French translation lives only in the catalogs (`CLAUDE.md` > Language) | The web UI's unit tests, the catalog test `translations.test.ts` among them; i18next-cli in `scripts/check.sh lint`, whose `extract --ci` refuses a key missing from the catalogs or unused, `status fr` an untranslated entry, and `lint` a text of the TypeScript UI outside `t()` and the values of a call that do not match its placeholders; `tsc`, for a key outside the English catalog; Android lint for missing translations |
 | Part of the rules of the Python: PEP 8 at 120 columns, imports, typed signatures with no bare `Any`, no blind `except`, no mutable defaults (`.claude/rules/python.md`), no shell or SQL string built from input (`.claude/rules/conventions.md` > Input from outside the program), and, in part, no character a reader cannot see written as such (`.claude/rules/conventions.md` > Characters a reader cannot see) | Ruff and mypy `--strict`, in `scripts/check.sh lint` |
 | Part of the rules of the shell scripts: quoting and `[[ … ]]` (ShellCheck), indentation (shfmt) (`.claude/rules/bash.md`) | ShellCheck and shfmt, in `scripts/check.sh lint` |
 | The Kotlin conventions at 120 columns, file names (`.claude/rules/kotlin.md`) | ktlint, in `scripts/check.sh android` |
@@ -433,7 +434,9 @@ The tests are the specification of the business rules. To learn how a part of th
 one states one rule, in a sentence, in the vocabulary of the domain. That is why the code carries no comment that states
 a rule. Every test file follows one structure, so that the sentence runs from the component through the operation and
 the situations to the test's name, and a reader, and an agent, finds the arrangement, the act and the assertions in the
-same place in every file; `.claude/rules/tests.md` says how tests are written.
+same place in every file; `.claude/rules/tests.md` says how tests are written. The web UI's tests sit beside the module
+they test, so that a module and its specification are read, and moved, together, and the tools tell them apart by their
+names; the other units keep theirs in a test tree of their own, where their runners and images look for them.
 
 ### Test levels
 

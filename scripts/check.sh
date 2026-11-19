@@ -208,7 +208,7 @@ check_web() {
     web_tools=$(build_web_tools)
     # The build writes into a tmpfs and is then dropped: a broken build or entry page fails the gate.
     run_web_tool --tmpfs /tmp "$web_tools" node build.ts --outdir /tmp/build
-    run_web_tool "$web_tools" node --test 'tests/**/*.test.ts'
+    run_web_tool "$web_tools" node --test '*.test.ts' 'src/**/*.test.ts'
 }
 
 check_server() {

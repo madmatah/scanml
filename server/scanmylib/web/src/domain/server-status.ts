@@ -29,3 +29,13 @@ export interface ServerStatus {
 export const countPendingPages = (queue: QueueCounts): number => {
   return queue.queuedCount + queue.processingCount;
 };
+
+export const queueKeyOf = (status: ServerStatus | null): string | null => {
+  if (status === null) return null;
+  const { queuedCount, processingCount, doneCount, errorCount } = status.queue;
+  return [queuedCount, processingCount, doneCount, errorCount].join('/');
+};
+
+export const hasQueueMoved = (previousKey: string | null, key: string): boolean => {
+  return previousKey !== null && key !== previousKey;
+};

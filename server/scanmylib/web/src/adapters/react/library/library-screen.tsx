@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router';
 
 import type { DocumentCatalog } from '../../../application/document-catalog.ts';
 import type { EngineStatus } from '../../../application/engine-status.ts';
+import { watchQueueMoves } from '../../../application/queue-moves.ts';
 import type { UuidSource } from '../../../application/uuid-source.ts';
 import { documentsMatching } from '../../../domain/document-search.ts';
 import type { DocumentSummary } from '../../../domain/document-summary.ts';
@@ -19,7 +20,7 @@ import { documentPath, PATHS } from '../shell/navigation.ts';
 import type { Toasts } from '../shell/toasts.ts';
 import { useDocumentTitle } from '../shell/use-document-title.ts';
 import { DocumentCard } from './document-card.tsx';
-import { afterLoadFailure, hasQueueMoved, type LibraryLoad, queueKeyOf, showsSearch } from './library-loading.ts';
+import { afterLoadFailure, type LibraryLoad, showsSearch } from './library-loading.ts';
 import { librarySummaryText } from './library-text.ts';
 
 // Keeps "Updated 5 minutes ago" true while the screen stays open.
@@ -50,7 +51,6 @@ export const LibraryScreen: FC<LibraryScreenProps> = ({ catalog, engineStatus, t
   useEffect(() => {
     const leaving = new AbortController();
     let current: LibraryLoad = { phase: 'loading' };
-    let lastQueueKey: string | null = null;
 
     const enter = (next: LibraryLoad): void => {
       current = next;
@@ -76,12 +76,7 @@ export const LibraryScreen: FC<LibraryScreenProps> = ({ catalog, engineStatus, t
     };
 
     // New pages from the phone, or pages whose text is now read, change the documents' counts.
-    const stopWatchingQueue = engineStatus.subscribe(() => {
-      const key = queueKeyOf(engineStatus.getSnapshot().status);
-      if (key === null) return;
-      if (hasQueueMoved(lastQueueKey, key)) loadAgain();
-      lastQueueKey = key;
-    });
+    const stopWatchingQueue = watchQueueMoves(engineStatus, loadAgain, { from: null });
     const loadWhenShown = (): void => {
       if (!document.hidden) loadAgain();
     };

@@ -12,6 +12,7 @@ import {
 } from '../../../application/document-loader.ts';
 import type { DocumentStore } from '../../../application/document-store.ts';
 import type { EngineStatus } from '../../../application/engine-status.ts';
+import { watchQueueMoves } from '../../../application/queue-moves.ts';
 import type { Scheduler } from '../../../application/scheduler.ts';
 import { sentCountOf, type UploadQueue } from '../../../application/upload-queue.ts';
 import type { UuidSource } from '../../../application/uuid-source.ts';
@@ -22,7 +23,6 @@ import { documentKindLabel } from '../../i18next/document-labels.ts';
 import { quoted } from '../../i18next/formatted-text.ts';
 import { ConfirmDialog } from '../dialogs/confirm-dialog.tsx';
 import { DocumentDialog } from '../dialogs/document-dialog.tsx';
-import { hasQueueMoved, queueKeyOf } from '../library/library-loading.ts';
 import { PageOrganizer } from '../organizer/page-organizer.tsx';
 import { EmptyState } from '../shell/empty-state.tsx';
 import { errorMessage } from '../shell/error-message.ts';
@@ -102,14 +102,10 @@ const DocumentView: FC<DocumentViewProps> = ({
         void navigate(PATHS.home, { replace: true });
       },
     });
-    // From the last known status, so that a page read before the first poll after opening is not missed.
-    let lastQueueKey = queueKeyOf(engineStatus.getSnapshot().status);
-    // New pages from the phone, or pages whose text is now read, show without waiting for a refresh.
-    const stopWatchingQueue = engineStatus.subscribe(() => {
-      const key = queueKeyOf(engineStatus.getSnapshot().status);
-      if (key === null) return;
-      if (hasQueueMoved(lastQueueKey, key)) documentLoader.load();
-      lastQueueKey = key;
+    // New pages from the phone, or pages whose text is now read, show without waiting for a refresh, counted from the
+    // last known status, so that a page read before the first poll after opening is not missed.
+    const stopWatchingQueue = watchQueueMoves(engineStatus, () => documentLoader.load(), {
+      from: engineStatus.getSnapshot().status,
     });
     // The pages of the photos sent from this screen show shortly after their upload.
     let sentCount = sentCountOf(uploads.getSnapshot(), documentId);

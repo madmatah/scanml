@@ -1,6 +1,5 @@
 import { NetworkError } from '../../../application/api-errors.ts';
 import type { DocumentSummary } from '../../../domain/document-summary.ts';
-import type { ServerStatus } from '../../../domain/server-status.ts';
 
 export type LibraryLoad =
   | { readonly phase: 'loading' }
@@ -21,14 +20,4 @@ export const showsSearch = (load: LibraryLoad): boolean => {
 export const afterLoadFailure = (load: LibraryLoad, failure: unknown): LoadFailure => {
   if (load.phase === 'loaded') return { load, isToldInToast: !(failure instanceof NetworkError) };
   return { load: { phase: 'failed', failure }, isToldInToast: false };
-};
-
-export const queueKeyOf = (status: ServerStatus | null): string | null => {
-  if (status === null) return null;
-  const { queuedCount, processingCount, doneCount, errorCount } = status.queue;
-  return [queuedCount, processingCount, doneCount, errorCount].join('/');
-};
-
-export const hasQueueMoved = (previousKey: string | null, key: string): boolean => {
-  return previousKey !== null && key !== previousKey;
 };

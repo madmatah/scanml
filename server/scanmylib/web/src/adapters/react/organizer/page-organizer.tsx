@@ -1,44 +1,15 @@
-import {
-  type FC,
-  memo,
-  useCallback,
-  useEffect,
-  useId,
-  useLayoutEffect,
-  useRef,
-  useState,
-  useSyncExternalStore,
-} from 'react';
-import { flushSync } from 'react-dom';
+import { type FC, memo, type RefCallback, useId } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  createOrganizerStore,
-  type OrganizerPlacement,
-  type OrganizerStore,
-  organizerToolbar,
-} from '../../../application/organizer-store.ts';
 import type { DocumentWithPages, PageSummary } from '../../../domain/document-details.ts';
-import {
-  inOrder,
-  type PageId,
-  type ReadingOrder,
-  readingOrderGroups,
-  sameOrder,
-} from '../../../domain/reading-order.ts';
+import type { PageId, ReadingOrder } from '../../../domain/reading-order.ts';
 import { pageShortLabel } from '../../i18next/page-labels.ts';
 import { ConfirmDialog } from '../dialogs/confirm-dialog.tsx';
 import { PlacementChip } from '../document/placement-chip.tsx';
 import { Icon } from '../shell/icon.tsx';
 import type { Toasts } from '../shell/toasts.ts';
 import { versionedUrl } from '../shell/versioned-url.ts';
-import type { GestureOutcome } from './drag-gesture.ts';
 import { MoveDialog } from './move-dialog.tsx';
 import {
-  conflictText,
-  type MoveChoice,
-  moveChoices,
-  moveText,
-  organizerNotice,
   outsideText,
   pageName,
   placedHeadingText,
@@ -48,8 +19,7 @@ import {
   spanShortText,
   unplacedHeadingText,
 } from './organizer-text.ts';
-import { createPageDrag } from './page-drag.ts';
-import type { MoveTarget } from './use-move-dialog.ts';
+import { usePageOrganizer } from './use-page-organizer.ts';
 
 export interface PageOrganizerProps {
   readonly document: DocumentWithPages;
@@ -60,267 +30,43 @@ export interface PageOrganizerProps {
   readonly onDone: () => void;
 }
 
-type OpenDialog =
-  | { readonly kind: 'move'; readonly moving: readonly PageId[]; readonly choices: readonly MoveChoice[] }
-  | { readonly kind: 'reset' }
-  | null;
-
-type CardNodes = Map<PageId, HTMLLIElement>;
-
-const ESCAPE = 'Escape';
-const APP_HEADER_ID = 'app-header';
-// The live region is emptied first, so that the same message twice is read twice.
-const ANNOUNCE_DELAY_MILLISECONDS = 60;
-const BEFORE = -1;
-const AFTER = 1;
-
 // aria-disabled rather than disabled, so that a focused button keeps the focus.
 const unavailable = (isUnavailable: boolean): 'true' | undefined => {
   return isUnavailable ? 'true' : undefined;
 };
 
-const isUnavailable = (button: Element): boolean => {
-  return button.getAttribute('aria-disabled') === 'true';
-};
-
-const closestElement = (target: EventTarget | null, selector: string): Element | null => {
-  return target instanceof Element ? target.closest(selector) : null;
-};
-
 // The click on the lists selects, with the keys it holds; the checkbox only shows the selection.
 const showsSelectionOnly = (): void => {};
-
-const highlight = (cards: CardNodes, moved: readonly PageId[]): void => {
-  for (const pageId of moved) {
-    const node = cards.get(pageId);
-    if (node === undefined) continue;
-    node.classList.remove('is-moved');
-    void node.offsetWidth;
-    node.classList.add('is-moved');
-  }
-};
 
 export const PageOrganizer: FC<PageOrganizerProps> = ({ document, save, reset, reload, toasts, onDone }) => {
   const { t } = useTranslation();
   const titleId = useId();
-  const [store] = useState<OrganizerStore>(() =>
-    createOrganizerStore(document, {
-      save,
-      reset,
-      reload,
-      report: (event) => {
-        const notice = organizerNotice(t, event);
-        toasts.show(notice.message, notice.tone);
-      },
-    }),
-  );
-  const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot);
-  // A card keeps its mark once moved, so that its animation plays to its end whatever is drawn meanwhile.
-  const [movedPageIds, setMovedPageIds] = useState<ReadonlySet<PageId>>(() => new Set());
-  const [openDialog, setOpenDialog] = useState<OpenDialog>(null);
-  const organizer = useRef<HTMLElement>(null);
-  const toolbar = useRef<HTMLDivElement>(null);
-  const lists = useRef<HTMLDivElement>(null);
-  const indicator = useRef<HTMLSpanElement>(null);
-  const title = useRef<HTMLHeadingElement>(null);
-  const moveButton = useRef<HTMLButtonElement>(null);
-  const resetButton = useRef<HTMLButtonElement>(null);
-  const announcer = useRef<HTMLParagraphElement>(null);
-  const announceTimer = useRef(0);
-  const cards = useRef<CardNodes>(new Map());
-  const wasResetting = useRef(false);
-
-  const announce = useCallback((message: string) => {
-    const element = announcer.current;
-    if (element === null) return;
-    element.textContent = '';
-    window.clearTimeout(announceTimer.current);
-    announceTimer.current = window.setTimeout(() => {
-      element.textContent = message;
-    }, ANNOUNCE_DELAY_MILLISECONDS);
-  }, []);
-
-  // A move shows at once with its marks, so that its cards, drawn in their new order, can be highlighted and it can be
-  // told.
-  const applyMove = useCallback(
-    (move: () => OrganizerPlacement): OrganizerPlacement => {
-      const outcome = flushSync(() => {
-        const done = move();
-        if (done.kind === 'moved') setMovedPageIds((previous) => new Set([...previous, ...done.moved]));
-        return done;
-      });
-      if (outcome.kind === 'moved') {
-        highlight(cards.current, outcome.moved);
-        const shown = store.getSnapshot();
-        announce(moveText(t, shown.pages, shown.order, outcome.moved));
-      }
-      return outcome;
-    },
-    [store, t, announce],
-  );
-
-  useEffect(() => {
-    store.update(document);
-  }, [store, document]);
-
-  useLayoutEffect(() => {
-    title.current?.focus();
-  }, []);
-
-  useEffect(() => () => window.clearTimeout(announceTimer.current), []);
-
-  // The toolbar sticks under the sticky header of the app, and the cards scrolled into view stay clear of both.
-  useEffect(() => {
-    const section = organizer.current;
-    const bar = toolbar.current;
-    if (section === null || bar === null) return;
-    const header = window.document.getElementById(APP_HEADER_ID);
-    const observer = new ResizeObserver(() => {
-      const headerHeight = header !== null && !header.hidden ? header.offsetHeight : 0;
-      section.style.setProperty('--organizer-top', `${headerHeight}px`);
-      section.style.setProperty('--organizer-covered', `${headerHeight + bar.offsetHeight}px`);
-    });
-    if (header !== null) observer.observe(header);
-    observer.observe(bar);
-    return () => observer.disconnect();
-  }, []);
-
-  useEffect(() => {
-    const section = organizer.current;
-    const bar = toolbar.current;
-    const listsElement = lists.current;
-    const indicatorElement = indicator.current;
-    if (section === null || bar === null || listsElement === null || indicatorElement === null) return;
-
-    const endGesture = (outcome: GestureOutcome): void => {
-      switch (outcome.kind) {
-        case 'drop':
-          if (!sameOrder(outcome.order, store.getSnapshot().order)) {
-            applyMove(() => {
-              store.change(outcome.order);
-              return { kind: 'moved', moved: outcome.moving };
-            });
-          }
-          break;
-        case 'tap':
-          store.select(outcome.pageId, { isToggle: false, isRange: false });
-          break;
-        case 'release':
-          break;
-        case 'cancel':
-          if (outcome.isByKey) announce(t('Move canceled.'));
-          break;
-        default:
-          throw new Error(`Unknown end of a gesture: ${JSON.stringify(outcome satisfies never)}`);
-      }
-      store.endGesture();
-    };
-
-    const drag = createPageDrag(
-      { organizer: section, toolbar: bar, lists: listsElement, indicator: indicatorElement },
-      {
-        isResetting: () => store.getSnapshot().isResetting,
-        order: () => store.getSnapshot().order,
-        selected: () => store.getSnapshot().selection.selected,
-        cardOf: (pageId) => cards.current.get(pageId),
-        onGestureStart: () => store.beginGesture(),
-        onGestureEnd: endGesture,
-      },
-    );
-
-    const moveOne = (pageId: PageId, step: typeof BEFORE | typeof AFTER, button: HTMLElement): void => {
-      if (applyMove(() => store.moveOne(pageId, step)).kind !== 'moved') return;
-      // The button moved with its card and kept the focus: it stays in view.
-      button.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-    };
-
-    const onClick = (event: MouseEvent): void => {
-      const card = closestElement(event.target, '.organizer-card');
-      if (!(card instanceof HTMLElement)) return;
-      if (drag.takeIgnoredClick()) {
-        // This also leaves a checkbox under the pointer as it was.
-        event.preventDefault();
-        return;
-      }
-      const pageId = card.dataset.id;
-      if (pageId === undefined) return;
-      const stepButton = closestElement(event.target, 'button[data-step]');
-      if (stepButton instanceof HTMLElement) {
-        if (!isUnavailable(stepButton)) moveOne(pageId, stepButton.dataset.step === '-1' ? BEFORE : AFTER, stepButton);
-      } else if (event.target instanceof HTMLInputElement && event.target.type === 'checkbox') {
-        store.select(pageId, { isToggle: true, isRange: event.shiftKey });
-      } else if (closestElement(event.target, 'label') === null) {
-        // A label passes its click on to its checkbox.
-        store.select(pageId, { isToggle: event.ctrlKey || event.metaKey, isRange: event.shiftKey });
-      }
-    };
-
-    // Escape empties the selection: a mouse click on a card does not move the focus into the organizer.
-    const onEscape = (event: KeyboardEvent): void => {
-      if (event.key !== ESCAPE || event.defaultPrevented || store.hasGesture()) return;
-      if (store.getSnapshot().selection.selected.size === 0) return;
-      if (window.document.querySelector('dialog[open]') !== null) return;
-      event.preventDefault();
-      store.clearSelection();
-      announce(t('No page selected anymore.'));
-    };
-
-    listsElement.addEventListener('click', onClick);
-    window.document.addEventListener('keydown', onEscape);
-    return () => {
-      drag.destroy();
-      listsElement.removeEventListener('click', onClick);
-      window.document.removeEventListener('keydown', onEscape);
-    };
-  }, [store, t, applyMove, announce]);
-
-  // The button disappears with the last place chosen by hand: the focus stays in the organizer.
-  useLayoutEffect(() => {
-    const button = resetButton.current;
-    const focused = window.document.activeElement;
-    if (wasResetting.current && !snapshot.isResetting && button?.hidden === true) {
-      if (focused === button || focused === window.document.body) title.current?.focus();
-    }
-    wasResetting.current = snapshot.isResetting;
-  }, [snapshot.isResetting]);
-
-  const { order, pages, selection, isResetting } = snapshot;
-  const toolbarState = organizerToolbar(snapshot);
-  const groups = readingOrderGroups(order, pages);
-  const outsideCount = snapshot.document.pages.length - order.length;
-
-  const openMoveDialog = (): void => {
-    const moving = inOrder(order, selection.selected);
-    if (moving.length === 0 || moving.length === order.length || isResetting) return;
-    setOpenDialog({ kind: 'move', moving, choices: moveChoices(t, pages, order, moving) });
-  };
-
-  const moveClosed = (moving: readonly PageId[], target: MoveTarget | null): void => {
-    setOpenDialog(null);
-    if (target === null) return;
-    const placement = applyMove(() => store.place(moving, target.targetId, target.side));
-    switch (placement.kind) {
-      case 'conflict':
-        toasts.show(conflictText(t), 'error');
-        return;
-      case 'unchanged':
-        announce(t('The pages are already at this place.'));
-        return;
-      case 'moved': {
-        const [first] = placement.moved;
-        if (first !== undefined) cards.current.get(first)?.scrollIntoView({ block: 'nearest' });
-        return;
-      }
-      default:
-        throw new Error(`Unknown placement: ${JSON.stringify(placement satisfies never)}`);
-    }
-  };
-
-  const resetClosed = (isConfirmed: boolean): void => {
-    setOpenDialog(null);
-    // resetOrder tells its outcome through the store's report, so its promise never rejects.
-    if (isConfirmed) void store.resetOrder();
-  };
+  const {
+    organizer,
+    toolbar,
+    lists,
+    indicator,
+    title,
+    moveButton,
+    resetButton,
+    announcer,
+    cardRef,
+    order,
+    pages,
+    selection,
+    isResetting,
+    toolbarState,
+    groups,
+    outsideCount,
+    movedPageIds,
+    openDialog,
+    onClearSelection,
+    onSelectSpan,
+    onMoveSelection,
+    onRestoreOrder,
+    onMoveClosed,
+    onResetClosed,
+  } = usePageOrganizer(document, { save, reset, reload, toasts });
 
   const renderCards = (pageIds: readonly PageId[], firstIndex: number) => {
     return pageIds.map((pageId, offset) => {
@@ -336,7 +82,7 @@ export const PageOrganizer: FC<PageOrganizerProps> = ({ document, save, reset, r
           isMoved={movedPageIds.has(pageId)}
           isResetting={isResetting}
           showsUnplaced={groups.hasPlacedPages}
-          cards={cards.current}
+          cardRef={cardRef(pageId)}
         />
       );
     });
@@ -366,22 +112,13 @@ export const PageOrganizer: FC<PageOrganizerProps> = ({ document, save, reset, r
             className="btn btn-small btn-compact"
             aria-disabled={unavailable(!toolbarState.canClearSelection)}
             onClick={() => {
-              if (toolbarState.canClearSelection) store.clearSelection();
+              if (toolbarState.canClearSelection) onClearSelection();
             }}
           >
             <Icon name="x" />
             <span className="btn-label">{t('Deselect all')}</span>
           </button>
-          <button
-            type="button"
-            className="btn btn-small"
-            hidden={!toolbarState.showsSpan}
-            onClick={() => {
-              store.selectSpan();
-              // This button goes now that the range is whole: moving it is the next step.
-              moveButton.current?.focus();
-            }}
-          >
+          <button type="button" className="btn btn-small" hidden={!toolbarState.showsSpan} onClick={onSelectSpan}>
             <span className="label-long">{spanLongText(t, toolbarState.spanCount)}</span>
             <span className="label-short">{spanShortText(t, toolbarState.spanCount)}</span>
           </button>
@@ -391,7 +128,7 @@ export const PageOrganizer: FC<PageOrganizerProps> = ({ document, save, reset, r
             className="btn btn-small"
             aria-disabled={unavailable(!toolbarState.canMoveSelection)}
             onClick={() => {
-              if (toolbarState.canMoveSelection) openMoveDialog();
+              if (toolbarState.canMoveSelection) onMoveSelection();
             }}
           >
             <Icon name="move" />
@@ -427,7 +164,7 @@ export const PageOrganizer: FC<PageOrganizerProps> = ({ document, save, reset, r
           hidden={!toolbarState.showsReset}
           aria-disabled={unavailable(!toolbarState.canReset)}
           onClick={() => {
-            if (toolbarState.canReset) setOpenDialog({ kind: 'reset' });
+            if (toolbarState.canReset) onRestoreOrder();
           }}
         >
           <Icon name="undo" />
@@ -464,7 +201,7 @@ export const PageOrganizer: FC<PageOrganizerProps> = ({ document, save, reset, r
         <MoveDialog
           count={openDialog.moving.length}
           choices={openDialog.choices}
-          onClosed={(target) => moveClosed(openDialog.moving, target)}
+          onClosed={(target) => onMoveClosed(openDialog.moving, target)}
         />
       )}
       {openDialog?.kind === 'reset' && (
@@ -474,7 +211,7 @@ export const PageOrganizer: FC<PageOrganizerProps> = ({ document, save, reset, r
             'The pages will go back to the place given by their number or by their photo series. Moves made by hand will be forgotten.',
           )}
           confirmLabel={t('Restore automatic order')}
-          onClosed={resetClosed}
+          onClosed={onResetClosed}
         />
       )}
     </section>
@@ -489,7 +226,7 @@ interface OrganizerCardProps {
   readonly isMoved: boolean;
   readonly isResetting: boolean;
   readonly showsUnplaced: boolean;
-  readonly cards: CardNodes;
+  readonly cardRef: RefCallback<HTMLLIElement>;
 }
 
 const OrganizerCard: FC<OrganizerCardProps> = ({
@@ -500,24 +237,14 @@ const OrganizerCard: FC<OrganizerCardProps> = ({
   isMoved,
   isResetting,
   showsUnplaced,
-  cards,
+  cardRef,
 }) => {
   const { t } = useTranslation();
   const name = pageName(t, page, index);
   const pageId = page.id;
-  const register = useCallback(
-    (node: HTMLLIElement | null) => {
-      if (node === null) return;
-      cards.set(pageId, node);
-      return () => {
-        if (cards.get(pageId) === node) cards.delete(pageId);
-      };
-    },
-    [cards, pageId],
-  );
   const classes = ['organizer-card', isSelected && 'is-selected', isMoved && 'is-moved'];
   return (
-    <li ref={register} className={classes.filter(Boolean).join(' ')} data-id={pageId}>
+    <li ref={cardRef} className={classes.filter(Boolean).join(' ')} data-id={pageId}>
       <div className="organizer-card-frame">
         <span className="page-thumb">
           {/* The api draws the thumbnail of a rotated page again at the same address. */}

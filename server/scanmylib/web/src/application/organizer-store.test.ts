@@ -8,6 +8,8 @@ import { ApiError } from './api-errors.ts';
 import {
   createOrganizerStore,
   type OrganizerEvent,
+  type OrganizerMove,
+  type OrganizerPlacement,
   type OrganizerSnapshot,
   type OrganizerStore,
   type OrganizerToolbar,
@@ -195,6 +197,138 @@ describe('The organizer store', () => {
 
       it('should show the last order the api gave', () => {
         assert.deepEqual(arrangement.store.getSnapshot().order, ['a', 'b', 'c']);
+      });
+    });
+  });
+
+  describe('The moveOne() method', () => {
+    describe('When a page is moved after the next one', () => {
+      let arrangement: Arrangement;
+      let move: OrganizerMove;
+      beforeEach(() => {
+        arrangement = arrange(documentWithOrder(['a', 'b', 'c']));
+        move = arrangement.store.moveOne('a', 1);
+      });
+
+      it('should show the new order at once', () => {
+        assert.deepEqual(arrangement.store.getSnapshot().order, ['b', 'a', 'c']);
+      });
+
+      it('should send it', () => {
+        assert.deepEqual(
+          arrangement.saves.map((save) => save.order),
+          [['b', 'a', 'c']],
+        );
+      });
+
+      it('should tell that the page moved, so that its card can be highlighted', () => {
+        assert.deepEqual(move, { kind: 'moved', moved: ['a'] });
+      });
+    });
+
+    describe('When the first page is moved before the previous one', () => {
+      let arrangement: Arrangement;
+      let move: OrganizerMove;
+      beforeEach(() => {
+        arrangement = arrange(documentWithOrder(['a', 'b', 'c']));
+        move = arrangement.store.moveOne('a', -1);
+      });
+
+      it('should keep the order, without sending it', () => {
+        assert.deepEqual(
+          { order: arrangement.store.getSnapshot().order, saveCount: arrangement.saves.length },
+          { order: ['a', 'b', 'c'], saveCount: 0 },
+        );
+      });
+
+      it('should tell that nothing moved', () => {
+        assert.deepEqual(move, { kind: 'unchanged' });
+      });
+    });
+  });
+
+  describe('The place() method', () => {
+    describe('When selected pages are placed after another', () => {
+      let arrangement: Arrangement;
+      let placement: OrganizerPlacement;
+      beforeEach(() => {
+        arrangement = arrange(documentWithOrder(['a', 'b', 'c', 'd']));
+        placement = arrangement.store.place(['a', 'b'], 'd', 'after');
+      });
+
+      it('should show the new order at once', () => {
+        assert.deepEqual(arrangement.store.getSnapshot().order, ['c', 'd', 'a', 'b']);
+      });
+
+      it('should send it', () => {
+        assert.deepEqual(
+          arrangement.saves.map((save) => save.order),
+          [['c', 'd', 'a', 'b']],
+        );
+      });
+
+      it('should tell the pages moved, so that their cards can be highlighted', () => {
+        assert.deepEqual(placement, { kind: 'moved', moved: ['a', 'b'] });
+      });
+    });
+
+    describe('When the pages are placed where they already are', () => {
+      let arrangement: Arrangement;
+      let placement: OrganizerPlacement;
+      beforeEach(() => {
+        arrangement = arrange(documentWithOrder(['a', 'b', 'c']));
+        placement = arrangement.store.place(['a', 'b'], 'c', 'before');
+      });
+
+      it('should keep the order, without sending it', () => {
+        assert.deepEqual(
+          { order: arrangement.store.getSnapshot().order, saveCount: arrangement.saves.length },
+          { order: ['a', 'b', 'c'], saveCount: 0 },
+        );
+      });
+
+      it('should tell that nothing moved', () => {
+        assert.deepEqual(placement, { kind: 'unchanged' });
+      });
+    });
+
+    describe('When the target page left the reading order meanwhile', () => {
+      let arrangement: Arrangement;
+      let placement: OrganizerPlacement;
+      beforeEach(() => {
+        arrangement = arrange(documentWithOrder(['a', 'b'], [samplePage('x', { isInDocument: false })]));
+        placement = arrangement.store.place(['a'], 'x', 'after');
+      });
+
+      it('should keep the order, without sending it', () => {
+        assert.deepEqual(
+          { order: arrangement.store.getSnapshot().order, saveCount: arrangement.saves.length },
+          { order: ['a', 'b'], saveCount: 0 },
+        );
+      });
+
+      it('should tell the conflict', () => {
+        assert.deepEqual(placement, { kind: 'conflict' });
+      });
+    });
+
+    describe('When a page to place left the reading order meanwhile', () => {
+      let arrangement: Arrangement;
+      let placement: OrganizerPlacement;
+      beforeEach(() => {
+        arrangement = arrange(documentWithOrder(['a', 'b', 'c'], [samplePage('x', { isInDocument: false })]));
+        placement = arrangement.store.place(['a', 'x'], 'c', 'after');
+      });
+
+      it('should keep the order, without sending it', () => {
+        assert.deepEqual(
+          { order: arrangement.store.getSnapshot().order, saveCount: arrangement.saves.length },
+          { order: ['a', 'b', 'c'], saveCount: 0 },
+        );
+      });
+
+      it('should tell the conflict', () => {
+        assert.deepEqual(placement, { kind: 'conflict' });
       });
     });
   });

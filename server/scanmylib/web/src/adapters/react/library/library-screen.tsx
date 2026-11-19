@@ -25,7 +25,7 @@ import { librarySummaryText } from './library-text.ts';
 // Keeps "Updated 5 minutes ago" true while the screen stays open.
 const RELATIVE_DATES_REFRESH_MILLISECONDS = 60_000;
 
-export interface LibraryProps {
+export interface LibraryScreenProps {
   readonly catalog: DocumentCatalog;
   readonly engineStatus: Pick<EngineStatus, 'subscribe' | 'getSnapshot'>;
   readonly toasts: Toasts;
@@ -33,7 +33,7 @@ export interface LibraryProps {
   readonly dates: DateFormatting;
 }
 
-export const Library: FC<LibraryProps> = ({ catalog, engineStatus, toasts, uuids, dates }) => {
+export const LibraryScreen: FC<LibraryScreenProps> = ({ catalog, engineStatus, toasts, uuids, dates }) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const libraryDirectory = useSyncExternalStore(

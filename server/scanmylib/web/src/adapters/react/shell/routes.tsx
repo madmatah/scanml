@@ -1,10 +1,10 @@
 import type { RouteObject } from 'react-router';
 
 import { DocumentScreen } from '../document/document-screen.tsx';
-import { Library } from '../library/library.tsx';
-import { Login } from '../login/login.tsx';
+import { LibraryScreen } from '../library/library-screen.tsx';
+import { LoginScreen } from '../login/login-screen.tsx';
 import { PageScreen } from '../page/page-screen.tsx';
-import { Pairing } from '../pairing/pairing.tsx';
+import { PairingScreen } from '../pairing/pairing-screen.tsx';
 import { ReaderScreen } from '../reader/reader-screen.tsx';
 import type { RouteName } from './navigation.ts';
 import { Shell, type ShellServices } from './shell.tsx';
@@ -18,7 +18,7 @@ export const createRoutes = (services: ShellServices): RouteObject[] => {
           id: 'home' satisfies RouteName,
           index: true,
           element: (
-            <Library
+            <LibraryScreen
               catalog={services.catalog}
               engineStatus={services.engineStatus}
               toasts={services.toasts}
@@ -73,9 +73,9 @@ export const createRoutes = (services: ShellServices): RouteObject[] => {
         {
           id: 'pairing' satisfies RouteName,
           path: 'pairing',
-          element: <Pairing source={services.pairing} clipboard={services.clipboard} toasts={services.toasts} />,
+          element: <PairingScreen source={services.pairing} clipboard={services.clipboard} toasts={services.toasts} />,
         },
-        { id: 'login' satisfies RouteName, path: 'login', element: <Login session={services.session} /> },
+        { id: 'login' satisfies RouteName, path: 'login', element: <LoginScreen session={services.session} /> },
         { id: 'unknown' satisfies RouteName, path: '*', element: null },
       ],
     },

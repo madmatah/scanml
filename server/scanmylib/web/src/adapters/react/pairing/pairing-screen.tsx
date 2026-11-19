@@ -22,13 +22,13 @@ type PairingLoad =
   | { readonly phase: 'failed'; readonly failure: unknown }
   | { readonly phase: 'loaded'; readonly pairing: PairingDetails };
 
-export interface PairingProps {
+export interface PairingScreenProps {
   readonly source: PairingSource;
   readonly clipboard: Clipboard;
   readonly toasts: Toasts;
 }
 
-export const Pairing: FC<PairingProps> = ({ source, clipboard, toasts }) => {
+export const PairingScreen: FC<PairingScreenProps> = ({ source, clipboard, toasts }) => {
   const { t } = useTranslation();
   const [load, setLoad] = useState<PairingLoad>({ phase: 'loading' });
   const reload = useRef<() => void>(() => {});

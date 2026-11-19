@@ -1,29 +1,24 @@
-import type { TFunction } from 'i18next';
-import { type FC, Fragment, type ReactNode, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { type FC, Fragment, type ReactNode, useId } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useLocation, useParams } from 'react-router';
+import { Link } from 'react-router';
 import { isNotFound } from '../../../application/document-loader.ts';
 import type { DocumentStore } from '../../../application/document-store.ts';
-import { createReaderLoader, type ReaderLoad, type ReaderLoader } from '../../../application/reader-loader.ts';
 import { type DocumentWithPages, type PageSummary, waitingPageCount } from '../../../domain/document-details.ts';
-import { type ReadingPart, readingOutline } from '../../../domain/reading.ts';
 import type { LabeledPage } from '../../i18next/page-labels.ts';
 import { outlineEntryLabel } from '../../i18next/reading-text.ts';
-import { localizeMarkers } from '../sanitized-html/page-markers.ts';
-import { type FormulaTypesetter, useSanitizedHtml } from '../sanitized-html/use-sanitized-html.ts';
+import type { FormulaTypesetter } from '../sanitized-html/use-sanitized-html.ts';
 import { EmptyState } from '../shell/empty-state.tsx';
 import { errorMessage } from '../shell/error-message.ts';
 import { ErrorState } from '../shell/error-state.tsx';
 import { Icon } from '../shell/icon.tsx';
 import { LoadingState } from '../shell/loading-state.tsx';
-import { documentPath, documentTitle, idOfAddress, PATHS, pagePath } from '../shell/navigation.ts';
+import { documentPath, PATHS } from '../shell/navigation.ts';
 import type { Toasts } from '../shell/toasts.ts';
-import { versionedUrl } from '../shell/versioned-url.ts';
-import { type GroupedOutlineEntry, outlineGroups } from './outline-groups.ts';
-import { isAddressOf, pageReadIn, withPageRead } from './page-read-memory.ts';
+import { useRouteId } from '../shell/use-route-id.ts';
+import type { GroupedOutlineEntry, OutlineGroup } from './outline-groups.ts';
 import { emptyReadingMessage, waitingPagesNotice } from './reader-text.ts';
-import { documentParts } from './reading-parts.ts';
-import { createReadingTracker, type ReadingTracker } from './reading-tracker.ts';
+import { useReaderScreen } from './use-reader-screen.ts';
+import { useReaderText } from './use-reader-text.ts';
 
 export interface ReaderScreenProps {
   readonly documents: DocumentStore;
@@ -33,7 +28,7 @@ export interface ReaderScreenProps {
 
 // Each document has a reader of its own, which starts afresh.
 export const ReaderScreen: FC<ReaderScreenProps> = (props) => {
-  const documentId = idOfAddress(useParams().documentId);
+  const documentId = useRouteId('documentId');
   if (documentId === null) return null;
   return <ReaderView key={documentId} documentId={documentId} {...props} />;
 };
@@ -44,31 +39,10 @@ interface ReaderViewProps extends ReaderScreenProps {
 
 const ReaderView: FC<ReaderViewProps> = ({ documentId, documents, toasts, typesetFormulas }) => {
   const { t } = useTranslation();
-  const [load, setLoad] = useState<ReaderLoad>({ phase: 'loading' });
-  const loader = useRef<ReaderLoader | null>(null);
-  const screenTitle = load.phase === 'loaded' ? `${t('Reading')} · ${load.document.title}` : null;
-
-  // The title of the previous screen stays until the document's own is known.
-  useEffect(() => {
-    if (screenTitle !== null) document.title = documentTitle(screenTitle);
-  }, [screenTitle]);
-
-  useEffect(() => {
-    const leaving = new AbortController();
-    const readerLoader = createReaderLoader({
-      readDocument: (signal) => documents.readDocument(documentId, signal),
-      readDocumentHtml: (signal) => documents.readDocumentHtml(documentId, signal),
-      leaving: leaving.signal,
-      onChange: setLoad,
-      onRefreshFailed: (failure) => toasts.show(errorMessage(t, failure, t('Could not refresh.')), 'error'),
-    });
-    loader.current = readerLoader;
-    void readerLoader.load();
-    return () => leaving.abort();
-  }, [documentId, documents, toasts, t]);
-
-  // The loader tells its failures itself, so its promise never rejects.
-  const reload = useCallback(() => void loader.current?.load(), []);
+  const { load, outline, pageCount, readerAddress, markdownUrl, onReload } = useReaderScreen(documentId, {
+    documents,
+    toasts,
+  });
 
   if (load.phase === 'loading') {
     return (
@@ -84,7 +58,7 @@ const ReaderView: FC<ReaderViewProps> = ({ documentId, documents, toasts, typese
         <ErrorState
           title={isMissing ? t('Document not found') : t('Could not load')}
           message={isMissing ? t('This document does not exist or has been deleted.') : errorMessage(t, load.failure)}
-          {...(isMissing ? {} : { onRetry: reload })}
+          {...(isMissing ? {} : { onRetry: onReload })}
           actions={
             isMissing ? (
               <Link className="btn" to={PATHS.home}>
@@ -103,9 +77,12 @@ const ReaderView: FC<ReaderViewProps> = ({ documentId, documents, toasts, typese
       document={load.document}
       sanitizedHtml={load.sanitizedHtml}
       returnsToPageRead={load.returnsToPageRead}
-      markdownUrl={documents.markdownUrl(documentId)}
+      outline={outline}
+      pageCount={pageCount}
+      readerAddress={readerAddress}
+      markdownUrl={markdownUrl}
       typesetFormulas={typesetFormulas}
-      onReload={reload}
+      onReload={onReload}
     />
   );
 };
@@ -130,24 +107,13 @@ const ReloadButton: FC<{ readonly onReload: () => void }> = ({ onReload }) => {
   );
 };
 
-const removeTitle = (content: DocumentFragment): void => {
-  if (content.firstElementChild?.tagName === 'H1') content.firstElementChild.remove();
-};
-
-// The parts of the document's HTML that the "Page" list shows, read from a copy of its own: the text shown is parsed
-// and prepared again where it is placed.
-const readingPartsOf = (t: TFunction, sanitizedHtml: string): ReadingPart[] => {
-  const template = document.createElement('template');
-  template.innerHTML = sanitizedHtml;
-  removeTitle(template.content);
-  localizeMarkers(t, template.content);
-  return documentParts(template.content.children).parts;
-};
-
 interface ReaderDocumentProps {
   readonly document: DocumentWithPages;
   readonly sanitizedHtml: string;
   readonly returnsToPageRead: boolean;
+  readonly outline: readonly OutlineGroup<LabeledPage>[];
+  readonly pageCount: number;
+  readonly readerAddress: string;
   readonly markdownUrl: string;
   readonly typesetFormulas: FormulaTypesetter;
   readonly onReload: () => void;
@@ -157,14 +123,15 @@ const ReaderDocument: FC<ReaderDocumentProps> = ({
   document: shownDocument,
   sanitizedHtml,
   returnsToPageRead,
+  outline,
+  pageCount,
+  readerAddress,
   markdownUrl,
   typesetFormulas,
   onReload,
 }) => {
   const { t } = useTranslation();
   const titleId = useId();
-  const parts = useMemo(() => readingPartsOf(t, sanitizedHtml), [t, sanitizedHtml]);
-  const pageCount = parts.filter((part) => part.type === 'page').length;
   const waitingCount = waitingPageCount(shownDocument.stats);
 
   const breadcrumb = (
@@ -218,11 +185,12 @@ const ReaderDocument: FC<ReaderDocumentProps> = ({
   }
   return (
     <ReadingText
-      parts={parts}
+      outline={outline}
       pageCount={pageCount}
       pages={shownDocument.pages}
       sanitizedHtml={sanitizedHtml}
       returnsToPageRead={returnsToPageRead}
+      readerAddress={readerAddress}
       titleId={titleId}
       typesetFormulas={typesetFormulas}
     >
@@ -242,120 +210,37 @@ const ReaderDocument: FC<ReaderDocumentProps> = ({
 
 interface ReadingTextProps {
   readonly children: ReactNode;
-  readonly parts: readonly ReadingPart[];
+  readonly outline: readonly OutlineGroup<LabeledPage>[];
   readonly pageCount: number;
   readonly pages: readonly PageSummary[];
   readonly sanitizedHtml: string;
   readonly returnsToPageRead: boolean;
+  readonly readerAddress: string;
   readonly titleId: string;
   readonly typesetFormulas: FormulaTypesetter;
 }
-
-const preparePage = (t: TFunction, section: Element, page: PageSummary | undefined): void => {
-  const marker = section.querySelector(':scope > .page-marker');
-  const pageId = page === undefined ? null : idOfAddress(page.id);
-  if (marker !== null && pageId !== null) {
-    const link = document.createElement('a');
-    link.href = `#${pagePath(pageId)}`;
-    link.title = t('Open this page: scan, number, recognized text');
-    link.textContent = marker.textContent;
-    marker.replaceChildren(link);
-  }
-  for (const illustration of section.querySelectorAll('img[src]')) {
-    const address = illustration.getAttribute('src');
-    // A new reading of the page's text rewrites its illustrations in place.
-    if (address !== null) illustration.setAttribute('src', versionedUrl(address, page?.readAt ?? ''));
-    illustration.setAttribute('loading', 'lazy');
-    illustration.setAttribute('decoding', 'async');
-  }
-};
-
-// As in the legend of the document's coverage.
-const missingPagesSwatch = (): HTMLElement => {
-  const swatch = document.createElement('span');
-  swatch.className = 'swatch is-missing';
-  swatch.setAttribute('aria-hidden', 'true');
-  return swatch;
-};
 
 // The screen's element is rendered here, with the "Page" bar and the text, so that all three exist when the text is
 // placed and the tracker starts.
 const ReadingText: FC<ReadingTextProps> = ({
   children,
-  parts,
+  outline,
   pageCount,
   pages,
   sanitizedHtml,
   returnsToPageRead,
+  readerAddress,
   titleId,
   typesetFormulas,
 }) => {
   const { t } = useTranslation();
-  const { pathname, search } = useLocation();
   const selectId = useId();
-  const view = useRef<HTMLElement>(null);
-  const toolbar = useRef<HTMLDivElement>(null);
-  const tracker = useRef<ReadingTracker | null>(null);
-  const [currentIndex, setCurrentIndex] = useState(-1);
-  const pagesByKey = useMemo(() => new Map(pages.map((page) => [page.key, page])), [pages]);
-  const outline = useMemo(() => {
-    const labeledPages = new Map<string, LabeledPage>(pages.map((page) => [page.key, { page_label: page.pageLabel }]));
-    return outlineGroups(readingOutline(parts, labeledPages));
-  }, [parts, pages]);
-  const readerAddress = `${pathname}${search}`;
-
-  const prepare = useCallback(
-    (content: DocumentFragment) => {
-      removeTitle(content);
-      localizeMarkers(t, content);
-      for (const element of content.children) {
-        if (element.matches('section.page')) {
-          preparePage(t, element, pagesByKey.get(element.getAttribute('data-key') ?? ''));
-        } else if (element.matches('.missing-pages')) {
-          element.prepend(missingPagesSwatch());
-        }
-      }
-    },
-    [t, pagesByKey],
-  );
-
-  // The tracker starts with the first text placed, once the elements it follows exist.
-  const followPages = useCallback(
-    (textElement: HTMLElement) => {
-      const viewElement = view.current;
-      const toolbarElement = toolbar.current;
-      if (viewElement === null || toolbarElement === null) return;
-      tracker.current ??= createReadingTracker(
-        {
-          view: viewElement,
-          toolbar: toolbarElement,
-          text: textElement,
-          appHeader: document.getElementById('app-header'),
-        },
-        {
-          onPageRead: setCurrentIndex,
-          onRememberPage: (pageKey) => {
-            // The router may have left the reader's history entry before the screen goes.
-            if (isAddressOf(window.location.hash, readerAddress)) {
-              window.history.replaceState(withPageRead(window.history.state, pageKey), '');
-            }
-          },
-        },
-      );
-      const placedPages = [...textElement.querySelectorAll<HTMLElement>(':scope > section.page')];
-      tracker.current.follow(placedPages, returnsToPageRead ? pageReadIn(window.history.state) : null);
-    },
-    [readerAddress, returnsToPageRead],
-  );
-  const text = useSanitizedHtml<HTMLElement>(sanitizedHtml, prepare, typesetFormulas, followPages);
-
-  useEffect(
-    () => () => {
-      tracker.current?.destroy();
-      tracker.current = null;
-    },
-    [],
-  );
+  const { view, toolbar, text, currentIndex, onGoToPage } = useReaderText(sanitizedHtml, {
+    pages,
+    returnsToPageRead,
+    readerAddress,
+    typesetFormulas,
+  });
 
   return (
     <section ref={view} className="view reader-view">
@@ -368,7 +253,7 @@ const ReadingText: FC<ReadingTextProps> = ({
           id={selectId}
           className="input reader-select"
           value={String(currentIndex)}
-          onChange={(event) => tracker.current?.goToPage(Number(event.target.value))}
+          onChange={(event) => onGoToPage(Number(event.target.value))}
         >
           {outline.map((group) =>
             group.label === null ? (

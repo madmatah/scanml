@@ -7,8 +7,12 @@ import {
   documentPath,
   documentTitle,
   idOfAddress,
+  type NavigationStep,
+  NO_RETURN_MEMORY,
+  navigationFor,
   pagePath,
   type Redirect,
+  type ReturnMemory,
   type RouteName,
   readerPath,
   redirectFor,
@@ -130,6 +134,99 @@ describe('The navigation', () => {
 
         it(rule, () => {
           assert.deepEqual(redirect, expectedRedirect);
+        });
+      });
+    }
+  });
+
+  describe('The navigationFor() function', () => {
+    const documentAddress = '/documents/95bbeb79-4351-432f-a53c-d3658892ff50';
+    const nothingRemembered: ReturnMemory = NO_RETURN_MEMORY;
+    const documentRemembered: ReturnMemory = { returnTo: documentAddress, hasJustSignedOut: false };
+    const signOutRemembered: ReturnMemory = { returnTo: null, hasJustSignedOut: true };
+    const situations: {
+      situation: string;
+      memory: ReturnMemory;
+      isSignedIn: boolean;
+      route: RouteName;
+      path: string;
+      rule: string;
+      expectedStep: NavigationStep;
+    }[] = [
+      {
+        situation: 'When a signed-out browser opens a document',
+        memory: nothingRemembered,
+        isSignedIn: false,
+        route: 'document',
+        path: documentAddress,
+        rule: 'should go to the login in place of the document, and remember the document to come back to',
+        expectedStep: { navigation: { path: '/login', replacesEntry: true }, memory: documentRemembered },
+      },
+      {
+        situation: 'When a signed-out browser opens an unknown address',
+        memory: nothingRemembered,
+        isSignedIn: false,
+        route: 'unknown',
+        path: '/no-such-screen',
+        rule: 'should go to the login, and remember no address to come back to',
+        expectedStep: { navigation: { path: '/login', replacesEntry: true }, memory: nothingRemembered },
+      },
+      {
+        situation: 'When a signed-out browser is on the login with a document to come back to',
+        memory: documentRemembered,
+        isSignedIn: false,
+        route: 'login',
+        path: '/login',
+        rule: 'should stay there, and keep the document to come back to',
+        expectedStep: { navigation: null, memory: documentRemembered },
+      },
+      {
+        situation: 'When the user has just signed out from a screen',
+        memory: signOutRemembered,
+        isSignedIn: false,
+        route: 'home',
+        path: '/',
+        rule: 'should go to the login as a new entry of the history, and to the home once signed in again',
+        expectedStep: { navigation: { path: '/login', replacesEntry: false }, memory: nothingRemembered },
+      },
+      {
+        situation: 'When the user signs in on the login with a document to come back to',
+        memory: documentRemembered,
+        isSignedIn: true,
+        route: 'login',
+        path: '/login',
+        rule: 'should go back to the document in place of the login, and forget it',
+        expectedStep: { navigation: { path: documentAddress, replacesEntry: true }, memory: nothingRemembered },
+      },
+      {
+        situation: 'When the user signs in on the login with nothing to come back to',
+        memory: nothingRemembered,
+        isSignedIn: true,
+        route: 'login',
+        path: '/login',
+        rule: 'should go to the home in place of the login',
+        expectedStep: { navigation: { path: '/', replacesEntry: true }, memory: nothingRemembered },
+      },
+      {
+        situation: 'When a signed-in browser is on a screen with a document to come back to',
+        memory: documentRemembered,
+        isSignedIn: true,
+        route: 'home',
+        path: '/',
+        rule: 'should stay there, and keep what it remembers',
+        expectedStep: { navigation: null, memory: documentRemembered },
+      },
+    ];
+
+    for (const { situation, memory, isSignedIn, route, path, rule, expectedStep } of situations) {
+      describe(situation, () => {
+        let step: NavigationStep;
+        beforeEach(() => {
+          step = navigationFor(memory, isSignedIn, route, path);
+        });
+
+        it(rule, () => {
+          assert.deepEqual(step, expectedStep);
         });
       });
     }

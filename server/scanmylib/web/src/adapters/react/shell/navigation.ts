@@ -67,6 +67,45 @@ export const redirectFor = (access: Access, route: RouteName, path: string): Red
   }
 };
 
+export interface ReturnMemory {
+  readonly returnTo: string | null;
+  readonly hasJustSignedOut: boolean;
+}
+
+export const NO_RETURN_MEMORY: ReturnMemory = { returnTo: null, hasJustSignedOut: false };
+
+export interface Navigation {
+  readonly path: string;
+  readonly replacesEntry: boolean;
+}
+
+export interface NavigationStep {
+  readonly navigation: Navigation | null;
+  readonly memory: ReturnMemory;
+}
+
+export const navigationFor = (
+  memory: ReturnMemory,
+  isSignedIn: boolean,
+  route: RouteName,
+  path: string,
+): NavigationStep => {
+  let access: Access = 'signed-in';
+  if (!isSignedIn) access = memory.hasJustSignedOut ? 'just-signed-out' : 'signed-out';
+  const redirect = redirectFor(access, route, path);
+  if (redirect === null) return { navigation: null, memory };
+  if (redirect.to === 'login') {
+    return {
+      navigation: { path: PATHS.login, replacesEntry: redirect.replacesEntry },
+      memory: { returnTo: redirect.returnTo, hasJustSignedOut: false },
+    };
+  }
+  return {
+    navigation: { path: memory.returnTo ?? PATHS.home, replacesEntry: true },
+    memory: { returnTo: null, hasJustSignedOut: memory.hasJustSignedOut },
+  };
+};
+
 export const sectionOf = (route: RouteName): Section | null => {
   switch (route) {
     case 'home':

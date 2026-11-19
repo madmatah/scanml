@@ -30,15 +30,15 @@ export const POLL_INTERVAL_MILLISECONDS = 3000;
 const UNKNOWN: EngineStatusState = { connection: 'unknown', status: null };
 const FIRST_SERVER_FAILURE = 500;
 
-function isServerUnreachable(failure: unknown): boolean {
+const isServerUnreachable = (failure: unknown): boolean => {
   return failure instanceof NetworkError || (failure instanceof ApiError && failure.status >= FIRST_SERVER_FAILURE);
-}
+};
 
-export function createEngineStatus(
+export const createEngineStatus = (
   source: ServerStatusSource,
   visibility: PageVisibility,
   scheduler: Scheduler,
-): EngineStatus {
+): EngineStatus => {
   let state = UNKNOWN;
   let isRunning = false;
   let pollCount = 0;
@@ -47,18 +47,18 @@ export function createEngineStatus(
   let stopWatching: (() => void) | null = null;
   const listeners = new Set<() => void>();
 
-  function enter(next: EngineStatusState): void {
+  const enter = (next: EngineStatusState): void => {
     if (next.connection === state.connection && next.status === state.status) return;
     state = next;
     for (const listener of listeners) listener();
-  }
+  };
 
-  function cancelScheduledPoll(): void {
+  const cancelScheduledPoll = (): void => {
     cancelNextPoll?.();
     cancelNextPoll = null;
-  }
+  };
 
-  async function fetchStatus(): Promise<void> {
+  const fetchStatus = async (): Promise<void> => {
     try {
       const status = await source.readStatus();
       if (isRunning) enter({ connection: 'online', status });
@@ -66,16 +66,16 @@ export function createEngineStatus(
       // A refused session is the session's to handle, and leaves the connection as it was.
       if (isRunning && isServerUnreachable(failure)) enter({ connection: 'offline', status: state.status });
     }
-  }
+  };
 
-  function refresh(): Promise<void> {
+  const refresh = (): Promise<void> => {
     inFlight ??= fetchStatus().finally(() => {
       inFlight = null;
     });
     return inFlight;
-  }
+  };
 
-  async function poll(): Promise<void> {
+  const poll = async (): Promise<void> => {
     pollCount += 1;
     const thisPoll = pollCount;
     cancelScheduledPoll();
@@ -86,13 +86,13 @@ export function createEngineStatus(
         void poll();
       }, POLL_INTERVAL_MILLISECONDS);
     }
-  }
+  };
 
-  function followVisibility(): void {
+  const followVisibility = (): void => {
     if (!isRunning) return;
     if (visibility.isVisible()) void poll();
     else cancelScheduledPoll();
-  }
+  };
 
   return {
     subscribe(listener) {
@@ -117,4 +117,4 @@ export function createEngineStatus(
       enter(UNKNOWN);
     },
   };
-}
+};

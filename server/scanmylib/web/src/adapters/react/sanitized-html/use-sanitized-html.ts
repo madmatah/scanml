@@ -9,12 +9,12 @@ export type HtmlPreparation = (content: DocumentFragment) => void;
 // the preparation can rewrite the addresses of its illustrations before the browser fetches them; then, in the page,
 // its formulas are typeset before the browser paints, and the caller is told, which may then measure what was placed.
 // The Content Security Policy forbids inline scripts besides.
-export function useSanitizedHtml<Container extends HTMLElement = HTMLDivElement>(
+export const useSanitizedHtml = <Container extends HTMLElement = HTMLDivElement>(
   sanitizedHtml: string,
   prepare: HtmlPreparation,
   typesetFormulas: FormulaTypesetter,
   onPlaced?: (container: Container) => void,
-): RefObject<Container | null> {
+): RefObject<Container | null> => {
   const container = useRef<Container>(null);
   useLayoutEffect(() => {
     const element = container.current;
@@ -27,4 +27,4 @@ export function useSanitizedHtml<Container extends HTMLElement = HTMLDivElement>
     onPlaced?.(element);
   }, [sanitizedHtml, prepare, typesetFormulas, onPlaced]);
   return container;
-}
+};

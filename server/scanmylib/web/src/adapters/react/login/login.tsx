@@ -12,7 +12,7 @@ const BRAND_MARK_PIXELS = 48;
 const TOKEN_FILE = 'state/token';
 const SIGN_IN_LINK_FORM = 'http://…/#token=…';
 
-export function Login({ session }: { readonly session: Session }) {
+export const Login = ({ session }: { readonly session: Session }) => {
   const { t } = useTranslation();
   const state = useSyncExternalStore(session.subscribe, session.getSnapshot);
   const [token, setToken] = useState('');
@@ -34,7 +34,7 @@ export function Login({ session }: { readonly session: Session }) {
   if (error !== null) errorText = loginErrorText(t, error);
   else if (notice !== null) errorText = signedOutNoticeText(t, notice);
 
-  async function signIn(signInToken: string): Promise<void> {
+  const signIn = async (signInToken: string): Promise<void> => {
     setSigningIn(true);
     try {
       await session.signIn(signInToken);
@@ -44,9 +44,9 @@ export function Login({ session }: { readonly session: Session }) {
     } finally {
       setSigningIn(false);
     }
-  }
+  };
 
-  function submit(event: FormEvent<HTMLFormElement>): void {
+  const submit = (event: FormEvent<HTMLFormElement>): void => {
     event.preventDefault();
     const trimmedToken = token.trim();
     if (trimmedToken === '') {
@@ -56,7 +56,7 @@ export function Login({ session }: { readonly session: Session }) {
     }
     // signIn handles its own failures, so its promise never rejects.
     void signIn(trimmedToken);
-  }
+  };
 
   return (
     <section className="view login">
@@ -115,4 +115,4 @@ export function Login({ session }: { readonly session: Session }) {
       </form>
     </section>
   );
-}
+};

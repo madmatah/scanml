@@ -14,26 +14,26 @@ export interface AxisLabel {
 // Below this distance, as a share of the bar's width, two numbers of the axis would overlap.
 export const LEAST_LABEL_SPACING_RATIO = 0.09;
 
-export function pageCount([start, end]: PageRange): number {
+export const pageCount = ([start, end]: PageRange): number => {
   return end - start + 1;
-}
+};
 
-export function scannedPageCount(ranges: readonly PageRange[]): number {
+export const scannedPageCount = (ranges: readonly PageRange[]): number => {
   return ranges.reduce((total, range) => total + pageCount(range), 0);
-}
+};
 
-export function coverageSegments(ranges: readonly PageRange[], gaps: readonly PageRange[]): CoverageSegment[] {
+export const coverageSegments = (ranges: readonly PageRange[], gaps: readonly PageRange[]): CoverageSegment[] => {
   return [
     ...ranges.map((range) => ({ range, isMissing: false })),
     ...gaps.map((range) => ({ range, isMissing: true })),
   ].sort((first, second) => first.range[0] - second.range[0]);
-}
+};
 
-export function axisLabels(
+export const axisLabels = (
   segments: readonly CoverageSegment[],
   lowestNumber: number,
   highestNumber: number,
-): AxisLabel[] {
+): AxisLabel[] => {
   if (lowestNumber === highestNumber) return [{ pageNumber: lowestNumber, positionRatio: 0, isLast: false }];
   const span = pageCount([lowestNumber, highestNumber]);
   const labels: AxisLabel[] = [];
@@ -46,4 +46,4 @@ export function axisLabels(
   }
   while (labels.length > 1 && 1 - (labels.at(-1)?.positionRatio ?? 0) < LEAST_LABEL_SPACING_RATIO) labels.pop();
   return [...labels, { pageNumber: highestNumber, positionRatio: 1, isLast: true }];
-}
+};

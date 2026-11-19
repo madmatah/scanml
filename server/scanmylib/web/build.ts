@@ -26,22 +26,26 @@ const STABLE_FILES = ['icons', 'manifest.webmanifest'];
 const STYLESHEET_MARKER = '<!-- stylesheet -->';
 const SCRIPT_MARKER = '<!-- script -->';
 
-function replaceMarker(page: string, marker: string, element: string): string {
+const replaceMarker = (page: string, marker: string, element: string): string => {
   const parts = page.split(marker);
   if (parts.length !== 2) {
     throw new Error(`The page template must hold ${marker} exactly once, not ${parts.length - 1} times`);
   }
   return parts.join(element);
-}
+};
 
-export function writeEntryPage(template: string, files: BuiltFiles): string {
+export const writeEntryPage = (template: string, files: BuiltFiles): string => {
   const stylesheet = `<link rel="stylesheet" href="${PUBLIC_PATH}${files.stylesheet}">`;
   const script = `<script type="module" src="${PUBLIC_PATH}${files.script}"></script>`;
   return replaceMarker(replaceMarker(template, STYLESHEET_MARKER, stylesheet), SCRIPT_MARKER, script);
-}
+};
 
 // The metafile names each output relative to the working directory, and the entry page names them relative to static/.
-export function findBuiltFiles(metafile: Metafile, entryPoint: string, staticFromWorkingDirectory: string): BuiltFiles {
+export const findBuiltFiles = (
+  metafile: Metafile,
+  entryPoint: string,
+  staticFromWorkingDirectory: string,
+): BuiltFiles => {
   const entryOutputs = Object.entries(metafile.outputs).filter(([, output]) => output.entryPoint === entryPoint);
   const [entryOutput, ...otherOutputs] = entryOutputs;
   if (entryOutput === undefined || otherOutputs.length > 0) {
@@ -53,9 +57,9 @@ export function findBuiltFiles(metafile: Metafile, entryPoint: string, staticFro
     script: relative(staticFromWorkingDirectory, scriptPath),
     stylesheet: relative(staticFromWorkingDirectory, cssBundle),
   };
-}
+};
 
-async function buildWebUi(outputDirectory: string): Promise<void> {
+const buildWebUi = async (outputDirectory: string): Promise<void> => {
   const staticDirectory = join(outputDirectory, STATIC_DIRECTORY);
   const { metafile } = await build({
     absWorkingDir: WEB_DIRECTORY,
@@ -83,7 +87,7 @@ async function buildWebUi(outputDirectory: string): Promise<void> {
   for (const file of STABLE_FILES) {
     cpSync(join(WEB_DIRECTORY, STATIC_DIRECTORY, file), join(staticDirectory, file), { recursive: true });
   }
-}
+};
 
 if (import.meta.main) {
   const { values } = parseArgs({ options: { outdir: { type: 'string' } } });

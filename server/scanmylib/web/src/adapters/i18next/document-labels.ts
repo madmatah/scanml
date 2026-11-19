@@ -7,19 +7,19 @@ export interface DocumentKindChoice {
   readonly label: string;
 }
 
-function knownKindLabel(t: TFunction, kind: DocumentKind): string {
+const knownKindLabel = (t: TFunction, kind: DocumentKind): string => {
   switch (kind) {
     case 'book':
       return t('Book');
     case 'document':
       return t('Other');
   }
-}
+};
 
-export function documentKindLabel(t: TFunction, kind: string): string {
+export const documentKindLabel = (t: TFunction, kind: string): string => {
   return isDocumentKind(kind) ? knownKindLabel(t, kind) : kind;
-}
+};
 
-export function documentKindChoices(t: TFunction): DocumentKindChoice[] {
+export const documentKindChoices = (t: TFunction): DocumentKindChoice[] => {
   return DOCUMENT_KINDS.map((kind) => ({ kind, label: knownKindLabel(t, kind) }));
-}
+};

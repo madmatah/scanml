@@ -10,19 +10,19 @@ interface TypesetFormula {
   readonly warningCount: number;
 }
 
-function typeset(tex: string, options: KatexOptions): TypesetFormula {
+const typeset = (tex: string, options: KatexOptions): TypesetFormula => {
   const warn = mock.method(console, 'warn', () => {});
   try {
     return { html: katex.renderToString(tex, options), warningCount: warn.mock.callCount() };
   } finally {
     warn.mock.restore();
   }
-}
+};
 
 // KaTeX's HTML holds a MathML copy of the formula for screen readers, which a reader does not see.
-function readVisibleText(html: string): string {
+const readVisibleText = (html: string): string => {
   return html.replace(/<span class="katex-mathml">.*?<\/math><\/span>/s, '').replace(/<[^>]+>/g, '');
-}
+};
 
 describe('The formulas', () => {
   describe('The katexOptions() function', () => {

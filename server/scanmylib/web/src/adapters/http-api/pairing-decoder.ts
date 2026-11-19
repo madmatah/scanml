@@ -1,7 +1,7 @@
 import type { PairingDetails } from '../../domain/pairing-details.ts';
 import { readResponseFields } from './response-fields.ts';
 
-export function decodePairingDetails(body: unknown): PairingDetails {
+export const decodePairingDetails = (body: unknown): PairingDetails => {
   const pairing = readResponseFields(body);
   return {
     serverUrl: pairing.string('url'),
@@ -9,4 +9,4 @@ export function decodePairingDetails(body: unknown): PairingDetails {
     isApkAvailable: pairing.boolean('apk_available'),
     apkUrl: pairing.string('apk_url'),
   };
-}
+};

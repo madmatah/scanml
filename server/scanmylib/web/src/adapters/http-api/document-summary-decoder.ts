@@ -1,7 +1,7 @@
 import type { DocumentSummary, PageCoverage } from '../../domain/document-summary.ts';
 import { type ResponseFields, readResponseFields } from './response-fields.ts';
 
-function decodeCoverage(coverage: ResponseFields): PageCoverage {
+const decodeCoverage = (coverage: ResponseFields): PageCoverage => {
   return {
     ranges: coverage.numberPairs('ranges'),
     label: coverage.string('label'),
@@ -10,9 +10,9 @@ function decodeCoverage(coverage: ResponseFields): PageCoverage {
     highestNumber: coverage.nullableNumber('max'),
     unnumberedCount: coverage.number('unnumbered'),
   };
-}
+};
 
-export function readDocumentSummary(document: ResponseFields): DocumentSummary {
+export const readDocumentSummary = (document: ResponseFields): DocumentSummary => {
   const stats = document.object('stats');
   return {
     id: document.string('id'),
@@ -32,12 +32,12 @@ export function readDocumentSummary(document: ResponseFields): DocumentSummary {
     coverage: decodeCoverage(document.object('coverage')),
     coverThumbnailUrl: document.nullableApiPath('cover_thumb_url'),
   };
-}
+};
 
-export function decodeDocumentSummary(body: unknown): DocumentSummary {
+export const decodeDocumentSummary = (body: unknown): DocumentSummary => {
   return readDocumentSummary(readResponseFields(body));
-}
+};
 
-export function decodeDocumentList(body: unknown): DocumentSummary[] {
+export const decodeDocumentList = (body: unknown): DocumentSummary[] => {
   return readResponseFields(body).objectList('documents').map(readDocumentSummary);
-}
+};

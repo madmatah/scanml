@@ -38,24 +38,24 @@ const SIGNED_IN: SessionState = { phase: 'signed-in' };
 const SIGNED_OUT: SessionState = { phase: 'signed-out', notice: null };
 const UNAUTHORIZED = 401;
 
-function isUnauthorized(failure: unknown): boolean {
+const isUnauthorized = (failure: unknown): boolean => {
   return failure instanceof ApiError && failure.status === UNAUTHORIZED;
-}
+};
 
-export function createSession(server: SessionServer, signInRecord: SignInRecord): Session {
-  let state = LOADING;
+export const createSession = (server: SessionServer, signInRecord: SignInRecord): Session => {
+  let state: SessionState = LOADING;
   const listeners = new Set<() => void>();
 
-  function enter(next: SessionState): void {
+  const enter = (next: SessionState): void => {
     state = next;
     for (const listener of listeners) listener();
-  }
+  };
 
-  function mayBeSignedIn(): boolean {
+  const mayBeSignedIn = (): boolean => {
     return signInRecord.readRecorded() !== false;
-  }
+  };
 
-  async function stateAfterCheck(): Promise<SessionState> {
+  const stateAfterCheck = async (): Promise<SessionState> => {
     try {
       await server.checkSession();
       return SIGNED_IN;
@@ -66,9 +66,9 @@ export function createSession(server: SessionServer, signInRecord: SignInRecord)
       }
       return { phase: 'signed-out', notice: { reason: 'check-failed', failure } };
     }
-  }
+  };
 
-  async function stateAfterLink(token: string): Promise<SessionState> {
+  const stateAfterLink = async (token: string): Promise<SessionState> => {
     try {
       await server.signIn(token);
       signInRecord.record(true);
@@ -80,7 +80,7 @@ export function createSession(server: SessionServer, signInRecord: SignInRecord)
         : { reason: 'link-failed', failure };
       return { phase: 'signed-out', notice };
     }
-  }
+  };
 
   return {
     subscribe(listener) {
@@ -121,4 +121,4 @@ export function createSession(server: SessionServer, signInRecord: SignInRecord)
       if (state.phase === 'signed-out' && state.notice !== null) enter(SIGNED_OUT);
     },
   };
-}
+};

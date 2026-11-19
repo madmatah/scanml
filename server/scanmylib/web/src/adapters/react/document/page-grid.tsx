@@ -17,7 +17,7 @@ export interface PageGridProps {
   readonly pages: readonly PageSummary[];
 }
 
-export function PageGrid({ pages }: PageGridProps) {
+export const PageGrid = ({ pages }: PageGridProps) => {
   const { t } = useTranslation();
   const groups = groupPages(pages);
   const situation = { hasPlacedPages: hasPlacedPages(groups), hasPagesPlacedByHand: hasPagesPlacedByHand(pages) };
@@ -42,14 +42,14 @@ export function PageGrid({ pages }: PageGridProps) {
       })}
     </div>
   );
-}
+};
 
 interface PageCardProps {
   readonly page: PageSummary;
   readonly showsUnplaced: boolean;
 }
 
-function PageCard({ page, showsUnplaced }: PageCardProps) {
+const PageCard = ({ page, showsUnplaced }: PageCardProps) => {
   const { t } = useTranslation();
   const status = pageStatusLabel(t, page.status);
   const source = numberSourceLabel(t, page.numberSource);
@@ -82,4 +82,4 @@ function PageCard({ page, showsUnplaced }: PageCardProps) {
       </Link>
     </li>
   );
-}
+};

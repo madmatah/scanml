@@ -33,19 +33,19 @@ const NOW_MILLISECONDS = Date.UTC(2026, 10, 18, 14, 30, 0);
 const UNSUPPORTED_MEDIA_TYPE = 415;
 const SERVER_ERROR = 500;
 
-function arrange(): Arrangement {
+const arrange = (): Arrangement => {
   const uploader = createFakePageUploader();
   const queue = createUploadQueue(uploader, createCountingUuidSource(), createFixedClock(NOW_MILLISECONDS));
   const settled: SettledUploads[] = [];
   queue.watchSettled((counts) => settled.push(counts));
   return { uploader, queue, settled };
-}
+};
 
-function statesOf(uploads: readonly UploadItem[]): string[] {
+const statesOf = (uploads: readonly UploadItem[]): string[] => {
   return uploads.map((upload) => `${upload.name}: ${upload.state}`);
-}
+};
 
-function uploadedItem(overrides: Partial<UploadItem>): UploadItem {
+const uploadedItem = (overrides: Partial<UploadItem>): UploadItem => {
   return {
     pageId: '00000000-0000-4000-8000-000000000001',
     documentId: DOCUMENT_ID,
@@ -56,7 +56,7 @@ function uploadedItem(overrides: Partial<UploadItem>): UploadItem {
     problem: null,
     ...overrides,
   };
-}
+};
 
 describe('The upload queue', () => {
   describe('The add() method', () => {

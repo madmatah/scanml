@@ -15,7 +15,7 @@ const BREAKABLE_SPACE = /[\t\n\f\r \u1680\u2000-\u2006\u2008-\u200b\u205f\u3000]
 
 // A new object for each formula, since KaTeX stores in `macros` what a formula defines with \gdef, which must not change
 // the next ones.
-export function katexOptions(displayMode = false): FormulaTypesetting {
+export const katexOptions = (displayMode = false): FormulaTypesetting => {
   return {
     displayMode,
     throwOnError: false,
@@ -31,16 +31,16 @@ export function katexOptions(displayMode = false): FormulaTypesetting {
     // ® is text in math mode too, as KaTeX does for ©: an upright R, not a math italic one.
     macros: { '®': '\\TextOrMath{\\textregistered}{\\text{\\textregistered}}' },
   };
-}
+};
 
-export function boundStart(text: string): number {
+export const boundStart = (text: string): number => {
   let start = text.length;
   while (start > 0 && !BREAKABLE_SPACE.test(text.charAt(start - 1))) start -= 1;
   return start;
-}
+};
 
-export function boundLength(text: string): number {
+export const boundLength = (text: string): number => {
   let length = 0;
   while (length < text.length && !BREAKABLE_SPACE.test(text.charAt(length))) length += 1;
   return length;
-}
+};

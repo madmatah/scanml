@@ -32,7 +32,7 @@ const SEPARATOR = '_';
 const ENTRY_COUNT_TO_EXCEED = 300;
 const ESCAPE_SEQUENCE = /\\u\{([0-9a-fA-F]+)\}|\\u([0-9a-fA-F]{4})|\\x([0-9a-fA-F]{2})/g;
 
-function listFiles(directory: URL, pattern: RegExp): string[] {
+const listFiles = (directory: URL, pattern: RegExp): string[] => {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     if (entry.isDirectory()) {
       return UNREAD_DIRECTORIES.has(entry.name) ? [] : listFiles(new URL(`${entry.name}/`, directory), pattern);
@@ -40,37 +40,37 @@ function listFiles(directory: URL, pattern: RegExp): string[] {
     const path = new URL(entry.name, directory).href.slice(WEB.href.length);
     return pattern.test(entry.name) && !FRENCH_CATALOG_FILES.has(path) ? [path] : [];
   });
-}
+};
 
-function readLines(path: string): Line[] {
+const readLines = (path: string): Line[] => {
   return readFileSync(new URL(path, WEB), 'utf8')
     .split('\n')
     .map((text, index) => ({ where: `${path}:${index + 1}`, text }));
-}
+};
 
-function readUnescaped(path: string): string {
+const readUnescaped = (path: string): string => {
   return readFileSync(new URL(path, WEB), 'utf8').replace(ESCAPE_SEQUENCE, (_sequence, braced, fourDigits, twoDigits) =>
     String.fromCodePoint(Number.parseInt(braced ?? fourDigits ?? twoDigits, 16)),
   );
-}
+};
 
-function listMarks(text: string): string {
+const listMarks = (text: string): string => {
   const placeholders = [...text.matchAll(PLACEHOLDER)].map((match) => match[0]);
   const tags = [...text.matchAll(COMPONENT_TAG)].map((match) => `<${match[1]}>`);
   return [...new Set([...placeholders, ...tags])].sort().join(' ');
-}
+};
 
-function listEnglishMarks(frenchKey: string): string {
+const listEnglishMarks = (frenchKey: string): string => {
   const baseKey = frenchKey.replace(PLURAL_SUFFIX, '');
   const englishForms = Object.entries(englishCatalog)
     .filter(([key]) => key.replace(PLURAL_SUFFIX, '') === baseKey)
     .map(([, form]) => form);
   return listMarks(englishForms.join(' '));
-}
+};
 
-function writeDelimited(text: string): string[] {
+const writeDelimited = (text: string): string[] => {
   return [`'${text}'`, `"${text}"`, `\`${text}\``, `>${text}<`];
-}
+};
 
 describe('The translation catalogs', () => {
   describe('The English catalog', () => {

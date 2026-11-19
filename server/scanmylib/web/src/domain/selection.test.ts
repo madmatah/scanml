@@ -9,13 +9,13 @@ const CTRL_CLICK = { isToggle: true, isRange: false };
 const SHIFT_CLICK = { isToggle: false, isRange: true };
 const CTRL_SHIFT_CLICK = { isToggle: true, isRange: true };
 
-function selectionOf(pageIds: readonly string[], anchor: string | null): Selection {
+const selectionOf = (pageIds: readonly string[], anchor: string | null): Selection => {
   return { selected: new Set(pageIds), anchor };
-}
+};
 
-function plainOf(selection: Selection): { selected: string[]; anchor: string | null } {
+const plainOf = (selection: Selection): { selected: string[]; anchor: string | null } => {
   return { selected: [...selection.selected].sort(), anchor: selection.anchor };
-}
+};
 
 describe('The selection of the pages to organize', () => {
   describe('The selectPage() function', () => {

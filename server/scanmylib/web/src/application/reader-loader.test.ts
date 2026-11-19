@@ -30,11 +30,11 @@ const SERVER_ERROR = 500;
 const FIRST_HTML = '<h1>Math Notes</h1><section class="page" data-key="k-1"></section>';
 const REFRESHED_HTML = `${FIRST_HTML}<section class="page" data-key="k-2"></section>`;
 
-async function settle(): Promise<void> {
+const settle = async (): Promise<void> => {
   await new Promise((resolve) => setImmediate(resolve));
-}
+};
 
-function createFakeCalls<Answer>(): FakeCalls<Answer> {
+const createFakeCalls = <Answer>(): FakeCalls<Answer> => {
   const calls: PendingCall<Answer>[] = [];
   return {
     calls,
@@ -53,9 +53,9 @@ function createFakeCalls<Answer>(): FakeCalls<Answer> {
         });
       }),
   };
-}
+};
 
-function documentWith(title: string): DocumentWithPages {
+const documentWith = (title: string): DocumentWithPages => {
   return {
     ...sampleDocument({ title }),
     slug: 'math-notes',
@@ -64,9 +64,9 @@ function documentWith(title: string): DocumentWithPages {
     folder: '/data/USER/scanmylib/library/math-notes',
     pages: [],
   };
-}
+};
 
-function arrange(): Arrangement {
+const arrange = (): Arrangement => {
   const documentReads = createFakeCalls<DocumentWithPages>();
   const htmlReads = createFakeCalls<string>();
   const leaving = new AbortController();
@@ -80,23 +80,23 @@ function arrange(): Arrangement {
     onRefreshFailed: (failure) => refreshFailures.push(failure),
   });
   return { documentReads, htmlReads, leaving, loads, refreshFailures, loader };
-}
+};
 
-async function answerLoad(arrangement: Arrangement, callIndex: number, title: string, html: string): Promise<void> {
+const answerLoad = async (arrangement: Arrangement, callIndex: number, title: string, html: string): Promise<void> => {
   await arrangement.documentReads.calls[callIndex]?.answer(documentWith(title));
   await arrangement.htmlReads.calls[callIndex]?.answer(html);
-}
+};
 
-async function showFirstLoad(): Promise<Arrangement> {
+const showFirstLoad = async (): Promise<Arrangement> => {
   const arrangement = arrange();
   void arrangement.loader.load();
   await answerLoad(arrangement, 0, 'Math Notes', FIRST_HTML);
   return arrangement;
-}
+};
 
-function phasesOf(loads: readonly ReaderLoad[]): string[] {
+const phasesOf = (loads: readonly ReaderLoad[]): string[] => {
   return loads.map((load) => (load.phase === 'loaded' ? `loaded ${load.sanitizedHtml.length}` : load.phase));
-}
+};
 
 describe('The reader loader', () => {
   describe('The load() method', () => {

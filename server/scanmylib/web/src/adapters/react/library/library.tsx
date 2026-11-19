@@ -33,7 +33,7 @@ export interface LibraryProps {
   readonly dates: DateFormatting;
 }
 
-export function Library({ catalog, engineStatus, toasts, uuids, dates }: LibraryProps) {
+export const Library = ({ catalog, engineStatus, toasts, uuids, dates }: LibraryProps) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const libraryDirectory = useSyncExternalStore(
@@ -52,12 +52,12 @@ export function Library({ catalog, engineStatus, toasts, uuids, dates }: Library
     let current: LibraryLoad = { phase: 'loading' };
     let lastQueueKey: string | null = null;
 
-    function enter(next: LibraryLoad): void {
+    const enter = (next: LibraryLoad): void => {
       current = next;
       setLoad(next);
-    }
+    };
 
-    async function loadDocuments(): Promise<void> {
+    const loadDocuments = async (): Promise<void> => {
       try {
         const documents = await catalog.listDocuments(leaving.signal);
         setNow(Date.now());
@@ -68,12 +68,12 @@ export function Library({ catalog, engineStatus, toasts, uuids, dates }: Library
         enter(outcome.load);
         if (outcome.isToldInToast) toasts.show(errorMessage(t, failure, t('Could not refresh the library.')), 'error');
       }
-    }
+    };
 
-    function loadAgain(): void {
+    const loadAgain = (): void => {
       // loadDocuments handles its own failures, so its promise never rejects.
       void loadDocuments();
-    }
+    };
 
     // New pages from the phone, or pages whose text is now read, change the documents' counts.
     const stopWatchingQueue = engineStatus.subscribe(() => {
@@ -82,9 +82,9 @@ export function Library({ catalog, engineStatus, toasts, uuids, dates }: Library
       if (hasQueueMoved(lastQueueKey, key)) loadAgain();
       lastQueueKey = key;
     });
-    function loadWhenShown(): void {
+    const loadWhenShown = (): void => {
       if (!document.hidden) loadAgain();
-    }
+    };
     document.addEventListener('visibilitychange', loadWhenShown);
     const clock = window.setInterval(() => setNow(Date.now()), RELATIVE_DATES_REFRESH_MILLISECONDS);
     reload.current = loadAgain;
@@ -101,12 +101,12 @@ export function Library({ catalog, engineStatus, toasts, uuids, dates }: Library
   // A search left typed while the field hides would keep filtering the list out of sight.
   if (!isSearchShown && query !== '') setQuery('');
 
-  function documentCreated(created: DocumentSummary | null): void {
+  const documentCreated = (created: DocumentSummary | null): void => {
     setNewDocumentId(null);
     if (created === null) return;
     toasts.show(t('Document {{title}} created.', { title: quoted(t, created.title) }), 'success');
     void navigate(documentPath(created.id));
-  }
+  };
 
   // One id per dialog, so that a request sent again from it stays the same creation.
   const openNewDocument = () => setNewDocumentId(uuids.createUuid());
@@ -179,7 +179,7 @@ export function Library({ catalog, engineStatus, toasts, uuids, dates }: Library
       )}
     </section>
   );
-}
+};
 
 interface LibraryContentProps {
   readonly load: LibraryLoad;
@@ -190,7 +190,7 @@ interface LibraryContentProps {
   readonly onRetry: () => void;
 }
 
-function LibraryContent({ load, query, dates, nowMilliseconds, emptyActions, onRetry }: LibraryContentProps) {
+const LibraryContent = ({ load, query, dates, nowMilliseconds, emptyActions, onRetry }: LibraryContentProps) => {
   const { t } = useTranslation();
   switch (load.phase) {
     case 'loading':
@@ -224,4 +224,4 @@ function LibraryContent({ load, query, dates, nowMilliseconds, emptyActions, onR
       ))}
     </ul>
   );
-}
+};

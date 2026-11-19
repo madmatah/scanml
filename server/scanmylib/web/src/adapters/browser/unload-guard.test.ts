@@ -7,7 +7,7 @@ interface StubEvent extends LeavingEvent {
   isPrevented: boolean;
 }
 
-function createStubEvent(): StubEvent {
+const createStubEvent = (): StubEvent => {
   const event: StubEvent = {
     isPrevented: false,
     returnValue: undefined,
@@ -16,15 +16,15 @@ function createStubEvent(): StubEvent {
     },
   };
   return event;
-}
+};
 
-function leaveGuardedPage(isWorking: boolean): StubEvent {
+const leaveGuardedPage = (isWorking: boolean): StubEvent => {
   const listeners: ((event: LeavingEvent) => void)[] = [];
   guardUnload({ addEventListener: (_type, listener) => listeners.push(listener) }, () => isWorking);
   const event = createStubEvent();
   for (const listener of listeners) listener(event);
   return event;
-}
+};
 
 describe('The unload guard', () => {
   describe('The guardUnload() function', () => {

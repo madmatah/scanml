@@ -4,7 +4,7 @@ import type { PairingDetails } from '../../domain/pairing-details.ts';
 import { decodePairingDetails } from './pairing-decoder.ts';
 
 // The answer of GET /api/pairing, as docs/API.md gives it.
-function pairingBody(): Record<string, unknown> {
+const pairingBody = (): Record<string, unknown> => {
   return {
     url: 'http://192.168.1.10:8765',
     token: 'EXAMPLE-TOKEN',
@@ -12,7 +12,7 @@ function pairingBody(): Record<string, unknown> {
     apk_available: true,
     apk_url: 'http://192.168.1.10:8765/download/scanmylib.apk',
   };
-}
+};
 
 describe('The pairing decoder', () => {
   describe('The decodePairingDetails() function', () => {

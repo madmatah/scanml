@@ -13,7 +13,7 @@ export interface CoverageProps {
   readonly formatting: NumberFormatting;
 }
 
-export function Coverage({ coverage, formatting }: CoverageProps) {
+export const Coverage = ({ coverage, formatting }: CoverageProps) => {
   const { t } = useTranslation();
   const { lowestNumber, highestNumber, ranges, gaps, unnumberedCount } = coverage;
   const unnumberedNote = unnumberedCount > 0 && (
@@ -95,9 +95,9 @@ export function Coverage({ coverage, formatting }: CoverageProps) {
       {unnumberedNote}
     </div>
   );
-}
+};
 
-function axisLabelClass(positionRatio: number, isLast: boolean): string {
+const axisLabelClass = (positionRatio: number, isLast: boolean): string => {
   if (isLast) return 'coverage-tick is-last';
   return positionRatio === 0 ? 'coverage-tick is-first' : 'coverage-tick';
-}
+};

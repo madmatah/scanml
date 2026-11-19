@@ -41,11 +41,11 @@ const NOT_FOUND = 404;
 const CONFLICT = 409;
 const SERVER_ERROR = 500;
 
-async function settle(): Promise<void> {
+const settle = async (): Promise<void> => {
   await new Promise((resolve) => setImmediate(resolve));
-}
+};
 
-function createFakeReader(): FakeReader {
+const createFakeReader = (): FakeReader => {
   const reads: PendingRead[] = [];
   return {
     reads,
@@ -64,9 +64,9 @@ function createFakeReader(): FakeReader {
         });
       }),
   };
-}
+};
 
-function documentWith(title: string, stats: Partial<DocumentStats> = {}): DocumentWithPages {
+const documentWith = (title: string, stats: Partial<DocumentStats> = {}): DocumentWithPages => {
   return {
     ...sampleDocument({ title, stats }),
     slug: 'example-book',
@@ -75,9 +75,9 @@ function documentWith(title: string, stats: Partial<DocumentStats> = {}): Docume
     folder: '/data/USER/scanmylib/library/example-book',
     pages: [],
   };
-}
+};
 
-function arrange({ isUploading }: ArrangementOptions = { isUploading: false }): Arrangement {
+const arrange = ({ isUploading }: ArrangementOptions = { isUploading: false }): Arrangement => {
   const reader = createFakeReader();
   const scheduler = createFakeScheduler();
   const leaving = new AbortController();
@@ -92,7 +92,7 @@ function arrange({ isUploading }: ArrangementOptions = { isUploading: false }): 
     onDeleted: () => deletions.push('deleted'),
   });
   return { reader, scheduler, leaving, loads, deletions, loader };
-}
+};
 
 interface PendingWrite {
   readonly request: () => Promise<DocumentWithPages>;
@@ -100,7 +100,7 @@ interface PendingWrite {
   readonly fail: (failure: unknown) => Promise<void>;
 }
 
-function pendingWrite(): PendingWrite {
+const pendingWrite = (): PendingWrite => {
   let resolveWrite: (document: DocumentWithPages) => void = () => {};
   let rejectWrite: (failure: unknown) => void = () => {};
   const written = new Promise<DocumentWithPages>((resolve, reject) => {
@@ -118,11 +118,11 @@ function pendingWrite(): PendingWrite {
       await settle();
     },
   };
-}
+};
 
-function titlesOf(loads: readonly DocumentLoad[]): string[] {
+const titlesOf = (loads: readonly DocumentLoad[]): string[] => {
   return loads.map((load) => (load.phase === 'loaded' ? load.document.title : load.phase));
-}
+};
 
 describe('The document loader', () => {
   describe('The load() method', () => {

@@ -12,7 +12,7 @@ export interface EngineStatusBadgeProps {
   readonly formatting: NumberFormatting;
 }
 
-export function EngineStatusBadge({ engineStatus, formatting }: EngineStatusBadgeProps) {
+export const EngineStatusBadge = ({ engineStatus, formatting }: EngineStatusBadgeProps) => {
   const { t } = useTranslation();
   const state = useSyncExternalStore(engineStatus.subscribe, engineStatus.getSnapshot);
   const [isOpen, setOpen] = useState(false);
@@ -24,15 +24,15 @@ export function EngineStatusBadge({ engineStatus, formatting }: EngineStatusBadg
 
   useEffect(() => {
     if (!isOpen) return;
-    function closeOnClickOutside(event: MouseEvent): void {
+    const closeOnClickOutside = (event: MouseEvent): void => {
       if (event.target instanceof Node && container.current?.contains(event.target)) return;
       setOpen(false);
-    }
-    function closeOnEscape(event: KeyboardEvent): void {
+    };
+    const closeOnEscape = (event: KeyboardEvent): void => {
       if (event.key !== 'Escape') return;
       setOpen(false);
       badge.current?.focus();
-    }
+    };
     document.addEventListener('click', closeOnClickOutside);
     document.addEventListener('keydown', closeOnEscape);
     return () => {
@@ -71,4 +71,4 @@ export function EngineStatusBadge({ engineStatus, formatting }: EngineStatusBadg
       </div>
     </div>
   );
-}
+};

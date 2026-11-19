@@ -10,7 +10,7 @@ export interface ErrorStateProps {
   readonly actions?: ReactNode;
 }
 
-export function ErrorState({ title, message, onRetry, actions }: ErrorStateProps) {
+export const ErrorState = ({ title, message, onRetry, actions }: ErrorStateProps) => {
   const { t } = useTranslation();
   return (
     <div className="state state-error" role="alert">
@@ -30,4 +30,4 @@ export function ErrorState({ title, message, onRetry, actions }: ErrorStateProps
       </div>
     </div>
   );
-}
+};

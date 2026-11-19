@@ -21,7 +21,7 @@ export interface MoveDialogProps {
 const MOVE = 'move';
 const SIDES: readonly Side[] = ['before', 'after'];
 
-export function MoveDialog({ count, choices, onClosed }: MoveDialogProps) {
+export const MoveDialog = ({ count, choices, onClosed }: MoveDialogProps) => {
   const { t } = useTranslation();
   const ids = { title: useId(), target: useId(), summary: useId() };
   const dialog = useRef<HTMLDialogElement>(null);
@@ -97,4 +97,4 @@ export function MoveDialog({ count, choices, onClosed }: MoveDialogProps) {
     </dialog>,
     document.body,
   );
-}
+};

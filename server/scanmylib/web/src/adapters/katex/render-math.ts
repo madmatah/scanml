@@ -6,13 +6,13 @@ const FORMULAS = '.math-display, .math-inline';
 const DISPLAY_FORMULA = 'math-display';
 const WORD_WITH_FORMULA = 'math-word';
 
-function hasStyle(element: Element): element is Element & ElementCSSInlineStyle {
+const hasStyle = (element: Element): element is Element & ElementCSSInlineStyle => {
   return 'style' in element && element.style instanceof CSSStyleDeclaration;
-}
+};
 
 // KaTeX styles its output through the CSSOM, which the Content Security Policy allows, except for a few `style`
 // attributes (error messages, the SVG parts of tall delimiters and of \vec, some MathML) that it would block.
-function withStyleAttributesThroughCssom(render: () => void): void {
+const withStyleAttributesThroughCssom = (render: () => void): void => {
   const { setAttribute } = Element.prototype;
   Element.prototype.setAttribute = function setAttributeThroughCssom(this: Element, name: string, value: string) {
     if (name === 'style' && hasStyle(this)) this.style.cssText = value;
@@ -23,12 +23,12 @@ function withStyleAttributesThroughCssom(render: () => void): void {
   } finally {
     Element.prototype.setAttribute = setAttribute;
   }
-}
+};
 
 // A browser may break a line on either side of a typeset formula, sending the superscript of 19$^{th}$, or the comma
 // after a formula, to the next line: the formula and the text written against it, with no breakable space between
 // them, go in one <span class="math-word">, which a formula following in this way joins.
-function keepWithWord(formula: Element): void {
+const keepWithWord = (formula: Element): void => {
   const before = formula.previousSibling;
   const after = formula.nextSibling;
   let word = before instanceof Element && before.classList.contains(WORD_WITH_FORMULA) ? before : null;
@@ -49,9 +49,9 @@ function keepWithWord(formula: Element): void {
     if (length < textAfter.data.length) textAfter.splitText(length);
     word.append(textAfter);
   }
-}
+};
 
-export function renderMath(root: Element): void {
+export const renderMath = (root: Element): void => {
   const formulas = [...root.querySelectorAll(FORMULAS)];
   if (formulas.length === 0) return;
   withStyleAttributesThroughCssom(() => {
@@ -68,4 +68,4 @@ export function renderMath(root: Element): void {
       if (!displayMode) keepWithWord(formula);
     }
   });
-}
+};

@@ -12,7 +12,7 @@ export interface DocumentParts<Section> {
   readonly sections: Section[];
 }
 
-export function documentParts<Element extends PartElement>(children: Iterable<Element>): DocumentParts<Element> {
+export const documentParts = <Element extends PartElement>(children: Iterable<Element>): DocumentParts<Element> => {
   const parts: ReadingPart[] = [];
   const sections: Element[] = [];
   for (const element of children) {
@@ -27,4 +27,4 @@ export function documentParts<Element extends PartElement>(children: Iterable<El
     }
   }
   return { parts, sections };
-}
+};

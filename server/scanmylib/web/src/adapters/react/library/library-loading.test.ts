@@ -15,12 +15,12 @@ import {
 
 const INTERNAL_SERVER_ERROR = 500;
 
-function loadedLibrary(documentCount: number): LibraryLoad {
+const loadedLibrary = (documentCount: number): LibraryLoad => {
   const documents = Array.from({ length: documentCount }, (_, position) =>
     sampleDocument({ id: `document-${position}` }),
   );
   return { phase: 'loaded', documents };
-}
+};
 
 describe('The library loading', () => {
   describe('The showsSearch() function', () => {

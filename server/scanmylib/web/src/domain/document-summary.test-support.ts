@@ -9,7 +9,7 @@ export interface DocumentChanges {
   readonly coverage?: Partial<PageCoverage>;
 }
 
-export function sampleDocument(changes: DocumentChanges = {}): DocumentSummary {
+export const sampleDocument = (changes: DocumentChanges = {}): DocumentSummary => {
   return {
     id: changes.id ?? '95bbeb79-4351-432f-a53c-d3658892ff50',
     title: changes.title ?? 'Example Book',
@@ -40,4 +40,4 @@ export function sampleDocument(changes: DocumentChanges = {}): DocumentSummary {
     },
     coverThumbnailUrl: '/api/pages/de215798-031a-4b20-a867-49c12e3baabe/thumb',
   };
-}
+};

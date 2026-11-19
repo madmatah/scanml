@@ -60,15 +60,15 @@ export interface OrganizerStore {
 
 const CONFLICT = 409;
 
-function isConflict(failure: unknown): boolean {
+const isConflict = (failure: unknown): boolean => {
   return failure instanceof ApiError && failure.status === CONFLICT;
-}
+};
 
-function readingOrderOf(document: DocumentWithPages): PageId[] {
+const readingOrderOf = (document: DocumentWithPages): PageId[] => {
   return document.pages.filter((page) => page.isInDocument).map((page) => page.id);
-}
+};
 
-export function organizerToolbar(snapshot: OrganizerSnapshot): OrganizerToolbar {
+export const organizerToolbar = (snapshot: OrganizerSnapshot): OrganizerToolbar => {
   const { order, selection, isDirty, isSaving, isResetting } = snapshot;
   const selectedCount = selection.selected.size;
   const spanCount = spanOf(order, selection.selected).length;
@@ -82,9 +82,9 @@ export function organizerToolbar(snapshot: OrganizerSnapshot): OrganizerToolbar 
     canReset: !isSaving && !isDirty && !isResetting,
     showsSaving: isSaving || isDirty || isResetting,
   };
-}
+};
 
-export function createOrganizerStore(document: DocumentWithPages, ports: OrganizerPorts): OrganizerStore {
+export const createOrganizerStore = (document: DocumentWithPages, ports: OrganizerPorts): OrganizerStore => {
   let latest = document;
   let pages: ReadonlyMap<PageId, PageSummary> = new Map(document.pages.map((page) => [page.id, page]));
   let order: ReadingOrder = readingOrderOf(document);
@@ -96,29 +96,29 @@ export function createOrganizerStore(document: DocumentWithPages, ports: Organiz
   const savedWaiters: (() => void)[] = [];
   const listeners = new Set<() => void>();
 
-  function snapshotNow(): OrganizerSnapshot {
+  const snapshotNow = (): OrganizerSnapshot => {
     return { document: latest, pages, order, selection, isDirty, isSaving, isResetting };
-  }
+  };
 
   let snapshot = snapshotNow();
 
-  function notify(): void {
+  const notify = (): void => {
     snapshot = snapshotNow();
     for (const listener of listeners) listener();
-  }
+  };
 
-  function showLatest(): void {
+  const showLatest = (): void => {
     pages = new Map(latest.pages.map((page) => [page.id, page]));
     order = readingOrderOf(latest);
     selection = keepShownPages(selection, order);
     notify();
-  }
+  };
 
-  function showLatestWhenIdle(): void {
+  const showLatestWhenIdle = (): void => {
     if (!isGestureActive && !isSaving && !isDirty && !isResetting) showLatest();
-  }
+  };
 
-  async function flush(): Promise<void> {
+  const flush = async (): Promise<void> => {
     if (isSaving || isResetting || !isDirty) return;
     isSaving = true;
     isDirty = false;
@@ -147,16 +147,16 @@ export function createOrganizerStore(document: DocumentWithPages, ports: Organiz
     showLatestWhenIdle();
     notify();
     for (const resolve of savedWaiters.splice(0)) resolve();
-  }
+  };
 
-  function whenSaved(): Promise<void> {
+  const whenSaved = (): Promise<void> => {
     return isSaving || isDirty ? new Promise((resolve) => savedWaiters.push(resolve)) : Promise.resolve();
-  }
+  };
 
-  function replaceSelection(next: Selection): void {
+  const replaceSelection = (next: Selection): void => {
     selection = next;
     notify();
-  }
+  };
 
   return {
     subscribe(listener) {
@@ -204,4 +204,4 @@ export function createOrganizerStore(document: DocumentWithPages, ports: Organiz
       }
     },
   };
-}
+};

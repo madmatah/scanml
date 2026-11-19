@@ -5,11 +5,11 @@ export interface Timers {
   clearTimeout(timer: number): void;
 }
 
-export function createTimerScheduler(timers: Timers): Scheduler {
+export const createTimerScheduler = (timers: Timers): Scheduler => {
   return {
     schedule(task, delayMilliseconds) {
       const timer = timers.setTimeout(task, delayMilliseconds);
       return () => timers.clearTimeout(timer);
     },
   };
-}
+};

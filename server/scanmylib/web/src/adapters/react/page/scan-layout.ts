@@ -22,16 +22,16 @@ const FIT_MARGIN_PIXELS = 112;
 const LOWEST_HEIGHT_LIMIT_PIXELS = 240;
 const HALF_TURN_DEGREES = 180;
 
-export function scanHeightLimitPixels(windowHeightPixels: number, headerHeightPixels: number): number {
+export const scanHeightLimitPixels = (windowHeightPixels: number, headerHeightPixels: number): number => {
   return Math.max(LOWEST_HEIGHT_LIMIT_PIXELS, windowHeightPixels - headerHeightPixels - FIT_MARGIN_PIXELS);
-}
+};
 
-export function layScan({
+export const layScan = ({
   imagePixels,
   rotationDegrees,
   paneWidthPixels,
   heightLimitPixels,
-}: ScanFit): ScanLayout | null {
+}: ScanFit): ScanLayout | null => {
   const { width, height } = imagePixels;
   if (width <= 0 || height <= 0) return null;
   const isQuarterTurn = rotationDegrees % HALF_TURN_DEGREES !== 0;
@@ -43,4 +43,4 @@ export function layScan({
     imagePixels: { width: width * scaleRatio, height: height * scaleRatio },
     transform: `translate(-50%, -50%) rotate(${rotationDegrees}deg)`,
   };
-}
+};

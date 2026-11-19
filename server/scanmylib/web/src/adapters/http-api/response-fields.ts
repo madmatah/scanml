@@ -24,37 +24,37 @@ export interface ResponseFields {
   numberPairs(name: string): (readonly [number, number])[];
 }
 
-function isObject(json: unknown): json is { readonly [name: string]: unknown } {
+const isObject = (json: unknown): json is { readonly [name: string]: unknown } => {
   return typeof json === 'object' && json !== null && !Array.isArray(json);
-}
+};
 
-function readFields(json: unknown, path: string): ResponseFields {
+const readFields = (json: unknown, path: string): ResponseFields => {
   if (!isObject(json)) throw new ResponseShapeError(path === '' ? 'body' : path);
   const fields = json;
   const pathOf = (name: string) => (path === '' ? name : `${path}.${name}`);
 
-  function read<Field>(name: string, isValid: (field: unknown) => field is Field): Field {
+  const read = <Field>(name: string, isValid: (field: unknown) => field is Field): Field => {
     const field = fields[name];
     if (!isValid(field)) throw new ResponseShapeError(pathOf(name));
     return field;
-  }
+  };
 
   const isString = (field: unknown): field is string => typeof field === 'string';
   const isApiPath = (field: unknown): field is string => isString(field) && field.startsWith(API_PATH_PREFIX);
   const isNumber = (field: unknown): field is number => typeof field === 'number' && Number.isFinite(field);
 
-  function readList(name: string): readonly unknown[] {
+  const readList = (name: string): readonly unknown[] => {
     const field = fields[name];
     if (!Array.isArray(field)) throw new ResponseShapeError(pathOf(name));
     return field;
-  }
+  };
 
-  function readNumberPair(pair: unknown, path: string): readonly [number, number] {
+  const readNumberPair = (pair: unknown, path: string): readonly [number, number] => {
     if (!Array.isArray(pair) || pair.length !== 2) throw new ResponseShapeError(path);
     const [first, second]: readonly unknown[] = pair;
     if (!isNumber(first) || !isNumber(second)) throw new ResponseShapeError(path);
     return [first, second];
-  }
+  };
 
   return {
     object: (name) => readFields(fields[name], pathOf(name)),
@@ -74,8 +74,8 @@ function readFields(json: unknown, path: string): ResponseFields {
       }),
     numberPairs: (name) => readList(name).map((pair, index) => readNumberPair(pair, `${pathOf(name)}[${index}]`)),
   };
-}
+};
 
-export function readResponseFields(body: unknown): ResponseFields {
+export const readResponseFields = (body: unknown): ResponseFields => {
   return readFields(body, '');
-}
+};

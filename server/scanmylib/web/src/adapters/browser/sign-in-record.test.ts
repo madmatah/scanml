@@ -7,9 +7,9 @@ import { createSignInRecord, type KeyValueStorage } from './sign-in-record.ts';
 const SIGNED_IN_KEY = 'scanmylib.signed-in';
 const SIGNED_IN = '1';
 
-function createStorage(
+const createStorage = (
   entries: Record<string, string> = {},
-): KeyValueStorage & { readonly entries: Map<string, string> } {
+): KeyValueStorage & { readonly entries: Map<string, string> } => {
   const stored = new Map(Object.entries(entries));
   return {
     entries: stored,
@@ -21,11 +21,11 @@ function createStorage(
       stored.delete(key);
     },
   };
-}
+};
 
-function disabledStorage(): KeyValueStorage {
+const disabledStorage = (): KeyValueStorage => {
   throw new DOMException('The operation is insecure.', 'SecurityError');
-}
+};
 
 describe('The sign-in record', () => {
   describe('The record() method', () => {

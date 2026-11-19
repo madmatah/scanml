@@ -4,7 +4,7 @@ import type { ServerStatus } from '../../domain/server-status.ts';
 import { decodeServerStatus } from './server-status-decoder.ts';
 
 // The answer of GET /api/status, as docs/API.md gives it.
-function statusBody(): Record<string, unknown> {
+const statusBody = (): Record<string, unknown> => {
   return {
     version: '0.2.3',
     ocr: {
@@ -17,7 +17,7 @@ function statusBody(): Record<string, unknown> {
     queue: { queued: 3, processing: 1, error: 0, done: 120 },
     library_dir: '/home/user/Documents/ScanMyLib',
   };
-}
+};
 
 const DECODED_STATUS: ServerStatus = {
   version: '0.2.3',

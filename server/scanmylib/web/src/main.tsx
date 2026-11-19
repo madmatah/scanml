@@ -25,11 +25,11 @@ import { createEngineStatus } from './application/engine-status.ts';
 import { createSession } from './application/session.ts';
 import { createUploadQueue } from './application/upload-queue.ts';
 
-function findElement(selector: string): Element {
+const findElement = (selector: string): Element => {
   const element = document.querySelector(selector);
   if (element === null) throw new Error(`The entry page holds no ${selector}`);
   return element;
-}
+};
 
 // Before anything else, so that the secret of a sign-in link never lingers in the address bar or the history; and the
 // links opened later are watched before the router listens, so that it never reads one.

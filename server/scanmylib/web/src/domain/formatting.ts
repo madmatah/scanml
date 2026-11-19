@@ -15,25 +15,25 @@ const DEFAULT_LOCALES: Readonly<Record<UiLanguage, string>> = { en: 'en-US', fr:
 const BYTE_UNITS: readonly ByteUnit[] = ['B', 'KB', 'MB', 'GB'];
 const BYTES_PER_UNIT = 1024;
 
-export function formattingLocale(languageTag: string, language: UiLanguage): string {
+export const formattingLocale = (languageTag: string, language: UiLanguage): string => {
   if (!languageTag.includes('-')) return DEFAULT_LOCALES[language];
   try {
     return Intl.getCanonicalLocales(languageTag)[0] ?? DEFAULT_LOCALES[language];
   } catch {
     return DEFAULT_LOCALES[language];
   }
-}
+};
 
-export function createNumberFormatting(locale: string): NumberFormatting {
+export const createNumberFormatting = (locale: string): NumberFormatting => {
   const integers = new Intl.NumberFormat(locale);
   const decimals = new Intl.NumberFormat(locale, { maximumFractionDigits: 1 });
   return {
     formatNumber: (number) => integers.format(number),
     formatDecimal: (number) => decimals.format(number),
   };
-}
+};
 
-export function byteSize(sizeBytes: number): ByteSize {
+export const byteSize = (sizeBytes: number): ByteSize => {
   let amount = sizeBytes;
   let unitIndex = 0;
   while (amount >= BYTES_PER_UNIT && unitIndex < BYTE_UNITS.length - 1) {
@@ -41,11 +41,11 @@ export function byteSize(sizeBytes: number): ByteSize {
     unitIndex += 1;
   }
   return { amount, unit: BYTE_UNITS[unitIndex] ?? 'B' };
-}
+};
 
-export function wholePercent(ratio: number): number {
+export const wholePercent = (ratio: number): number => {
   return Math.round(ratio * 100);
-}
+};
 
 export type RelativeTimeUnit = 'second' | 'minute' | 'hour' | 'day';
 
@@ -68,7 +68,7 @@ const RELATIVE_TIME_UNITS: readonly (readonly [unit: RelativeTimeUnit, countInNe
   ['day', 7],
 ];
 
-export function elapsedTime(dateMilliseconds: number, nowMilliseconds: number): ElapsedTime {
+export const elapsedTime = (dateMilliseconds: number, nowMilliseconds: number): ElapsedTime => {
   let amount = (dateMilliseconds - nowMilliseconds) / MILLISECONDS_PER_SECOND;
   if (Math.abs(amount) < JUST_NOW_SECONDS) return { kind: 'just-now' };
   for (const [unit, countInNextUnit] of RELATIVE_TIME_UNITS) {
@@ -76,16 +76,16 @@ export function elapsedTime(dateMilliseconds: number, nowMilliseconds: number): 
     amount /= countInNextUnit;
   }
   return { kind: 'absolute' };
-}
+};
 
-export function createDateFormatting(locale: string): DateFormatting {
+export const createDateFormatting = (locale: string): DateFormatting => {
   const dateTimes = new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' });
   const relativeTimes = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' });
   return {
     formatDateTime: (date) => dateTimes.format(date),
     formatRelativeTime: (amount, unit) => relativeTimes.format(amount, unit),
   };
-}
+};
 
 export interface LocalDate {
   getFullYear(): number;
@@ -99,12 +99,12 @@ export interface LocalDate {
 
 const MINUTES_PER_HOUR = 60;
 
-function twoDigits(number: number): string {
+const twoDigits = (number: number): string => {
   return String(number).padStart(2, '0');
-}
+};
 
 // A time in ISO 8601 with the browser's local time and its offset from UTC, the form of a photo's `captured_at`.
-export function localIsoString(date: LocalDate): string {
+export const localIsoString = (date: LocalDate): string => {
   const offset = -date.getTimezoneOffset();
   const sign = offset >= 0 ? '+' : '-';
   const offsetHours = twoDigits(Math.floor(Math.abs(offset) / MINUTES_PER_HOUR));
@@ -112,4 +112,4 @@ export function localIsoString(date: LocalDate): string {
   const day = `${date.getFullYear()}-${twoDigits(date.getMonth() + 1)}-${twoDigits(date.getDate())}`;
   const time = `${twoDigits(date.getHours())}:${twoDigits(date.getMinutes())}:${twoDigits(date.getSeconds())}`;
   return `${day}T${time}${sign}${offsetHours}:${offsetMinutes}`;
-}
+};

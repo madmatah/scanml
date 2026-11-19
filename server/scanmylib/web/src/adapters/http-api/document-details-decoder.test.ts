@@ -6,7 +6,7 @@ import { decodeDocumentDetails, decodeDocumentHtml, decodeDocumentWithPages } fr
 const PAGE_ID = 'de215798-031a-4b20-a867-49c12e3baabe';
 
 // A document of PATCH /api/documents/{id}, as docs/API.md gives it.
-function documentBody(): Record<string, unknown> {
+const documentBody = (): Record<string, unknown> => {
   return {
     id: '95bbeb79-4351-432f-a53c-d3658892ff50',
     slug: 'example-book',
@@ -22,10 +22,10 @@ function documentBody(): Record<string, unknown> {
     cover_thumb_url: `/api/pages/${PAGE_ID}/thumb`,
     folder: '/data/USER/scanmylib/library/example-book',
   };
-}
+};
 
 // A page of GET /api/documents/{id}, as docs/API.md gives it.
-function pageBody(): Record<string, unknown> {
+const pageBody = (): Record<string, unknown> => {
   return {
     id: PAGE_ID,
     document_id: '95bbeb79-4351-432f-a53c-d3658892ff50',
@@ -55,7 +55,7 @@ function pageBody(): Record<string, unknown> {
     thumb_url: `/api/pages/${PAGE_ID}/thumb`,
     image_url: `/api/pages/${PAGE_ID}/image`,
   };
-}
+};
 
 const DECODED_PAGE: PageSummary = {
   id: PAGE_ID,

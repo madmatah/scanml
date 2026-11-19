@@ -1,4 +1,4 @@
-export function decodeErrorDetail(body: unknown): string {
+export const decodeErrorDetail = (body: unknown): string => {
   if (typeof body !== 'object' || body === null || !('detail' in body)) return '';
   const { detail } = body;
   if (typeof detail === 'string') return detail;
@@ -9,4 +9,4 @@ export function decodeErrorDetail(body: unknown): string {
     )
     .filter((message) => message !== '')
     .join('; ');
-}
+};

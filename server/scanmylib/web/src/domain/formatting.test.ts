@@ -100,7 +100,7 @@ describe('The formatting', () => {
   });
 
   describe('The localIsoString() function', () => {
-    function localDate(offsetMinutes: number): LocalDate {
+    const localDate = (offsetMinutes: number): LocalDate => {
       return {
         getFullYear: () => 2026,
         getMonth: () => 2,
@@ -110,7 +110,7 @@ describe('The formatting', () => {
         getSeconds: () => 3,
         getTimezoneOffset: () => offsetMinutes,
       };
-    }
+    };
 
     const situations: { situation: string; offsetMinutes: number; rule: string; expected: string }[] = [
       {

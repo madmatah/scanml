@@ -19,6 +19,13 @@ From the TypeScript handbook and React's "Rules of React" (react.dev).
   tools strip the types without a compiler. Relative imports carry their `.ts` or `.tsx` extension, so that the tests of
   plain modules run with `node --test` as they are.
 - **No `any`.**
+- **Every function is declared as a `const` arrow function,** `export const pageTitle = (page: Page): string => { … };`,
+  never with a `function` declaration, exported or not, nested, in the tests, and components included: one form for
+  every function, and a module that reads top-down, since a `const` exists only from its line on, so that a helper
+  comes before the code that runs it at load. A generic one in a `.tsx` file is written `<Entry,>(…) =>`, which JSX
+  would otherwise read as a tag. The one exception is a function that needs its own `this`, such as one that replaces a
+  method of a prototype, which an arrow function cannot have: it stays a `function` expression. Biome's plugin
+  `biome-plugins/arrow-functions.grit` refuses a `function` declaration.
 - **A switch over a union whose cases must all be handled ends with a `never` check,** in a `default` that throws,
   unless each case returns a value that the function's return type requires, which the compiler checks itself: a new
   case then fails to compile at every switch that forgets it.

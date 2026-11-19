@@ -28,10 +28,10 @@ interface Text {
   readonly formatting: NumberFormatting;
 }
 
-async function textFor(languages: readonly string[]): Promise<Text> {
+const textFor = async (languages: readonly string[]): Promise<Text> => {
   const { i18next, formatting } = await createLocalizationFor(languages, CATALOGS);
   return { t: i18next.t, formatting };
-}
+};
 
 describe('The engine status text', () => {
   let english: Text;

@@ -12,7 +12,7 @@ export interface FakeScheduler extends Scheduler {
 }
 
 // Time passes only when a test runs the tasks still pending, so that no test waits.
-export function createFakeScheduler(): FakeScheduler {
+export const createFakeScheduler = (): FakeScheduler => {
   const tasks: ScheduledTask[] = [];
   return {
     schedule(task, delayMilliseconds) {
@@ -30,4 +30,4 @@ export function createFakeScheduler(): FakeScheduler {
       }
     },
   };
-}
+};

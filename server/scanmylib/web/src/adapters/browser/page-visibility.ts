@@ -6,7 +6,7 @@ export interface VisibleDocument {
   removeEventListener(type: 'visibilitychange', listener: () => void): void;
 }
 
-export function createPageVisibility(page: VisibleDocument): PageVisibility {
+export const createPageVisibility = (page: VisibleDocument): PageVisibility => {
   return {
     isVisible: () => !page.hidden,
     watch(listener) {
@@ -14,4 +14,4 @@ export function createPageVisibility(page: VisibleDocument): PageVisibility {
       return () => page.removeEventListener('visibilitychange', listener);
     },
   };
-}
+};

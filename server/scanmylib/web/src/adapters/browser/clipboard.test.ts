@@ -17,7 +17,7 @@ interface ApisChoice {
   readonly isCommandRefused: boolean;
 }
 
-function fakeApis(choice: ApisChoice, copies: Copies): ClipboardApis {
+const fakeApis = (choice: ApisChoice, copies: Copies): ClipboardApis => {
   return {
     isSecureContext: choice.isSecureContext,
     writeText: choice.hasClipboardApi
@@ -32,7 +32,7 @@ function fakeApis(choice: ApisChoice, copies: Copies): ClipboardApis {
       return true;
     },
   };
-}
+};
 
 describe('The clipboard', () => {
   describe('The copyText() function', () => {

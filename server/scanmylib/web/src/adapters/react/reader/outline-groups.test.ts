@@ -7,16 +7,16 @@ interface Page {
   readonly id: string;
 }
 
-function pageEntry(index: number): OutlineEntry<Page> {
+const pageEntry = (index: number): OutlineEntry<Page> => {
   return { type: 'page', index, key: `k-${index}`, page: { id: String(index) }, marker: `Page ${index + 1}` };
-}
+};
 
-function summarize(groups: readonly OutlineGroup<Page>[]): (string | null | (string | number)[])[][] {
+const summarize = (groups: readonly OutlineGroup<Page>[]): (string | null | (string | number)[])[][] => {
   return groups.map((group) => [
     group.label,
     group.entries.map((entry) => (entry.type === 'page' ? entry.index : entry.label)),
   ]);
-}
+};
 
 describe('The outline groups', () => {
   describe('The outlineGroups() function', () => {

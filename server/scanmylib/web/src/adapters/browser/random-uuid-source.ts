@@ -10,7 +10,7 @@ const VARIANT_BYTE = 8;
 
 // crypto.randomUUID() exists only in a secure context, and the web UI is usually opened over plain HTTP on the local
 // network, where crypto.getRandomValues() is still there: the UUID (version 4, RFC 9562) is built from its bytes.
-export function createRandomUuidSource(random: RandomValues): UuidSource {
+export const createRandomUuidSource = (random: RandomValues): UuidSource => {
   return {
     createUuid() {
       const bytes = random.getRandomValues(new Uint8Array(UUID_BYTES));
@@ -20,4 +20,4 @@ export function createRandomUuidSource(random: RandomValues): UuidSource {
       return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
     },
   };
-}
+};

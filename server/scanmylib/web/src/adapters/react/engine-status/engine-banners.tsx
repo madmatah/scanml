@@ -5,7 +5,7 @@ import type { EngineStatus } from '../../../application/engine-status.ts';
 import { Icon } from '../shell/icon.tsx';
 import { engineBanner } from './engine-status-text.ts';
 
-export function EngineBanners({ engineStatus }: { readonly engineStatus: EngineStatus }) {
+export const EngineBanners = ({ engineStatus }: { readonly engineStatus: EngineStatus }) => {
   const { t } = useTranslation();
   const state = useSyncExternalStore(engineStatus.subscribe, engineStatus.getSnapshot);
   const banner = engineBanner(t, state);
@@ -23,4 +23,4 @@ export function EngineBanners({ engineStatus }: { readonly engineStatus: EngineS
       )}
     </div>
   );
-}
+};

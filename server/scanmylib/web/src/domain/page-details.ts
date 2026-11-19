@@ -50,12 +50,12 @@ const LOWEST_PAGE_NUMBER = 1;
 const HIGHEST_PAGE_NUMBER = 9999;
 
 // The api reads the text of a page in the background: until it is done, the page changes on its own.
-export function isBeingRead(status: string): boolean {
+export const isBeingRead = (status: string): boolean => {
   return status === 'queued' || status === 'processing';
-}
+};
 
 // The pages around this one in the document's order, which the api lists as its reading order.
-export function pageNeighbors(pages: readonly PageSummary[], pageId: string): PageNeighbors {
+export const pageNeighbors = (pages: readonly PageSummary[], pageId: string): PageNeighbors => {
   const index = pages.findIndex((page) => page.id === pageId);
   if (index < 0) return { previous: null, next: null, position: null };
   return {
@@ -63,26 +63,26 @@ export function pageNeighbors(pages: readonly PageSummary[], pageId: string): Pa
     next: pages[index + 1] ?? null,
     position: { index, count: pages.length },
   };
-}
+};
 
 // A number field takes digits only, so a roman number of the front matter is not shown in it.
-export function typedNumberOf(page: PageDetails): number | null {
+export const typedNumberOf = (page: PageDetails): number | null => {
   const arabicNumber = /^\d/.test(page.pageLabel ?? '') ? page.number : null;
   return page.manualNumber ?? arabicNumber;
-}
+};
 
-export function readPageNumberEntry(text: string): PageNumberEntry {
+export const readPageNumberEntry = (text: string): PageNumberEntry => {
   const number = Number(text);
   if (text.trim() === '' || !Number.isInteger(number) || number < LOWEST_PAGE_NUMBER || number > HIGHEST_PAGE_NUMBER) {
     return { isValid: false };
   }
   return { isValid: true, number };
-}
+};
 
-export function turnedLeft(rotation: number): number {
+export const turnedLeft = (rotation: number): number => {
   return (rotation + FULL_TURN_DEGREES - QUARTER_TURN_DEGREES) % FULL_TURN_DEGREES;
-}
+};
 
-export function turnedRight(rotation: number): number {
+export const turnedRight = (rotation: number): number => {
   return (rotation + QUARTER_TURN_DEGREES) % FULL_TURN_DEGREES;
-}
+};

@@ -24,7 +24,7 @@ const ORDER = ['a', 'b', 'c', 'd', 'e'];
 const START_PIXELS: PixelPoint = { x: 100, y: 200 };
 const SECONDARY_BUTTON = 2;
 
-function press(changes: Partial<Press> = {}): Press {
+const press = (changes: Partial<Press> = {}): Press => {
   return {
     pointerId: 1,
     pointerType: 'mouse',
@@ -36,9 +36,9 @@ function press(changes: Partial<Press> = {}): Press {
     isOnControl: false,
     ...changes,
   };
-}
+};
 
-function gesture(changes: Partial<Gesture> = {}): Gesture {
+const gesture = (changes: Partial<Gesture> = {}): Gesture => {
   return {
     pointerId: 1,
     pointerType: 'mouse',
@@ -51,11 +51,11 @@ function gesture(changes: Partial<Gesture> = {}): Gesture {
     moving: [],
     ...changes,
   };
-}
+};
 
-function stepAfter(moved: Gesture, distancePixels: number): GestureStep {
+const stepAfter = (moved: Gesture, distancePixels: number): GestureStep => {
   return moveGesture(moved, { x: START_PIXELS.x + distancePixels, y: START_PIXELS.y }).step;
-}
+};
 
 describe('The drag gesture', () => {
   describe('The pressGesture() function', () => {

@@ -1,6 +1,6 @@
 import { BRAND_MARK_HREF, BRAND_MARK_VIEW_BOX } from './brand-mark-drawing.ts';
 
-export function BrandMark({ sizePixels }: { readonly sizePixels: number }) {
+export const BrandMark = ({ sizePixels }: { readonly sizePixels: number }) => {
   return (
     <svg
       className="brand-mark"
@@ -13,4 +13,4 @@ export function BrandMark({ sizePixels }: { readonly sizePixels: number }) {
       <use href={BRAND_MARK_HREF} />
     </svg>
   );
-}
+};

@@ -34,28 +34,28 @@ export const DOCUMENT_KINDS = ['book', 'document'] as const;
 
 export type DocumentKind = (typeof DOCUMENT_KINDS)[number];
 
-export function isDocumentKind(kind: string): kind is DocumentKind {
+export const isDocumentKind = (kind: string): kind is DocumentKind => {
   return DOCUMENT_KINDS.some((documentKind) => documentKind === kind);
-}
+};
 
 export const NEW_DOCUMENT_KIND: DocumentKind = 'book';
 
-export function unwarpsByDefault(kind: DocumentKind): boolean {
+export const unwarpsByDefault = (kind: DocumentKind): boolean => {
   return kind === 'book';
-}
+};
 
-export function countPages(documents: readonly DocumentSummary[]): number {
+export const countPages = (documents: readonly DocumentSummary[]): number => {
   return documents.reduce((total, document) => total + document.stats.pageCount, 0);
-}
+};
 
-export function doneRatio(stats: DocumentStats): number {
+export const doneRatio = (stats: DocumentStats): number => {
   return stats.pageCount === 0 ? 0 : stats.doneCount / stats.pageCount;
-}
+};
 
-export function formatPageRange([start, end]: PageRange): string {
+export const formatPageRange = ([start, end]: PageRange): string => {
   return start === end ? String(start) : `${start}–${end}`;
-}
+};
 
-export function formatPageRanges(ranges: readonly PageRange[]): string {
+export const formatPageRanges = (ranges: readonly PageRange[]): string => {
   return ranges.map(formatPageRange).join(', ');
-}
+};

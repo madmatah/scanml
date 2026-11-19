@@ -31,7 +31,7 @@ const CREATED = 201;
 const UNAUTHORIZED = 401;
 const UNSUPPORTED_MEDIA_TYPE = 415;
 
-function createFakeRequest(): FakeRequest {
+const createFakeRequest = (): FakeRequest => {
   const opened: string[] = [];
   const headers: Record<string, string> = {};
   const sent: FormData[] = [];
@@ -39,9 +39,9 @@ function createFakeRequest(): FakeRequest {
   const listeners = new Map<string, (() => void)[]>();
   let status = 0;
   let response: unknown = null;
-  function dispatch(type: string): void {
+  const dispatch = (type: string): void => {
     for (const listener of listeners.get(type) ?? []) listener();
-  }
+  };
   return {
     responseType: '',
     get status() {
@@ -80,9 +80,9 @@ function createFakeRequest(): FakeRequest {
     },
     breakConnection: (type) => dispatch(type),
   };
-}
+};
 
-function pageUpload(): PageUpload<File> {
+const pageUpload = (): PageUpload<File> => {
   return {
     documentId: DOCUMENT_ID,
     pageId: PAGE_ID,
@@ -91,9 +91,9 @@ function pageUpload(): PageUpload<File> {
     capturedAt: CAPTURED_AT,
     file: new File([PHOTO_BYTES], PHOTO_NAME, { type: 'image/jpeg' }),
   };
-}
+};
 
-function arrange(): Arrangement {
+const arrange = (): Arrangement => {
   const request = createFakeRequest();
   const progress: number[] = [];
   let unauthorizedCount = 0;
@@ -110,13 +110,13 @@ function arrange(): Arrangement {
       (failure: unknown) => failure,
     );
   return { request, progress, unauthorizedCount: () => unauthorizedCount, outcome };
-}
+};
 
-function fieldsOf(form: FormData | undefined): Record<string, string> {
+const fieldsOf = (form: FormData | undefined): Record<string, string> => {
   const fields: Record<string, string> = {};
   for (const [name, field] of form?.entries() ?? []) fields[name] = typeof field === 'string' ? field : field.name;
   return fields;
-}
+};
 
 describe('The page uploader', () => {
   describe('The uploadPage() method', () => {

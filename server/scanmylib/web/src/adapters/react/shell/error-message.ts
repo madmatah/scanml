@@ -2,11 +2,11 @@ import type { TFunction } from 'i18next';
 
 import { ApiError, NetworkError } from '../../../application/api-errors.ts';
 
-export function errorMessage(
+export const errorMessage = (
   t: TFunction,
   failure: unknown,
   fallback: string = t('An unexpected error occurred.'),
-): string {
+): string => {
   if (failure instanceof NetworkError) {
     return t('The ScanMyLib server is not responding. Check that it is running and that you are on the same network.');
   }
@@ -25,4 +25,4 @@ export function errorMessage(
         ? fallback
         : t('{{message}} ({{detail}})', { message: fallback, detail: failure.detail });
   }
-}
+};

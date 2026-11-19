@@ -9,7 +9,7 @@ import { ReaderScreen } from '../reader/reader-screen.tsx';
 import type { RouteName } from './navigation.ts';
 import { Shell, type ShellServices } from './shell.tsx';
 
-export function createRoutes(services: ShellServices): RouteObject[] {
+export const createRoutes = (services: ShellServices): RouteObject[] => {
   return [
     {
       element: <Shell services={services} />,
@@ -80,4 +80,4 @@ export function createRoutes(services: ShellServices): RouteObject[] {
       ],
     },
   ];
-}
+};

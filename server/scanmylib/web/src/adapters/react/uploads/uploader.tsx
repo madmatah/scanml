@@ -25,14 +25,14 @@ interface CameraSeries {
   readonly nextSeq: number;
 }
 
-function takeFiles(input: HTMLInputElement): File[] {
+const takeFiles = (input: HTMLInputElement): File[] => {
   const files = [...(input.files ?? [])];
   // So that choosing the same photos again is a change too.
   input.value = '';
   return files;
-}
+};
 
-export function Uploader({ documentId, uploads, uuids, formatting }: UploaderProps) {
+export const Uploader = ({ documentId, uploads, uuids, formatting }: UploaderProps) => {
   const { t } = useTranslation();
   const filesInput = useRef<HTMLInputElement>(null);
   const cameraInput = useRef<HTMLInputElement>(null);
@@ -41,18 +41,18 @@ export function Uploader({ documentId, uploads, uuids, formatting }: UploaderPro
   const queued = useSyncExternalStore(uploads.subscribe, uploads.getSnapshot);
   const items = useMemo(() => uploadsOf(queued, documentId), [queued, documentId]);
 
-  function filesChosen(input: HTMLInputElement): void {
+  const filesChosen = (input: HTMLInputElement): void => {
     const files = inFileNameOrder(takeFiles(input));
     if (files.length > 0) uploads.add(documentId, files, { sessionId: uuids.createUuid(), firstSeq: 1 });
-  }
+  };
 
-  function photosTaken(input: HTMLInputElement): void {
+  const photosTaken = (input: HTMLInputElement): void => {
     const files = takeFiles(input);
     if (files.length === 0) return;
     const series = cameraSeries.current ?? { sessionId: uuids.createUuid(), nextSeq: 1 };
     uploads.add(documentId, files, { sessionId: series.sessionId, firstSeq: series.nextSeq });
     cameraSeries.current = { sessionId: series.sessionId, nextSeq: series.nextSeq + files.length };
-  }
+  };
 
   return (
     <div className="uploader">
@@ -90,7 +90,7 @@ export function Uploader({ documentId, uploads, uuids, formatting }: UploaderPro
       <UploadPanel documentId={documentId} items={items} uploads={uploads} formatting={formatting} />
     </div>
   );
-}
+};
 
 interface UploadPanelProps {
   readonly documentId: string;
@@ -99,7 +99,7 @@ interface UploadPanelProps {
   readonly formatting: NumberFormatting;
 }
 
-function UploadPanel({ documentId, items, uploads, formatting }: UploadPanelProps) {
+const UploadPanel = ({ documentId, items, uploads, formatting }: UploadPanelProps) => {
   const { t } = useTranslation();
   if (items.length === 0) return <div className="upload-panel" hidden />;
   const summary = summarizeUploads(items);
@@ -153,4 +153,4 @@ function UploadPanel({ documentId, items, uploads, formatting }: UploadPanelProp
       </div>
     </div>
   );
-}
+};

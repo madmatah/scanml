@@ -89,36 +89,36 @@ interface QueuedUpload<F extends PhotoFile> extends UploadItem {
 
 const NOTHING_SETTLED: SettledUploads = { sentCount: 0, failedCount: 0, rejectedCount: 0 };
 
-function isActive(item: UploadItem): boolean {
+const isActive = (item: UploadItem): boolean => {
   return item.state === 'pending' || item.state === 'uploading';
-}
+};
 
-function hasProblem(item: UploadItem): item is FailedUpload {
+const hasProblem = (item: UploadItem): item is FailedUpload => {
   return item.problem !== null;
-}
+};
 
-export function settledCount(settled: SettledUploads): number {
+export const settledCount = (settled: SettledUploads): number => {
   return settled.sentCount + settled.failedCount + settled.rejectedCount;
-}
+};
 
-export function hasFailures(settled: SettledUploads): boolean {
+export const hasFailures = (settled: SettledUploads): boolean => {
   return settled.failedCount + settled.rejectedCount > 0;
-}
+};
 
-export function uploadsOf(items: readonly UploadItem[], documentId: string): UploadItem[] {
+export const uploadsOf = (items: readonly UploadItem[], documentId: string): UploadItem[] => {
   return items.filter((item) => item.documentId === documentId);
-}
+};
 
-export function sentCountOf(items: readonly UploadItem[], documentId: string): number {
+export const sentCountOf = (items: readonly UploadItem[], documentId: string): number => {
   return items.filter((item) => item.documentId === documentId && item.state === 'sent').length;
-}
+};
 
 // The names that cameras and scanners give their files sort in shooting order.
-export function inFileNameOrder<F extends PhotoFile>(files: readonly F[]): F[] {
+export const inFileNameOrder = <F extends PhotoFile>(files: readonly F[]): F[] => {
   return [...files].sort((first, second) => first.name.localeCompare(second.name, undefined, { numeric: true }));
-}
+};
 
-export function summarizeUploads(items: readonly UploadItem[]): UploadSummary {
+export const summarizeUploads = (items: readonly UploadItem[]): UploadSummary => {
   const inState = (state: UploadState) => items.filter((item) => item.state === state);
   const uploading = inState('uploading');
   const failed = inState('failed').filter(hasProblem);
@@ -141,42 +141,42 @@ export function summarizeUploads(items: readonly UploadItem[]): UploadSummary {
     isBusy: uploading.length + waitingCount > 0,
     progress: totalBytes === 0 ? 1 : sentBytes / totalBytes,
   };
-}
+};
 
 // The queue lives outside the screens: uploads go on while the user browses, and a document's screen shows their
 // progress whenever it is open. The server is idempotent on a page's id, so a failed upload is sent again safely.
-export function createUploadQueue<F extends PhotoFile>(
+export const createUploadQueue = <F extends PhotoFile>(
   uploader: PageUploader<F>,
   uuids: UuidSource,
   clock: Clock,
-): UploadQueue<F> {
+): UploadQueue<F> => {
   let items: readonly QueuedUpload<F>[] = [];
   let runningCount = 0;
   let settled = NOTHING_SETTLED;
   const listeners = new Set<() => void>();
   const settledListeners = new Set<(settled: SettledUploads) => void>();
 
-  function replace(next: readonly QueuedUpload<F>[]): void {
+  const replace = (next: readonly QueuedUpload<F>[]): void => {
     items = next;
     for (const listener of [...listeners]) listener();
-  }
+  };
 
-  function update(pageId: string, change: Partial<QueuedUpload<F>>): void {
+  const update = (pageId: string, change: Partial<QueuedUpload<F>>): void => {
     replace(items.map((item) => (item.pageId === pageId ? { ...item, ...change } : item)));
-  }
+  };
 
-  function isBusy(documentId?: string): boolean {
+  const isBusy = (documentId?: string): boolean => {
     return items.some((item) => (documentId === undefined || item.documentId === documentId) && isActive(item));
-  }
+  };
 
-  function settleIfIdle(): void {
+  const settleIfIdle = (): void => {
     if (isBusy() || settledCount(settled) === 0) return;
     const counts = settled;
     settled = NOTHING_SETTLED;
     for (const listener of [...settledListeners]) listener(counts);
-  }
+  };
 
-  async function send(request: PageUpload<F>): Promise<void> {
+  const send = async (request: PageUpload<F>): Promise<void> => {
     const { pageId } = request;
     runningCount += 1;
     update(pageId, { state: 'uploading' });
@@ -199,16 +199,16 @@ export function createUploadQueue<F extends PhotoFile>(
     update(pageId, outcome);
     pump();
     settleIfIdle();
-  }
+  };
 
-  function pump(): void {
+  const pump = (): void => {
     while (runningCount < CONCURRENT_UPLOADS) {
       const request = items.find((item) => item.state === 'pending')?.request;
       if (request === undefined || request === null) return;
       // send tells its failures through the item's state, so its promise never rejects.
       void send(request);
     }
-  }
+  };
 
   return {
     subscribe(listener) {
@@ -263,4 +263,4 @@ export function createUploadQueue<F extends PhotoFile>(
       replace(items.filter((item) => item.documentId !== documentId || isActive(item)));
     },
   };
-}
+};

@@ -29,20 +29,20 @@ interface Arrangement {
   readonly engineStatus: EngineStatus;
 }
 
-function arrange(isVisible: boolean): Arrangement {
+const arrange = (isVisible: boolean): Arrangement => {
   const source = createFakeStatusSource();
   const visibility = createFakePageVisibility(isVisible);
   const scheduler = createFakeScheduler();
   return { source, visibility, scheduler, engineStatus: createEngineStatus(source, visibility, scheduler) };
-}
+};
 
-async function startOnline(): Promise<Arrangement> {
+const startOnline = async (): Promise<Arrangement> => {
   const arrangement = arrange(true);
   arrangement.engineStatus.start();
   arrangement.source.answer(STATUS);
   await settle();
   return arrangement;
-}
+};
 
 describe('The engine status', () => {
   describe('The POLL_INTERVAL_MILLISECONDS constant', () => {

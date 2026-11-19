@@ -6,7 +6,7 @@ export interface StatusChanges {
   readonly libraryDirectory?: string;
 }
 
-export function sampleServerStatus(changes: StatusChanges = {}): ServerStatus {
+export const sampleServerStatus = (changes: StatusChanges = {}): ServerStatus => {
   return {
     version: '0.2.3',
     engine: {
@@ -20,4 +20,4 @@ export function sampleServerStatus(changes: StatusChanges = {}): ServerStatus {
     queue: { queuedCount: 3, processingCount: 1, errorCount: 0, doneCount: 1200, ...changes.queue },
     libraryDirectory: changes.libraryDirectory ?? '/home/user/Documents/ScanMyLib',
   };
-}
+};

@@ -22,6 +22,7 @@ paths:
   - "android/.editorconfig"
   - ".shellcheckrc"
   - "server/scanmylib/web/biome.json"
+  - "server/scanmylib/web/biome-plugins/**"
   - "server/scanmylib/web/package.json"
   - "server/scanmylib/web/pnpm-*.yaml"
   - "server/scanmylib/web/tsconfig*.json"

@@ -26,12 +26,12 @@ const FRENCH_LANGUAGES = ['fr-FR'];
 const UNPROCESSABLE = 422;
 const UNSUPPORTED_MEDIA_TYPE = 415;
 
-async function textFor(languages: readonly string[]): Promise<Text> {
+const textFor = async (languages: readonly string[]): Promise<Text> => {
   const { i18next, formatting } = await createLocalizationFor(languages, CATALOGS);
   return { t: i18next.t, formatting };
-}
+};
 
-function summary(overrides: Partial<UploadSummary>): UploadSummary {
+const summary = (overrides: Partial<UploadSummary>): UploadSummary => {
   return {
     sentCount: 0,
     acceptedCount: 0,
@@ -43,9 +43,9 @@ function summary(overrides: Partial<UploadSummary>): UploadSummary {
     progress: 1,
     ...overrides,
   };
-}
+};
 
-function failures(count: number): FailedUpload[] {
+const failures = (count: number): FailedUpload[] => {
   return [...Array(count).keys()].map(
     (index): FailedUpload => ({
       pageId: `page-${index}`,
@@ -57,7 +57,7 @@ function failures(count: number): FailedUpload[] {
       problem: { kind: 'upload-failed', failure: new NetworkError() },
     }),
   );
-}
+};
 
 describe('The upload text', () => {
   let english: Text;

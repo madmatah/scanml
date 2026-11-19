@@ -10,7 +10,7 @@ export type LoginError =
 
 const UNAUTHORIZED = 401;
 
-export function loginErrorText(t: TFunction, error: LoginError): string {
+export const loginErrorText = (t: TFunction, error: LoginError): string => {
   switch (error.reason) {
     case 'missing-token':
       return t('Enter the access token.');
@@ -19,9 +19,9 @@ export function loginErrorText(t: TFunction, error: LoginError): string {
         ? t('Invalid access token. Check it and try again.')
         : errorMessage(t, error.failure, t('Could not sign in.'));
   }
-}
+};
 
-export function signedOutNoticeText(t: TFunction, notice: SignedOutNotice): string {
+export const signedOutNoticeText = (t: TFunction, notice: SignedOutNotice): string => {
   switch (notice.reason) {
     case 'expired':
       return t('Your session has expired: please sign in again.');
@@ -32,4 +32,4 @@ export function signedOutNoticeText(t: TFunction, notice: SignedOutNotice): stri
     case 'check-failed':
       return errorMessage(t, notice.failure, t('The ScanMyLib server is not responding correctly.'));
   }
-}
+};

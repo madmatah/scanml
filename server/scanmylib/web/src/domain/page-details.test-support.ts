@@ -3,7 +3,7 @@ import type { PageDetails } from './page-details.ts';
 export const SAMPLE_PAGE_ID = 'de215798-031a-4b20-a867-49c12e3baabe';
 export const SAMPLE_DOCUMENT_ID = '95bbeb79-4351-432f-a53c-d3658892ff50';
 
-export function samplePageDetails(changes: Partial<PageDetails> = {}): PageDetails {
+export const samplePageDetails = (changes: Partial<PageDetails> = {}): PageDetails => {
   return {
     id: SAMPLE_PAGE_ID,
     documentId: SAMPLE_DOCUMENT_ID,
@@ -38,4 +38,4 @@ export function samplePageDetails(changes: Partial<PageDetails> = {}): PageDetai
     markdown: 'Example text.',
     ...changes,
   };
-}
+};

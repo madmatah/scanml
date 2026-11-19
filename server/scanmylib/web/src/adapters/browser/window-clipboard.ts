@@ -1,7 +1,7 @@
 import type { Clipboard } from '../../application/clipboard.ts';
 import { createClipboard } from './clipboard.ts';
 
-function copyWithTextArea(page: Document, text: string): boolean {
+const copyWithTextArea = (page: Document, text: string): boolean => {
   const previousFocus = page.activeElement;
   const area = page.createElement('textarea');
   area.value = text;
@@ -18,9 +18,9 @@ function copyWithTextArea(page: Document, text: string): boolean {
   area.remove();
   if (previousFocus instanceof HTMLElement) previousFocus.focus();
   return isCopied;
-}
+};
 
-export function createWindowClipboard(browser: Window): Clipboard {
+export const createWindowClipboard = (browser: Window): Clipboard => {
   const { clipboard } = browser.navigator;
   return createClipboard({
     isSecureContext: browser.isSecureContext,
@@ -28,4 +28,4 @@ export function createWindowClipboard(browser: Window): Clipboard {
     writeText: clipboard === undefined ? null : (text) => clipboard.writeText(text),
     copyWithCommand: (text) => copyWithTextArea(browser.document, text),
   });
-}
+};

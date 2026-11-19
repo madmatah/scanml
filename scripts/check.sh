@@ -49,11 +49,12 @@ readonly FORMATTED_DIRECTORIES=(server ocr scripts .claude/skills)
 # copied from a template is kept as it ships").
 readonly TEMPLATE_SCRIPT=.claude/skills/pull-request/scripts/pr_screenshots.py
 # The files the formatters of the copy format, and nothing else: no other file comes back, such as a lock or an image,
-# whose change git diff would not let a reader judge.
+# whose change git diff would not let a reader judge. Biome formats the web UI's GritQL plugins too, and cannot run
+# without them.
 readonly FORMATTED_PATHSPECS=('server/*.py' 'ocr/*.py' 'scripts/*.py' '.claude/skills/*.py' 'ocr/*.sh' 'scripts/*.sh'
     '.claude/skills/*.sh' ":(exclude)$TEMPLATE_SCRIPT"
     'server/scanmylib/web/*.js' 'server/scanmylib/web/*.ts' 'server/scanmylib/web/*.tsx' 'server/scanmylib/web/*.json'
-    'server/scanmylib/web/*.css')
+    'server/scanmylib/web/*.css' 'server/scanmylib/web/*.grit')
 # Without .env (CI only), scripts/build-apk.sh reads its settings from the environment, which
 # common.sh clears: they are handed back to it.
 readonly CI_ANDROID_SETTINGS=("DATA_DIR=${DATA_DIR:-}" "ANDROID_DIR=${ANDROID_DIR:-}" "APP_VARIANT=${APP_VARIANT:-}")

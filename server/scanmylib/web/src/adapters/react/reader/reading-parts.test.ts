@@ -13,7 +13,11 @@ interface ElementParts {
   readonly markerText?: string;
 }
 
-function buildElement(selector: string, name: string, { attributes = {}, text = '', markerText }: ElementParts = {}) {
+const buildElement = (
+  selector: string,
+  name: string,
+  { attributes = {}, text = '', markerText }: ElementParts = {},
+) => {
   const [tag, ...classes] = selector.split('.');
   const element: StandInElement = {
     name,
@@ -27,7 +31,7 @@ function buildElement(selector: string, name: string, { attributes = {}, text = 
     getAttribute: (attributeName) => attributes[attributeName] ?? null,
   };
   return element;
-}
+};
 
 describe('The reading parts', () => {
   describe('The documentParts() function', () => {

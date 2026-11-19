@@ -61,22 +61,22 @@ const BEFORE = -1;
 const AFTER = 1;
 
 // aria-disabled rather than disabled, so that a focused button keeps the focus.
-function unavailable(isUnavailable: boolean): 'true' | undefined {
+const unavailable = (isUnavailable: boolean): 'true' | undefined => {
   return isUnavailable ? 'true' : undefined;
-}
+};
 
-function isUnavailable(button: Element): boolean {
+const isUnavailable = (button: Element): boolean => {
   return button.getAttribute('aria-disabled') === 'true';
-}
+};
 
-function closestElement(target: EventTarget | null, selector: string): Element | null {
+const closestElement = (target: EventTarget | null, selector: string): Element | null => {
   return target instanceof Element ? target.closest(selector) : null;
-}
+};
 
 // The click on the lists selects, with the keys it holds; the checkbox only shows the selection.
-function showsSelectionOnly(): void {}
+const showsSelectionOnly = (): void => {};
 
-function highlight(cards: CardNodes, moved: readonly PageId[]): void {
+const highlight = (cards: CardNodes, moved: readonly PageId[]): void => {
   for (const pageId of moved) {
     const node = cards.get(pageId);
     if (node === undefined) continue;
@@ -84,9 +84,9 @@ function highlight(cards: CardNodes, moved: readonly PageId[]): void {
     void node.offsetWidth;
     node.classList.add('is-moved');
   }
-}
+};
 
-export function PageOrganizer({ document, save, reset, reload, toasts, onDone }: PageOrganizerProps) {
+export const PageOrganizer = ({ document, save, reset, reload, toasts, onDone }: PageOrganizerProps) => {
   const { t } = useTranslation();
   const titleId = useId();
   const [store] = useState<OrganizerStore>(() =>
@@ -173,7 +173,7 @@ export function PageOrganizer({ document, save, reset, reload, toasts, onDone }:
     const indicatorElement = indicator.current;
     if (section === null || bar === null || listsElement === null || indicatorElement === null) return;
 
-    function endGesture(outcome: GestureOutcome): void {
+    const endGesture = (outcome: GestureOutcome): void => {
       switch (outcome.kind) {
         case 'drop':
           if (!sameOrder(outcome.order, store.getSnapshot().order)) applyMove(outcome.order, outcome.moving);
@@ -190,7 +190,7 @@ export function PageOrganizer({ document, save, reset, reload, toasts, onDone }:
           throw new Error(`Unknown end of a gesture: ${JSON.stringify(outcome satisfies never)}`);
       }
       store.endGesture();
-    }
+    };
 
     const drag = createPageDrag(
       { organizer: section, toolbar: bar, lists: listsElement, indicator: indicatorElement },
@@ -204,16 +204,16 @@ export function PageOrganizer({ document, save, reset, reload, toasts, onDone }:
       },
     );
 
-    function moveOne(pageId: PageId, step: typeof BEFORE | typeof AFTER, button: HTMLElement): void {
+    const moveOne = (pageId: PageId, step: typeof BEFORE | typeof AFTER, button: HTMLElement): void => {
       const { order } = store.getSnapshot();
       const next = moveByOne(order, pageId, step);
       if (sameOrder(next, order)) return;
       applyMove(next, [pageId]);
       // The button moved with its card and kept the focus: it stays in view.
       button.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-    }
+    };
 
-    function onClick(event: MouseEvent): void {
+    const onClick = (event: MouseEvent): void => {
       const card = closestElement(event.target, '.organizer-card');
       if (!(card instanceof HTMLElement)) return;
       if (drag.takeIgnoredClick()) {
@@ -232,17 +232,17 @@ export function PageOrganizer({ document, save, reset, reload, toasts, onDone }:
         // A label passes its click on to its checkbox.
         store.select(pageId, { isToggle: event.ctrlKey || event.metaKey, isRange: event.shiftKey });
       }
-    }
+    };
 
     // Escape empties the selection: a mouse click on a card does not move the focus into the organizer.
-    function onEscape(event: KeyboardEvent): void {
+    const onEscape = (event: KeyboardEvent): void => {
       if (event.key !== ESCAPE || event.defaultPrevented || store.hasGesture()) return;
       if (store.getSnapshot().selection.selected.size === 0) return;
       if (window.document.querySelector('dialog[open]') !== null) return;
       event.preventDefault();
       store.clearSelection();
       announce(t('No page selected anymore.'));
-    }
+    };
 
     listsElement.addEventListener('click', onClick);
     window.document.addEventListener('keydown', onEscape);
@@ -268,13 +268,13 @@ export function PageOrganizer({ document, save, reset, reload, toasts, onDone }:
   const groups = readingOrderGroups(order, pages);
   const outsideCount = snapshot.document.pages.length - order.length;
 
-  function openMoveDialog(): void {
+  const openMoveDialog = (): void => {
     const moving = inOrder(order, selection.selected);
     if (moving.length === 0 || moving.length === order.length || isResetting) return;
     setOpenDialog({ kind: 'move', moving, choices: moveChoices(t, pages, order, moving) });
-  }
+  };
 
-  function moveClosed(moving: readonly PageId[], target: MoveTarget | null): void {
+  const moveClosed = (moving: readonly PageId[], target: MoveTarget | null): void => {
     setOpenDialog(null);
     if (target === null) return;
     const placement = placeSelection(store.getSnapshot().order, moving, target.targetId, target.side);
@@ -294,15 +294,15 @@ export function PageOrganizer({ document, save, reset, reload, toasts, onDone }:
       default:
         throw new Error(`Unknown placement: ${JSON.stringify(placement satisfies never)}`);
     }
-  }
+  };
 
-  function resetClosed(isConfirmed: boolean): void {
+  const resetClosed = (isConfirmed: boolean): void => {
     setOpenDialog(null);
     // resetOrder tells its outcome through the store's report, so its promise never rejects.
     if (isConfirmed) void store.resetOrder();
-  }
+  };
 
-  function renderCards(pageIds: readonly PageId[], firstIndex: number) {
+  const renderCards = (pageIds: readonly PageId[], firstIndex: number) => {
     return pageIds.map((pageId, offset) => {
       const page = pages.get(pageId);
       if (page === undefined) return null;
@@ -320,7 +320,7 @@ export function PageOrganizer({ document, save, reset, reload, toasts, onDone }:
         />
       );
     });
-  }
+  };
 
   return (
     <section
@@ -459,7 +459,7 @@ export function PageOrganizer({ document, save, reset, reload, toasts, onDone }:
       )}
     </section>
   );
-}
+};
 
 interface OrganizerCardProps {
   readonly page: PageSummary;

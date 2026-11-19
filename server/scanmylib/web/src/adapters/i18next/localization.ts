@@ -18,7 +18,7 @@ export interface Localization {
   readonly dates: DateFormatting;
 }
 
-export async function createLocalization(catalogs: Resource): Promise<Localization> {
+export const createLocalization = async (catalogs: Resource): Promise<Localization> => {
   const instance = createInstance();
   await instance.use(LanguageDetector).init({
     resources: catalogs,
@@ -39,4 +39,4 @@ export async function createLocalization(catalogs: Resource): Promise<Localizati
     typeof value === 'number' ? formatting.formatNumber(value) : String(value),
   );
   return { i18next: instance, language, locale, formatting, dates: createDateFormatting(locale) };
-}
+};

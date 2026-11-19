@@ -11,9 +11,9 @@ export type PhotoRejection =
 export const ACCEPTED_TYPES: readonly string[] = ['image/jpeg', 'image/png', 'image/webp'];
 export const MAX_UPLOAD_BYTES = 40 * 1024 * 1024;
 
-export function checkPhoto(photo: Photo): PhotoRejection | null {
+export const checkPhoto = (photo: Photo): PhotoRejection | null => {
   if (photo.type !== '' && !ACCEPTED_TYPES.includes(photo.type)) return { kind: 'unsupported-format' };
   if (photo.size > MAX_UPLOAD_BYTES) return { kind: 'too-large' };
   if (photo.size === 0) return { kind: 'empty' };
   return null;
-}
+};

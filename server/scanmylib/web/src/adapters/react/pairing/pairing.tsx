@@ -28,7 +28,7 @@ export interface PairingProps {
   readonly toasts: Toasts;
 }
 
-export function Pairing({ source, clipboard, toasts }: PairingProps) {
+export const Pairing = ({ source, clipboard, toasts }: PairingProps) => {
   const { t } = useTranslation();
   const [load, setLoad] = useState<PairingLoad>({ phase: 'loading' });
   const reload = useRef<() => void>(() => {});
@@ -36,18 +36,18 @@ export function Pairing({ source, clipboard, toasts }: PairingProps) {
 
   useEffect(() => {
     const leaving = new AbortController();
-    async function loadPairing(): Promise<void> {
+    const loadPairing = async (): Promise<void> => {
       setLoad({ phase: 'loading' });
       try {
         setLoad({ phase: 'loaded', pairing: await source.readPairing(leaving.signal) });
       } catch (failure) {
         if (!leaving.signal.aborted) setLoad({ phase: 'failed', failure });
       }
-    }
-    function loadAgain(): void {
+    };
+    const loadAgain = (): void => {
       // loadPairing handles its own failures, so its promise never rejects.
       void loadPairing();
-    }
+    };
     reload.current = loadAgain;
     loadAgain();
     return () => leaving.abort();
@@ -75,14 +75,14 @@ export function Pairing({ source, clipboard, toasts }: PairingProps) {
       </div>
     </section>
   );
-}
+};
 
 interface InstallCardProps {
   readonly pairing: PairingDetails;
   readonly source: PairingSource;
 }
 
-function InstallCard({ pairing, source }: InstallCardProps) {
+const InstallCard = ({ pairing, source }: InstallCardProps) => {
   const { t } = useTranslation();
   return (
     <section className="card pairing-step" aria-labelledby="install-title">
@@ -150,7 +150,7 @@ function InstallCard({ pairing, source }: InstallCardProps) {
       )}
     </section>
   );
-}
+};
 
 interface PairCardProps {
   readonly pairing: PairingDetails;
@@ -160,7 +160,7 @@ interface PairCardProps {
 }
 
 // The labels quoted here are those of the Android app's pairing screen.
-function PairCard({ pairing, source, clipboard, toasts }: PairCardProps) {
+const PairCard = ({ pairing, source, clipboard, toasts }: PairCardProps) => {
   const { t } = useTranslation();
   return (
     <section className="card pairing-step" aria-labelledby="pair-title">
@@ -211,4 +211,4 @@ function PairCard({ pairing, source, clipboard, toasts }: PairCardProps) {
       />
     </section>
   );
-}
+};

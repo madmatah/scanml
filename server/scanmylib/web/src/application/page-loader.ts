@@ -31,7 +31,7 @@ export interface PageLoader {
 // While the PC reads the text of the page, the page refreshes itself at the pace of the engine's status.
 export const REFRESH_INTERVAL_MILLISECONDS = 3000;
 
-export function createPageLoader({
+export const createPageLoader = ({
   readPage,
   readDocument,
   readPageHtml,
@@ -39,19 +39,19 @@ export function createPageLoader({
   leaving,
   onChange,
   onRefreshFailed,
-}: PageLoaderOptions): PageLoader {
+}: PageLoaderOptions): PageLoader => {
   let latestPage: PageDetails | null = null;
   let hasShownPage = false;
   let loading: Promise<void> | null = null;
   let isReloadQueued = false;
   let cancelRefresh: CancelTask | null = null;
 
-  function stopRefresh(): void {
+  const stopRefresh = (): void => {
     cancelRefresh?.();
     cancelRefresh = null;
-  }
+  };
 
-  async function fetchPage(): Promise<void> {
+  const fetchPage = async (): Promise<void> => {
     stopRefresh();
     try {
       const page = await readPage(leaving);
@@ -76,9 +76,9 @@ export function createPageLoader({
         void load();
       }, REFRESH_INTERVAL_MILLISECONDS);
     }
-  }
+  };
 
-  function load(): Promise<void> {
+  const load = (): Promise<void> => {
     if (loading !== null) {
       isReloadQueued = true;
       return loading;
@@ -92,9 +92,9 @@ export function createPageLoader({
     });
     loading = current;
     return current;
-  }
+  };
 
   leaving.addEventListener('abort', stopRefresh, { once: true });
 
   return { load };
-}
+};

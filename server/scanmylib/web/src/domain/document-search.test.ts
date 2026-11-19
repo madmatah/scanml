@@ -11,9 +11,9 @@ const CAFE_NOTES = sampleDocument({ id: 'cafe-notes', title: ACCENTED_TITLE, aut
 const EXAMPLE_BOOK = sampleDocument({ id: 'example-book', title: 'Example Book', author: 'Jane Doe' });
 const LIBRARY = [FIELD_NOTES, CAFE_NOTES, EXAMPLE_BOOK];
 
-function idsOf(documents: readonly DocumentSummary[]): string[] {
+const idsOf = (documents: readonly DocumentSummary[]): string[] => {
   return documents.map((document) => document.id);
-}
+};
 
 describe('The document search', () => {
   describe('The documentsMatching() function', () => {

@@ -23,17 +23,17 @@ export interface ReaderLoader {
   load(): Promise<void>;
 }
 
-export function createReaderLoader({
+export const createReaderLoader = ({
   readDocument,
   readDocumentHtml,
   leaving,
   onChange,
   onRefreshFailed,
-}: ReaderLoaderOptions): ReaderLoader {
+}: ReaderLoaderOptions): ReaderLoader => {
   let isShown = false;
   let isLoading = false;
 
-  async function load(): Promise<void> {
+  const load = async (): Promise<void> => {
     if (isLoading) return;
     isLoading = true;
     const returnsToPageRead = !isShown;
@@ -53,7 +53,7 @@ export function createReaderLoader({
     } finally {
       isLoading = false;
     }
-  }
+  };
 
   return { load };
-}
+};

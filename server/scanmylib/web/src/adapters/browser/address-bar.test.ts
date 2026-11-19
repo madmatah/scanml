@@ -9,7 +9,7 @@ interface StubAddressBar extends AddressBar {
   dispatch(type: 'popstate' | 'hashchange'): void;
 }
 
-function createAddressBar(hash: string, pathname = '/', search = ''): StubAddressBar {
+const createAddressBar = (hash: string, pathname = '/', search = ''): StubAddressBar => {
   const location = { hash, pathname, search };
   const replacedUrls: string[] = [];
   const target = new EventTarget();
@@ -28,7 +28,7 @@ function createAddressBar(hash: string, pathname = '/', search = ''): StubAddres
     },
     dispatch: (type) => target.dispatchEvent(new Event(type)),
   };
-}
+};
 
 describe('The address bar', () => {
   describe('The takeSignInToken() function', () => {

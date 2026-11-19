@@ -25,7 +25,7 @@ export interface EditedDocument {
 
 export type SubmittedForm = { readonly fields: DocumentFields } | { readonly missing: 'title' };
 
-export function newDocumentForm(showsNotes = false): DocumentForm {
+export const newDocumentForm = (showsNotes = false): DocumentForm => {
   return {
     title: '',
     author: '',
@@ -34,9 +34,9 @@ export function newDocumentForm(showsNotes = false): DocumentForm {
     isUnwarpChosen: false,
     notes: showsNotes ? '' : null,
   };
-}
+};
 
-export function editedDocumentForm(document: EditedDocument, showsNotes: boolean): DocumentForm {
+export const editedDocumentForm = (document: EditedDocument, showsNotes: boolean): DocumentForm => {
   return {
     title: document.title,
     author: document.author,
@@ -45,19 +45,19 @@ export function editedDocumentForm(document: EditedDocument, showsNotes: boolean
     isUnwarpChosen: true,
     notes: showsNotes ? document.notes : null,
   };
-}
+};
 
-export function withKind(form: DocumentForm, kind: DocumentKind): DocumentForm {
+export const withKind = (form: DocumentForm, kind: DocumentKind): DocumentForm => {
   return { ...form, kind, unwarp: form.isUnwarpChosen ? form.unwarp : unwarpsByDefault(kind) };
-}
+};
 
-export function withUnwarp(form: DocumentForm, unwarp: boolean): DocumentForm {
+export const withUnwarp = (form: DocumentForm, unwarp: boolean): DocumentForm => {
   return { ...form, unwarp, isUnwarpChosen: true };
-}
+};
 
-export function submittedForm(form: DocumentForm): SubmittedForm {
+export const submittedForm = (form: DocumentForm): SubmittedForm => {
   const title = form.title.trim();
   if (title === '') return { missing: 'title' };
   const fields: DocumentFields = { title, author: form.author.trim(), kind: form.kind, unwarp: form.unwarp };
   return { fields: form.notes === null ? fields : { ...fields, notes: form.notes.trim() } };
-}
+};

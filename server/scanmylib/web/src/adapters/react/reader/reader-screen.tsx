@@ -32,17 +32,17 @@ export interface ReaderScreenProps {
 }
 
 // Each document has a reader of its own, which starts afresh.
-export function ReaderScreen(props: ReaderScreenProps) {
+export const ReaderScreen = (props: ReaderScreenProps) => {
   const documentId = idOfAddress(useParams().documentId);
   if (documentId === null) return null;
   return <ReaderView key={documentId} documentId={documentId} {...props} />;
-}
+};
 
 interface ReaderViewProps extends ReaderScreenProps {
   readonly documentId: string;
 }
 
-function ReaderView({ documentId, documents, toasts, typesetFormulas }: ReaderViewProps) {
+const ReaderView = ({ documentId, documents, toasts, typesetFormulas }: ReaderViewProps) => {
   const { t } = useTranslation();
   const [load, setLoad] = useState<ReaderLoad>({ phase: 'loading' });
   const loader = useRef<ReaderLoader | null>(null);
@@ -108,9 +108,9 @@ function ReaderView({ documentId, documents, toasts, typesetFormulas }: ReaderVi
       onReload={reload}
     />
   );
-}
+};
 
-function BackToDocument({ documentId }: { readonly documentId: string }) {
+const BackToDocument = ({ documentId }: { readonly documentId: string }) => {
   const { t } = useTranslation();
   return (
     <Link className="btn" to={documentPath(documentId)}>
@@ -118,9 +118,9 @@ function BackToDocument({ documentId }: { readonly documentId: string }) {
       {t('Back to the document')}
     </Link>
   );
-}
+};
 
-function ReloadButton({ onReload }: { readonly onReload: () => void }) {
+const ReloadButton = ({ onReload }: { readonly onReload: () => void }) => {
   const { t } = useTranslation();
   return (
     <button type="button" className="btn btn-small" onClick={onReload}>
@@ -128,21 +128,21 @@ function ReloadButton({ onReload }: { readonly onReload: () => void }) {
       {t('Refresh')}
     </button>
   );
-}
+};
 
-function removeTitle(content: DocumentFragment): void {
+const removeTitle = (content: DocumentFragment): void => {
   if (content.firstElementChild?.tagName === 'H1') content.firstElementChild.remove();
-}
+};
 
 // The parts of the document's HTML that the "Page" list shows, read from a copy of its own: the text shown is parsed
 // and prepared again where it is placed.
-function readingPartsOf(t: TFunction, sanitizedHtml: string): ReadingPart[] {
+const readingPartsOf = (t: TFunction, sanitizedHtml: string): ReadingPart[] => {
   const template = document.createElement('template');
   template.innerHTML = sanitizedHtml;
   removeTitle(template.content);
   localizeMarkers(t, template.content);
   return documentParts(template.content.children).parts;
-}
+};
 
 interface ReaderDocumentProps {
   readonly document: DocumentWithPages;
@@ -153,14 +153,14 @@ interface ReaderDocumentProps {
   readonly onReload: () => void;
 }
 
-function ReaderDocument({
+const ReaderDocument = ({
   document: shownDocument,
   sanitizedHtml,
   returnsToPageRead,
   markdownUrl,
   typesetFormulas,
   onReload,
-}: ReaderDocumentProps) {
+}: ReaderDocumentProps) => {
   const { t } = useTranslation();
   const titleId = useId();
   const parts = useMemo(() => readingPartsOf(t, sanitizedHtml), [t, sanitizedHtml]);
@@ -238,7 +238,7 @@ function ReaderDocument({
       </div>
     </ReadingText>
   );
-}
+};
 
 interface ReadingTextProps {
   readonly children: ReactNode;
@@ -251,7 +251,7 @@ interface ReadingTextProps {
   readonly typesetFormulas: FormulaTypesetter;
 }
 
-function preparePage(t: TFunction, section: Element, page: PageSummary | undefined): void {
+const preparePage = (t: TFunction, section: Element, page: PageSummary | undefined): void => {
   const marker = section.querySelector(':scope > .page-marker');
   const pageId = page === undefined ? null : idOfAddress(page.id);
   if (marker !== null && pageId !== null) {
@@ -268,19 +268,19 @@ function preparePage(t: TFunction, section: Element, page: PageSummary | undefin
     illustration.setAttribute('loading', 'lazy');
     illustration.setAttribute('decoding', 'async');
   }
-}
+};
 
 // As in the legend of the document's coverage.
-function missingPagesSwatch(): HTMLElement {
+const missingPagesSwatch = (): HTMLElement => {
   const swatch = document.createElement('span');
   swatch.className = 'swatch is-missing';
   swatch.setAttribute('aria-hidden', 'true');
   return swatch;
-}
+};
 
 // The screen's element is rendered here, with the "Page" bar and the text, so that all three exist when the text is
 // placed and the tracker starts.
-function ReadingText({
+const ReadingText = ({
   children,
   parts,
   pageCount,
@@ -289,7 +289,7 @@ function ReadingText({
   returnsToPageRead,
   titleId,
   typesetFormulas,
-}: ReadingTextProps) {
+}: ReadingTextProps) => {
   const { t } = useTranslation();
   const { pathname, search } = useLocation();
   const selectId = useId();
@@ -391,14 +391,14 @@ function ReadingText({
       <article ref={text} className="ocr-render reader-text" aria-labelledby={titleId} />
     </section>
   );
-}
+};
 
-function optionKey(entry: GroupedOutlineEntry<LabeledPage>): string {
+const optionKey = (entry: GroupedOutlineEntry<LabeledPage>): string => {
   return entry.type === 'page' ? `page-${entry.index}` : `gap-${entry.label}`;
-}
+};
 
-function OutlineOption({ entry }: { readonly entry: GroupedOutlineEntry<LabeledPage> }) {
+const OutlineOption = ({ entry }: { readonly entry: GroupedOutlineEntry<LabeledPage> }) => {
   const { t } = useTranslation();
   if (entry.type === 'gap') return <option disabled>{outlineEntryLabel(t, entry)}</option>;
   return <option value={String(entry.index)}>{outlineEntryLabel(t, entry)}</option>;
-}
+};

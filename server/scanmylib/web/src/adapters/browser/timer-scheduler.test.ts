@@ -11,7 +11,7 @@ interface RecordingTimers extends Timers {
   readonly cleared: number[];
 }
 
-function createRecordingTimers(): RecordingTimers {
+const createRecordingTimers = (): RecordingTimers => {
   const started: RecordingTimers['started'] = [];
   const cleared: number[] = [];
   return {
@@ -25,7 +25,7 @@ function createRecordingTimers(): RecordingTimers {
       cleared.push(timer);
     },
   };
-}
+};
 
 describe('The timer scheduler', () => {
   describe('The schedule() method', () => {

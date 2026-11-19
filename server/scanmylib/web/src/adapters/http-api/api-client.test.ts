@@ -31,9 +31,9 @@ const CONFLICT = 409;
 const UNPROCESSABLE = 422;
 const BAD_GATEWAY = 502;
 
-function ignoreUnauthorized(): void {}
+const ignoreUnauthorized = (): void => {};
 
-function exchange(answer: () => Response): Exchange {
+const exchange = (answer: () => Response): Exchange => {
   const requests: SentRequest[] = [];
   return {
     requests,
@@ -42,17 +42,17 @@ function exchange(answer: () => Response): Exchange {
       return answer();
     },
   };
-}
+};
 
-function jsonResponse(status: number, body: unknown): Response {
+const jsonResponse = (status: number, body: unknown): Response => {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
-}
+};
 
-function noContent(): Response {
+const noContent = (): Response => {
   return new Response(null, { status: NO_CONTENT });
-}
+};
 
-function documentDetailsBody(): Record<string, unknown> {
+const documentDetailsBody = (): Record<string, unknown> => {
   return {
     ...documentBody(),
     slug: 'example-book',
@@ -60,9 +60,9 @@ function documentDetailsBody(): Record<string, unknown> {
     unwarp: true,
     folder: '/data/USER/scanmylib/library/example-book',
   };
-}
+};
 
-function documentBody(): Record<string, unknown> {
+const documentBody = (): Record<string, unknown> => {
   return {
     id: DOCUMENT_ID,
     title: 'Example Book',
@@ -73,9 +73,9 @@ function documentBody(): Record<string, unknown> {
     coverage: { ranges: [[11, 11]], label: '11', gaps: [], min: 11, max: 11, unnumbered: 0 },
     cover_thumb_url: null,
   };
-}
+};
 
-function pageBody(): Record<string, unknown> {
+const pageBody = (): Record<string, unknown> => {
   return {
     id: PAGE_ID,
     document_id: DOCUMENT_ID,
@@ -103,11 +103,11 @@ function pageBody(): Record<string, unknown> {
     image_url: `/api/pages/${PAGE_ID}/image`,
     markdown: '',
   };
-}
+};
 
-function headersOf(request: SentRequest | undefined): Record<string, string> {
+const headersOf = (request: SentRequest | undefined): Record<string, string> => {
   return Object.fromEntries(new Headers(request?.init.headers).entries());
-}
+};
 
 describe('The api client', () => {
   describe('The checkSession() call', () => {

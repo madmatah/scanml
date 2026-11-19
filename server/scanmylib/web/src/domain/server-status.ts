@@ -26,6 +26,6 @@ export interface ServerStatus {
   readonly libraryDirectory: string;
 }
 
-export function countPendingPages(queue: QueueCounts): number {
+export const countPendingPages = (queue: QueueCounts): number => {
   return queue.queuedCount + queue.processingCount;
-}
+};

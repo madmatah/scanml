@@ -18,7 +18,7 @@ export interface ReadingPosition {
   readonly heldPageIndex: number | null;
 }
 
-export function readingPosition(view: ReadingView, heldPageIndex: number | null): ReadingPosition | null {
+export const readingPosition = (view: ReadingView, heldPageIndex: number | null): ReadingPosition | null => {
   if (view.pageCount === 0) return null;
   if (heldPageIndex !== null) {
     const isStillShown =
@@ -34,4 +34,4 @@ export function readingPosition(view: ReadingView, heldPageIndex: number | null)
     pageIndex: pageAtLine(view.pageCount, (pageIndex) => view.pageTopPixels(pageIndex), view.readingLinePixels),
     heldPageIndex: null,
   };
-}
+};

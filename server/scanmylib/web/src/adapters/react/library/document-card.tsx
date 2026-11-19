@@ -22,7 +22,7 @@ export interface DocumentCardProps {
   readonly nowMilliseconds: number;
 }
 
-export function DocumentCard({ document, dates, nowMilliseconds }: DocumentCardProps) {
+export const DocumentCard = ({ document, dates, nowMilliseconds }: DocumentCardProps) => {
   const { t } = useTranslation();
   const { coverThumbnailUrl } = document;
   return (
@@ -63,4 +63,4 @@ export function DocumentCard({ document, dates, nowMilliseconds }: DocumentCardP
       </Link>
     </li>
   );
-}
+};

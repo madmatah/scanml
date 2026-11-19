@@ -33,11 +33,11 @@ const SERVER_ERROR = 500;
 const PLAIN_CLICK = { isToggle: false, isRange: false };
 const CTRL_CLICK = { isToggle: true, isRange: false };
 
-async function settle(): Promise<void> {
+const settle = async (): Promise<void> => {
   await new Promise((resolve) => setImmediate(resolve));
-}
+};
 
-function documentWithOrder(order: readonly string[], outside: readonly PageSummary[] = []): DocumentWithPages {
+const documentWithOrder = (order: readonly string[], outside: readonly PageSummary[] = []): DocumentWithPages => {
   return {
     ...sampleDocument({ title: 'Example Book' }),
     slug: 'example-book',
@@ -46,9 +46,9 @@ function documentWithOrder(order: readonly string[], outside: readonly PageSumma
     folder: '/data/USER/scanmylib/library/example-book',
     pages: [...order.map((pageId) => samplePage(pageId)), ...outside],
   };
-}
+};
 
-function pendingWrites(writes: PendingWrite[]): (order?: ReadingOrder) => Promise<DocumentWithPages> {
+const pendingWrites = (writes: PendingWrite[]): ((order?: ReadingOrder) => Promise<DocumentWithPages>) => {
   return (order) =>
     new Promise((resolve, reject) => {
       writes.push({
@@ -63,9 +63,9 @@ function pendingWrites(writes: PendingWrite[]): (order?: ReadingOrder) => Promis
         },
       });
     });
-}
+};
 
-function arrange(document: DocumentWithPages): Arrangement {
+const arrange = (document: DocumentWithPages): Arrangement => {
   const saves: PendingWrite[] = [];
   const resets: PendingWrite[] = [];
   const events: OrganizerEvent[] = [];
@@ -77,11 +77,11 @@ function arrange(document: DocumentWithPages): Arrangement {
     report: (event) => events.push(event),
   });
   return { store, saves, resets, events, reloads };
-}
+};
 
-function selectedOf(snapshot: OrganizerSnapshot): string[] {
+const selectedOf = (snapshot: OrganizerSnapshot): string[] => {
   return [...snapshot.selection.selected].sort();
-}
+};
 
 describe('The organizer store', () => {
   describe('The change() method', () => {

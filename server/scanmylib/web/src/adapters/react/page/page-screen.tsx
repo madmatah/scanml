@@ -46,17 +46,17 @@ export interface PageScreenProps {
 }
 
 // Each page has a screen of its own, so that going to the previous or the next page starts the next one afresh.
-export function PageScreen(props: PageScreenProps) {
+export const PageScreen = (props: PageScreenProps) => {
   const pageId = idOfAddress(useParams().pageId);
   if (pageId === null) return null;
   return <PageView key={pageId} pageId={pageId} {...props} />;
-}
+};
 
 interface PageViewProps extends PageScreenProps {
   readonly pageId: string;
 }
 
-function isTypingTarget(target: EventTarget | null): boolean {
+const isTypingTarget = (target: EventTarget | null): boolean => {
   return (
     target instanceof HTMLElement &&
     (target.isContentEditable ||
@@ -64,9 +64,9 @@ function isTypingTarget(target: EventTarget | null): boolean {
       target.tagName === 'TEXTAREA' ||
       target.tagName === 'SELECT')
   );
-}
+};
 
-function PageView({
+const PageView = ({
   pageId,
   pages,
   documents,
@@ -76,7 +76,7 @@ function PageView({
   formatting,
   dates,
   typesetFormulas,
-}: PageViewProps) {
+}: PageViewProps) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [load, setLoad] = useState<PageLoad>({ phase: 'loading' });
@@ -112,24 +112,24 @@ function PageView({
   }, [pageId, pages, documents, scheduler, toasts, t]);
 
   useEffect(() => {
-    function goToNeighbor(event: KeyboardEvent): void {
+    const goToNeighbor = (event: KeyboardEvent): void => {
       if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
       if (isTypingTarget(event.target) || document.querySelector('dialog[open]') !== null) return;
       const targetId = event.key === 'ArrowLeft' ? previousId : event.key === 'ArrowRight' ? nextId : null;
       if (targetId === null) return;
       event.preventDefault();
       void navigate(pagePath(targetId));
-    }
+    };
     document.addEventListener('keydown', goToNeighbor);
     return () => document.removeEventListener('keydown', goToNeighbor);
   }, [previousId, nextId, navigate]);
 
-  function setActing(isNowActing: boolean): void {
+  const setActing = (isNowActing: boolean): void => {
     isActing.current = isNowActing;
     setBusy(isNowActing);
-  }
+  };
 
-  async function act(action: () => Promise<void>, successMessage: string): Promise<void> {
+  const act = async (action: () => Promise<void>, successMessage: string): Promise<void> => {
     if (isActing.current) return;
     setActing(true);
     try {
@@ -141,14 +141,14 @@ function PageView({
       setActing(false);
     }
     await loader.current?.load();
-  }
+  };
 
-  function change(changes: PageChanges, successMessage: string): void {
+  const change = (changes: PageChanges, successMessage: string): void => {
     // act tells its failures in a toast, so its promise never rejects.
     void act(() => pages.updatePage(pageId, changes), successMessage);
-  }
+  };
 
-  async function deletePage(page: PageDetails, destination: PageSummary | null): Promise<void> {
+  const deletePage = async (page: PageDetails, destination: PageSummary | null): Promise<void> => {
     setActing(true);
     try {
       await pages.deletePage(pageId);
@@ -160,7 +160,7 @@ function PageView({
       toasts.show(errorMessage(t, failure, t('Could not delete.')), 'error');
       setActing(false);
     }
-  }
+  };
 
   if (load.phase === 'loading') {
     return (
@@ -261,7 +261,7 @@ function PageView({
       )}
     </section>
   );
-}
+};
 
 interface PageHeaderProps {
   readonly page: PageDetails;
@@ -269,7 +269,7 @@ interface PageHeaderProps {
   readonly neighbors: PageNeighbors;
 }
 
-function PageHeader({ page, documentPages, neighbors }: PageHeaderProps) {
+const PageHeader = ({ page, documentPages, neighbors }: PageHeaderProps) => {
   const { t } = useTranslation();
   const source = numberSourceLabel(t, page.numberSource);
   const status = pageStatusLabel(t, page.status);
@@ -309,7 +309,7 @@ function PageHeader({ page, documentPages, neighbors }: PageHeaderProps) {
       </nav>
     </header>
   );
-}
+};
 
 interface NeighborLinkProps {
   readonly neighbor: PageSummary | null;
@@ -317,7 +317,7 @@ interface NeighborLinkProps {
   readonly children: ReactNode;
 }
 
-function NeighborLink({ neighbor, rel, children }: NeighborLinkProps) {
+const NeighborLink = ({ neighbor, rel, children }: NeighborLinkProps) => {
   const { t } = useTranslation();
   if (neighbor === null) {
     return (
@@ -337,9 +337,9 @@ function NeighborLink({ neighbor, rel, children }: NeighborLinkProps) {
       {children}
     </Link>
   );
-}
+};
 
-function PageNotices({ page }: { readonly page: PageDetails }) {
+const PageNotices = ({ page }: { readonly page: PageDetails }) => {
   const { t } = useTranslation();
   const hasError = page.status === 'error';
   const isDuplicate = page.duplicateOf !== null && page.duplicateOf !== '';
@@ -375,7 +375,7 @@ function PageNotices({ page }: { readonly page: PageDetails }) {
       )}
     </div>
   );
-}
+};
 
 interface PageToolbarProps {
   readonly page: PageDetails;
@@ -389,7 +389,7 @@ interface PageToolbarProps {
   readonly onDelete: () => void;
 }
 
-function PageToolbar({
+const PageToolbar = ({
   page,
   isBusy,
   onSaveNumber,
@@ -399,7 +399,7 @@ function PageToolbar({
   onExclude,
   onReadAgain,
   onDelete,
-}: PageToolbarProps) {
+}: PageToolbarProps) => {
   const { t } = useTranslation();
   const numberId = useId();
   const numberHelpId = useId();
@@ -412,7 +412,7 @@ function PageToolbar({
     input.value = typedNumber === null ? '' : String(typedNumber);
   }, [page]);
 
-  function saveNumber(event: FormEvent<HTMLFormElement>): void {
+  const saveNumber = (event: FormEvent<HTMLFormElement>): void => {
     event.preventDefault();
     const input = numberInput.current;
     if (isBusy || input === null) return;
@@ -423,7 +423,7 @@ function PageToolbar({
       onInvalidNumber();
       input.focus();
     }
-  }
+  };
 
   return (
     <section className="card page-toolbar" aria-label={t('Page actions')}>
@@ -496,7 +496,7 @@ function PageToolbar({
       </div>
     </section>
   );
-}
+};
 
 interface ActionButtonProps {
   readonly className: string;
@@ -507,7 +507,7 @@ interface ActionButtonProps {
   readonly children: ReactNode;
 }
 
-function ActionButton({ className, isUnavailable, onActivate, children }: ActionButtonProps) {
+const ActionButton = ({ className, isUnavailable, onActivate, children }: ActionButtonProps) => {
   return (
     <button
       type="button"
@@ -520,7 +520,7 @@ function ActionButton({ className, isUnavailable, onActivate, children }: Action
       {children}
     </button>
   );
-}
+};
 
 interface IconButtonProps {
   readonly iconName: IconName;
@@ -529,7 +529,7 @@ interface IconButtonProps {
   readonly onActivate: () => void;
 }
 
-function IconButton({ iconName, label, isUnavailable, onActivate }: IconButtonProps) {
+const IconButton = ({ iconName, label, isUnavailable, onActivate }: IconButtonProps) => {
   return (
     <button
       type="button"
@@ -544,4 +544,4 @@ function IconButton({ iconName, label, isUnavailable, onActivate }: IconButtonPr
       <Icon name={iconName} />
     </button>
   );
-}
+};

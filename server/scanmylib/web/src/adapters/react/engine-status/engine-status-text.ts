@@ -26,7 +26,7 @@ export interface EngineBanner {
 
 const MEBIBYTES_PER_GIBIBYTE = 1024;
 
-function displayedEngineState(t: TFunction, engineState: string | null): DisplayedEngineState {
+const displayedEngineState = (t: TFunction, engineState: string | null): DisplayedEngineState => {
   switch (engineState) {
     case 'idle':
       return {
@@ -51,9 +51,9 @@ function displayedEngineState(t: TFunction, engineState: string | null): Display
     default:
       return { label: t('OCR: {{state}}', { state: engineState ?? t('unknown') }), tone: 'neutral', description: '' };
   }
-}
+};
 
-export function engineStateOf(t: TFunction, { connection, status }: EngineStatusState): DisplayedEngineState {
+export const engineStateOf = (t: TFunction, { connection, status }: EngineStatusState): DisplayedEngineState => {
   if (connection === 'offline') {
     return {
       label: t('Server unreachable'),
@@ -63,19 +63,19 @@ export function engineStateOf(t: TFunction, { connection, status }: EngineStatus
   }
   if (status === null) return { label: t('OCR…'), tone: 'neutral', description: '' };
   return displayedEngineState(t, status.engine.isReachable ? status.engine.state : 'unreachable');
-}
+};
 
-export function pendingPagesText(
+export const pendingPagesText = (
   t: TFunction,
   formatting: NumberFormatting,
   { connection, status }: EngineStatusState,
-): string | null {
+): string | null => {
   if (connection === 'offline' || status === null) return null;
   const pendingPages = countPendingPages(status.queue);
   return pendingPages === 0 ? null : t('{{pages}} in queue', { pages: formatting.formatNumber(pendingPages) });
-}
+};
 
-function graphicsMemoryText(t: TFunction, formatting: NumberFormatting, card: GraphicsCard | null): string | null {
+const graphicsMemoryText = (t: TFunction, formatting: NumberFormatting, card: GraphicsCard | null): string | null => {
   const used = card?.memoryUsedMebibytes ?? null;
   const total = card?.memoryTotalMebibytes ?? null;
   if (used === null || total === null || total === 0) return null;
@@ -83,14 +83,14 @@ function graphicsMemoryText(t: TFunction, formatting: NumberFormatting, card: Gr
     used: formatting.formatDecimal(used / MEBIBYTES_PER_GIBIBYTE),
     total: formatting.formatDecimal(total / MEBIBYTES_PER_GIBIBYTE),
   });
-}
+};
 
-export function engineDetails(
+export const engineDetails = (
   t: TFunction,
   formatting: NumberFormatting,
   { connection, status }: EngineStatusState,
   stateLabel: string,
-): EngineDetail[] {
+): EngineDetail[] => {
   const details: { term: string; description: string | null; isPath?: boolean }[] = [
     { term: t('State'), description: stateLabel },
   ];
@@ -127,9 +127,9 @@ export function engineDetails(
   return details.flatMap(({ term, description, isPath = false }) =>
     description === null || description === '' ? [] : [{ term, description, isPath }],
   );
-}
+};
 
-export function engineBanner(t: TFunction, { connection, status }: EngineStatusState): EngineBanner | null {
+export const engineBanner = (t: TFunction, { connection, status }: EngineStatusState): EngineBanner | null => {
   if (connection === 'offline') {
     return {
       title: t('The ScanMyLib server is not responding.'),
@@ -161,4 +161,4 @@ export function engineBanner(t: TFunction, { connection, status }: EngineStatusS
     };
   }
   return null;
-}
+};

@@ -17,7 +17,7 @@ export interface StatusChip {
   readonly tone: ChipTone;
 }
 
-export function statusChips(t: TFunction, document: DocumentSummary): StatusChip[] {
+export const statusChips = (t: TFunction, document: DocumentSummary): StatusChip[] => {
   const { stats } = document;
   const chips: StatusChip[] = [{ name: 'kind', text: documentKindLabel(t, document.kind), tone: 'neutral' }];
   if (stats.processingCount > 0) {
@@ -51,9 +51,9 @@ export function statusChips(t: TFunction, document: DocumentSummary): StatusChip
     chips.push({ name: 'duplicates', text, tone: 'neutral' });
   }
   return chips;
-}
+};
 
-export function coverageText(t: TFunction, coverage: PageCoverage): string {
+export const coverageText = (t: TFunction, coverage: PageCoverage): string => {
   if (coverage.lowestNumber === null) {
     if (coverage.unnumberedCount === 0) return t('No numbered page');
     return t('{{count, number}} unnumbered page', {
@@ -68,18 +68,18 @@ export function coverageText(t: TFunction, coverage: PageCoverage): string {
     parts.push(t('not scanned yet: {{ranges}}', { ranges: formatPageRanges(coverage.gaps) }));
   }
   return parts.join(' · ');
-}
+};
 
-export function progressText(t: TFunction, stats: DocumentStats): string {
+export const progressText = (t: TFunction, stats: DocumentStats): string => {
   const pages = t('{{count, number}} page: text ready', {
     count: stats.pageCount,
     defaultValue_one: '{{count, number}} page: text ready',
     defaultValue_other: '{{count, number}} pages: text ready',
   });
   return `${stats.doneCount} / ${pages}`;
-}
+};
 
-export function librarySummaryText(t: TFunction, documents: readonly DocumentSummary[]): string {
+export const librarySummaryText = (t: TFunction, documents: readonly DocumentSummary[]): string => {
   if (documents.length === 0) return '';
   const documentCount = t('{{count, number}} document', {
     count: documents.length,
@@ -92,4 +92,4 @@ export function librarySummaryText(t: TFunction, documents: readonly DocumentSum
     defaultValue_other: '{{count, number}} pages',
   });
   return `${documentCount} · ${pageCount}`;
-}
+};

@@ -19,19 +19,19 @@ export interface MoveChoice {
 
 type NamedPage = Pick<PageSummary, 'pageLabel'>;
 
-export function conflictText(t: TFunction): string {
+export const conflictText = (t: TFunction): string => {
   return t('The list of pages changed: try again.');
-}
+};
 
 // Unnumbered pages all sound alike to a screen reader: their place in the reading order tells them apart.
-export function pageName(t: TFunction, page: NamedPage, index: number): string {
+export const pageName = (t: TFunction, page: NamedPage, index: number): string => {
   const position = index + 1;
   return page.pageLabel
     ? t('the page at position {{position}} (p. {{label}})', { position, label: page.pageLabel })
     : t('the page at position {{position}} (no number)', { position });
-}
+};
 
-export function selectionStatusText(t: TFunction, selectedCount: number, total: number): string {
+export const selectionStatusText = (t: TFunction, selectedCount: number, total: number): string => {
   if (selectedCount === 0) return t('No page selected');
   return t('{{count, number}} page selected out of {{total}}', {
     count: selectedCount,
@@ -39,34 +39,34 @@ export function selectionStatusText(t: TFunction, selectedCount: number, total: 
     defaultValue_one: '{{count, number}} page selected out of {{total}}',
     defaultValue_other: '{{count, number}} pages selected out of {{total}}',
   });
-}
+};
 
-export function spanLongText(t: TFunction, spanCount: number): string {
+export const spanLongText = (t: TFunction, spanCount: number): string => {
   return t('Select the range ({{count, number}} page)', {
     count: spanCount,
     defaultValue_one: 'Select the range ({{count, number}} page)',
     defaultValue_other: 'Select the range ({{count, number}} pages)',
   });
-}
+};
 
-export function spanShortText(t: TFunction, spanCount: number): string {
+export const spanShortText = (t: TFunction, spanCount: number): string => {
   return t('Range ({{pageCount}})', { pageCount: spanCount });
-}
+};
 
-export function placedHeadingText(t: TFunction, pageCount: number): string {
+export const placedHeadingText = (t: TFunction, pageCount: number): string => {
   return t('Reading order ({{pageCount}})', { pageCount });
-}
+};
 
-export function placedHintText(t: TFunction, pageCount: number, hasPlacedPages: boolean): string {
+export const placedHintText = (t: TFunction, pageCount: number, hasPlacedPages: boolean): string => {
   if (pageCount === 0) return t('No page is in the document yet.');
   return hasPlacedPages ? t('The order of document.md.') : t('No numbered page: capture order.');
-}
+};
 
-export function unplacedHeadingText(t: TFunction, pageCount: number): string {
+export const unplacedHeadingText = (t: TFunction, pageCount: number): string => {
   return t('Unnumbered pages ({{pageCount}})', { pageCount });
-}
+};
 
-export function outsideText(t: TFunction, outsideCount: number): string {
+export const outsideText = (t: TFunction, outsideCount: number): string => {
   return t(
     '{{count}} page is outside the document (waiting to be read, couldn’t be read, excluded or duplicate): it is not affected.',
     {
@@ -77,14 +77,14 @@ export function outsideText(t: TFunction, outsideCount: number): string {
         '{{count}} pages are outside the document (waiting to be read, couldn’t be read, excluded or duplicates): they are not affected.',
     },
   );
-}
+};
 
-export function moveText(
+export const moveText = (
   t: TFunction,
   pages: ReadonlyMap<PageId, PageSummary>,
   order: ReadingOrder,
   moved: readonly PageId[],
-): string {
+): string => {
   const positions = moved.map((pageId) => order.indexOf(pageId) + 1);
   const [first] = moved;
   const page = first === undefined ? undefined : pages.get(first);
@@ -101,9 +101,9 @@ export function moveText(
     last: positions.at(-1),
     total: order.length,
   });
-}
+};
 
-export function organizerNotice(t: TFunction, event: OrganizerEvent): OrganizerNotice {
+export const organizerNotice = (t: TFunction, event: OrganizerEvent): OrganizerNotice => {
   switch (event.kind) {
     case 'conflict':
       return { message: conflictText(t), tone: 'error' };
@@ -117,14 +117,14 @@ export function organizerNotice(t: TFunction, event: OrganizerEvent): OrganizerN
         tone: 'error',
       };
   }
-}
+};
 
-export function moveChoices(
+export const moveChoices = (
   t: TFunction,
   pages: ReadonlyMap<PageId, PageSummary>,
   order: ReadingOrder,
   moving: readonly PageId[],
-): MoveChoice[] {
+): MoveChoice[] => {
   const isMoving = new Set(moving);
   return order.flatMap((pageId, index) => {
     const page = pages.get(pageId);
@@ -132,9 +132,9 @@ export function moveChoices(
     const label = `${index + 1} · ${pageShortLabel(t, { page_label: page.pageLabel })}`;
     return [{ pageId, label, name: pageName(t, page, index) }];
   });
-}
+};
 
-export function selectedPagesText(t: TFunction, count: number): string {
+export const selectedPagesText = (t: TFunction, count: number): string => {
   if (count === 1) return t('1 page selected.');
   const selected = t('{{count, number}} selected page', {
     count,
@@ -142,9 +142,9 @@ export function selectedPagesText(t: TFunction, count: number): string {
     defaultValue_other: '{{count, number}} selected pages',
   });
   return t('{{selected}}, in their current order.', { selected });
-}
+};
 
-export function moveSummaryText(t: TFunction, count: number, side: Side, page: string): string {
+export const moveSummaryText = (t: TFunction, count: number, side: Side, page: string): string => {
   if (count > 1) {
     return side === 'after'
       ? t('The {{pageCount}} pages will go after {{page}}.', { pageCount: count, page })
@@ -153,4 +153,4 @@ export function moveSummaryText(t: TFunction, count: number, side: Side, page: s
   return side === 'after'
     ? t('The page will go after {{page}}.', { page })
     : t('The page will go before {{page}}.', { page });
-}
+};

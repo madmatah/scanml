@@ -13,13 +13,13 @@ const STATIC_DIRECTORY = '../../tmp/build/static';
 
 type Output = Metafile['outputs'][string];
 
-function output(fields: Partial<Output> = {}): Output {
+const output = (fields: Partial<Output> = {}): Output => {
   return { bytes: 1, inputs: {}, imports: [], exports: [], ...fields };
-}
+};
 
-function metafileOf(outputs: Record<string, Output>): Metafile {
+const metafileOf = (outputs: Record<string, Output>): Metafile => {
   return { inputs: {}, outputs };
-}
+};
 
 describe('The build', () => {
   describe('The writeEntryPage() function', () => {

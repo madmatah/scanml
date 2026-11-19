@@ -1,7 +1,7 @@
 import type { PageDetails, PageReading } from '../../domain/page-details.ts';
 import { type ResponseFields, readResponseFields } from './response-fields.ts';
 
-function readPageReading(reading: ResponseFields): PageReading {
+const readPageReading = (reading: ResponseFields): PageReading => {
   return {
     engine: reading.nullableString('engine'),
     durationSeconds: reading.nullableNumber('duration_s'),
@@ -9,9 +9,9 @@ function readPageReading(reading: ResponseFields): PageReading {
     illustrationCount: reading.nullableNumber('images'),
     characterCount: reading.nullableNumber('chars'),
   };
-}
+};
 
-export function decodePageDetails(body: unknown): PageDetails {
+export const decodePageDetails = (body: unknown): PageDetails => {
   const page = readResponseFields(body);
   const reading = page.nullableObject('ocr');
   return {
@@ -41,8 +41,8 @@ export function decodePageDetails(body: unknown): PageDetails {
     imageUrl: page.apiPath('image_url'),
     markdown: page.string('markdown'),
   };
-}
+};
 
-export function decodePageHtml(body: unknown): string {
+export const decodePageHtml = (body: unknown): string => {
   return readResponseFields(body).string('html');
-}
+};

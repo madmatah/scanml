@@ -1,19 +1,12 @@
-import { type FC, useMemo, useRef, useSyncExternalStore } from 'react';
+import { type FC, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import {
-  type CaptureSession,
-  createCaptureSession,
-  inFileNameOrder,
-  summarizeUploads,
-  type UploadItem,
-  type UploadQueue,
-  uploadsOf,
-} from '../../../application/upload-queue.ts';
+import { summarizeUploads, type UploadItem, type UploadQueue } from '../../../application/upload-queue.ts';
 import type { UuidSource } from '../../../application/uuid-source.ts';
 import type { NumberFormatting } from '../../../domain/formatting.ts';
 import { Icon } from '../shell/icon.tsx';
 import { uploadHeadline, uploadProblemText, uploadProgressText, waitingPhotosText } from './upload-text.ts';
+import { useUploader } from './use-uploader.ts';
 
 export interface UploaderProps {
   readonly documentId: string;
@@ -33,23 +26,11 @@ export const Uploader: FC<UploaderProps> = ({ documentId, uploads, uuids, format
   const { t } = useTranslation();
   const filesInput = useRef<HTMLInputElement>(null);
   const cameraInput = useRef<HTMLInputElement>(null);
-  // The successive shots of the camera form one capture session, which another document starts afresh.
-  const cameraSessionRef = useRef<CaptureSession | null>(null);
-  if (cameraSessionRef.current === null) cameraSessionRef.current = createCaptureSession(uuids);
-  const cameraSession = cameraSessionRef.current;
-  const queued = useSyncExternalStore(uploads.subscribe, uploads.getSnapshot);
-  const items = useMemo(() => uploadsOf(queued, documentId), [queued, documentId]);
-
-  const filesChosen = (input: HTMLInputElement): void => {
-    const files = inFileNameOrder(takeFiles(input));
-    if (files.length > 0) uploads.add(documentId, files, { sessionId: uuids.createUuid(), firstSeq: 1 });
-  };
-
-  const photosTaken = (input: HTMLInputElement): void => {
-    const files = takeFiles(input);
-    if (files.length === 0) return;
-    uploads.add(documentId, files, cameraSession.next(files.length));
-  };
+  const { items, onFilesChosen, onPhotosTaken, onRetryFailed, onClearFinished } = useUploader(
+    documentId,
+    uploads,
+    uuids,
+  );
 
   return (
     <div className="uploader">
@@ -73,7 +54,7 @@ export const Uploader: FC<UploaderProps> = ({ documentId, uploads, uuids, format
         multiple
         hidden
         data-upload="files"
-        onChange={(event) => filesChosen(event.currentTarget)}
+        onChange={(event) => onFilesChosen(takeFiles(event.currentTarget))}
       />
       <input
         ref={cameraInput}
@@ -82,21 +63,26 @@ export const Uploader: FC<UploaderProps> = ({ documentId, uploads, uuids, format
         capture="environment"
         hidden
         data-upload="camera"
-        onChange={(event) => photosTaken(event.currentTarget)}
+        onChange={(event) => onPhotosTaken(takeFiles(event.currentTarget))}
       />
-      <UploadPanel documentId={documentId} items={items} uploads={uploads} formatting={formatting} />
+      <UploadPanel
+        items={items}
+        formatting={formatting}
+        onRetryFailed={onRetryFailed}
+        onClearFinished={onClearFinished}
+      />
     </div>
   );
 };
 
 interface UploadPanelProps {
-  readonly documentId: string;
   readonly items: readonly UploadItem[];
-  readonly uploads: UploadQueue<File>;
   readonly formatting: NumberFormatting;
+  readonly onRetryFailed: () => void;
+  readonly onClearFinished: () => void;
 }
 
-const UploadPanel: FC<UploadPanelProps> = ({ documentId, items, uploads, formatting }) => {
+const UploadPanel: FC<UploadPanelProps> = ({ items, formatting, onRetryFailed, onClearFinished }) => {
   const { t } = useTranslation();
   if (items.length === 0) return <div className="upload-panel" hidden />;
   const summary = summarizeUploads(items);
@@ -130,21 +116,11 @@ const UploadPanel: FC<UploadPanelProps> = ({ documentId, items, uploads, formatt
         )}
       </ul>
       <div className="upload-actions">
-        <button
-          type="button"
-          className="btn btn-small"
-          hidden={summary.failed.length === 0}
-          onClick={() => uploads.retryFailed(documentId)}
-        >
+        <button type="button" className="btn btn-small" hidden={summary.failed.length === 0} onClick={onRetryFailed}>
           <Icon name="refresh" />
           {t('Retry failed uploads')}
         </button>
-        <button
-          type="button"
-          className="btn btn-small btn-ghost"
-          hidden={summary.isBusy}
-          onClick={() => uploads.clearFinished(documentId)}
-        >
+        <button type="button" className="btn btn-small btn-ghost" hidden={summary.isBusy} onClick={onClearFinished}>
           {t('Clear the list')}
         </button>
       </div>

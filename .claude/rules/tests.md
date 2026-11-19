@@ -130,8 +130,8 @@ The section of each test framework below gives its own words for them, and how i
   filesystem. The HTTP API runs through FastAPI's test client, against the fake OCR sandbox on a real Unix socket.
 - **Unit tests of the web UI:** beside the module each tests, under `server/scanmylib/web/src/`, as `<module>.test.ts`,
   with `node --test`, on what needs no DOM: the files of the UI that hold none and the constants of the others; the
-  tests of its build, its translation catalogs and its icons, which test no module of `src/`, sit at the web UI's root,
-  beside `build.ts`, never under `static/`, which the api serves.
+  tests of its build, its Biome plugins, its translation catalogs and its icons, which test no module of `src/`, sit at
+  the web UI's root, beside `build.ts`, never under `static/`, which the api serves.
 - **Unit tests of the OCR sandbox:** `ocr/tests/`, with `unittest`, in the sandbox's image, without network or models;
   the tests that need an engine's environment skip without it, as in the gate and so in the CI, and run apart, with
   that environment, when the `running-tests` skill says.

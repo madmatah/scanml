@@ -209,7 +209,8 @@ check_web() {
     web_tools=$(build_web_tools)
     # The build writes into a tmpfs and is then dropped: a broken build or entry page fails the gate.
     run_web_tool --tmpfs /tmp "$web_tools" node build.ts --outdir /tmp/build
-    run_web_tool "$web_tools" node --test '*.test.ts' 'src/**/*.test.ts'
+    # The tests of the Biome plugins write their samples, beside a copy of Biome's configuration, into a tmpfs.
+    run_web_tool --tmpfs /tmp "$web_tools" node --test '*.test.ts' 'src/**/*.test.ts'
 }
 
 check_server() {

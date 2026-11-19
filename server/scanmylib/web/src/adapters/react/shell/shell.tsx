@@ -20,7 +20,15 @@ import { settledUploadsText } from '../uploads/upload-text.ts';
 import { errorMessage } from './error-message.ts';
 import { Header } from './header.tsx';
 import { LoadingState } from './loading-state.tsx';
-import { type Access, PATHS, type RouteName, redirectFor, routeNameOf, sectionOf } from './navigation.ts';
+import {
+  NO_RETURN_MEMORY,
+  navigationFor,
+  type ReturnMemory,
+  type RouteName,
+  redirectFor,
+  routeNameOf,
+  sectionOf,
+} from './navigation.ts';
 import { ToastRegion } from './toast-region.tsx';
 import type { Toasts } from './toasts.ts';
 
@@ -54,9 +62,8 @@ export const Shell: FC<{ readonly services: ShellServices }> = ({ services }) =>
   const navigate = useNavigate();
   const route = useRouteName();
   const main = useRef<HTMLElement>(null);
-  const returnTo = useRef<string | null>(null);
+  const returnMemory = useRef<ReturnMemory>(NO_RETURN_MEMORY);
   const hasShownScreen = useRef(false);
-  const hasJustSignedOut = useRef(false);
   const [isConfirmingSignOut, setConfirmingSignOut] = useState(false);
   const isLoading = state.phase === 'loading';
   const isSignedIn = state.phase === 'signed-in';
@@ -66,19 +73,9 @@ export const Shell: FC<{ readonly services: ShellServices }> = ({ services }) =>
 
   useEffect(() => {
     if (isLoading) return;
-    let access: Access = 'signed-in';
-    if (!isSignedIn) access = hasJustSignedOut.current ? 'just-signed-out' : 'signed-out';
-    const redirect = redirectFor(access, route, location.pathname);
-    if (redirect === null) return;
-    if (redirect.to === 'login') {
-      hasJustSignedOut.current = false;
-      returnTo.current = redirect.returnTo;
-      void navigate(PATHS.login, { replace: redirect.replacesEntry });
-    } else {
-      const target = returnTo.current ?? PATHS.home;
-      returnTo.current = null;
-      void navigate(target, { replace: true });
-    }
+    const { navigation, memory } = navigationFor(returnMemory.current, isSignedIn, route, location.pathname);
+    returnMemory.current = memory;
+    if (navigation !== null) void navigate(navigation.path, { replace: navigation.replacesEntry });
   }, [isLoading, isSignedIn, route, location.pathname, navigate]);
 
   // Uploads go on from one screen to the next: their outcome is told wherever the user is.
@@ -100,11 +97,11 @@ export const Shell: FC<{ readonly services: ShellServices }> = ({ services }) =>
   }, [screenKey]);
 
   const signOut = async (): Promise<void> => {
-    hasJustSignedOut.current = true;
+    returnMemory.current = { ...returnMemory.current, hasJustSignedOut: true };
     try {
       await session.signOut();
     } catch (failure) {
-      hasJustSignedOut.current = false;
+      returnMemory.current = { ...returnMemory.current, hasJustSignedOut: false };
       toasts.show(errorMessage(t, failure, t('Could not sign out.')), 'error');
     }
   };

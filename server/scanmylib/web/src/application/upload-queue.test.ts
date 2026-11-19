@@ -12,6 +12,7 @@ import {
   type UploadItem,
   type UploadQueue,
   type UploadSummary,
+  watchSentUploads,
 } from './upload-queue.ts';
 import { createCountingUuidSource } from './uuid-source.test-support.ts';
 
@@ -342,6 +343,98 @@ describe('The upload queue', () => {
 
       it('should remove its sent, failed and refused photos, and keep the running ones and other documents', () => {
         assert.deepEqual(statesOf(arrangement.queue.getSnapshot()), ['IMG_0009.jpg: sent', 'IMG_0003.jpg: uploading']);
+      });
+    });
+  });
+
+  describe('The watchSentUploads() function', () => {
+    describe('When a photo of the document is sent, after telling its progress', () => {
+      let moreSentCount: number;
+      beforeEach(async () => {
+        const { uploader, queue } = arrange();
+        moreSentCount = 0;
+        watchSentUploads(queue, DOCUMENT_ID, () => {
+          moreSentCount += 1;
+        });
+        queue.add(DOCUMENT_ID, [photo('IMG_0001.jpg')], { sessionId: SESSION_ID, firstSeq: 1 });
+        uploader.started[0]?.reportProgress(0.5);
+        await uploader.started[0]?.succeed();
+      });
+
+      it('should tell it once, when it is sent, and not while it goes', () => {
+        assert.equal(moreSentCount, 1);
+      });
+    });
+
+    describe('When a photo of another document is sent', () => {
+      let moreSentCount: number;
+      beforeEach(async () => {
+        const { uploader, queue } = arrange();
+        moreSentCount = 0;
+        watchSentUploads(queue, DOCUMENT_ID, () => {
+          moreSentCount += 1;
+        });
+        queue.add(OTHER_DOCUMENT_ID, [photo('IMG_0001.jpg')], { sessionId: SESSION_ID, firstSeq: 1 });
+        await uploader.started[0]?.succeed();
+      });
+
+      it('should not tell it, since that document has no page more', () => {
+        assert.equal(moreSentCount, 0);
+      });
+    });
+
+    describe('When the upload of a photo of the document fails', () => {
+      let moreSentCount: number;
+      beforeEach(async () => {
+        const { uploader, queue } = arrange();
+        moreSentCount = 0;
+        watchSentUploads(queue, DOCUMENT_ID, () => {
+          moreSentCount += 1;
+        });
+        queue.add(DOCUMENT_ID, [photo('IMG_0001.jpg')], { sessionId: SESSION_ID, firstSeq: 1 });
+        await uploader.started[0]?.fail(new NetworkError());
+      });
+
+      it('should not tell it, since no page was added', () => {
+        assert.equal(moreSentCount, 0);
+      });
+    });
+
+    describe('When the list, which held a photo sent before the watch, is cleared, then another photo is sent', () => {
+      let moreSentCount: number;
+      beforeEach(async () => {
+        const { uploader, queue } = arrange();
+        queue.add(DOCUMENT_ID, [photo('IMG_0001.jpg')], { sessionId: SESSION_ID, firstSeq: 1 });
+        await uploader.started[0]?.succeed();
+        moreSentCount = 0;
+        watchSentUploads(queue, DOCUMENT_ID, () => {
+          moreSentCount += 1;
+        });
+        queue.clearFinished(DOCUMENT_ID);
+        queue.add(DOCUMENT_ID, [photo('IMG_0002.jpg')], { sessionId: SESSION_ID, firstSeq: 2 });
+        await uploader.started[1]?.succeed();
+      });
+
+      it('should tell it, though the list holds no more sent photos than when the watch started', () => {
+        assert.equal(moreSentCount, 1);
+      });
+    });
+
+    describe('When the watch has stopped', () => {
+      let moreSentCount: number;
+      beforeEach(async () => {
+        const { uploader, queue } = arrange();
+        moreSentCount = 0;
+        const stopWatching = watchSentUploads(queue, DOCUMENT_ID, () => {
+          moreSentCount += 1;
+        });
+        stopWatching();
+        queue.add(DOCUMENT_ID, [photo('IMG_0001.jpg')], { sessionId: SESSION_ID, firstSeq: 1 });
+        await uploader.started[0]?.succeed();
+      });
+
+      it('should no longer tell the photos sent', () => {
+        assert.equal(moreSentCount, 0);
       });
     });
   });

@@ -14,7 +14,7 @@ import type { DocumentStore } from '../../../application/document-store.ts';
 import type { EngineStatus } from '../../../application/engine-status.ts';
 import { watchQueueMoves } from '../../../application/queue-moves.ts';
 import type { Scheduler } from '../../../application/scheduler.ts';
-import { sentCountOf, type UploadQueue } from '../../../application/upload-queue.ts';
+import { type UploadQueue, watchSentUploads } from '../../../application/upload-queue.ts';
 import type { UuidSource } from '../../../application/uuid-source.ts';
 import { canOrganize, type DocumentDetails, type DocumentWithPages } from '../../../domain/document-details.ts';
 import type { NumberFormatting } from '../../../domain/formatting.ts';
@@ -108,12 +108,7 @@ const DocumentView: FC<DocumentViewProps> = ({
       from: engineStatus.getSnapshot().status,
     });
     // The pages of the photos sent from this screen show shortly after their upload.
-    let sentCount = sentCountOf(uploads.getSnapshot(), documentId);
-    const stopWatchingUploads = uploads.subscribe(() => {
-      const nextSentCount = sentCountOf(uploads.getSnapshot(), documentId);
-      if (nextSentCount > sentCount) documentLoader.loadAfterUpload();
-      sentCount = nextSentCount;
-    });
+    const stopWatchingUploads = watchSentUploads(uploads, documentId, () => documentLoader.loadAfterUpload());
     loader.current = documentLoader;
     documentLoader.load();
     return () => {

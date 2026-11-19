@@ -109,8 +109,21 @@ export const uploadsOf = (items: readonly UploadItem[], documentId: string): Upl
   return items.filter((item) => item.documentId === documentId);
 };
 
-export const sentCountOf = (items: readonly UploadItem[], documentId: string): number => {
+const sentCountOf = (items: readonly UploadItem[], documentId: string): number => {
   return items.filter((item) => item.documentId === documentId && item.state === 'sent').length;
+};
+
+export const watchSentUploads = (
+  queue: Pick<UploadQueue<PhotoFile>, 'subscribe' | 'getSnapshot'>,
+  documentId: string,
+  onMoreSent: () => void,
+): (() => void) => {
+  let sentCount = sentCountOf(queue.getSnapshot(), documentId);
+  return queue.subscribe(() => {
+    const nextSentCount = sentCountOf(queue.getSnapshot(), documentId);
+    if (nextSentCount > sentCount) onMoreSent();
+    sentCount = nextSentCount;
+  });
 };
 
 // The names that cameras and scanners give their files sort in shooting order.

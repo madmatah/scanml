@@ -32,7 +32,7 @@ import { Icon } from '../shell/icon.tsx';
 import type { Toasts } from '../shell/toasts.ts';
 import { versionedUrl } from '../shell/versioned-url.ts';
 import type { GestureOutcome } from './drag-gesture.ts';
-import { MoveDialog, type MoveTarget } from './move-dialog.tsx';
+import { MoveDialog } from './move-dialog.tsx';
 import {
   conflictText,
   type MoveChoice,
@@ -49,6 +49,7 @@ import {
   unplacedHeadingText,
 } from './organizer-text.ts';
 import { createPageDrag } from './page-drag.ts';
+import type { MoveTarget } from './use-move-dialog.ts';
 
 export interface PageOrganizerProps {
   readonly document: DocumentWithPages;

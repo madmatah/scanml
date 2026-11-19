@@ -39,8 +39,7 @@ From the TypeScript handbook and React's "Rules of React" (react.dev).
 - **No `as` cast on outside data:** the api client checks the shape of each response before it becomes a typed value.
 - **Layout:** 2-space indentation, semicolons, single quotes, template literals for interpolation, 120 columns.
 - **Casing:** `camelCase` for functions and variables, `PascalCase` for types and components, `UPPER_SNAKE_CASE` for
-  module constants. Files are named in `kebab-case` (`page-organizer.tsx`), and their tests `<module>.test.ts`. Acronyms
-  are written as words (`ApiError`).
+  module constants. Files are named in `kebab-case` (`page-organizer.tsx`). Acronyms are written as words (`ApiError`).
 - **`async` and `await`, and no floating promise:** every promise is awaited, or handled where it is created.
 - **Every text of the UI goes through `t()`** (the translation function), so that its French translation lives in the
   catalog, as `CLAUDE.md` > Language says.

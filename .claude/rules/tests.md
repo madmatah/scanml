@@ -2,7 +2,9 @@
 paths:
   - "server/tests/**"
   - "server/scanmylib/devtools/**"
-  - "server/scanmylib/web/tests/**"
+  - "server/scanmylib/web/*.test.ts"
+  - "server/scanmylib/web/src/**/*.test.ts"
+  - "server/scanmylib/web/src/**/*.test-support.ts"
   - "ocr/tests/**"
   - "ocr/bench/**"
   - "android/app/src/test/**"
@@ -126,8 +128,10 @@ The section of each test framework below gives its own words for them, and how i
 
 - **Unit tests of the api:** `server/tests/`, with pytest, in the api's test image, without network and on a read-only
   filesystem. The HTTP API runs through FastAPI's test client, against the fake OCR sandbox on a real Unix socket.
-- **Unit tests of the web UI:** `server/scanmylib/web/tests/`, with `node --test`, on what needs no DOM: the files of
-  the UI that hold none, the constants of the others, its translation catalog and its icons.
+- **Unit tests of the web UI:** beside the module each tests, under `server/scanmylib/web/src/`, as `<module>.test.ts`,
+  with `node --test`, on what needs no DOM: the files of the UI that hold none and the constants of the others; the
+  tests of its build, its translation catalogs and its icons, which test no module of `src/`, sit at the web UI's root,
+  beside `build.ts`, never under `static/`, which the api serves.
 - **Unit tests of the OCR sandbox:** `ocr/tests/`, with `unittest`, in the sandbox's image, without network or models;
   the tests that need an engine's environment skip without it, as in the gate and so in the CI, and run apart, with
   that environment, when the `running-tests` skill says.
@@ -168,7 +172,14 @@ The section of each test framework below gives its own words for them, and how i
   the real adapter refuses, so that the code under test behaves the same on it as on the real adapter.
 - **Only tests import test support.** The fake OCR sandbox (`server/scanmylib/devtools/fake_ocr.py`) is the exception:
   it ships in the api's image, since the development stack runs it as `ocr-fake`, and it refuses the production project
-  and a socket that a real sandbox serves. Every other piece of test support lives in a test directory.
+  and a socket that a real sandbox serves. Every other piece of test support lives in a test directory, but the web
+  UI's.
+- **The web UI's test support is named `<module>.test-support.ts`,** beside the module whose tests it serves: the fakes
+  of the ports that the module declares, or samples of the values it defines. That name, with `.test.ts` for the
+  tests, is how the tools tell test code from the UI: the app's `tsconfig.json`, whose types are the browser's, leaves
+  it out, since test support may need Node's, such as `setImmediate`, and `tsconfig.tools.json` checks it with Node's;
+  i18next-cli extracts no text from it; and `server/.dockerignore` keeps it out of the api's build context, so that the
+  build of the api's image fails on a module of the UI that imports it.
 - **A test that runs git in a repository of its own drops the `GIT_` variables it inherits:** `git rebase --exec`, which
   checks each commit of a branch, exports `GIT_DIR` when it runs in a worktree, and the test's git would then work on
   the repository under rebase instead of its own. The unit tests of the scripts build their git environment with
@@ -310,8 +321,8 @@ class TheReleaseCodeFunctionWhenTheMinorVersionChanges(unittest.TestCase):
 
 ## node:test
 
-The web UI's tests, in `server/scanmylib/web/tests/`, run on Node's own runner, `node --test`, with
-`node:assert/strict`.
+The web UI's tests, the `*.test.ts` files beside its modules and at its root, run on Node's own runner,
+`node --test`, with `node:assert/strict`.
 
 - **Its words:** `describe`, `it`, `beforeEach` and `before`, imported from `node:test`, with `afterEach` and `after`
   for teardown. For the first test of a nested group, the parent's `before` runs, then the group's `before`, then the

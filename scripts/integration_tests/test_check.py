@@ -349,7 +349,7 @@ class WhenGivenAreas(InstallationTestCase):
         self.assertTrue(self.checks[3].endswith("node build.ts --outdir /tmp/build"), self.checks[3])
 
     def test_should_run_the_typescript_tests_of_the_web_ui(self) -> None:
-        self.assertTrue(self.checks[4].endswith("node --test tests/**/*.test.ts"), self.checks[4])
+        self.assertTrue(self.checks[4].endswith("node --test *.test.ts src/**/*.test.ts"), self.checks[4])
 
 
 class WhenGivenTheWebUiTheApiAndTheSandbox(InstallationTestCase):

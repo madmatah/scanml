@@ -5,5 +5,5 @@
     "types": ["node"],
     "skipLibCheck": true
   },
-  "include": ["tests/**/*.ts", "i18next.config.ts", "build.ts"]
+  "include": ["*.test.ts", "src/**/*.test.ts", "src/**/*.test-support.ts", "i18next.config.ts", "build.ts"]
 }

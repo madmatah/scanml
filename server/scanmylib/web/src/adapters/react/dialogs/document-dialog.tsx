@@ -1,20 +1,11 @@
-import { type FormEvent, useId, useRef, useState } from 'react';
+import { useId } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
 import type { DocumentFields } from '../../../application/document-catalog.ts';
 import { documentKindChoices } from '../../i18next/document-labels.ts';
-import { errorMessage } from '../shell/error-message.ts';
-import {
-  type DocumentForm,
-  type EditedDocument,
-  editedDocumentForm,
-  newDocumentForm,
-  submittedForm,
-  withKind,
-  withUnwarp,
-} from './document-form.ts';
-import { useModal } from './use-modal.ts';
+import type { EditedDocument } from './document-form.ts';
+import { useDocumentDialog } from './use-document-dialog.ts';
 
 export interface DocumentDialogProps<Saved> {
   readonly heading: string;
@@ -39,41 +30,21 @@ export const DocumentDialog = <Saved,>({
 }: DocumentDialogProps<Saved>) => {
   const { t } = useTranslation();
   const ids = { heading: useId(), title: useId(), author: useId(), notes: useId(), unwarpHint: useId() };
-  const dialog = useRef<HTMLDialogElement>(null);
-  const titleInput = useRef<HTMLInputElement>(null);
-  const saved = useRef<{ readonly answer: Saved } | null>(null);
-  const [form, setForm] = useState<DocumentForm>(() =>
-    initial === undefined ? newDocumentForm(showsNotes) : editedDocumentForm(initial, showsNotes),
-  );
-  const [error, setError] = useState<string | null>(null);
-  const [isBusy, setBusy] = useState(false);
-  const returnFocus = useModal(dialog, titleInput);
-
-  const save = async (fields: DocumentFields): Promise<void> => {
-    setBusy(true);
-    setError(null);
-    try {
-      saved.current = { answer: await onSubmit(fields) };
-      dialog.current?.close();
-    } catch (failure) {
-      setError(errorMessage(t, failure, t('Could not save.')));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const submit = (event: FormEvent<HTMLFormElement>): void => {
-    event.preventDefault();
-    if (isBusy) return;
-    const submitted = submittedForm(form);
-    if ('missing' in submitted) {
-      setError(t('The title is required.'));
-      titleInput.current?.focus();
-      return;
-    }
-    // save shows its own failures in the dialog, so its promise never rejects.
-    void save(submitted.fields);
-  };
+  const {
+    dialog,
+    titleInput,
+    form,
+    error,
+    isBusy,
+    onTitleChange,
+    onAuthorChange,
+    onKindChange,
+    onUnwarpChange,
+    onNotesChange,
+    onFormSubmit,
+    onCancel,
+    onClose,
+  } = useDocumentDialog(initial, showsNotes, onSubmit, onClosed);
 
   // aria-disabled rather than disabled, so that the focused button keeps the focus while the request is sent.
   const busyState = isBusy ? 'true' : undefined;
@@ -87,12 +58,16 @@ export const DocumentDialog = <Saved,>({
         // Escape must not drop a request that is being sent.
         if (isBusy) event.preventDefault();
       }}
-      onClose={() => {
-        returnFocus();
-        onClosed(saved.current === null ? null : saved.current.answer);
-      }}
+      onClose={onClose}
     >
-      <form className="dialog-body" noValidate onSubmit={submit}>
+      <form
+        className="dialog-body"
+        noValidate
+        onSubmit={(event) => {
+          event.preventDefault();
+          onFormSubmit();
+        }}
+      >
         <h2 id={ids.heading} className="dialog-title">
           {heading}
         </h2>
@@ -107,10 +82,7 @@ export const DocumentDialog = <Saved,>({
             maxLength={TEXT_MAXIMUM_LENGTH}
             autoComplete="off"
             value={form.title}
-            onChange={(event) => {
-              setForm({ ...form, title: event.target.value });
-              setError(null);
-            }}
+            onChange={(event) => onTitleChange(event.target.value)}
           />
         </div>
         <div className="field">
@@ -124,7 +96,7 @@ export const DocumentDialog = <Saved,>({
             maxLength={TEXT_MAXIMUM_LENGTH}
             autoComplete="off"
             value={form.author}
-            onChange={(event) => setForm({ ...form, author: event.target.value })}
+            onChange={(event) => onAuthorChange(event.target.value)}
           />
         </div>
         <fieldset className="field">
@@ -137,7 +109,7 @@ export const DocumentDialog = <Saved,>({
                   name="kind"
                   value={kind}
                   checked={form.kind === kind}
-                  onChange={() => setForm(withKind(form, kind))}
+                  onChange={() => onKindChange(kind)}
                 />
                 <span>{label}</span>
               </label>
@@ -150,7 +122,7 @@ export const DocumentDialog = <Saved,>({
             name="unwarp"
             aria-describedby={ids.unwarpHint}
             checked={form.unwarp}
-            onChange={(event) => setForm(withUnwarp(form, event.target.checked))}
+            onChange={(event) => onUnwarpChange(event.target.checked)}
           />
           <span>
             <span className="checkbox-label">{t('Flatten curved pages')}</span>
@@ -171,7 +143,7 @@ export const DocumentDialog = <Saved,>({
               rows={NOTES_ROWS}
               maxLength={NOTES_MAXIMUM_LENGTH}
               value={form.notes}
-              onChange={(event) => setForm({ ...form, notes: event.target.value })}
+              onChange={(event) => onNotesChange(event.target.value)}
             />
           </div>
         )}
@@ -179,14 +151,7 @@ export const DocumentDialog = <Saved,>({
           {error ?? ''}
         </p>
         <div className="dialog-actions">
-          <button
-            type="button"
-            className="btn"
-            aria-disabled={busyState}
-            onClick={() => {
-              if (!isBusy) dialog.current?.close();
-            }}
-          >
+          <button type="button" className="btn" aria-disabled={busyState} onClick={onCancel}>
             {t('Cancel')}
           </button>
           <button type="submit" className="btn btn-primary" aria-disabled={busyState}>

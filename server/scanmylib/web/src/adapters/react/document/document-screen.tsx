@@ -1,24 +1,16 @@
-import { type FC, type ReactNode, type RefObject, useEffect, useId, useRef, useState } from 'react';
-import { flushSync } from 'react-dom';
+import { type FC, type ReactNode, type RefObject, useId } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useNavigate, useParams } from 'react-router';
+import { Link } from 'react-router';
 
 import type { Clipboard } from '../../../application/clipboard.ts';
-import {
-  createDocumentLoader,
-  type DocumentLoad,
-  type DocumentLoader,
-  isNotFound,
-} from '../../../application/document-loader.ts';
+import { isNotFound } from '../../../application/document-loader.ts';
 import type { DocumentStore } from '../../../application/document-store.ts';
 import type { EngineStatus } from '../../../application/engine-status.ts';
-import { watchQueueMoves } from '../../../application/queue-moves.ts';
 import type { Scheduler } from '../../../application/scheduler.ts';
-import { type UploadQueue, watchSentUploads } from '../../../application/upload-queue.ts';
+import type { UploadQueue } from '../../../application/upload-queue.ts';
 import type { UuidSource } from '../../../application/uuid-source.ts';
-import { canOrganize, type DocumentDetails, type DocumentWithPages } from '../../../domain/document-details.ts';
+import { canOrganize, type DocumentWithPages } from '../../../domain/document-details.ts';
 import type { NumberFormatting } from '../../../domain/formatting.ts';
-import type { ReadingOrder } from '../../../domain/reading-order.ts';
 import { documentKindLabel } from '../../i18next/document-labels.ts';
 import { quoted } from '../../i18next/formatted-text.ts';
 import { ConfirmDialog } from '../dialogs/confirm-dialog.tsx';
@@ -29,12 +21,14 @@ import { errorMessage } from '../shell/error-message.ts';
 import { ErrorState } from '../shell/error-state.tsx';
 import { Icon } from '../shell/icon.tsx';
 import { LoadingState } from '../shell/loading-state.tsx';
-import { documentTitle, idOfAddress, PATHS, readerPath } from '../shell/navigation.ts';
+import { PATHS, readerPath } from '../shell/navigation.ts';
 import type { Toasts } from '../shell/toasts.ts';
+import { useRouteId } from '../shell/use-route-id.ts';
 import { Uploader } from '../uploads/uploader.tsx';
 import { Coverage } from './coverage.tsx';
 import { type StatTone, statTiles } from './document-text.ts';
 import { PageGrid } from './page-grid.tsx';
+import { useDocumentScreen } from './use-document-screen.ts';
 
 export interface DocumentScreenProps {
   readonly store: DocumentStore;
@@ -47,14 +41,12 @@ export interface DocumentScreenProps {
   readonly uuids: UuidSource;
 }
 
-type OpenDialog = 'edit' | 'delete' | null;
-
 // A file name, the same in every language.
 const MARKDOWN_FILE_NAME = 'document.md';
 
 // Each document has a screen of its own, so that going from one to another starts the next one afresh.
 export const DocumentScreen: FC<DocumentScreenProps> = (props) => {
-  const documentId = idOfAddress(useParams().documentId);
+  const documentId = useRouteId('documentId');
   if (documentId === null) return null;
   return <DocumentView key={documentId} documentId={documentId} {...props} />;
 };
@@ -75,85 +67,28 @@ const DocumentView: FC<DocumentViewProps> = ({
   uuids,
 }) => {
   const { t } = useTranslation();
-  const navigate = useNavigate();
-  const [load, setLoad] = useState<DocumentLoad>({ phase: 'loading' });
-  const [openDialog, setOpenDialog] = useState<OpenDialog>(null);
-  const [isOrganizing, setOrganizing] = useState(false);
-  const loader = useRef<DocumentLoader | null>(null);
-  const heading = useRef<HTMLHeadingElement>(null);
-  const organizeButton = useRef<HTMLButtonElement>(null);
-  const title = load.phase === 'loaded' ? load.document.title : null;
-
-  // The title of the previous screen stays until the document's own is known.
-  useEffect(() => {
-    if (title !== null) document.title = documentTitle(title);
-  }, [title]);
-
-  useEffect(() => {
-    const leaving = new AbortController();
-    const documentLoader = createDocumentLoader({
-      read: (signal) => store.readDocument(documentId, signal),
-      scheduler,
-      isUploading: () => uploads.isBusy(documentId),
-      leaving: leaving.signal,
-      onChange: setLoad,
-      onDeleted: () => {
-        toasts.show(t('This document has been deleted.'), 'error');
-        void navigate(PATHS.home, { replace: true });
-      },
-    });
-    // New pages from the phone, or pages whose text is now read, show without waiting for a refresh, counted from the
-    // last known status, so that a page read before the first poll after opening is not missed.
-    const stopWatchingQueue = watchQueueMoves(engineStatus, () => documentLoader.load(), {
-      from: engineStatus.getSnapshot().status,
-    });
-    // The pages of the photos sent from this screen show shortly after their upload.
-    const stopWatchingUploads = watchSentUploads(uploads, documentId, () => documentLoader.loadAfterUpload());
-    loader.current = documentLoader;
-    documentLoader.load();
-    return () => {
-      leaving.abort();
-      stopWatchingQueue();
-      stopWatchingUploads();
-    };
-  }, [documentId, store, engineStatus, scheduler, uploads, toasts, t, navigate]);
-
-  const edited = (saved: DocumentDetails | null): void => {
-    setOpenDialog(null);
-    if (saved === null || load.phase !== 'loaded') return;
-    loader.current?.replace({ ...saved, pages: load.document.pages });
-    toasts.show(t('Details saved.'), 'success');
-  };
-
-  const deleteDocument = async (deletedTitle: string): Promise<void> => {
-    try {
-      await store.deleteDocument(documentId);
-      toasts.show(t('Document {{title}} moved to the trash.', { title: quoted(t, deletedTitle) }), 'success');
-      await navigate(PATHS.home, { replace: true });
-    } catch (failure) {
-      toasts.show(errorMessage(t, failure, t('Could not delete.')), 'error');
-    }
-  };
-
-  // A change of the order and a refresh cannot cross: the loader tells them apart.
-  const writeOrder = async (request: () => Promise<DocumentWithPages>): Promise<DocumentWithPages> => {
-    const documentLoader = loader.current;
-    if (documentLoader === null) throw new Error('The document is organized before it is loaded');
-    return await documentLoader.writeOrder(request);
-  };
-
-  const stopOrganizing = (): void => {
-    flushSync(() => setOrganizing(false));
-    const button = organizeButton.current;
-    // The button stays hidden when too few pages are left to organize.
-    (button === null || button.hidden ? heading.current : button)?.focus();
-  };
-
-  const deleteClosed = (isConfirmed: boolean, deletedTitle: string): void => {
-    setOpenDialog(null);
-    // deleteDocument tells its failures in a toast, so its promise never rejects.
-    if (isConfirmed) void deleteDocument(deletedTitle);
-  };
+  const {
+    load,
+    openDialog,
+    isOrganizing,
+    includesScans,
+    markdownUrl,
+    archiveUrl,
+    heading,
+    organizeButton,
+    onEdit,
+    onDelete,
+    onSaveDetails,
+    onEditClosed,
+    onDeleteClosed,
+    onOrganize,
+    onSaveOrder,
+    onResetOrder,
+    onReload,
+    onDoneOrganizing,
+    onIncludesScansChange,
+    onCopyFolder,
+  } = useDocumentScreen(documentId, { store, engineStatus, scheduler, toasts, clipboard, uploads });
 
   if (load.phase === 'loading') {
     return (
@@ -169,7 +104,7 @@ const DocumentView: FC<DocumentViewProps> = ({
         <ErrorState
           title={isMissing ? t('Document not found') : t('Could not load')}
           message={isMissing ? t('This document does not exist or has been deleted.') : errorMessage(t, load.failure)}
-          {...(isMissing ? {} : { onRetry: () => loader.current?.load() })}
+          {...(isMissing ? {} : { onRetry: onReload })}
           actions={
             <Link className="btn" to={PATHS.home}>
               {t('Back to the library')}
@@ -211,11 +146,11 @@ const DocumentView: FC<DocumentViewProps> = ({
             <Icon name="book" />
             {t('Read document')}
           </Link>
-          <button type="button" className="btn" onClick={() => setOpenDialog('edit')}>
+          <button type="button" className="btn" onClick={onEdit}>
             <Icon name="edit" />
             {t('Edit')}
           </button>
-          <button type="button" className="btn btn-danger" onClick={() => setOpenDialog('delete')}>
+          <button type="button" className="btn btn-danger" onClick={onDelete}>
             <Icon name="trash" />
             {t('Delete')}
           </button>
@@ -223,26 +158,28 @@ const DocumentView: FC<DocumentViewProps> = ({
       </header>
       <DocumentOverview
         document={shown}
-        store={store}
-        toasts={toasts}
-        clipboard={clipboard}
+        markdownUrl={markdownUrl}
+        archiveUrl={archiveUrl}
+        includesScans={includesScans}
         formatting={formatting}
         uploads={uploads}
         uuids={uuids}
+        onIncludesScansChange={onIncludesScansChange}
+        onCopyFolder={onCopyFolder}
       />
       <PagesSection
         document={shown}
         organizeButton={organizeButton}
-        onOrganize={isOrganizing ? null : () => setOrganizing(true)}
+        onOrganize={isOrganizing ? null : onOrganize}
         organizer={
           isOrganizing && (
             <PageOrganizer
               document={shown}
-              save={(order: ReadingOrder) => writeOrder(() => store.reorderPages(documentId, order))}
-              reset={() => writeOrder(() => store.resetPageOrder(documentId))}
-              reload={() => loader.current?.load()}
+              save={onSaveOrder}
+              reset={onResetOrder}
+              reload={onReload}
               toasts={toasts}
-              onDone={stopOrganizing}
+              onDone={onDoneOrganizing}
             />
           )
         }
@@ -253,8 +190,8 @@ const DocumentView: FC<DocumentViewProps> = ({
           submitLabel={t('Save')}
           initial={shown}
           showsNotes
-          onSubmit={(fields) => store.updateDocument(documentId, fields)}
-          onClosed={edited}
+          onSubmit={onSaveDetails}
+          onClosed={onEditClosed}
         />
       )}
       {openDialog === 'delete' && (
@@ -265,7 +202,7 @@ const DocumentView: FC<DocumentViewProps> = ({
           )}
           confirmLabel={t('Delete document')}
           isDanger
-          onClosed={(isConfirmed) => deleteClosed(isConfirmed, shown.title)}
+          onClosed={(isConfirmed) => onDeleteClosed(isConfirmed, shown.title)}
         />
       )}
     </section>
@@ -274,31 +211,29 @@ const DocumentView: FC<DocumentViewProps> = ({
 
 interface DocumentOverviewProps {
   readonly document: DocumentWithPages;
-  readonly store: DocumentStore;
-  readonly toasts: Toasts;
-  readonly clipboard: Clipboard;
+  readonly markdownUrl: string;
+  readonly archiveUrl: string;
+  readonly includesScans: boolean;
   readonly formatting: NumberFormatting;
   readonly uploads: UploadQueue<File>;
   readonly uuids: UuidSource;
+  readonly onIncludesScansChange: (includesScans: boolean) => void;
+  readonly onCopyFolder: (folder: string) => void;
 }
 
 const DocumentOverview: FC<DocumentOverviewProps> = ({
   document,
-  store,
-  toasts,
-  clipboard,
+  markdownUrl,
+  archiveUrl,
+  includesScans,
   formatting,
   uploads,
   uuids,
+  onIncludesScansChange,
+  onCopyFolder,
 }) => {
   const { t } = useTranslation();
   const withScansId = useId();
-  const [includesScans, setIncludesScans] = useState(false);
-
-  const copyFolder = async (): Promise<void> => {
-    if (await clipboard.copyText(document.folder)) toasts.show(t('Folder path copied.'), 'success');
-    else toasts.show(t('Could not copy: select the path by hand.'), 'error');
-  };
 
   return (
     <div className="doc-overview">
@@ -330,11 +265,11 @@ const DocumentOverview: FC<DocumentOverviewProps> = ({
             {t('Export')}
           </h2>
           <div className="button-row">
-            <a className="btn" href={store.markdownUrl(document.id)} download={`${document.slug}.md`}>
+            <a className="btn" href={markdownUrl} download={`${document.slug}.md`}>
               <Icon name="download" />
               {MARKDOWN_FILE_NAME}
             </a>
-            <a className="btn" href={store.archiveUrl(document.id, includesScans)} download={`${document.slug}.zip`}>
+            <a className="btn" href={archiveUrl} download={`${document.slug}.zip`}>
               <Icon name="archive" />
               {t('.zip archive')}
             </a>
@@ -344,7 +279,7 @@ const DocumentOverview: FC<DocumentOverviewProps> = ({
               type="checkbox"
               id={withScansId}
               checked={includesScans}
-              onChange={(event) => setIncludesScans(event.target.checked)}
+              onChange={(event) => onIncludesScansChange(event.target.checked)}
             />
             <span>{t('Include the original photos in the archive')}</span>
           </label>
@@ -356,10 +291,7 @@ const DocumentOverview: FC<DocumentOverviewProps> = ({
                 type="button"
                 className="btn btn-icon btn-small"
                 aria-label={t('Copy the folder path')}
-                onClick={() => {
-                  // copyFolder tells its outcome in a toast, and the clipboard's copy never rejects.
-                  void copyFolder();
-                }}
+                onClick={() => onCopyFolder(document.folder)}
               >
                 <Icon name="copy" />
               </button>

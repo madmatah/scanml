@@ -12,7 +12,7 @@ const BRAND_MARK_PIXELS = 48;
 const TOKEN_FILE = 'state/token';
 const SIGN_IN_LINK_FORM = 'http://…/#token=…';
 
-export const Login: FC<{ readonly session: Session }> = ({ session }) => {
+export const LoginScreen: FC<{ readonly session: Session }> = ({ session }) => {
   const { t } = useTranslation();
   const state = useSyncExternalStore(session.subscribe, session.getSnapshot);
   const [token, setToken] = useState('');

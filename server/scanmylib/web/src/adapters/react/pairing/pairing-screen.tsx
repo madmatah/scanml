@@ -1,4 +1,4 @@
-import { type FC, useEffect, useRef, useState } from 'react';
+import type { FC } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
 import type { Clipboard } from '../../../application/clipboard.ts';
@@ -10,17 +10,12 @@ import { ErrorState } from '../shell/error-state.tsx';
 import { Icon } from '../shell/icon.tsx';
 import { LoadingState } from '../shell/loading-state.tsx';
 import type { Toasts } from '../shell/toasts.ts';
-import { useDocumentTitle } from '../shell/use-document-title.ts';
 import { CopyField } from './copy-field.tsx';
 import { QrCode } from './qr-code.tsx';
+import { usePairingScreen } from './use-pairing-screen.ts';
 
 const APK_FILE_NAME = 'scanmylib.apk';
 const ANDROID_FOLDER = 'android/';
-
-type PairingLoad =
-  | { readonly phase: 'loading' }
-  | { readonly phase: 'failed'; readonly failure: unknown }
-  | { readonly phase: 'loaded'; readonly pairing: PairingDetails };
 
 export interface PairingScreenProps {
   readonly source: PairingSource;
@@ -30,28 +25,11 @@ export interface PairingScreenProps {
 
 export const PairingScreen: FC<PairingScreenProps> = ({ source, clipboard, toasts }) => {
   const { t } = useTranslation();
-  const [load, setLoad] = useState<PairingLoad>({ phase: 'loading' });
-  const reload = useRef<() => void>(() => {});
-  useDocumentTitle(t('Pairing'));
-
-  useEffect(() => {
-    const leaving = new AbortController();
-    const loadPairing = async (): Promise<void> => {
-      setLoad({ phase: 'loading' });
-      try {
-        setLoad({ phase: 'loaded', pairing: await source.readPairing(leaving.signal) });
-      } catch (failure) {
-        if (!leaving.signal.aborted) setLoad({ phase: 'failed', failure });
-      }
-    };
-    const loadAgain = (): void => {
-      // loadPairing handles its own failures, so its promise never rejects.
-      void loadPairing();
-    };
-    reload.current = loadAgain;
-    loadAgain();
-    return () => leaving.abort();
-  }, [source]);
+  const { load, isTokenShown, missingQrCodes, onRetry, onToggleToken, onCopy, onQrCodeMissing } = usePairingScreen(
+    source,
+    clipboard,
+    toasts,
+  );
 
   return (
     <section className="view pairing">
@@ -63,13 +41,24 @@ export const PairingScreen: FC<PairingScreenProps> = ({ source, clipboard, toast
       </header>
       <div className="pairing-content">
         {load.phase === 'loading' && <LoadingState />}
-        {load.phase === 'failed' && (
-          <ErrorState message={errorMessage(t, load.failure)} onRetry={() => reload.current()} />
-        )}
+        {load.phase === 'failed' && <ErrorState message={errorMessage(t, load.failure)} onRetry={onRetry} />}
         {load.phase === 'loaded' && (
           <div className="pairing-grid">
-            <InstallCard pairing={load.pairing} source={source} />
-            <PairCard pairing={load.pairing} source={source} clipboard={clipboard} toasts={toasts} />
+            <InstallCard
+              pairing={load.pairing}
+              source={source}
+              isQrCodeMissing={missingQrCodes.has('install')}
+              onQrCodeMissing={() => onQrCodeMissing('install')}
+            />
+            <PairCard
+              pairing={load.pairing}
+              source={source}
+              isQrCodeMissing={missingQrCodes.has('pair')}
+              onQrCodeMissing={() => onQrCodeMissing('pair')}
+              isTokenShown={isTokenShown}
+              onToggleToken={onToggleToken}
+              onCopy={onCopy}
+            />
           </div>
         )}
       </div>
@@ -80,9 +69,11 @@ export const PairingScreen: FC<PairingScreenProps> = ({ source, clipboard, toast
 interface InstallCardProps {
   readonly pairing: PairingDetails;
   readonly source: PairingSource;
+  readonly isQrCodeMissing: boolean;
+  readonly onQrCodeMissing: () => void;
 }
 
-const InstallCard: FC<InstallCardProps> = ({ pairing, source }) => {
+const InstallCard: FC<InstallCardProps> = ({ pairing, source, isQrCodeMissing, onQrCodeMissing }) => {
   const { t } = useTranslation();
   return (
     <section className="card pairing-step" aria-labelledby="install-title">
@@ -94,7 +85,12 @@ const InstallCard: FC<InstallCardProps> = ({ pairing, source }) => {
       </h2>
       {pairing.isApkAvailable ? (
         <>
-          <QrCode url={source.apkQrCodeUrl} description={t('QR code of the Android app’s download link')} />
+          <QrCode
+            url={source.apkQrCodeUrl}
+            description={t('QR code of the Android app’s download link')}
+            isMissing={isQrCodeMissing}
+            onMissing={onQrCodeMissing}
+          />
           <ol className="steps">
             <li>
               <Trans
@@ -155,12 +151,23 @@ const InstallCard: FC<InstallCardProps> = ({ pairing, source }) => {
 interface PairCardProps {
   readonly pairing: PairingDetails;
   readonly source: PairingSource;
-  readonly clipboard: Clipboard;
-  readonly toasts: Toasts;
+  readonly isQrCodeMissing: boolean;
+  readonly onQrCodeMissing: () => void;
+  readonly isTokenShown: boolean;
+  readonly onToggleToken: () => void;
+  readonly onCopy: (text: string, copiedMessage: string) => void;
 }
 
 // The labels quoted here are those of the Android app's pairing screen.
-const PairCard: FC<PairCardProps> = ({ pairing, source, clipboard, toasts }) => {
+const PairCard: FC<PairCardProps> = ({
+  pairing,
+  source,
+  isQrCodeMissing,
+  onQrCodeMissing,
+  isTokenShown,
+  onToggleToken,
+  onCopy,
+}) => {
   const { t } = useTranslation();
   return (
     <section className="card pairing-step" aria-labelledby="pair-title">
@@ -170,7 +177,12 @@ const PairCard: FC<PairCardProps> = ({ pairing, source, clipboard, toasts }) => 
         </span>
         {t('Pair the app with this PC')}
       </h2>
-      <QrCode url={source.pairingQrCodeUrl} description={t('Pairing QR code: address of this PC and access token')} />
+      <QrCode
+        url={source.pairingQrCodeUrl}
+        description={t('Pairing QR code: address of this PC and access token')}
+        isMissing={isQrCodeMissing}
+        onMissing={onQrCodeMissing}
+      />
       <ol className="steps">
         <li>
           <Trans
@@ -196,18 +208,16 @@ const PairCard: FC<PairCardProps> = ({ pairing, source, clipboard, toasts }) => 
       <CopyField
         label={t('PC address')}
         text={pairing.serverUrl}
-        isSecret={false}
+        secret={null}
         copiedMessage={t('Address copied.')}
-        clipboard={clipboard}
-        toasts={toasts}
+        onCopy={onCopy}
       />
       <CopyField
         label={t('Access token')}
         text={pairing.accessToken}
-        isSecret
+        secret={{ isShown: isTokenShown, onToggleShown: onToggleToken }}
         copiedMessage={t('Access token copied.')}
-        clipboard={clipboard}
-        toasts={toasts}
+        onCopy={onCopy}
       />
     </section>
   );

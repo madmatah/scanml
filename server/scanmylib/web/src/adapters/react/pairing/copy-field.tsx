@@ -1,29 +1,24 @@
-import { type FC, useId, useState } from 'react';
+import { type FC, useId } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { Clipboard } from '../../../application/clipboard.ts';
 import { Icon } from '../shell/icon.tsx';
-import type { Toasts } from '../shell/toasts.ts';
+
+export interface SecretVisibility {
+  readonly isShown: boolean;
+  readonly onToggleShown: () => void;
+}
 
 export interface CopyFieldProps {
   readonly label: string;
   readonly text: string;
-  readonly isSecret: boolean;
+  readonly secret: SecretVisibility | null;
   readonly copiedMessage: string;
-  readonly clipboard: Clipboard;
-  readonly toasts: Toasts;
+  readonly onCopy: (text: string, copiedMessage: string) => void;
 }
 
-export const CopyField: FC<CopyFieldProps> = ({ label, text, isSecret, copiedMessage, clipboard, toasts }) => {
+export const CopyField: FC<CopyFieldProps> = ({ label, text, secret, copiedMessage, onCopy }) => {
   const { t } = useTranslation();
   const id = useId();
-  const [isShown, setShown] = useState(false);
-
-  const copy = async (): Promise<void> => {
-    if (await clipboard.copyText(text)) toasts.show(copiedMessage, 'success');
-    else toasts.show(t('Could not copy: select the text by hand.'), 'error');
-  };
-
   return (
     <div className="field">
       <label htmlFor={id}>{label}</label>
@@ -31,31 +26,28 @@ export const CopyField: FC<CopyFieldProps> = ({ label, text, isSecret, copiedMes
         <input
           id={id}
           className="input input-mono"
-          type={isSecret && !isShown ? 'password' : 'text'}
+          type={secret !== null && !secret.isShown ? 'password' : 'text'}
           value={text}
           readOnly
           autoComplete="off"
           spellCheck={false}
         />
-        {isSecret && (
+        {secret !== null && (
           <button
             type="button"
             className="btn btn-icon"
-            aria-pressed={isShown}
-            aria-label={isShown ? t('Hide the access token') : t('Show the access token')}
-            onClick={() => setShown(!isShown)}
+            aria-pressed={secret.isShown}
+            aria-label={secret.isShown ? t('Hide the access token') : t('Show the access token')}
+            onClick={secret.onToggleShown}
           >
-            <Icon name={isShown ? 'eye-off' : 'eye'} />
+            <Icon name={secret.isShown ? 'eye-off' : 'eye'} />
           </button>
         )}
         <button
           type="button"
           className="btn"
           aria-label={t('Copy: {{label}}', { label })}
-          onClick={() => {
-            // copy tells its outcome in a toast, and the clipboard's copy never rejects.
-            void copy();
-          }}
+          onClick={() => onCopy(text, copiedMessage)}
         >
           <Icon name="copy" />
           <span className="btn-label">{t('Copy')}</span>

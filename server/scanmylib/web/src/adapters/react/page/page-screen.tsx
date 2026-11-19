@@ -1,3 +1,4 @@
+import type { TFunction } from 'i18next';
 import { type FC, type FormEvent, type ReactNode, useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router';
@@ -5,8 +6,14 @@ import { Link, useNavigate, useParams } from 'react-router';
 import type { Clipboard } from '../../../application/clipboard.ts';
 import { isNotFound } from '../../../application/document-loader.ts';
 import type { DocumentStore } from '../../../application/document-store.ts';
+import {
+  createPageActions,
+  type PageAction,
+  type PageActionOutcome,
+  type PageDeletion,
+} from '../../../application/page-actions.ts';
 import { createPageLoader, type PageLoad, type PageLoader } from '../../../application/page-loader.ts';
-import type { PageChanges, PageStore } from '../../../application/page-store.ts';
+import type { PageStore } from '../../../application/page-store.ts';
 import type { Scheduler } from '../../../application/scheduler.ts';
 import { groupPages, hasPlacedPages, type PageSummary } from '../../../domain/document-details.ts';
 import type { DateFormatting, NumberFormatting } from '../../../domain/formatting.ts';
@@ -66,6 +73,21 @@ const isTypingTarget = (target: EventTarget | null): boolean => {
   );
 };
 
+const actionSuccessMessage = (t: TFunction, action: PageAction): string => {
+  switch (action.kind) {
+    case 'saveNumber':
+      return t('Number {{number}} saved.', { number: action.number });
+    case 'clearNumber':
+      return t('Manual number cleared.');
+    case 'rotate':
+      return t('Page rotated: its text will be read again.');
+    case 'setExclusion':
+      return action.isExcluded ? t('Page excluded from the document.') : t('Page put back in the document.');
+    case 'readAgain':
+      return t('The text of this page will be read again.');
+  }
+};
+
 const PageView: FC<PageViewProps> = ({
   pageId,
   pages,
@@ -81,10 +103,18 @@ const PageView: FC<PageViewProps> = ({
   const navigate = useNavigate();
   const [load, setLoad] = useState<PageLoad>({ phase: 'loading' });
   const [isBusy, setBusy] = useState(false);
-  // Read by the actions, which an action's own render has not reached yet when a second click comes.
-  const isActing = useRef(false);
   const [isConfirmingDelete, setConfirmingDelete] = useState(false);
   const loader = useRef<PageLoader | null>(null);
+  const [actions] = useState(() =>
+    createPageActions({
+      pageId,
+      pages,
+      reload: async () => {
+        await loader.current?.load();
+      },
+      onBusyChange: setBusy,
+    }),
+  );
   const screenTitle = load.phase === 'loaded' ? `${pageTitle(t, load.page)} · ${load.document.title}` : null;
   const neighbors = load.phase === 'loaded' ? pageNeighbors(load.document.pages, load.page.id) : null;
   const previousId = neighbors?.previous?.id ?? null;
@@ -124,42 +154,27 @@ const PageView: FC<PageViewProps> = ({
     return () => document.removeEventListener('keydown', goToNeighbor);
   }, [previousId, nextId, navigate]);
 
-  const setActing = (isNowActing: boolean): void => {
-    isActing.current = isNowActing;
-    setBusy(isNowActing);
+  const tellOutcome = (outcome: PageActionOutcome): void => {
+    if (outcome.kind === 'succeeded') toasts.show(actionSuccessMessage(t, outcome.action), 'success');
+    else toasts.show(errorMessage(t, outcome.failure, t('Action failed.')), 'error');
   };
 
-  const act = async (action: () => Promise<void>, successMessage: string): Promise<void> => {
-    if (isActing.current) return;
-    setActing(true);
-    try {
-      await action();
-      toasts.show(successMessage, 'success');
-    } catch (failure) {
-      toasts.show(errorMessage(t, failure, t('Action failed.')), 'error');
-    } finally {
-      setActing(false);
-    }
-    await loader.current?.load();
+  const runAction = (action: PageAction): void => {
+    // The actions tell their outcome, failures included, so their promise never rejects.
+    void actions.run(action, tellOutcome);
   };
 
-  const change = (changes: PageChanges, successMessage: string): void => {
-    // act tells its failures in a toast, so its promise never rejects.
-    void act(() => pages.updatePage(pageId, changes), successMessage);
-  };
-
-  const deletePage = async (page: PageDetails, destination: PageSummary | null): Promise<void> => {
-    setActing(true);
-    try {
-      await pages.deletePage(pageId);
+  const deletePage = (page: PageDetails, destination: PageSummary | null): void => {
+    const tellDeletion = (deletion: PageDeletion): void => {
+      if (deletion.kind === 'failed') {
+        toasts.show(errorMessage(t, deletion.failure, t('Could not delete.')), 'error');
+        return;
+      }
       toasts.show(t('Page deleted.'), 'success');
-      await navigate(destination === null ? documentPath(page.documentId) : pagePath(destination.id), {
-        replace: true,
-      });
-    } catch (failure) {
-      toasts.show(errorMessage(t, failure, t('Could not delete.')), 'error');
-      setActing(false);
-    }
+      void navigate(destination === null ? documentPath(page.documentId) : pagePath(destination.id), { replace: true });
+    };
+    // The deletion tells its outcome, its failure included, so its promise never rejects.
+    void actions.deletePage(tellDeletion);
   };
 
   if (load.phase === 'loading') {
@@ -207,20 +222,12 @@ const PageView: FC<PageViewProps> = ({
       <PageToolbar
         page={page}
         isBusy={isBusy}
-        onSaveNumber={(number) => change({ manualNumber: number }, t('Number {{number}} saved.', { number }))}
+        onSaveNumber={(number) => runAction({ kind: 'saveNumber', number })}
         onInvalidNumber={() => toasts.show(t('Enter a whole page number between 1 and 9999.'), 'error')}
-        onClearNumber={() => change({ manualNumber: null }, t('Manual number cleared.'))}
-        onRotate={(rotation) => change({ rotation }, t('Page rotated: its text will be read again.'))}
-        onExclude={(isExcluded) =>
-          change(
-            { isExcluded },
-            isExcluded ? t('Page excluded from the document.') : t('Page put back in the document.'),
-          )
-        }
-        onReadAgain={() => {
-          // act tells its failures in a toast, so its promise never rejects.
-          void act(() => pages.readPageAgain(pageId), t('The text of this page will be read again.'));
-        }}
+        onClearNumber={() => runAction({ kind: 'clearNumber' })}
+        onRotate={(rotation) => runAction({ kind: 'rotate', rotation })}
+        onExclude={(isExcluded) => runAction({ kind: 'setExclusion', isExcluded })}
+        onReadAgain={() => runAction({ kind: 'readAgain' })}
         onDelete={() => setConfirmingDelete(true)}
       />
       <div className="page-split">
@@ -254,8 +261,7 @@ const PageView: FC<PageViewProps> = ({
           isDanger
           onClosed={(isConfirmed) => {
             setConfirmingDelete(false);
-            // deletePage tells its failure in a toast, so its promise never rejects.
-            if (isConfirmed) void deletePage(page, shownNeighbors.next ?? shownNeighbors.previous);
+            if (isConfirmed) deletePage(page, shownNeighbors.next ?? shownNeighbors.previous);
           }}
         />
       )}

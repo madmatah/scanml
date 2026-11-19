@@ -351,6 +351,11 @@ class WhenGivenAreas(InstallationTestCase):
     def test_should_run_the_typescript_tests_of_the_web_ui(self) -> None:
         self.assertTrue(self.checks[4].endswith("node --test *.test.ts src/**/*.test.ts"), self.checks[4])
 
+    def test_should_give_the_tests_of_the_web_ui_a_throwaway_directory_for_the_samples_of_its_biome_plugins(
+        self,
+    ) -> None:
+        self.assertIn(" --tmpfs /tmp ", self.checks[4])
+
 
 class WhenGivenTheWebUiTheApiAndTheSandbox(InstallationTestCase):
     gate_run: ClassVar[ScriptRun]

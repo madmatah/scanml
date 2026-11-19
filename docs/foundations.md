@@ -176,9 +176,9 @@ states the rules, and `docs/SECURITY.md` the threat model, the guarantees and th
 Each unit's source files as they are, grouped by responsibility, and the layer of each group. The api's and the web UI's
 files live in their layer's directory, but the composition roots at the top of their source trees, the web UI's build
 script and the api's test support; the web UI's tests and their support sit beside the module they test, and those of
-its build, its catalogs and its icons beside its build script. The restructuring of [Principles](#principles) moves the
-other units' files where one is planned; a file that mixes two layers splits along them. The last row lists the scripts
-that the skills keep, which belong to no unit.
+its build, its Biome plugins, its catalogs and its icons beside its build script. The restructuring of
+[Principles](#principles) moves the other units' files where one is planned; a file that mixes two layers splits along
+them. The last row lists the scripts that the skills keep, which belong to no unit.
 
 | Unit | Source files | Responsibility | Layer |
 |---|---|---|---|
@@ -322,7 +322,7 @@ Each row names a rule, the rules file that states it, and what enforces it.
 | Part of the rules of the Python: PEP 8 at 120 columns, imports, typed signatures with no bare `Any`, no blind `except`, no mutable defaults (`.claude/rules/python.md`), no shell or SQL string built from input (`.claude/rules/conventions.md` > Input from outside the program), and, in part, no character a reader cannot see written as such (`.claude/rules/conventions.md` > Characters a reader cannot see) | Ruff and mypy `--strict`, in `scripts/check.sh lint` |
 | Part of the rules of the shell scripts: quoting and `[[ … ]]` (ShellCheck), indentation (shfmt) (`.claude/rules/bash.md`) | ShellCheck and shfmt, in `scripts/check.sh lint` |
 | The Kotlin conventions at 120 columns, file names (`.claude/rules/kotlin.md`) | ktlint, in `scripts/check.sh android` |
-| The rules of the web UI: layout, named exports, no `any`, type-only imports marked, no `@ts-ignore`, no `enum` or `namespace`, no floating promise, the rules of hooks, keys from the data, no `dangerouslySetInnerHTML`, every function a `const` arrow function, every component but a generic one typed `FC<Props>` (`.claude/rules/web.md`) | Biome, with its plugins `server/scanmylib/web/biome-plugins/arrow-functions.grit` for the arrow functions and `server/scanmylib/web/biome-plugins/typed-components.grit` for the components, in `scripts/check.sh lint` |
+| The rules of the web UI: layout, named exports, no `any`, type-only imports marked, no `@ts-ignore`, no `enum` or `namespace`, no floating promise, the rules of hooks, keys from the data, no `dangerouslySetInnerHTML`, every function a `const` arrow function, every component but a generic one typed `FC<Props>` (`.claude/rules/web.md`) | Biome, with its plugins `server/scanmylib/web/biome-plugins/arrow-functions.grit` for the arrow functions and `server/scanmylib/web/biome-plugins/typed-components.grit` for the components, in `scripts/check.sh lint`; `server/scanmylib/web/biome-plugins.test.ts`, in `scripts/check.sh web`, which runs each plugin on a sample that breaks its rule and on one that keeps it, since Biome reports a plugin that errors as an info and passes |
 | The web UI's TypeScript is strict, with `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes` and erasable syntax only (`.claude/rules/web.md` > TypeScript and React) | `tsc --noEmit` on the sources and on the tests, each with the types of its runtime, in `scripts/check.sh lint` |
 | Part of the rules of the api's tests: a broad exception asserted with its message, its raising call alone in its block, no assertion in an `except` (`.claude/rules/tests.md` > pytest) | Ruff's PT011, PT012 and PT017, in `scripts/check.sh lint` |
 | The hook that runs once in the api's tests is a fixture of `scope="class"` written as a `@classmethod` (`.claude/rules/tests.md` > pytest) | `filterwarnings = ["error::pytest.PytestRemovedIn10Warning"]` in `server/pyproject.toml`, in `scripts/check.sh server` |

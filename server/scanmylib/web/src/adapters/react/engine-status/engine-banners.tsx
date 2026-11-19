@@ -1,14 +1,13 @@
-import { type FC, useSyncExternalStore } from 'react';
+import type { FC } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { EngineStatus } from '../../../application/engine-status.ts';
+import type { EngineStatusState } from '../../../application/engine-status.ts';
 import { Icon } from '../shell/icon.tsx';
 import { engineBanner } from './engine-status-text.ts';
 
-export const EngineBanners: FC<{ readonly engineStatus: EngineStatus }> = ({ engineStatus }) => {
+export const EngineBanners: FC<{ readonly engine: EngineStatusState }> = ({ engine }) => {
   const { t } = useTranslation();
-  const state = useSyncExternalStore(engineStatus.subscribe, engineStatus.getSnapshot);
-  const banner = engineBanner(t, state);
+  const banner = engineBanner(t, engine);
   return (
     <div className="banners" id="banners">
       {banner !== null && (

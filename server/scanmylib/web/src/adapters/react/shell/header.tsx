@@ -1,8 +1,8 @@
 import type { FC, MouseEvent, ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useLocation } from 'react-router';
+import { Link } from 'react-router';
 
-import type { EngineStatus } from '../../../application/engine-status.ts';
+import type { EngineStatusState } from '../../../application/engine-status.ts';
 import type { NumberFormatting } from '../../../domain/formatting.ts';
 import { EngineStatusBadge } from '../engine-status/engine-status-badge.tsx';
 import { BrandMark } from './brand-mark.tsx';
@@ -14,24 +14,28 @@ const BRAND_MARK_PIXELS = 28;
 export interface HeaderProps {
   readonly isSignedIn: boolean;
   readonly section: Section | null;
-  readonly engineStatus: EngineStatus;
+  readonly currentPath: string;
+  readonly engine: EngineStatusState;
   readonly formatting: NumberFormatting;
+  readonly isEnginePanelOpen: boolean;
+  readonly onToggleEnginePanel: () => void;
+  readonly onCloseEnginePanel: () => void;
   readonly onSignOut: () => void;
 }
 
 interface HeaderLinkProps {
   readonly to: string;
+  readonly currentPath: string;
   readonly className?: string;
   readonly isCurrent?: boolean;
   readonly children: ReactNode;
 }
 
-const HeaderLink: FC<HeaderLinkProps> = ({ to, className, isCurrent = false, children }) => {
-  const location = useLocation();
+const HeaderLink: FC<HeaderLinkProps> = ({ to, currentPath, className, isCurrent = false, children }) => {
   // A link to the address already shown changes nothing, as a link to the same fragment does: the router would
   // otherwise enter it again, and the shell move the focus and the scroll as for a new screen.
   const stayOnSameAddress = (event: MouseEvent<HTMLAnchorElement>): void => {
-    if (location.pathname === to) event.preventDefault();
+    if (currentPath === to) event.preventDefault();
   };
   return (
     <Link to={to} className={className} aria-current={isCurrent ? 'page' : undefined} onClick={stayOnSameAddress}>
@@ -40,24 +44,40 @@ const HeaderLink: FC<HeaderLinkProps> = ({ to, className, isCurrent = false, chi
   );
 };
 
-export const Header: FC<HeaderProps> = ({ isSignedIn, section, engineStatus, formatting, onSignOut }) => {
+export const Header: FC<HeaderProps> = ({
+  isSignedIn,
+  section,
+  currentPath,
+  engine,
+  formatting,
+  isEnginePanelOpen,
+  onToggleEnginePanel,
+  onCloseEnginePanel,
+  onSignOut,
+}) => {
   const { t } = useTranslation();
   return (
     <header className="app-header" id="app-header" hidden={!isSignedIn}>
-      <HeaderLink to={PATHS.home} className="brand">
+      <HeaderLink to={PATHS.home} currentPath={currentPath} className="brand">
         <BrandMark sizePixels={BRAND_MARK_PIXELS} />
         <span>{BRAND_NAME}</span>
       </HeaderLink>
       <nav className="app-nav" aria-label={t('Main navigation')}>
-        <HeaderLink to={PATHS.home} isCurrent={section === 'library'}>
+        <HeaderLink to={PATHS.home} currentPath={currentPath} isCurrent={section === 'library'}>
           {t('Library')}
         </HeaderLink>
-        <HeaderLink to={PATHS.pairing} isCurrent={section === 'pairing'}>
+        <HeaderLink to={PATHS.pairing} currentPath={currentPath} isCurrent={section === 'pairing'}>
           {t('Pairing')}
         </HeaderLink>
       </nav>
       <div className="header-tools">
-        <EngineStatusBadge engineStatus={engineStatus} formatting={formatting} />
+        <EngineStatusBadge
+          engine={engine}
+          formatting={formatting}
+          isOpen={isEnginePanelOpen}
+          onToggle={onToggleEnginePanel}
+          onClose={onCloseEnginePanel}
+        />
         <button type="button" className="btn btn-ghost btn-compact" id="logout-button" onClick={onSignOut}>
           <Icon name="sign-out" />
           <span className="btn-label">{t('Sign out', { context: 'header' })}</span>

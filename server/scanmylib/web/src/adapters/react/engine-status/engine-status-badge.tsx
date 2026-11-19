@@ -1,45 +1,27 @@
-import { type FC, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import type { FC } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { EngineStatus } from '../../../application/engine-status.ts';
+import type { EngineStatusState } from '../../../application/engine-status.ts';
 import type { NumberFormatting } from '../../../domain/formatting.ts';
 import { engineDetails, engineStateOf, pendingPagesText } from './engine-status-text.ts';
+import { usePanelDismissal } from './use-panel-dismissal.ts';
 
 const PANEL_ID = 'engine-panel';
 
 export interface EngineStatusBadgeProps {
-  readonly engineStatus: EngineStatus;
+  readonly engine: EngineStatusState;
   readonly formatting: NumberFormatting;
+  readonly isOpen: boolean;
+  readonly onToggle: () => void;
+  readonly onClose: () => void;
 }
 
-export const EngineStatusBadge: FC<EngineStatusBadgeProps> = ({ engineStatus, formatting }) => {
+export const EngineStatusBadge: FC<EngineStatusBadgeProps> = ({ engine, formatting, isOpen, onToggle, onClose }) => {
   const { t } = useTranslation();
-  const state = useSyncExternalStore(engineStatus.subscribe, engineStatus.getSnapshot);
-  const [isOpen, setOpen] = useState(false);
-  const container = useRef<HTMLDivElement>(null);
-  const badge = useRef<HTMLButtonElement>(null);
-  const engineState = engineStateOf(t, state);
-  const pendingPages = pendingPagesText(t, formatting, state);
-  const details = engineDetails(t, formatting, state, engineState.label);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    const closeOnClickOutside = (event: MouseEvent): void => {
-      if (event.target instanceof Node && container.current?.contains(event.target)) return;
-      setOpen(false);
-    };
-    const closeOnEscape = (event: KeyboardEvent): void => {
-      if (event.key !== 'Escape') return;
-      setOpen(false);
-      badge.current?.focus();
-    };
-    document.addEventListener('click', closeOnClickOutside);
-    document.addEventListener('keydown', closeOnEscape);
-    return () => {
-      document.removeEventListener('click', closeOnClickOutside);
-      document.removeEventListener('keydown', closeOnEscape);
-    };
-  }, [isOpen]);
+  const { container, badge } = usePanelDismissal(isOpen, onClose);
+  const engineState = engineStateOf(t, engine);
+  const pendingPages = pendingPagesText(t, formatting, engine);
+  const details = engineDetails(t, formatting, engine, engineState.label);
 
   return (
     <div className="engine-status" id="engine-status" ref={container}>
@@ -50,7 +32,7 @@ export const EngineStatusBadge: FC<EngineStatusBadgeProps> = ({ engineStatus, fo
         aria-controls={PANEL_ID}
         data-tone={engineState.tone}
         ref={badge}
-        onClick={() => setOpen(!isOpen)}
+        onClick={onToggle}
       >
         <span className="status-dot" aria-hidden="true" />
         <span className="engine-label">{engineState.label}</span>

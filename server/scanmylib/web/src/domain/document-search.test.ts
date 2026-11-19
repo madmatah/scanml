@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { beforeEach, describe, it } from 'node:test';
 
-import { documentsMatching } from './document-search.ts';
+import { documentsMatching, SEARCH_THRESHOLD_DOCUMENTS, showsSearch } from './document-search.ts';
 import { sampleDocument } from './document-summary.test-support.ts';
 import type { DocumentSummary } from './document-summary.ts';
 
@@ -13,6 +13,10 @@ const LIBRARY = [FIELD_NOTES, CAFE_NOTES, EXAMPLE_BOOK];
 
 const idsOf = (documents: readonly DocumentSummary[]): string[] => {
   return documents.map((document) => document.id);
+};
+
+const libraryOf = (documentCount: number): DocumentSummary[] => {
+  return Array.from({ length: documentCount }, (_, position) => sampleDocument({ id: `document-${position}` }));
 };
 
 describe('The document search', () => {
@@ -65,6 +69,36 @@ describe('The document search', () => {
 
         it(rule, () => {
           assert.deepEqual(idsOf(found), expectedIds);
+        });
+      });
+    }
+  });
+
+  describe('The showsSearch() function', () => {
+    const situations: { situation: string; documents: DocumentSummary[]; rule: string; expected: boolean }[] = [
+      {
+        situation: 'When the library holds one document less than the threshold',
+        documents: libraryOf(SEARCH_THRESHOLD_DOCUMENTS - 1),
+        rule: 'should hide the search, since the documents fit in a glance',
+        expected: false,
+      },
+      {
+        situation: 'When the library holds as many documents as the threshold',
+        documents: libraryOf(SEARCH_THRESHOLD_DOCUMENTS),
+        rule: 'should show the search',
+        expected: true,
+      },
+    ];
+
+    for (const { situation, documents, rule, expected } of situations) {
+      describe(situation, () => {
+        let isShown: boolean;
+        beforeEach(() => {
+          isShown = showsSearch(documents);
+        });
+
+        it(rule, () => {
+          assert.equal(isShown, expected);
         });
       });
     }

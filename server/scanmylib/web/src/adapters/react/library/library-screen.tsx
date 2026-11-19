@@ -4,9 +4,10 @@ import { Link, useNavigate } from 'react-router';
 
 import type { DocumentCatalog } from '../../../application/document-catalog.ts';
 import type { EngineStatus } from '../../../application/engine-status.ts';
+import { createLibraryLoader, type LibraryLoad } from '../../../application/library-loader.ts';
 import { watchQueueMoves } from '../../../application/queue-moves.ts';
 import type { UuidSource } from '../../../application/uuid-source.ts';
-import { documentsMatching } from '../../../domain/document-search.ts';
+import { documentsMatching, showsSearch } from '../../../domain/document-search.ts';
 import type { DocumentSummary } from '../../../domain/document-summary.ts';
 import type { DateFormatting } from '../../../domain/formatting.ts';
 import { quoted } from '../../i18next/formatted-text.ts';
@@ -20,7 +21,6 @@ import { documentPath, PATHS } from '../shell/navigation.ts';
 import type { Toasts } from '../shell/toasts.ts';
 import { useDocumentTitle } from '../shell/use-document-title.ts';
 import { DocumentCard } from './document-card.tsx';
-import { afterLoadFailure, type LibraryLoad, showsSearch } from './library-loading.ts';
 import { librarySummaryText } from './library-text.ts';
 
 // Keeps "Updated 5 minutes ago" true while the screen stays open.
@@ -50,30 +50,18 @@ export const LibraryScreen: FC<LibraryScreenProps> = ({ catalog, engineStatus, t
 
   useEffect(() => {
     const leaving = new AbortController();
-    let current: LibraryLoad = { phase: 'loading' };
-
-    const enter = (next: LibraryLoad): void => {
-      current = next;
-      setLoad(next);
-    };
-
-    const loadDocuments = async (): Promise<void> => {
-      try {
-        const documents = await catalog.listDocuments(leaving.signal);
-        setNow(Date.now());
-        enter({ phase: 'loaded', documents });
-      } catch (failure) {
-        if (leaving.signal.aborted) return;
-        const outcome = afterLoadFailure(current, failure);
-        enter(outcome.load);
-        if (outcome.isToldInToast) toasts.show(errorMessage(t, failure, t('Could not refresh the library.')), 'error');
-      }
-    };
-
-    const loadAgain = (): void => {
-      // loadDocuments handles its own failures, so its promise never rejects.
-      void loadDocuments();
-    };
+    const loader = createLibraryLoader({
+      listDocuments: (signal) => catalog.listDocuments(signal),
+      leaving: leaving.signal,
+      onChange: (next) => {
+        if (next.phase === 'loaded') setNow(Date.now());
+        setLoad(next);
+      },
+      onRefreshFailed: (failure) => {
+        toasts.show(errorMessage(t, failure, t('Could not refresh the library.')), 'error');
+      },
+    });
+    const loadAgain = (): void => loader.load();
 
     // New pages from the phone, or pages whose text is now read, change the documents' counts.
     const stopWatchingQueue = watchQueueMoves(engineStatus, loadAgain, { from: null });
@@ -92,7 +80,7 @@ export const LibraryScreen: FC<LibraryScreenProps> = ({ catalog, engineStatus, t
     };
   }, [catalog, engineStatus, toasts, t]);
 
-  const isSearchShown = showsSearch(load);
+  const isSearchShown = load.phase === 'loaded' && showsSearch(load.documents);
   // A search left typed while the field hides would keep filtering the list out of sight.
   if (!isSearchShown && query !== '') setQuery('');
 

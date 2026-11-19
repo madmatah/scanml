@@ -2,6 +2,8 @@ import { type FC, useMemo, useRef, useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
+  type CaptureSession,
+  createCaptureSession,
   inFileNameOrder,
   summarizeUploads,
   type UploadItem,
@@ -20,11 +22,6 @@ export interface UploaderProps {
   readonly formatting: NumberFormatting;
 }
 
-interface CameraSeries {
-  readonly sessionId: string;
-  readonly nextSeq: number;
-}
-
 const takeFiles = (input: HTMLInputElement): File[] => {
   const files = [...(input.files ?? [])];
   // So that choosing the same photos again is a change too.
@@ -36,8 +33,10 @@ export const Uploader: FC<UploaderProps> = ({ documentId, uploads, uuids, format
   const { t } = useTranslation();
   const filesInput = useRef<HTMLInputElement>(null);
   const cameraInput = useRef<HTMLInputElement>(null);
-  // The successive shots of the camera form one capture session.
-  const cameraSeries = useRef<CameraSeries | null>(null);
+  // The successive shots of the camera form one capture session, which another document starts afresh.
+  const cameraSessionRef = useRef<CaptureSession | null>(null);
+  if (cameraSessionRef.current === null) cameraSessionRef.current = createCaptureSession(uuids);
+  const cameraSession = cameraSessionRef.current;
   const queued = useSyncExternalStore(uploads.subscribe, uploads.getSnapshot);
   const items = useMemo(() => uploadsOf(queued, documentId), [queued, documentId]);
 
@@ -49,9 +48,7 @@ export const Uploader: FC<UploaderProps> = ({ documentId, uploads, uuids, format
   const photosTaken = (input: HTMLInputElement): void => {
     const files = takeFiles(input);
     if (files.length === 0) return;
-    const series = cameraSeries.current ?? { sessionId: uuids.createUuid(), nextSeq: 1 };
-    uploads.add(documentId, files, { sessionId: series.sessionId, firstSeq: series.nextSeq });
-    cameraSeries.current = { sessionId: series.sessionId, nextSeq: series.nextSeq + files.length };
+    uploads.add(documentId, files, cameraSession.next(files.length));
   };
 
   return (

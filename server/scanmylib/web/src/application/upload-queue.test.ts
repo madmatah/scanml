@@ -4,6 +4,8 @@ import { MAX_UPLOAD_BYTES } from '../domain/photo-upload.ts';
 import { ApiError, NetworkError } from './api-errors.ts';
 import { createFakePageUploader, createFixedClock, type FakePageUploader, photo } from './upload-queue.test-support.ts';
 import {
+  type CaptureSeries,
+  createCaptureSession,
   createUploadQueue,
   inFileNameOrder,
   type PhotoFile,
@@ -435,6 +437,45 @@ describe('The upload queue', () => {
 
       it('should no longer tell the photos sent', () => {
         assert.equal(moreSentCount, 0);
+      });
+    });
+  });
+
+  describe('The createCaptureSession() function', () => {
+    describe('When two shots follow each other, of two photos then one', () => {
+      let series: CaptureSeries[];
+      beforeEach(() => {
+        const session = createCaptureSession(createCountingUuidSource());
+        series = [session.next(2), session.next(1)];
+      });
+
+      it('should number the photos of the second shot after those of the first', () => {
+        assert.deepEqual(
+          series.map(({ firstSeq }) => firstSeq),
+          [1, 3],
+        );
+      });
+
+      it('should keep both shots in one session', () => {
+        assert.equal(series[1]?.sessionId, series[0]?.sessionId);
+      });
+    });
+
+    describe('When an id is drawn between the creation of the session and its first shot', () => {
+      let drawnBetween: string;
+      let series: CaptureSeries;
+      beforeEach(() => {
+        const uuids = createCountingUuidSource();
+        const session = createCaptureSession(uuids);
+        drawnBetween = uuids.createUuid();
+        series = session.next(1);
+      });
+
+      it('should draw the id of the session at its first shot, after the id drawn before it', () => {
+        assert.deepEqual(
+          [drawnBetween, series.sessionId],
+          ['00000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-000000000002'],
+        );
       });
     });
   });

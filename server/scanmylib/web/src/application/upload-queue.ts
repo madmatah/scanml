@@ -58,6 +58,10 @@ export interface CaptureSeries {
   readonly firstSeq: number;
 }
 
+export interface CaptureSession {
+  next(count: number): CaptureSeries;
+}
+
 export interface UploadQueue<F extends PhotoFile> {
   subscribe(listener: () => void): () => void;
   getSnapshot(): readonly UploadItem[];
@@ -124,6 +128,19 @@ export const watchSentUploads = (
     if (nextSentCount > sentCount) onMoreSent();
     sentCount = nextSentCount;
   });
+};
+
+export const createCaptureSession = (uuids: UuidSource): CaptureSession => {
+  let sessionId: string | null = null;
+  let nextSeq = 1;
+  return {
+    next(count) {
+      if (sessionId === null) sessionId = uuids.createUuid();
+      const series = { sessionId, firstSeq: nextSeq };
+      nextSeq += count;
+      return series;
+    },
+  };
 };
 
 // The names that cameras and scanners give their files sort in shooting order.

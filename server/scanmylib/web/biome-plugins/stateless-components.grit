@@ -1,0 +1,38 @@
+language js
+
+or {
+  JsNamedImportSpecifier(name=$imported) as $specifier where {
+    $imported <: r"(?:unstable_|UNSAFE_)?use.*",
+    not $imported <: or {
+      `useId`,
+      `useRef`
+    },
+    $specifier <: within JsImport(import_clause=or {
+      JsImportNamedClause(source=$source),
+      JsImportCombinedClause(source=$source)
+    }),
+    $source <: r"['\"](?:react|react-dom|react-router|react-router/dom)['\"]",
+    register_diagnostic(span=$specifier, message="Call this hook in a hook of a use-*.ts file, not in a component, which only renders what it is given.")
+  },
+  JsShorthandNamedImportSpecifier(local_name=$imported) as $specifier where {
+    $imported <: r"(?:unstable_|UNSAFE_)?use.*",
+    not $imported <: or {
+      `useId`,
+      `useRef`
+    },
+    $specifier <: within JsImport(import_clause=or {
+      JsImportNamedClause(source=$source),
+      JsImportCombinedClause(source=$source)
+    }),
+    $source <: r"['\"](?:react|react-dom|react-router|react-router/dom)['\"]",
+    register_diagnostic(span=$specifier, message="Call this hook in a hook of a use-*.ts file, not in a component, which only renders what it is given.")
+  },
+  JsImport(import_clause=or {
+    JsImportDefaultClause(source=$source),
+    JsImportNamespaceClause(source=$source),
+    JsImportCombinedClause(source=$source)
+  }) as $import where {
+    $source <: r"['\"](?:react|react-dom|react-router|react-router/dom)['\"]",
+    register_diagnostic(span=$import, message="Import this package's names one by one, not as a default or namespace import.")
+  }
+}

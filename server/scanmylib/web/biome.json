@@ -2,7 +2,8 @@
   "$schema": "https://biomejs.dev/schemas/2.5.15/schema.json",
   "plugins": [
     "biome-plugins/arrow-functions.grit",
-    { "path": "biome-plugins/typed-components.grit", "includes": ["**/*.tsx"] }
+    { "path": "biome-plugins/typed-components.grit", "includes": ["**/*.tsx"] },
+    { "path": "biome-plugins/stateless-components.grit", "includes": ["**/*.tsx"] }
   ],
   "formatter": {
     "indentStyle": "space",

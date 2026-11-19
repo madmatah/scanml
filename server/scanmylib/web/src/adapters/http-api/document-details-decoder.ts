@@ -2,7 +2,7 @@ import type { DocumentDetails, DocumentWithPages, PageSummary } from '../../doma
 import { readDocumentSummary } from './document-summary-decoder.ts';
 import { type ResponseFields, readResponseFields } from './response-fields.ts';
 
-function readDocumentDetails(document: ResponseFields): DocumentDetails {
+const readDocumentDetails = (document: ResponseFields): DocumentDetails => {
   return {
     ...readDocumentSummary(document),
     slug: document.string('slug'),
@@ -10,9 +10,9 @@ function readDocumentDetails(document: ResponseFields): DocumentDetails {
     unwarp: document.boolean('unwarp'),
     folder: document.string('folder'),
   };
-}
+};
 
-function readPageSummary(page: ResponseFields): PageSummary {
+const readPageSummary = (page: ResponseFields): PageSummary => {
   return {
     id: page.string('id'),
     key: page.string('key'),
@@ -29,17 +29,17 @@ function readPageSummary(page: ResponseFields): PageSummary {
     thumbnailUrl: page.apiPath('thumb_url'),
     readAt: page.nullableObject('ocr')?.nullableString('at') ?? null,
   };
-}
+};
 
-export function decodeDocumentDetails(body: unknown): DocumentDetails {
+export const decodeDocumentDetails = (body: unknown): DocumentDetails => {
   return readDocumentDetails(readResponseFields(body));
-}
+};
 
-export function decodeDocumentWithPages(body: unknown): DocumentWithPages {
+export const decodeDocumentWithPages = (body: unknown): DocumentWithPages => {
   const document = readResponseFields(body);
   return { ...readDocumentDetails(document), pages: document.objectList('pages').map(readPageSummary) };
-}
+};
 
-export function decodeDocumentHtml(body: unknown): string {
+export const decodeDocumentHtml = (body: unknown): string => {
   return readResponseFields(body).string('html');
-}
+};

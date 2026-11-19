@@ -9,7 +9,7 @@ export interface EmptyStateProps {
   readonly actions?: ReactNode;
 }
 
-export function EmptyState({ iconName, title, message, actions }: EmptyStateProps) {
+export const EmptyState = ({ iconName, title, message, actions }: EmptyStateProps) => {
   return (
     <div className="state state-empty">
       {iconName !== undefined && (
@@ -22,4 +22,4 @@ export function EmptyState({ iconName, title, message, actions }: EmptyStateProp
       {actions !== undefined && <div className="state-actions">{actions}</div>}
     </div>
   );
-}
+};

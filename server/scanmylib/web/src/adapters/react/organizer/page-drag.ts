@@ -66,16 +66,16 @@ interface ActivePress {
 const ESCAPE = 'Escape';
 const APP_HEADER_ID = 'app-header';
 
-function closestElement(target: EventTarget | null, selector: string): Element | null {
+const closestElement = (target: EventTarget | null, selector: string): Element | null => {
   return target instanceof Element ? target.closest(selector) : null;
-}
+};
 
-function documentBox(element: Element): PixelBox {
+const documentBox = (element: Element): PixelBox => {
   const box = element.getBoundingClientRect();
   return { left: box.left + window.scrollX, top: box.top + window.scrollY, width: box.width, height: box.height };
-}
+};
 
-function dragGhost(card: HTMLElement, count: number): HTMLElement {
+const dragGhost = (card: HTMLElement, count: number): HTMLElement => {
   const ghost = document.createElement('div');
   ghost.className = 'drag-ghost';
   ghost.setAttribute('aria-hidden', 'true');
@@ -94,26 +94,26 @@ function dragGhost(card: HTMLElement, count: number): HTMLElement {
     ghost.append(badge);
   }
   return ghost;
-}
+};
 
 // Drags cards with Pointer Events, which work with a mouse, a finger and a pen, where the HTML drag and drop API does
 // not work on touch screens. The moving cards, the dragged thumbnail and the drop indicator change through the DOM
 // while the pointer moves, so that the screen draws again only when the drop changes the order.
-export function createPageDrag(elements: PageDragElements, callbacks: PageDragCallbacks): PageDrag {
+export const createPageDrag = (elements: PageDragElements, callbacks: PageDragCallbacks): PageDrag => {
   const { organizer, toolbar, lists, indicator } = elements;
   let press: ActivePress | null = null;
   let ignoreClickUntilMilliseconds = 0;
 
-  function ignoreNextClick(): void {
+  const ignoreNextClick = (): void => {
     ignoreClickUntilMilliseconds = performance.now() + CLICK_AFTER_DRAG_MILLISECONDS;
-  }
+  };
 
-  function appHeader(): HTMLElement | null {
+  const appHeader = (): HTMLElement | null => {
     const header = document.getElementById(APP_HEADER_ID);
     return header !== null && !header.hidden ? header : null;
-  }
+  };
 
-  function measure(current: ActivePress, scene: DragScene): void {
+  const measure = (current: ActivePress, scene: DragScene): void => {
     const { scrollX, scrollY } = window;
     scene.rectangles = callbacks.order().map((pageId) => {
       const box = callbacks.cardOf(pageId)?.getBoundingClientRect();
@@ -128,9 +128,9 @@ export function createPageDrag(elements: PageDragElements, callbacks: PageDragCa
     scene.gapPixels = columnGap(scene.rectangles);
     scene.origin = documentBox(lists);
     follow(current, scene);
-  }
+  };
 
-  function follow(current: ActivePress, scene: DragScene): void {
+  const follow = (current: ActivePress, scene: DragScene): void => {
     const { gesture } = current;
     const pointer = gesture.pointerPixels;
     const ghostAt = ghostPosition(gesture.pointerType, pointer, scene.ghostSize);
@@ -141,15 +141,15 @@ export function createPageDrag(elements: PageDragElements, callbacks: PageDragCa
     const mark = insertionMark(scene.rectangles, scene.target, scene.gapPixels);
     indicator.style.transform = `translate(${mark.x - scene.origin.left}px, ${mark.top - scene.origin.top}px)`;
     indicator.style.height = `${mark.bottom - mark.top}px`;
-  }
+  };
 
-  function coveredTop(): number {
+  const coveredTop = (): number => {
     const header = appHeader();
     const bar = toolbar.getBoundingClientRect();
     return coveredTopPixels(header === null ? 0 : header.getBoundingClientRect().bottom, bar.top, bar.bottom);
-  }
+  };
 
-  function tick(): void {
+  const tick = (): void => {
     const current = press;
     const scene = current?.scene;
     if (current === null || scene === null || scene === undefined) return;
@@ -158,9 +158,9 @@ export function createPageDrag(elements: PageDragElements, callbacks: PageDragCa
     // The scroll event moves the drop target.
     if (stepPixels !== 0) window.scrollBy(0, stepPixels);
     current.frame = requestAnimationFrame(tick);
-  }
+  };
 
-  function startDrag(current: ActivePress): void {
+  const startDrag = (current: ActivePress): void => {
     current.gesture = startDragging(current.gesture, callbacks.order(), callbacks.selected());
     window.clearTimeout(current.longPressTimer);
     for (const pageId of current.gesture.moving) callbacks.cardOf(pageId)?.classList.add('is-dragging');
@@ -189,9 +189,9 @@ export function createPageDrag(elements: PageDragElements, callbacks: PageDragCa
     window.addEventListener('resize', onDragResize);
     window.addEventListener('blur', onBlur);
     current.frame = requestAnimationFrame(tick);
-  }
+  };
 
-  function endPress(): ActivePress | null {
+  const endPress = (): ActivePress | null => {
     const ended = press;
     if (ended === null) return null;
     press = null;
@@ -214,13 +214,13 @@ export function createPageDrag(elements: PageDragElements, callbacks: PageDragCa
       ended.card.releasePointerCapture(ended.gesture.pointerId);
     }
     return ended;
-  }
+  };
 
-  function cancel(isByKey: boolean): void {
+  const cancel = (isByKey: boolean): void => {
     if (endPress() !== null) callbacks.onGestureEnd({ kind: 'cancel', isByKey });
-  }
+  };
 
-  function onPointerDown(event: PointerEvent): void {
+  const onPointerDown = (event: PointerEvent): void => {
     const card = closestElement(event.target, '.organizer-card');
     const pageId = card instanceof HTMLElement ? (card.dataset.id ?? null) : null;
     const start = pressGesture(
@@ -246,15 +246,15 @@ export function createPageDrag(elements: PageDragElements, callbacks: PageDragCa
     window.addEventListener('pointermove', onPointerMove);
     window.addEventListener('pointerup', onPointerUp);
     window.addEventListener('pointercancel', onPointerCancel);
-  }
+  };
 
-  function onLongPress(): void {
+  const onLongPress = (): void => {
     if (press === null || press.gesture.isDragging) return;
     press.gesture = pickUpGesture(press.gesture);
     press.card.classList.add('is-pressed');
-  }
+  };
 
-  function onPointerMove(event: PointerEvent): void {
+  const onPointerMove = (event: PointerEvent): void => {
     const current = press;
     if (current === null || event.pointerId !== current.gesture.pointerId) return;
     const { gesture, step } = moveGesture(current.gesture, { x: event.clientX, y: event.clientY });
@@ -262,56 +262,56 @@ export function createPageDrag(elements: PageDragElements, callbacks: PageDragCa
     if (step === 'cancel') cancel(false);
     else if (step === 'start') startDrag(current);
     else if (step === 'follow' && current.scene !== null) follow(current, current.scene);
-  }
+  };
 
-  function onPointerUp(event: PointerEvent): void {
+  const onPointerUp = (event: PointerEvent): void => {
     const current = press;
     if (current === null || event.pointerId !== current.gesture.pointerId) return;
     const release = releaseGesture(current.gesture, current.scene?.target ?? null, callbacks.order());
     if (release.ignoresClick) ignoreNextClick();
     endPress();
     callbacks.onGestureEnd(release.outcome);
-  }
+  };
 
-  function onPointerCancel(event: PointerEvent): void {
+  const onPointerCancel = (event: PointerEvent): void => {
     if (press !== null && event.pointerId === press.gesture.pointerId) cancel(false);
-  }
+  };
 
-  function onDragKey(event: KeyboardEvent): void {
+  const onDragKey = (event: KeyboardEvent): void => {
     if (event.key !== ESCAPE) return;
     event.preventDefault();
     event.stopPropagation();
     // The mouse button is still down: its click must not select.
     ignoreNextClick();
     cancel(true);
-  }
+  };
 
-  function onDragScroll(): void {
+  const onDragScroll = (): void => {
     if (press?.scene) follow(press, press.scene);
-  }
+  };
 
-  function onDragResize(): void {
+  const onDragResize = (): void => {
     if (press?.scene) measure(press, press.scene);
-  }
+  };
 
-  function onBlur(): void {
+  const onBlur = (): void => {
     cancel(false);
-  }
+  };
 
   // A finger that picked a card up must not scroll the page: the browser decides touch-action when the finger lands,
   // before the long press.
-  function onTouchMove(event: TouchEvent): void {
+  const onTouchMove = (event: TouchEvent): void => {
     if (press?.gesture.isArmed && event.cancelable) event.preventDefault();
-  }
+  };
 
   // The menu of a long press.
-  function onContextMenu(event: Event): void {
+  const onContextMenu = (event: Event): void => {
     if (press !== null && !isMouse(press.gesture.pointerType)) event.preventDefault();
-  }
+  };
 
-  function onDragStart(event: Event): void {
+  const onDragStart = (event: Event): void => {
     event.preventDefault();
-  }
+  };
 
   lists.addEventListener('pointerdown', onPointerDown);
   lists.addEventListener('touchmove', onTouchMove, { passive: false });
@@ -332,4 +332,4 @@ export function createPageDrag(elements: PageDragElements, callbacks: PageDragCa
       lists.removeEventListener('dragstart', onDragStart);
     },
   };
-}
+};

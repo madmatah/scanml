@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Icon } from './icon.tsx';
 import type { Toasts } from './toasts.ts';
 
-export function ToastRegion({ toasts }: { readonly toasts: Toasts }) {
+export const ToastRegion = ({ toasts }: { readonly toasts: Toasts }) => {
   const { t } = useTranslation();
   const shown = useSyncExternalStore(toasts.subscribe, toasts.getSnapshot);
   return (
@@ -24,4 +24,4 @@ export function ToastRegion({ toasts }: { readonly toasts: Toasts }) {
       ))}
     </div>
   );
-}
+};

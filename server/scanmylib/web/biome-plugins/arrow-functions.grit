@@ -1,0 +1,5 @@
+language js
+
+JsFunctionDeclaration(id=$name) where {
+  register_diagnostic(span=$name, message="Declare this function as a const arrow function.")
+}

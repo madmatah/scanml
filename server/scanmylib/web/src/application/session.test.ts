@@ -23,18 +23,18 @@ interface Arrangement {
   readonly session: Session;
 }
 
-function arrange(recorded: boolean | null, answers: ServerAnswers = {}): Arrangement {
+const arrange = (recorded: boolean | null, answers: ServerAnswers = {}): Arrangement => {
   const server = createFakeSessionServer(answers);
   const signInRecord = createFakeSignInRecord(recorded);
   return { server, signInRecord, session: createSession(server, signInRecord) };
-}
+};
 
-async function startSignedIn(answers: ServerAnswers = {}): Promise<Arrangement> {
+const startSignedIn = async (answers: ServerAnswers = {}): Promise<Arrangement> => {
   const arrangement = arrange(true, answers);
   await arrangement.session.start(null);
   arrangement.server.calls.length = 0;
   return arrangement;
-}
+};
 
 describe('The session', () => {
   describe('The getSnapshot() method', () => {

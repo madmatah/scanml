@@ -10,7 +10,7 @@ import {
 
 const NO_VALUE = '—';
 
-export function formatBytes(t: TFunction, formatting: NumberFormatting, sizeBytes: number): string {
+export const formatBytes = (t: TFunction, formatting: NumberFormatting, sizeBytes: number): string => {
   const { amount, unit } = byteSize(sizeBytes);
   switch (unit) {
     case 'B':
@@ -22,26 +22,26 @@ export function formatBytes(t: TFunction, formatting: NumberFormatting, sizeByte
     case 'GB':
       return t('{{size}} GB', { size: formatting.formatDecimal(amount) });
   }
-}
+};
 
-export function formatSeconds(t: TFunction, formatting: NumberFormatting, seconds: number | null): string {
+export const formatSeconds = (t: TFunction, formatting: NumberFormatting, seconds: number | null): string => {
   return seconds === null ? NO_VALUE : t('{{seconds}} s', { seconds: formatting.formatDecimal(seconds) });
-}
+};
 
-export function formatPercent(t: TFunction, formatting: NumberFormatting, ratio: number): string {
+export const formatPercent = (t: TFunction, formatting: NumberFormatting, ratio: number): string => {
   return t('{{percent}}%', { percent: formatting.formatNumber(wholePercent(ratio)) });
-}
+};
 
-export function quoted(t: TFunction, text: string): string {
+export const quoted = (t: TFunction, text: string): string => {
   return t('“{{text}}”', { text });
-}
+};
 
-export function formatRelativeTime(
+export const formatRelativeTime = (
   t: TFunction,
   dates: DateFormatting,
   isoDate: string,
   nowMilliseconds: number,
-): string {
+): string => {
   const date = new Date(isoDate);
   if (Number.isNaN(date.getTime())) return NO_VALUE;
   const elapsed = elapsedTime(date.getTime(), nowMilliseconds);
@@ -53,9 +53,9 @@ export function formatRelativeTime(
     case 'absolute':
       return dates.formatDateTime(date);
   }
-}
+};
 
-export function formatDateTime(dates: DateFormatting, isoDate: string): string {
+export const formatDateTime = (dates: DateFormatting, isoDate: string): string => {
   const date = new Date(isoDate);
   return Number.isNaN(date.getTime()) ? NO_VALUE : dates.formatDateTime(date);
-}
+};

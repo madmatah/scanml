@@ -28,7 +28,10 @@ const FIRST_SUCCESS = 200;
 const FIRST_FAILURE = 300;
 
 // An XMLHttpRequest rather than fetch(), which cannot tell how much of a request's body is sent.
-export function createPageUploader(createRequest: () => UploadRequest, onUnauthorized: () => void): PageUploader<File> {
+export const createPageUploader = (
+  createRequest: () => UploadRequest,
+  onUnauthorized: () => void,
+): PageUploader<File> => {
   return {
     uploadPage({ documentId, pageId, sessionId, seq, capturedAt, file }, onProgress) {
       return new Promise((resolve, reject) => {
@@ -60,4 +63,4 @@ export function createPageUploader(createRequest: () => UploadRequest, onUnautho
       });
     },
   };
-}
+};

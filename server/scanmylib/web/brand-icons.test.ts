@@ -53,7 +53,7 @@ const UNMASKED_COLOR: PictureColor = {
 };
 const BITS_PER_CHANNEL = 8;
 
-function readPngHeader(bytes: Uint8Array): PngHeader {
+const readPngHeader = (bytes: Uint8Array): PngHeader => {
   if (!PNG_SIGNATURE.every((byte, index) => bytes[index] === byte)) {
     throw new Error('not a PNG: wrong signature');
   }
@@ -82,37 +82,37 @@ function readPngHeader(bytes: Uint8Array): PngHeader {
     colorType: view.getUint8(25),
     chunkTypes,
   };
-}
+};
 
-function readMark(source: string): string {
+const readMark = (source: string): string => {
   const mark = source.match(/<g id="mark">[\s\S]*?<\/g>/)?.[0];
   if (mark === undefined) {
     throw new Error('no <g id="mark"> group');
   }
   return mark.replace(/\s+/g, ' ');
-}
+};
 
-function readSizes(sizes: string): PictureSize {
+const readSizes = (sizes: string): PictureSize => {
   const [widthPixels = Number.NaN, heightPixels = Number.NaN] = sizes.split('x').map(Number);
   return { widthPixels, heightPixels };
-}
+};
 
-function readAttribute(tag: string, name: string): string {
+const readAttribute = (tag: string, name: string): string => {
   const attribute = tag.match(new RegExp(`\\s${name}="([^"]*)"`))?.[1];
   if (attribute === undefined) {
     throw new Error(`no ${name} in ${tag}`);
   }
   return attribute;
-}
+};
 
-function readText(field: string, value: unknown): string {
+const readText = (field: string, value: unknown): string => {
   if (typeof value !== 'string') {
     throw new Error(`the manifest's ${field} is not a text`);
   }
   return value;
-}
+};
 
-function readManifestIcons(manifest: unknown): ManifestIcon[] {
+const readManifestIcons = (manifest: unknown): ManifestIcon[] => {
   const icons = typeof manifest === 'object' && manifest !== null ? Reflect.get(manifest, 'icons') : undefined;
   if (!Array.isArray(icons)) {
     throw new Error('the manifest lists no icons');
@@ -123,15 +123,15 @@ function readManifestIcons(manifest: unknown): ManifestIcon[] {
     type: readText('type', Reflect.get(Object(icon), 'type')),
     purpose: readText('purpose', Reflect.get(Object(icon), 'purpose')),
   }));
-}
+};
 
-function readAppleTouchLink(page: string): string {
+const readAppleTouchLink = (page: string): string => {
   const link = page.match(/<link\s[^>]*rel="apple-touch-icon"[^>]*>/)?.[0];
   if (link === undefined) {
     throw new Error('no apple-touch-icon link in the template of the entry page');
   }
   return link;
-}
+};
 
 const DRAWINGS = readdirSync(ICONS).filter((file) => file.endsWith('.svg'));
 

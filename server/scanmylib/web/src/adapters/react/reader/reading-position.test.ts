@@ -13,12 +13,12 @@ interface ViewLayout {
 const READING_LINE_PIXELS = 120;
 const VIEWPORT_HEIGHT_PIXELS = 900;
 
-function viewOf({
+const viewOf = ({
   pageTopsPixels,
   pageHeightPixels = 600,
   scrolledPixels = 1000,
   textHeightPixels = 10000,
-}: ViewLayout) {
+}: ViewLayout) => {
   const view: ReadingView = {
     pageCount: pageTopsPixels.length,
     readingLinePixels: READING_LINE_PIXELS,
@@ -29,7 +29,7 @@ function viewOf({
     pageBottomPixels: (pageIndex) => (pageTopsPixels[pageIndex] ?? 0) + pageHeightPixels,
   };
   return view;
-}
+};
 
 describe('The reading position', () => {
   describe('The readingPosition() function', () => {

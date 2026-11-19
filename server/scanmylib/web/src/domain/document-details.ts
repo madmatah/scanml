@@ -41,14 +41,14 @@ export interface PageGroup {
 
 const PAGES_TO_ORGANIZE = 2;
 
-export function pageGroupOf(page: PageSummary): PageGroupKind {
+export const pageGroupOf = (page: PageSummary): PageGroupKind => {
   if (page.isInDocument) return page.placement === 'unplaced' ? 'unplaced' : 'placed';
   if (page.isExcluded) return 'excluded';
   if (page.duplicateOf !== null) return 'duplicate';
   return 'pending';
-}
+};
 
-export function groupPages(pages: readonly PageSummary[]): PageGroup[] {
+export const groupPages = (pages: readonly PageSummary[]): PageGroup[] => {
   const groups: { readonly kind: PageGroupKind; readonly pages: PageSummary[] }[] = [];
   for (const page of pages) {
     const kind = pageGroupOf(page);
@@ -62,28 +62,28 @@ export function groupPages(pages: readonly PageSummary[]): PageGroup[] {
     occurrences.set(kind, occurrence + 1);
     return { key: occurrence === 0 ? kind : `${kind}-${occurrence}`, kind, pages: groupPages };
   });
-}
+};
 
-export function hasPlacedPages(groups: readonly PageGroup[]): boolean {
+export const hasPlacedPages = (groups: readonly PageGroup[]): boolean => {
   return groups.some((group) => group.kind === 'placed');
-}
+};
 
-export function hasPagesPlacedByHand(pages: readonly PageSummary[]): boolean {
+export const hasPagesPlacedByHand = (pages: readonly PageSummary[]): boolean => {
   return pages.some((page) => page.isInDocument && page.placement === 'manual');
-}
+};
 
-export function canOrganize(pages: readonly PageSummary[]): boolean {
+export const canOrganize = (pages: readonly PageSummary[]): boolean => {
   return pages.filter((page) => page.isInDocument).length >= PAGES_TO_ORGANIZE;
-}
+};
 
-export function waitingPageCount(stats: DocumentStats): number {
+export const waitingPageCount = (stats: DocumentStats): number => {
   return stats.queuedCount + stats.processingCount;
-}
+};
 
-export function isTextPending(stats: DocumentStats): boolean {
+export const isTextPending = (stats: DocumentStats): boolean => {
   return waitingPageCount(stats) > 0;
-}
+};
 
-export function hasPagesPositionedByHand(pages: readonly PageSummary[]): boolean {
+export const hasPagesPositionedByHand = (pages: readonly PageSummary[]): boolean => {
   return pages.some((page) => page.position !== null);
-}
+};

@@ -34,11 +34,11 @@ const NOT_FOUND = 404;
 const SERVER_ERROR = 500;
 const SANITIZED_HTML = '<p>Example text.</p>';
 
-async function settle(): Promise<void> {
+const settle = async (): Promise<void> => {
   await new Promise((resolve) => setImmediate(resolve));
-}
+};
 
-function createFakeCalls<Answer>(): FakeCalls<Answer> {
+const createFakeCalls = <Answer>(): FakeCalls<Answer> => {
   const calls: PendingCall<Answer>[] = [];
   return {
     calls,
@@ -57,9 +57,9 @@ function createFakeCalls<Answer>(): FakeCalls<Answer> {
         });
       }),
   };
-}
+};
 
-function documentWith(title: string): DocumentWithPages {
+const documentWith = (title: string): DocumentWithPages => {
   return {
     ...sampleDocument({ title }),
     slug: 'math-notes',
@@ -68,9 +68,9 @@ function documentWith(title: string): DocumentWithPages {
     folder: '/data/USER/scanmylib/library/math-notes',
     pages: [],
   };
-}
+};
 
-function arrange(): Arrangement {
+const arrange = (): Arrangement => {
   const pageReads = createFakeCalls<PageDetails>();
   const documentReads = createFakeCalls<DocumentWithPages>();
   const htmlReads = createFakeCalls<string>();
@@ -88,17 +88,17 @@ function arrange(): Arrangement {
     onRefreshFailed: (failure) => refreshFailures.push(failure),
   });
   return { pageReads, documentReads, htmlReads, scheduler, leaving, loads, refreshFailures, loader };
-}
+};
 
-async function showReadPage(arrangement: Arrangement, callIndex: number, markdown: string): Promise<void> {
+const showReadPage = async (arrangement: Arrangement, callIndex: number, markdown: string): Promise<void> => {
   await arrangement.pageReads.calls[callIndex]?.answer(samplePageDetails({ markdown }));
   await arrangement.documentReads.calls[callIndex]?.answer(documentWith('Math Notes'));
   await arrangement.htmlReads.calls[callIndex]?.answer(SANITIZED_HTML);
-}
+};
 
-function phasesOf(loads: readonly PageLoad[]): string[] {
+const phasesOf = (loads: readonly PageLoad[]): string[] => {
   return loads.map((load) => (load.phase === 'loaded' ? load.page.markdown : load.phase));
-}
+};
 
 describe('The page loader', () => {
   describe('The load() method', () => {

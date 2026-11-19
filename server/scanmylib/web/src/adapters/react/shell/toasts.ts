@@ -22,19 +22,19 @@ export const TOAST_DURATION_MILLISECONDS: Readonly<Record<ToastTone, number>> = 
 };
 export const MOST_TOASTS_SHOWN = 3;
 
-export function createToasts(scheduler: Scheduler): Toasts {
+export const createToasts = (scheduler: Scheduler): Toasts => {
   let shown: readonly Toast[] = [];
   let lastId = 0;
   const listeners = new Set<() => void>();
 
-  function replace(next: readonly Toast[]): void {
+  const replace = (next: readonly Toast[]): void => {
     shown = next;
     for (const listener of listeners) listener();
-  }
+  };
 
-  function dismiss(id: number): void {
+  const dismiss = (id: number): void => {
     if (shown.some((toast) => toast.id === id)) replace(shown.filter((toast) => toast.id !== id));
-  }
+  };
 
   return {
     subscribe(listener) {
@@ -53,4 +53,4 @@ export function createToasts(scheduler: Scheduler): Toasts {
     },
     dismiss,
   };
-}
+};

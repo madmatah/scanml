@@ -4,7 +4,7 @@ import type { DocumentSummary } from '../../domain/document-summary.ts';
 import { decodeDocumentList, decodeDocumentSummary } from './document-summary-decoder.ts';
 
 // A document of GET /api/documents and of PUT /api/documents/{id}, as docs/API.md gives it.
-function documentBody(): Record<string, unknown> {
+const documentBody = (): Record<string, unknown> => {
   return {
     id: '95bbeb79-4351-432f-a53c-d3658892ff50',
     slug: 'example-book',
@@ -20,7 +20,7 @@ function documentBody(): Record<string, unknown> {
     cover_thumb_url: '/api/pages/de215798-031a-4b20-a867-49c12e3baabe/thumb',
     folder: '/data/USER/scanmylib/library/example-book',
   };
-}
+};
 
 const DECODED_DOCUMENT: DocumentSummary = {
   id: '95bbeb79-4351-432f-a53c-d3658892ff50',

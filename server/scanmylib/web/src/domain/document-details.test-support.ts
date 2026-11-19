@@ -1,6 +1,6 @@
 import type { PageSummary } from './document-details.ts';
 
-export function samplePage(id: string, changes: Partial<PageSummary> = {}): PageSummary {
+export const samplePage = (id: string, changes: Partial<PageSummary> = {}): PageSummary => {
   return {
     id,
     key: `k-${id}`,
@@ -18,4 +18,4 @@ export function samplePage(id: string, changes: Partial<PageSummary> = {}): Page
     readAt: null,
     ...changes,
   };
-}
+};

@@ -16,14 +16,14 @@ export type OutlineEntry<Page> =
 
 const PAGE_RANGE_DASH = /[–-]/;
 
-export function namesSeveralPages(range: string): boolean {
+export const namesSeveralPages = (range: string): boolean => {
   return PAGE_RANGE_DASH.test(range);
-}
+};
 
-export function readingOutline<Page>(
+export const readingOutline = <Page>(
   parts: readonly ReadingPart[],
   pagesByKey: ReadonlyMap<string, Page>,
-): OutlineEntry<Page>[] {
+): OutlineEntry<Page>[] => {
   const entries: OutlineEntry<Page>[] = [];
   let pageCount = 0;
   for (const part of parts) {
@@ -36,10 +36,14 @@ export function readingOutline<Page>(
     }
   }
   return entries;
-}
+};
 
 // A binary search: a long book has hundreds of pages, and this runs while the reader scrolls.
-export function pageAtLine(pageCount: number, topPixelsOf: (pageIndex: number) => number, linePixels: number): number {
+export const pageAtLine = (
+  pageCount: number,
+  topPixelsOf: (pageIndex: number) => number,
+  linePixels: number,
+): number => {
   let low = 0;
   let high = pageCount - 1;
   let found = 0;
@@ -53,4 +57,4 @@ export function pageAtLine(pageCount: number, topPixelsOf: (pageIndex: number) =
     }
   }
   return found;
-}
+};

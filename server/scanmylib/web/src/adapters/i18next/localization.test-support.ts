@@ -3,10 +3,10 @@ import type { Resource } from 'i18next';
 import { createLocalization, type Localization } from './localization.ts';
 
 // The language detector reads the browser's languages from the global navigator, and only while the instance starts.
-export async function createLocalizationFor(
+export const createLocalizationFor = async (
   browserLanguages: readonly string[] | undefined,
   catalogs: Resource,
-): Promise<Localization> {
+): Promise<Localization> => {
   const navigatorProperty = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
   const browserNavigator = browserLanguages === undefined ? {} : { languages: browserLanguages };
   Object.defineProperty(globalThis, 'navigator', { value: browserNavigator, configurable: true });
@@ -16,4 +16,4 @@ export async function createLocalizationFor(
     Reflect.deleteProperty(globalThis, 'navigator');
     if (navigatorProperty !== undefined) Object.defineProperty(globalThis, 'navigator', navigatorProperty);
   }
-}
+};

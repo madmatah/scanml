@@ -5,14 +5,14 @@ import { createRandomUuidSource, type RandomValues } from './random-uuid-source.
 
 const VERSION_4_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
-function fixedRandomValues(byte: number): RandomValues {
+const fixedRandomValues = (byte: number): RandomValues => {
   return {
     getRandomValues(array) {
       array.fill(byte);
       return array;
     },
   };
-}
+};
 
 describe('The random uuid source', () => {
   describe('The createUuid() function', () => {

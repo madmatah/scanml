@@ -6,9 +6,9 @@ import { createToasts, MOST_TOASTS_SHOWN, TOAST_DURATION_MILLISECONDS, type Toas
 const SAVED = 'Details saved.';
 const FAILED = 'Could not sign out.';
 
-function messagesOf(toasts: readonly Toast[]): string[] {
+const messagesOf = (toasts: readonly Toast[]): string[] => {
   return toasts.map((toast) => toast.message);
-}
+};
 
 describe('The toasts', () => {
   describe('The TOAST_DURATION_MILLISECONDS constant', () => {

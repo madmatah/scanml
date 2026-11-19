@@ -53,17 +53,17 @@ type OpenDialog = 'edit' | 'delete' | null;
 const MARKDOWN_FILE_NAME = 'document.md';
 
 // Each document has a screen of its own, so that going from one to another starts the next one afresh.
-export function DocumentScreen(props: DocumentScreenProps) {
+export const DocumentScreen = (props: DocumentScreenProps) => {
   const documentId = idOfAddress(useParams().documentId);
   if (documentId === null) return null;
   return <DocumentView key={documentId} documentId={documentId} {...props} />;
-}
+};
 
 interface DocumentViewProps extends DocumentScreenProps {
   readonly documentId: string;
 }
 
-function DocumentView({
+const DocumentView = ({
   documentId,
   store,
   engineStatus,
@@ -73,7 +73,7 @@ function DocumentView({
   formatting,
   uploads,
   uuids,
-}: DocumentViewProps) {
+}: DocumentViewProps) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [load, setLoad] = useState<DocumentLoad>({ phase: 'loading' });
@@ -127,14 +127,14 @@ function DocumentView({
     };
   }, [documentId, store, engineStatus, scheduler, uploads, toasts, t, navigate]);
 
-  function edited(saved: DocumentDetails | null): void {
+  const edited = (saved: DocumentDetails | null): void => {
     setOpenDialog(null);
     if (saved === null || load.phase !== 'loaded') return;
     loader.current?.replace({ ...saved, pages: load.document.pages });
     toasts.show(t('Details saved.'), 'success');
-  }
+  };
 
-  async function deleteDocument(deletedTitle: string): Promise<void> {
+  const deleteDocument = async (deletedTitle: string): Promise<void> => {
     try {
       await store.deleteDocument(documentId);
       toasts.show(t('Document {{title}} moved to the trash.', { title: quoted(t, deletedTitle) }), 'success');
@@ -142,27 +142,27 @@ function DocumentView({
     } catch (failure) {
       toasts.show(errorMessage(t, failure, t('Could not delete.')), 'error');
     }
-  }
+  };
 
   // A change of the order and a refresh cannot cross: the loader tells them apart.
-  async function writeOrder(request: () => Promise<DocumentWithPages>): Promise<DocumentWithPages> {
+  const writeOrder = async (request: () => Promise<DocumentWithPages>): Promise<DocumentWithPages> => {
     const documentLoader = loader.current;
     if (documentLoader === null) throw new Error('The document is organized before it is loaded');
     return await documentLoader.writeOrder(request);
-  }
+  };
 
-  function stopOrganizing(): void {
+  const stopOrganizing = (): void => {
     flushSync(() => setOrganizing(false));
     const button = organizeButton.current;
     // The button stays hidden when too few pages are left to organize.
     (button === null || button.hidden ? heading.current : button)?.focus();
-  }
+  };
 
-  function deleteClosed(isConfirmed: boolean, deletedTitle: string): void {
+  const deleteClosed = (isConfirmed: boolean, deletedTitle: string): void => {
     setOpenDialog(null);
     // deleteDocument tells its failures in a toast, so its promise never rejects.
     if (isConfirmed) void deleteDocument(deletedTitle);
-  }
+  };
 
   if (load.phase === 'loading') {
     return (
@@ -279,7 +279,7 @@ function DocumentView({
       )}
     </section>
   );
-}
+};
 
 interface DocumentOverviewProps {
   readonly document: DocumentWithPages;
@@ -291,15 +291,23 @@ interface DocumentOverviewProps {
   readonly uuids: UuidSource;
 }
 
-function DocumentOverview({ document, store, toasts, clipboard, formatting, uploads, uuids }: DocumentOverviewProps) {
+const DocumentOverview = ({
+  document,
+  store,
+  toasts,
+  clipboard,
+  formatting,
+  uploads,
+  uuids,
+}: DocumentOverviewProps) => {
   const { t } = useTranslation();
   const withScansId = useId();
   const [includesScans, setIncludesScans] = useState(false);
 
-  async function copyFolder(): Promise<void> {
+  const copyFolder = async (): Promise<void> => {
     if (await clipboard.copyText(document.folder)) toasts.show(t('Folder path copied.'), 'success');
     else toasts.show(t('Could not copy: select the path by hand.'), 'error');
-  }
+  };
 
   return (
     <div className="doc-overview">
@@ -370,12 +378,12 @@ function DocumentOverview({ document, store, toasts, clipboard, formatting, uplo
       </div>
     </div>
   );
-}
+};
 
-function statClass(count: number, tone: StatTone | null): string {
+const statClass = (count: number, tone: StatTone | null): string => {
   if (count === 0) return 'stat is-zero';
   return tone === null ? 'stat' : `stat stat-${tone}`;
-}
+};
 
 interface PagesSectionProps {
   readonly document: DocumentWithPages;
@@ -384,7 +392,7 @@ interface PagesSectionProps {
   readonly organizer: ReactNode;
 }
 
-function PagesSection({ document, organizeButton, onOrganize, organizer }: PagesSectionProps) {
+const PagesSection = ({ document, organizeButton, onOrganize, organizer }: PagesSectionProps) => {
   const { t } = useTranslation();
   const { pages } = document;
   return (
@@ -407,9 +415,9 @@ function PagesSection({ document, organizeButton, onOrganize, organizer }: Pages
       {organizer || <PageGroups pages={pages} />}
     </section>
   );
-}
+};
 
-function PageGroups({ pages }: { readonly pages: DocumentWithPages['pages'] }) {
+const PageGroups = ({ pages }: { readonly pages: DocumentWithPages['pages'] }) => {
   const { t } = useTranslation();
   if (pages.length > 0) return <PageGrid pages={pages} />;
   return (
@@ -421,4 +429,4 @@ function PageGroups({ pages }: { readonly pages: DocumentWithPages['pages'] }) {
       />
     </div>
   );
-}
+};

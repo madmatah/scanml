@@ -11,9 +11,9 @@ import { type DetailRow, detailRows, numberHelp, scanDescription } from './page-
 
 const NARROW_NO_BREAK_SPACE = '\u202f';
 
-function describedRows(rows: readonly DetailRow[]): Record<string, string> {
+const describedRows = (rows: readonly DetailRow[]): Record<string, string> => {
   return Object.fromEntries(rows.map(({ term, description }) => [term, description]));
-}
+};
 
 describe('The page text', () => {
   let english: Localization;

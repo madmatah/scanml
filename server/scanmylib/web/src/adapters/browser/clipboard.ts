@@ -9,7 +9,7 @@ export interface ClipboardApis {
 // The asynchronous Clipboard API exists only in a secure context, and the web UI is usually opened over plain HTTP on
 // the local network: there, the text is copied from a temporary text area by the copy command, deprecated but still
 // supported.
-export function createClipboard(apis: ClipboardApis): Clipboard {
+export const createClipboard = (apis: ClipboardApis): Clipboard => {
   return {
     async copyText(text) {
       if (apis.isSecureContext && apis.writeText !== null) {
@@ -23,4 +23,4 @@ export function createClipboard(apis: ClipboardApis): Clipboard {
       return apis.copyWithCommand(text);
     },
   };
-}
+};

@@ -27,7 +27,11 @@ export interface StatTile {
   readonly tone: StatTone | null;
 }
 
-export function pageGroupHeading(t: TFunction, kind: PageGroupKind, situation: PageGroupSituation): PageGroupHeading {
+export const pageGroupHeading = (
+  t: TFunction,
+  kind: PageGroupKind,
+  situation: PageGroupSituation,
+): PageGroupHeading => {
   switch (kind) {
     case 'placed':
       return {
@@ -56,9 +60,9 @@ export function pageGroupHeading(t: TFunction, kind: PageGroupKind, situation: P
     case 'duplicate':
       return { title: t('Duplicates'), hint: t('Replaced by a newer scan of the same page number.') };
   }
-}
+};
 
-export function statTiles(t: TFunction, stats: DocumentStats): StatTile[] {
+export const statTiles = (t: TFunction, stats: DocumentStats): StatTile[] => {
   return [
     { name: 'pages', label: t('Pages'), count: stats.pageCount, tone: null },
     { name: 'done', label: t('Text ready'), count: stats.doneCount, tone: null },
@@ -68,9 +72,9 @@ export function statTiles(t: TFunction, stats: DocumentStats): StatTile[] {
     { name: 'excluded', label: t('Excluded'), count: stats.excludedCount, tone: null },
     { name: 'duplicates', label: t('Duplicates'), count: stats.duplicateCount, tone: null },
   ];
-}
+};
 
-export function coverageRangeTitle(t: TFunction, range: PageRange, isMissing: boolean): string {
+export const coverageRangeTitle = (t: TFunction, range: PageRange, isMissing: boolean): string => {
   const [start, end] = range;
   if (start === end) {
     return isMissing
@@ -81,15 +85,15 @@ export function coverageRangeTitle(t: TFunction, range: PageRange, isMissing: bo
   return isMissing
     ? t('Pages {{range}}: not scanned yet', { range: pages })
     : t('Pages {{range}}: scanned', { range: pages });
-}
+};
 
-export function coverageDescription(
+export const coverageDescription = (
   t: TFunction,
   scannedLabel: string,
   gaps: readonly PageRange[],
   lowestNumber: number,
   highestNumber: number,
-): string {
+): string => {
   if (gaps.length === 0) {
     return t('All pages from {{lowest}} to {{highest}} are scanned.', { lowest: lowestNumber, highest: highestNumber });
   }
@@ -97,17 +101,17 @@ export function coverageDescription(
     scanned: scannedLabel,
     missing: formatPageRanges(gaps),
   });
-}
+};
 
-export function missingPagesText(t: TFunction, gaps: readonly PageRange[]): string {
+export const missingPagesText = (t: TFunction, gaps: readonly PageRange[]): string => {
   return gaps.length === 0 ? t('none', { context: 'missing pages' }) : formatPageRanges(gaps);
-}
+};
 
-export function unnumberedPagesNote(t: TFunction, unnumberedCount: number): string {
+export const unnumberedPagesNote = (t: TFunction, unnumberedCount: number): string => {
   const pages = t('{{count, number}} unnumbered page', {
     count: unnumberedCount,
     defaultValue_one: '{{count, number}} unnumbered page',
     defaultValue_other: '{{count, number}} unnumbered pages',
   });
   return `+ ${pages}`;
-}
+};

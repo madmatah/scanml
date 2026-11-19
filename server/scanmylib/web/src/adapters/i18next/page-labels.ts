@@ -16,23 +16,23 @@ export interface DescribedLabel {
   readonly description: string;
 }
 
-export function pageShortLabel(t: TFunction, page: LabeledPage): string {
+export const pageShortLabel = (t: TFunction, page: LabeledPage): string => {
   return page.page_label ? t('p. {{label}}', { label: page.page_label }) : t('No number');
-}
+};
 
 export interface TitledPage {
   readonly pageLabel: string | null;
   readonly numberEnd: number | null;
 }
 
-export function pageTitle(t: TFunction, page: TitledPage): string {
+export const pageTitle = (t: TFunction, page: TitledPage): string => {
   if (!page.pageLabel) return t('Page with no number');
   return page.numberEnd === null
     ? t('Page {{label}}', { label: page.pageLabel })
     : t('Pages {{label}}', { label: page.pageLabel });
-}
+};
 
-export function pageStatusLabel(t: TFunction, status: string): PageStatusLabel {
+export const pageStatusLabel = (t: TFunction, status: string): PageStatusLabel => {
   switch (status) {
     case 'queued':
       return { label: t('Queued'), tone: 'warn' };
@@ -45,9 +45,9 @@ export function pageStatusLabel(t: TFunction, status: string): PageStatusLabel {
     default:
       return { label: status, tone: 'neutral' };
   }
-}
+};
 
-export function numberSourceLabel(t: TFunction, source: string | null): DescribedLabel | null {
+export const numberSourceLabel = (t: TFunction, source: string | null): DescribedLabel | null => {
   switch (source) {
     case null:
       return null;
@@ -65,9 +65,9 @@ export function numberSourceLabel(t: TFunction, source: string | null): Describe
     default:
       return { label: source, description: '' };
   }
-}
+};
 
-export function pagePlacementLabel(t: TFunction, placement: string | null): DescribedLabel | null {
+export const pagePlacementLabel = (t: TFunction, placement: string | null): DescribedLabel | null => {
   switch (placement) {
     case 'manual':
       return { label: t('moved'), description: t('Placed by hand with “Organize”: it keeps this place.') };
@@ -84,4 +84,4 @@ export function pagePlacementLabel(t: TFunction, placement: string | null): Desc
     default:
       return null;
   }
-}
+};

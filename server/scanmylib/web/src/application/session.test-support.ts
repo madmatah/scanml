@@ -10,26 +10,26 @@ export interface FakeSessionServer extends SessionServer {
   readonly calls: string[];
 }
 
-export function createFakeSessionServer(answers: ServerAnswers = {}): FakeSessionServer {
+export const createFakeSessionServer = (answers: ServerAnswers = {}): FakeSessionServer => {
   const calls: string[] = [];
-  async function answer(call: string, failure: Error | undefined): Promise<void> {
+  const answer = async (call: string, failure: Error | undefined): Promise<void> => {
     calls.push(call);
     if (failure !== undefined) throw failure;
-  }
+  };
   return {
     calls,
     checkSession: () => answer('checkSession', answers.checkSession),
     signIn: (token) => answer(`signIn ${token}`, answers.signIn),
     signOut: () => answer('signOut', answers.signOut),
   };
-}
+};
 
 export interface FakeSignInRecord extends SignInRecord {
   readonly recorded: () => boolean | null;
 }
 
 // A record that cannot be read, as a disabled storage, also keeps nothing written to it.
-export function createFakeSignInRecord(recorded: boolean | null): FakeSignInRecord {
+export const createFakeSignInRecord = (recorded: boolean | null): FakeSignInRecord => {
   let current = recorded;
   return {
     recorded: () => current,
@@ -38,4 +38,4 @@ export function createFakeSignInRecord(recorded: boolean | null): FakeSignInReco
       if (current !== null) current = isSignedIn;
     },
   };
-}
+};

@@ -1,5 +1,6 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.5.15/schema.json",
+  "plugins": ["biome-plugins/arrow-functions.grit"],
   "formatter": {
     "indentStyle": "space",
     "indentWidth": 2,

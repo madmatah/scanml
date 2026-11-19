@@ -8,7 +8,7 @@ import { layScan, scanHeightLimitPixels } from './scan-layout.ts';
 
 const APP_HEADER_ID = 'app-header';
 
-export function ScanPane({ page }: { readonly page: PageDetails }) {
+export const ScanPane = ({ page }: { readonly page: PageDetails }) => {
   const { t } = useTranslation();
   const [isFullWidth, setFullWidth] = useState(false);
   const viewport = useRef<HTMLDivElement>(null);
@@ -26,7 +26,7 @@ export function ScanPane({ page }: { readonly page: PageDetails }) {
     let layoutFrame = 0;
     let lastPaneWidthPixels = 0;
 
-    function layOut(): void {
+    const layOut = (): void => {
       if (paneViewport === null || scanFrame === null || scanImage === null) return;
       layoutFrame = 0;
       lastPaneWidthPixels = paneViewport.clientWidth;
@@ -43,12 +43,12 @@ export function ScanPane({ page }: { readonly page: PageDetails }) {
       scanImage.style.width = `${layout.imagePixels.width}px`;
       scanImage.style.height = `${layout.imagePixels.height}px`;
       scanImage.style.transform = layout.transform;
-    }
+    };
 
     // In the next frame: a size changed inside the observer's own callback would call it again within the same frame.
-    function scheduleLayout(): void {
+    const scheduleLayout = (): void => {
       if (layoutFrame === 0) layoutFrame = requestAnimationFrame(layOut);
-    }
+    };
 
     const resizeObserver = new ResizeObserver(() => {
       if (paneViewport.clientWidth !== lastPaneWidthPixels) scheduleLayout();
@@ -94,4 +94,4 @@ export function ScanPane({ page }: { readonly page: PageDetails }) {
       </div>
     </section>
   );
-}
+};

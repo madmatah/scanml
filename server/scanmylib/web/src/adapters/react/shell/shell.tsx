@@ -41,12 +41,12 @@ export interface ShellServices {
   readonly typesetFormulas: FormulaTypesetter;
 }
 
-function useRouteName(): RouteName {
+const useRouteName = (): RouteName => {
   const match = useMatches().at(-1);
   return match === undefined ? 'unknown' : routeNameOf(match.id, match.params);
-}
+};
 
-export function Shell({ services }: { readonly services: ShellServices }) {
+export const Shell = ({ services }: { readonly services: ShellServices }) => {
   const { session, toasts, engineStatus, formatting, uploads } = services;
   const { t } = useTranslation();
   const state = useSyncExternalStore(session.subscribe, session.getSnapshot);
@@ -99,7 +99,7 @@ export function Shell({ services }: { readonly services: ShellServices }) {
     window.scrollTo(0, 0);
   }, [screenKey]);
 
-  async function signOut(): Promise<void> {
+  const signOut = async (): Promise<void> => {
     hasJustSignedOut.current = true;
     try {
       await session.signOut();
@@ -107,13 +107,13 @@ export function Shell({ services }: { readonly services: ShellServices }) {
       hasJustSignedOut.current = false;
       toasts.show(errorMessage(t, failure, t('Could not sign out.')), 'error');
     }
-  }
+  };
 
-  function signOutClosed(isConfirmed: boolean): void {
+  const signOutClosed = (isConfirmed: boolean): void => {
     setConfirmingSignOut(false);
     // signOut handles its own failures, so its promise never rejects.
     if (isConfirmed) void signOut();
-  }
+  };
 
   return (
     <>
@@ -149,4 +149,4 @@ export function Shell({ services }: { readonly services: ShellServices }) {
       )}
     </>
   );
-}
+};

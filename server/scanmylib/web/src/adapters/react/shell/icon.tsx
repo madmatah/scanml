@@ -34,10 +34,10 @@ const ICON_PATHS = {
 
 export type IconName = keyof typeof ICON_PATHS;
 
-export function Icon({ name }: { readonly name: IconName }) {
+export const Icon = ({ name }: { readonly name: IconName }) => {
   return (
     <svg className="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
       <path d={ICON_PATHS[name]} />
     </svg>
   );
-}
+};

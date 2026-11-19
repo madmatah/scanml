@@ -12,14 +12,14 @@ export interface FakeStatusSource extends ServerStatusSource {
   readonly fail: (failure: Error) => void;
 }
 
-export function createFakeStatusSource(): FakeStatusSource {
+export const createFakeStatusSource = (): FakeStatusSource => {
   const waiting: PendingRequest[] = [];
   let requestCount = 0;
-  function takeOldest(): PendingRequest {
+  const takeOldest = (): PendingRequest => {
     const oldest = waiting.shift();
     if (oldest === undefined) throw new Error('No request of the status is waiting for an answer');
     return oldest;
-  }
+  };
   return {
     readStatus() {
       requestCount += 1;
@@ -31,7 +31,7 @@ export function createFakeStatusSource(): FakeStatusSource {
     answer: (status) => takeOldest().resolve(status),
     fail: (failure) => takeOldest().reject(failure),
   };
-}
+};
 
 export interface FakePageVisibility extends PageVisibility {
   readonly watcherCount: () => number;
@@ -39,13 +39,13 @@ export interface FakePageVisibility extends PageVisibility {
   readonly hide: () => void;
 }
 
-export function createFakePageVisibility(isVisible: boolean): FakePageVisibility {
+export const createFakePageVisibility = (isVisible: boolean): FakePageVisibility => {
   let visible = isVisible;
   const watchers = new Set<() => void>();
-  function change(next: boolean): void {
+  const change = (next: boolean): void => {
     visible = next;
     for (const watcher of [...watchers]) watcher();
-  }
+  };
   return {
     isVisible: () => visible,
     watch(listener) {
@@ -59,11 +59,11 @@ export function createFakePageVisibility(isVisible: boolean): FakePageVisibility
     show: () => change(true),
     hide: () => change(false),
   };
-}
+};
 
 // The promises that an answer settles run their continuations before this resolves.
-export function settle(): Promise<void> {
+export const settle = (): Promise<void> => {
   return new Promise((resolve) => {
     setImmediate(resolve);
   });
-}
+};

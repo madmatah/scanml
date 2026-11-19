@@ -21,14 +21,14 @@ export interface ReadingTracker {
 const REMEMBER_DELAY_MILLISECONDS = 300;
 const USER_SCROLL_EVENTS = ['wheel', 'touchstart', 'keydown', 'pointerdown'] as const;
 
-function pageKeyOf(page: HTMLElement | undefined): string {
+const pageKeyOf = (page: HTMLElement | undefined): string => {
   return page?.dataset.key ?? '';
-}
+};
 
-export function createReadingTracker(
+export const createReadingTracker = (
   { view, toolbar, text, appHeader }: ReadingTrackerElements,
   { onPageRead, onRememberPage }: ReadingTrackerCallbacks,
-): ReadingTracker {
+): ReadingTracker => {
   let pages: readonly HTMLElement[] = [];
   let currentIndex = -1;
   let heldIndex: number | null = null;
@@ -36,28 +36,28 @@ export function createReadingTracker(
   let rememberTimer: ReturnType<typeof setTimeout> | undefined;
 
   // The "Page" bar sticks under the sticky app header; the pages jumped to stay clear of both.
-  function updateStickyOffsets(): void {
+  const updateStickyOffsets = (): void => {
     const headerHeightPixels = appHeader !== null && !appHeader.hidden ? appHeader.offsetHeight : 0;
     view.style.setProperty('--reader-top', `${headerHeightPixels}px`);
     const barTopPixels = Number.parseFloat(getComputedStyle(toolbar).top) || 0;
     view.style.setProperty('--reader-covered', `${barTopPixels + toolbar.offsetHeight}px`);
-  }
+  };
 
-  function rememberPage(pageKey: string): void {
+  const rememberPage = (pageKey: string): void => {
     clearTimeout(rememberTimer);
     onRememberPage(pageKey);
-  }
+  };
 
-  function setCurrent(pageIndex: number): void {
+  const setCurrent = (pageIndex: number): void => {
     if (pageIndex === currentIndex) return;
     currentIndex = pageIndex;
     onPageRead(pageIndex);
     clearTimeout(rememberTimer);
     const pageKey = pageKeyOf(pages[pageIndex]);
     rememberTimer = setTimeout(() => rememberPage(pageKey), REMEMBER_DELAY_MILLISECONDS);
-  }
+  };
 
-  function trackReading(): void {
+  const trackReading = (): void => {
     trackingFrame = 0;
     const position = readingPosition(
       {
@@ -74,40 +74,40 @@ export function createReadingTracker(
     if (position === null) return;
     heldIndex = position.heldPageIndex;
     setCurrent(position.pageIndex);
-  }
+  };
 
-  function scheduleTracking(): void {
+  const scheduleTracking = (): void => {
     trackingFrame ||= requestAnimationFrame(trackReading);
-  }
+  };
 
   // Holds a page at the top until the reader scrolls: the illustrations above it, loaded as they come into view, would
   // push it down or pull it up when they get their height.
-  function goToPage(pageIndex: number): void {
+  const goToPage = (pageIndex: number): void => {
     const page = pages[pageIndex];
     if (page === undefined) return;
     heldIndex = pageIndex;
     page.scrollIntoView({ block: 'start' });
     setCurrent(pageIndex);
-  }
+  };
 
-  function holdPage(event: Event): void {
+  const holdPage = (event: Event): void => {
     if (heldIndex === null || !(event.target instanceof HTMLImageElement)) return;
     const page = pages[heldIndex];
     if (page !== undefined && page.compareDocumentPosition(event.target) & Node.DOCUMENT_POSITION_PRECEDING) {
       page.scrollIntoView({ block: 'start' });
     }
-  }
+  };
 
-  function releasePage(): void {
+  const releasePage = (): void => {
     heldIndex = null;
-  }
+  };
 
   // "Back" from the page screen returns to the page whose marker was followed.
-  function rememberFollowedPage(event: MouseEvent): void {
+  const rememberFollowedPage = (event: MouseEvent): void => {
     if (!(event.target instanceof Element)) return;
     const page = event.target.closest('.page-marker a')?.closest('section.page');
     if (page instanceof HTMLElement) rememberPage(pageKeyOf(page));
-  }
+  };
 
   const resizeObserver = new ResizeObserver(updateStickyOffsets);
   if (appHeader !== null) resizeObserver.observe(appHeader);
@@ -142,4 +142,4 @@ export function createReadingTracker(
       for (const type of USER_SCROLL_EVENTS) window.removeEventListener(type, releasePage);
     },
   };
-}
+};

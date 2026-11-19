@@ -13,13 +13,13 @@ export interface FakePageUploader extends PageUploader<PhotoFile> {
   readonly startedOf: (pageId: string) => StartedUpload;
 }
 
-function settle(): Promise<void> {
+const settle = (): Promise<void> => {
   return new Promise((resolve) => {
     setImmediate(resolve);
   });
-}
+};
 
-export function createFakePageUploader(): FakePageUploader {
+export const createFakePageUploader = (): FakePageUploader => {
   const started: StartedUpload[] = [];
   return {
     started,
@@ -45,10 +45,10 @@ export function createFakePageUploader(): FakePageUploader {
       });
     },
   };
-}
+};
 
 // Page ids that tell in which order they were made.
-export function createCountingUuidSource(): UuidSource {
+export const createCountingUuidSource = (): UuidSource => {
   let count = 0;
   return {
     createUuid() {
@@ -56,12 +56,12 @@ export function createCountingUuidSource(): UuidSource {
       return `00000000-0000-4000-8000-${String(count).padStart(12, '0')}`;
     },
   };
-}
+};
 
-export function createFixedClock(nowMilliseconds: number): Clock {
+export const createFixedClock = (nowMilliseconds: number): Clock => {
   return { readTimeMilliseconds: () => nowMilliseconds };
-}
+};
 
-export function photo(name: string, overrides: Partial<PhotoFile> = {}): PhotoFile {
+export const photo = (name: string, overrides: Partial<PhotoFile> = {}): PhotoFile => {
   return { name, size: 1000, type: 'image/jpeg', lastModified: Date.UTC(2026, 2, 7, 9, 5, 3), ...overrides };
-}
+};

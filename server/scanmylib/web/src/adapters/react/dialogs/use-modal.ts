@@ -1,9 +1,9 @@
 import { type RefObject, useCallback, useLayoutEffect, useRef } from 'react';
 
-export function useModal(
+export const useModal = (
   dialog: RefObject<HTMLDialogElement | null>,
   initialFocus: RefObject<HTMLElement | null>,
-): () => void {
+): (() => void) => {
   const opener = useRef<Element | null>(null);
 
   useLayoutEffect(() => {
@@ -18,4 +18,4 @@ export function useModal(
     const element = opener.current;
     if (element instanceof HTMLElement && element.isConnected) element.focus();
   }, []);
-}
+};

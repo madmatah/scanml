@@ -14,7 +14,7 @@ export interface ConfirmDialogProps {
 
 const CONFIRM = 'confirm';
 
-export function ConfirmDialog({ title, message, confirmLabel, isDanger = false, onClosed }: ConfirmDialogProps) {
+export const ConfirmDialog = ({ title, message, confirmLabel, isDanger = false, onClosed }: ConfirmDialogProps) => {
   const { t } = useTranslation();
   const titleId = useId();
   const dialog = useRef<HTMLDialogElement>(null);
@@ -49,4 +49,4 @@ export function ConfirmDialog({ title, message, confirmLabel, isDanger = false, 
     </dialog>,
     document.body,
   );
-}
+};

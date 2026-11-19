@@ -14,15 +14,15 @@ export interface CopyFieldProps {
   readonly toasts: Toasts;
 }
 
-export function CopyField({ label, text, isSecret, copiedMessage, clipboard, toasts }: CopyFieldProps) {
+export const CopyField = ({ label, text, isSecret, copiedMessage, clipboard, toasts }: CopyFieldProps) => {
   const { t } = useTranslation();
   const id = useId();
   const [isShown, setShown] = useState(false);
 
-  async function copy(): Promise<void> {
+  const copy = async (): Promise<void> => {
     if (await clipboard.copyText(text)) toasts.show(copiedMessage, 'success');
     else toasts.show(t('Could not copy: select the text by hand.'), 'error');
-  }
+  };
 
   return (
     <div className="field">
@@ -63,4 +63,4 @@ export function CopyField({ label, text, isSecret, copiedMessage, clipboard, toa
       </div>
     </div>
   );
-}
+};

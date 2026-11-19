@@ -11,7 +11,7 @@ const SIGNED_IN_KEY = 'scanmylib.signed-in';
 const SIGNED_IN = '1';
 
 // The storage is reached on each call, since the browser throws when its storage is disabled, even on reaching it.
-export function createSignInRecord(openStorage: () => KeyValueStorage): SignInRecord {
+export const createSignInRecord = (openStorage: () => KeyValueStorage): SignInRecord => {
   return {
     readRecorded() {
       try {
@@ -29,4 +29,4 @@ export function createSignInRecord(openStorage: () => KeyValueStorage): SignInRe
       }
     },
   };
-}
+};

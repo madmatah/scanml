@@ -8,7 +8,7 @@ interface StubDocument extends VisibleDocument {
   readonly listeners: Set<() => void>;
 }
 
-function createStubDocument(hidden: boolean): StubDocument {
+const createStubDocument = (hidden: boolean): StubDocument => {
   const listeners = new Set<() => void>();
   return {
     hidden,
@@ -20,7 +20,7 @@ function createStubDocument(hidden: boolean): StubDocument {
       listeners.delete(listener);
     },
   };
-}
+};
 
 describe('The page visibility', () => {
   describe('The isVisible() method', () => {

@@ -34,12 +34,12 @@ const PAGES_BY_KEY = new Map<string, LabeledPage>([
 ]);
 const FIRST_THREE_PARTS = PARTS.slice(0, 3);
 
-function fillTemplate(template: string, placeholderValues: Readonly<Record<string, string>>): string {
+const fillTemplate = (template: string, placeholderValues: Readonly<Record<string, string>>): string => {
   return Object.entries(placeholderValues).reduce(
     (text, [placeholderName, placeholderValue]) => text.replaceAll(`{{${placeholderName}}}`, () => placeholderValue),
     template,
   );
-}
+};
 
 describe('The reading text', () => {
   let localization: Localization;

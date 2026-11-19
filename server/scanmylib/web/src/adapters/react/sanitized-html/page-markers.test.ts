@@ -25,17 +25,17 @@ interface ElementParts {
 const ENGLISH_LANGUAGES = ['en-US'];
 const FRENCH_LANGUAGES = ['fr-FR'];
 
-function fillTemplate(template: string, placeholderValues: Readonly<Record<string, string>>): string {
+const fillTemplate = (template: string, placeholderValues: Readonly<Record<string, string>>): string => {
   return Object.entries(placeholderValues).reduce(
     (text, [placeholderName, placeholderValue]) => text.replaceAll(`{{${placeholderName}}}`, () => placeholderValue),
     template,
   );
-}
+};
 
-function buildElement(
+const buildElement = (
   selector: string,
   { attributes = {}, text = '', children = [] }: ElementParts = {},
-): StandInElement {
+): StandInElement => {
   const [tag, ...classes] = selector.split('.');
   const matchesQuery = (query: string): boolean => {
     const [queryTag, ...queryClasses] = query.split('.');
@@ -48,9 +48,9 @@ function buildElement(
     querySelector: (query) => children.find((candidate) => candidate.matches(query.replace(/^:scope > /, ''))) ?? null,
     getAttribute: (name) => attributes[name] ?? null,
   };
-}
+};
 
-function buildPage(label: string, markerText: string): StandInElement {
+const buildPage = (label: string, markerText: string): StandInElement => {
   return buildElement('section.page', {
     attributes: { 'data-key': `k-${label}` },
     children: [
@@ -58,9 +58,9 @@ function buildPage(label: string, markerText: string): StandInElement {
       buildElement('p'),
     ],
   });
-}
+};
 
-function buildDocumentContent(): StandInContent {
+const buildDocumentContent = (): StandInContent => {
   return {
     children: [
       buildPage('12', 'Page 12'),
@@ -72,24 +72,24 @@ function buildDocumentContent(): StandInContent {
       buildPage('', 'Unnumbered page'),
     ],
   };
-}
+};
 
-function buildOlderServerContent(): StandInContent {
+const buildOlderServerContent = (): StandInContent => {
   return {
     children: [
       buildElement('section.page', { children: [buildElement('p.page-marker', { text: 'Page 99' })] }),
       buildElement('p.missing-pages', { text: 'Missing pages: 100–104' }),
     ],
   };
-}
+};
 
-function readTexts(content: StandInContent): (string | null)[] {
+const readTexts = (content: StandInContent): (string | null)[] => {
   return content.children.map((child) =>
     child.matches('section.page')
       ? (child.querySelector(':scope > .page-marker')?.textContent ?? null)
       : child.textContent,
   );
-}
+};
 
 describe('The page markers', () => {
   describe('The localizeMarkers() function', () => {

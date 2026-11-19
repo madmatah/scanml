@@ -4,12 +4,12 @@ import { SAMPLE_DOCUMENT_ID, SAMPLE_PAGE_ID } from '../../domain/page-details.te
 import type { PageDetails } from '../../domain/page-details.ts';
 import { decodePageDetails, decodePageHtml } from './page-details-decoder.ts';
 
-function readingBody(): Record<string, unknown> {
+const readingBody = (): Record<string, unknown> => {
   return { engine: 'example-engine', duration_s: 2.3, at: '2026-11-14T15:32:00+00:00', images: 2, chars: 1234 };
-}
+};
 
 // A page of GET /api/pages/{id}, as docs/API.md gives it.
-function pageBody(): Record<string, unknown> {
+const pageBody = (): Record<string, unknown> => {
   return {
     id: SAMPLE_PAGE_ID,
     document_id: SAMPLE_DOCUMENT_ID,
@@ -40,7 +40,7 @@ function pageBody(): Record<string, unknown> {
     image_url: `/api/pages/${SAMPLE_PAGE_ID}/image`,
     markdown: 'Example text.',
   };
-}
+};
 
 const DECODED_PAGE: PageDetails = {
   id: SAMPLE_PAGE_ID,

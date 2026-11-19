@@ -29,18 +29,18 @@ export const REFRESH_INTERVAL_MILLISECONDS = 3000;
 export const UPLOAD_RELOAD_DELAY_MILLISECONDS = 400;
 const NOT_FOUND = 404;
 
-export function isNotFound(failure: unknown): boolean {
+export const isNotFound = (failure: unknown): boolean => {
   return failure instanceof ApiError && failure.status === NOT_FOUND;
-}
+};
 
-export function createDocumentLoader({
+export const createDocumentLoader = ({
   read,
   scheduler,
   isUploading,
   leaving,
   onChange,
   onDeleted,
-}: DocumentLoaderOptions): DocumentLoader {
+}: DocumentLoaderOptions): DocumentLoader => {
   let document: DocumentWithPages | null = null;
   let loading: Promise<void> | null = null;
   let isReloadQueued = false;
@@ -52,38 +52,38 @@ export function createDocumentLoader({
   let orderVersion = 0;
   let isReloadAfterWritesQueued = false;
 
-  function stopRefresh(): void {
+  const stopRefresh = (): void => {
     cancelRefresh?.();
     cancelRefresh = null;
-  }
+  };
 
-  function stopUploadReload(): void {
+  const stopUploadReload = (): void => {
     cancelUploadReload?.();
     cancelUploadReload = null;
-  }
+  };
 
-  function scheduleRefresh(): void {
+  const scheduleRefresh = (): void => {
     stopRefresh();
     if (leaving.aborted || document === null) return;
     if (!isTextPending(document.stats) && !isUploading()) return;
     cancelRefresh = scheduler.schedule(load, REFRESH_INTERVAL_MILLISECONDS);
-  }
+  };
 
-  function loadAfterUpload(): void {
+  const loadAfterUpload = (): void => {
     stopUploadReload();
     if (leaving.aborted) return;
     cancelUploadReload = scheduler.schedule(() => {
       cancelUploadReload = null;
       load();
     }, UPLOAD_RELOAD_DELAY_MILLISECONDS);
-  }
+  };
 
-  function show(next: DocumentWithPages): void {
+  const show = (next: DocumentWithPages): void => {
     document = next;
     onChange({ phase: 'loaded', document: next });
-  }
+  };
 
-  async function fetchDocument(): Promise<void> {
+  const fetchDocument = async (): Promise<void> => {
     stopRefresh();
     const version = orderVersion;
     try {
@@ -104,9 +104,9 @@ export function createDocumentLoader({
       // A passing failure keeps the last document on screen, and the next refresh tries again.
     }
     scheduleRefresh();
-  }
+  };
 
-  function load(): void {
+  const load = (): void => {
     if (loading !== null) {
       isReloadQueued = true;
       return;
@@ -118,9 +118,9 @@ export function createDocumentLoader({
         load();
       }
     });
-  }
+  };
 
-  async function writeOrder(request: () => Promise<DocumentWithPages>): Promise<DocumentWithPages> {
+  const writeOrder = async (request: () => Promise<DocumentWithPages>): Promise<DocumentWithPages> => {
     orderWriteCount += 1;
     orderVersion += 1;
     try {
@@ -134,7 +134,7 @@ export function createDocumentLoader({
         load();
       }
     }
-  }
+  };
 
   leaving.addEventListener(
     'abort',
@@ -146,4 +146,4 @@ export function createDocumentLoader({
   );
 
   return { load, loadAfterUpload, replace: show, writeOrder };
-}
+};

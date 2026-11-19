@@ -21,16 +21,16 @@ type GridLayout = {
   readonly gapPixels?: number;
 };
 
-function layOutGrid(
+const layOutGrid = (
   cardCount: number,
   { columnCount = 3, topPixels = 0, widthPixels = 100, heightPixels = 130, gapPixels = 10 }: GridLayout = {},
-): PixelRectangle[] {
+): PixelRectangle[] => {
   return Array.from({ length: cardCount }, (_, cardIndex) => {
     const left = (cardIndex % columnCount) * (widthPixels + gapPixels);
     const top = topPixels + Math.floor(cardIndex / columnCount) * (heightPixels + gapPixels);
     return { left, top, right: left + widthPixels, bottom: top + heightPixels };
   });
-}
+};
 
 // The second grid stands for the organizer's group of unplaced pages.
 const CARDS = [...layOutGrid(7), ...layOutGrid(2, { topPixels: 480 })];

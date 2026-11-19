@@ -28,9 +28,9 @@ const PAGES_BY_KEY = new Map<string, Page>([
   ['k-notes', { id: 'notes', page_label: null }],
 ]);
 
-function summarize(outline: readonly OutlineEntry<Page>[]): (string | number)[][] {
+const summarize = (outline: readonly OutlineEntry<Page>[]): (string | number)[][] => {
   return outline.map((entry) => (entry.type === 'page' ? [entry.index, entry.key] : [entry.type, entry.label]));
-}
+};
 
 describe('The reading', () => {
   describe('The readingOutline() function', () => {

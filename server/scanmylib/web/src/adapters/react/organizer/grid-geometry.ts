@@ -39,11 +39,11 @@ export type ScrollZone = {
 // Cards whose tops differ by sub-pixel rounding still lie on one row.
 const ROW_TOLERANCE_PIXELS = 2;
 
-function followsOnRow(previous: PixelRectangle, next: PixelRectangle): boolean {
+const followsOnRow = (previous: PixelRectangle, next: PixelRectangle): boolean => {
   return Math.abs(previous.top - next.top) <= ROW_TOLERANCE_PIXELS && next.left > previous.left;
-}
+};
 
-export function gridRows(cards: readonly PixelRectangle[]): GridRow[] {
+export const gridRows = (cards: readonly PixelRectangle[]): GridRow[] => {
   const rows: GridRow[] = [];
   let previous: PixelRectangle | undefined;
   cards.forEach((card, index) => {
@@ -56,15 +56,15 @@ export function gridRows(cards: readonly PixelRectangle[]): GridRow[] {
     previous = card;
   });
   return rows;
-}
+};
 
-function cardAt(cards: readonly PixelRectangle[], index: number): PixelRectangle {
+const cardAt = (cards: readonly PixelRectangle[], index: number): PixelRectangle => {
   const card = cards[index];
   if (card === undefined) throw new RangeError(`No card at index ${index} of ${cards.length}`);
   return card;
-}
+};
 
-export function dropTarget(cards: readonly PixelRectangle[], pointerPixels: PixelPoint): DropTarget | null {
+export const dropTarget = (cards: readonly PixelRectangle[], pointerPixels: PixelPoint): DropTarget | null => {
   let nearestRow: GridRow | null = null;
   let nearestDistance = Infinity;
   for (const row of gridRows(cards)) {
@@ -80,18 +80,22 @@ export function dropTarget(cards: readonly PixelRectangle[], pointerPixels: Pixe
     if (pointerPixels.x < (card.left + card.right) / 2) return { index, card: index, side: 'before' };
   }
   return { index: nearestRow.last + 1, card: nearestRow.last, side: 'after' };
-}
+};
 
-export function columnGap(cards: readonly PixelRectangle[], fallbackPixels = 12): number {
+export const columnGap = (cards: readonly PixelRectangle[], fallbackPixels = 12): number => {
   for (let index = 1; index < cards.length; index += 1) {
     const previous = cardAt(cards, index - 1);
     const card = cardAt(cards, index);
     if (followsOnRow(previous, card)) return card.left - previous.right;
   }
   return fallbackPixels;
-}
+};
 
-export function insertionMark(cards: readonly PixelRectangle[], target: DropTarget, gapPixels: number): InsertionMark {
+export const insertionMark = (
+  cards: readonly PixelRectangle[],
+  target: DropTarget,
+  gapPixels: number,
+): InsertionMark => {
   const card = cardAt(cards, target.card);
   let left: number;
   if (target.side === 'before') {
@@ -105,14 +109,14 @@ export function insertionMark(cards: readonly PixelRectangle[], target: DropTarg
     left = next !== undefined && followsOnRow(card, next) ? (card.right + next.left) / 2 : card.right + gapPixels / 2;
   }
   return { x: left, top: card.top, bottom: card.bottom };
-}
+};
 
-export function autoScrollStep(
+export const autoScrollStep = (
   pointerTopPixels: number,
   topPixels: number,
   bottomPixels: number,
   { zonePixels = 64, maxStepPixels = 18 }: ScrollZone = {},
-): number {
+): number => {
   if (pointerTopPixels < topPixels + zonePixels) {
     return -Math.ceil(maxStepPixels * Math.min(1, (topPixels + zonePixels - pointerTopPixels) / zonePixels));
   }
@@ -120,4 +124,4 @@ export function autoScrollStep(
     return Math.ceil(maxStepPixels * Math.min(1, (pointerTopPixels - (bottomPixels - zonePixels)) / zonePixels));
   }
   return 0;
-}
+};

@@ -9,7 +9,7 @@ export interface QrCodeProps {
 }
 
 // In a white frame, since a QR code needs a light quiet zone around it, in the dark theme too.
-export function QrCode({ url, description }: QrCodeProps) {
+export const QrCode = ({ url, description }: QrCodeProps) => {
   const { t } = useTranslation();
   const [isMissing, setMissing] = useState(false);
   return (
@@ -27,4 +27,4 @@ export function QrCode({ url, description }: QrCodeProps) {
       )}
     </div>
   );
-}
+};

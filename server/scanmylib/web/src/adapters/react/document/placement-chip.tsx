@@ -12,11 +12,11 @@ export interface PlacementChipProps {
   readonly showsUnplaced: boolean;
 }
 
-export function shownPlacement(t: TFunction, page: PlacedPage, showsUnplaced: boolean): DescribedLabel | null {
+export const shownPlacement = (t: TFunction, page: PlacedPage, showsUnplaced: boolean): DescribedLabel | null => {
   return page.placement === 'unplaced' && !showsUnplaced ? null : pagePlacementLabel(t, page.placement);
-}
+};
 
-export function PlacementChip({ page, showsUnplaced }: PlacementChipProps) {
+export const PlacementChip = ({ page, showsUnplaced }: PlacementChipProps) => {
   const { t } = useTranslation();
   const placement = shownPlacement(t, page, showsUnplaced);
   if (placement === null) return null;
@@ -25,4 +25,4 @@ export function PlacementChip({ page, showsUnplaced }: PlacementChipProps) {
       {placement.label}
     </span>
   );
-}
+};

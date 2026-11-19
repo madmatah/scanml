@@ -31,32 +31,32 @@ const PAGES_PATH = '/api/pages';
 const PAIRING_PATH = '/api/pairing';
 const UNAUTHORIZED = 401;
 
-function documentPath(documentId: string): string {
+const documentPath = (documentId: string): string => {
   return `${DOCUMENTS_PATH}/${encodeURIComponent(documentId)}`;
-}
+};
 
-function pagePath(pageId: string): string {
+const pagePath = (pageId: string): string => {
   return `${PAGES_PATH}/${encodeURIComponent(pageId)}`;
-}
+};
 
-function pageChangesBody({ manualNumber, isExcluded, rotation }: PageChanges): Record<string, unknown> {
+const pageChangesBody = ({ manualNumber, isExcluded, rotation }: PageChanges): Record<string, unknown> => {
   return {
     ...(manualNumber === undefined ? {} : { manual_number: manualNumber }),
     ...(isExcluded === undefined ? {} : { excluded: isExcluded }),
     ...(rotation === undefined ? {} : { rotation }),
   };
-}
+};
 
-async function readJson(response: Response): Promise<unknown> {
+const readJson = async (response: Response): Promise<unknown> => {
   try {
     return await response.json();
   } catch {
     return null;
   }
-}
+};
 
-export function createApiClient(fetchFromApi: Fetch, onUnauthorized: () => void): ApiClient {
-  async function request(method: string, path: string, json?: unknown, signal?: AbortSignal): Promise<Response> {
+export const createApiClient = (fetchFromApi: Fetch, onUnauthorized: () => void): ApiClient => {
+  const request = async (method: string, path: string, json?: unknown, signal?: AbortSignal): Promise<Response> => {
     const headers: Record<string, string> = { Accept: 'application/json' };
     if (method !== 'GET') headers[CSRF_HEADER] = '1';
     const init: RequestInit = { method, headers, credentials: 'same-origin', cache: 'no-store' };
@@ -77,7 +77,7 @@ export function createApiClient(fetchFromApi: Fetch, onUnauthorized: () => void)
       throw new ApiError(response.status, decodeErrorDetail(await readJson(response)));
     }
     return response;
-  }
+  };
 
   return {
     pairingQrCodeUrl: `${PAIRING_PATH}/qr.svg`,
@@ -143,4 +143,4 @@ export function createApiClient(fetchFromApi: Fetch, onUnauthorized: () => void)
     markdownUrl: (documentId) => `${documentPath(documentId)}/markdown`,
     archiveUrl: (documentId, includesScans) => `${documentPath(documentId)}/export.zip?scans=${includesScans ? 1 : 0}`,
   };
-}
+};

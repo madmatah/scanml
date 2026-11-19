@@ -29,14 +29,14 @@ const TEXT_MAXIMUM_LENGTH = 300;
 const NOTES_MAXIMUM_LENGTH = 20_000;
 const NOTES_ROWS = 3;
 
-export function DocumentDialog<Saved>({
+export const DocumentDialog = <Saved,>({
   heading,
   submitLabel,
   initial,
   showsNotes = false,
   onSubmit,
   onClosed,
-}: DocumentDialogProps<Saved>) {
+}: DocumentDialogProps<Saved>) => {
   const { t } = useTranslation();
   const ids = { heading: useId(), title: useId(), author: useId(), notes: useId(), unwarpHint: useId() };
   const dialog = useRef<HTMLDialogElement>(null);
@@ -49,7 +49,7 @@ export function DocumentDialog<Saved>({
   const [isBusy, setBusy] = useState(false);
   const returnFocus = useModal(dialog, titleInput);
 
-  async function save(fields: DocumentFields): Promise<void> {
+  const save = async (fields: DocumentFields): Promise<void> => {
     setBusy(true);
     setError(null);
     try {
@@ -60,9 +60,9 @@ export function DocumentDialog<Saved>({
     } finally {
       setBusy(false);
     }
-  }
+  };
 
-  function submit(event: FormEvent<HTMLFormElement>): void {
+  const submit = (event: FormEvent<HTMLFormElement>): void => {
     event.preventDefault();
     if (isBusy) return;
     const submitted = submittedForm(form);
@@ -73,7 +73,7 @@ export function DocumentDialog<Saved>({
     }
     // save shows its own failures in the dialog, so its promise never rejects.
     void save(submitted.fields);
-  }
+  };
 
   // aria-disabled rather than disabled, so that the focused button keeps the focus while the request is sent.
   const busyState = isBusy ? 'true' : undefined;
@@ -197,4 +197,4 @@ export function DocumentDialog<Saved>({
     </dialog>,
     document.body,
   );
-}
+};

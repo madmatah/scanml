@@ -68,11 +68,11 @@ export interface PixelBox {
   readonly height: number;
 }
 
-export function isMouse(pointerType: string): boolean {
+export const isMouse = (pointerType: string): boolean => {
   return pointerType === MOUSE;
-}
+};
 
-export function pressGesture(press: Press, isBlocked: boolean): GestureStart | null {
+export const pressGesture = (press: Press, isBlocked: boolean): GestureStart | null => {
   if (isBlocked || !press.isPrimary || press.pageId === null) return null;
   if (isMouse(press.pointerType) && press.button !== MAIN_BUTTON) return null;
   if (!press.isOnHandle && press.isOnControl) return null;
@@ -92,57 +92,57 @@ export function pressGesture(press: Press, isBlocked: boolean): GestureStart | n
     waitsForLongPress: !mouse && !press.isOnHandle,
     preventsDefault: mouse,
   };
-}
+};
 
-export function moveGesture(
+export const moveGesture = (
   gesture: Gesture,
   pointerPixels: PixelPoint,
-): { readonly gesture: Gesture; readonly step: GestureStep } {
+): { readonly gesture: Gesture; readonly step: GestureStep } => {
   const moved = { ...gesture, pointerPixels };
   if (gesture.isDragging) return { gesture: moved, step: 'follow' };
   const distancePixels = Math.hypot(pointerPixels.x - gesture.startPixels.x, pointerPixels.y - gesture.startPixels.y);
   if (!gesture.isArmed) return { gesture: moved, step: distancePixels > SCROLL_SLOP_PIXELS ? 'cancel' : 'wait' };
   if (distancePixels < (gesture.isLongPress ? 1 : DRAG_THRESHOLD_PIXELS)) return { gesture: moved, step: 'wait' };
   return { gesture: moved, step: 'start' };
-}
+};
 
-export function pickUpGesture(gesture: Gesture): Gesture {
+export const pickUpGesture = (gesture: Gesture): Gesture => {
   return gesture.isDragging ? gesture : { ...gesture, isArmed: true, isLongPress: true };
-}
+};
 
-export function startDragging(gesture: Gesture, order: ReadingOrder, selected: ReadonlySet<PageId>): Gesture {
+export const startDragging = (gesture: Gesture, order: ReadingOrder, selected: ReadonlySet<PageId>): Gesture => {
   const moving = selected.has(gesture.pageId) ? inOrder(order, selected) : [gesture.pageId];
   return { ...gesture, isDragging: true, moving };
-}
+};
 
-export function releaseGesture(gesture: Gesture, target: DropTarget | null, order: ReadingOrder): Release {
+export const releaseGesture = (gesture: Gesture, target: DropTarget | null, order: ReadingOrder): Release => {
   if (gesture.isDragging) {
     const dropped = target === null ? order.slice() : moveBlock(order, gesture.moving, target.index);
     return { outcome: { kind: 'drop', order: dropped, moving: gesture.moving }, ignoresClick: true };
   }
   if (gesture.isLongPress) return { outcome: { kind: 'tap', pageId: gesture.pageId }, ignoresClick: true };
   return { outcome: { kind: 'release' }, ignoresClick: false };
-}
+};
 
-export function ghostPosition(pointerType: string, pointer: PixelPoint, ghostSize: PixelSize): PixelPoint {
+export const ghostPosition = (pointerType: string, pointer: PixelPoint, ghostSize: PixelSize): PixelPoint => {
   if (isMouse(pointerType)) {
     return { x: pointer.x + GHOST_MOUSE_OFFSET_PIXELS, y: pointer.y + GHOST_MOUSE_OFFSET_PIXELS };
   }
   return { x: pointer.x - ghostSize.width / 2, y: pointer.y - ghostSize.height - GHOST_FINGER_GAP_PIXELS };
-}
+};
 
-export function hasLayoutMoved(box: PixelBox, origin: PixelBox): boolean {
+export const hasLayoutMoved = (box: PixelBox, origin: PixelBox): boolean => {
   return (['left', 'top', 'width', 'height'] as const).some(
     (side) => Math.abs(box[side] - origin[side]) > LAYOUT_TOLERANCE_PIXELS,
   );
-}
+};
 
-export function coveredTopPixels(
+export const coveredTopPixels = (
   headerBottomPixels: number,
   toolbarTopPixels: number,
   toolbarBottomPixels: number,
-): number {
+): number => {
   return toolbarTopPixels <= headerBottomPixels + 1
     ? Math.max(headerBottomPixels, toolbarBottomPixels)
     : headerBottomPixels;
-}
+};

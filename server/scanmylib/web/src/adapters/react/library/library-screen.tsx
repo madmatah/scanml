@@ -1,14 +1,12 @@
-import { type FC, type ReactNode, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import type { FC, ReactNode } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
-import { Link, useNavigate } from 'react-router';
+import { Link } from 'react-router';
 
 import type { DocumentCatalog } from '../../../application/document-catalog.ts';
 import type { EngineStatus } from '../../../application/engine-status.ts';
-import { createLibraryLoader, type LibraryLoad } from '../../../application/library-loader.ts';
-import { watchQueueMoves } from '../../../application/queue-moves.ts';
+import type { LibraryLoad } from '../../../application/library-loader.ts';
 import type { UuidSource } from '../../../application/uuid-source.ts';
-import { documentsMatching, showsSearch } from '../../../domain/document-search.ts';
-import type { DocumentSummary } from '../../../domain/document-summary.ts';
+import { documentsMatching } from '../../../domain/document-search.ts';
 import type { DateFormatting } from '../../../domain/formatting.ts';
 import { quoted } from '../../i18next/formatted-text.ts';
 import { DocumentDialog } from '../dialogs/document-dialog.tsx';
@@ -17,14 +15,11 @@ import { errorMessage } from '../shell/error-message.ts';
 import { ErrorState } from '../shell/error-state.tsx';
 import { Icon } from '../shell/icon.tsx';
 import { LoadingState } from '../shell/loading-state.tsx';
-import { documentPath, PATHS } from '../shell/navigation.ts';
+import { PATHS } from '../shell/navigation.ts';
 import type { Toasts } from '../shell/toasts.ts';
-import { useDocumentTitle } from '../shell/use-document-title.ts';
 import { DocumentCard } from './document-card.tsx';
 import { librarySummaryText } from './library-text.ts';
-
-// Keeps "Updated 5 minutes ago" true while the screen stays open.
-const RELATIVE_DATES_REFRESH_MILLISECONDS = 60_000;
+import { useLibraryScreen } from './use-library-screen.ts';
 
 export interface LibraryScreenProps {
   readonly catalog: DocumentCatalog;
@@ -36,65 +31,22 @@ export interface LibraryScreenProps {
 
 export const LibraryScreen: FC<LibraryScreenProps> = ({ catalog, engineStatus, toasts, uuids, dates }) => {
   const { t } = useTranslation();
-  const navigate = useNavigate();
-  const libraryDirectory = useSyncExternalStore(
-    engineStatus.subscribe,
-    () => engineStatus.getSnapshot().status?.libraryDirectory ?? '',
-  );
-  const [load, setLoad] = useState<LibraryLoad>({ phase: 'loading' });
-  const [nowMilliseconds, setNow] = useState(() => Date.now());
-  const [query, setQuery] = useState('');
-  const [newDocumentId, setNewDocumentId] = useState<string | null>(null);
-  const reload = useRef<() => void>(() => {});
-  useDocumentTitle(t('Library'));
+  const {
+    load,
+    nowMilliseconds,
+    libraryDirectory,
+    query,
+    isSearchShown,
+    newDocumentId,
+    onQueryChange,
+    onRetry,
+    onNewDocument,
+    onCreateDocument,
+    onNewDocumentClosed,
+  } = useLibraryScreen(catalog, engineStatus, toasts, uuids);
 
-  useEffect(() => {
-    const leaving = new AbortController();
-    const loader = createLibraryLoader({
-      listDocuments: (signal) => catalog.listDocuments(signal),
-      leaving: leaving.signal,
-      onChange: (next) => {
-        if (next.phase === 'loaded') setNow(Date.now());
-        setLoad(next);
-      },
-      onRefreshFailed: (failure) => {
-        toasts.show(errorMessage(t, failure, t('Could not refresh the library.')), 'error');
-      },
-    });
-    const loadAgain = (): void => loader.load();
-
-    // New pages from the phone, or pages whose text is now read, change the documents' counts.
-    const stopWatchingQueue = watchQueueMoves(engineStatus, loadAgain, { from: null });
-    const loadWhenShown = (): void => {
-      if (!document.hidden) loadAgain();
-    };
-    document.addEventListener('visibilitychange', loadWhenShown);
-    const clock = window.setInterval(() => setNow(Date.now()), RELATIVE_DATES_REFRESH_MILLISECONDS);
-    reload.current = loadAgain;
-    loadAgain();
-    return () => {
-      leaving.abort();
-      stopWatchingQueue();
-      document.removeEventListener('visibilitychange', loadWhenShown);
-      window.clearInterval(clock);
-    };
-  }, [catalog, engineStatus, toasts, t]);
-
-  const isSearchShown = load.phase === 'loaded' && showsSearch(load.documents);
-  // A search left typed while the field hides would keep filtering the list out of sight.
-  if (!isSearchShown && query !== '') setQuery('');
-
-  const documentCreated = (created: DocumentSummary | null): void => {
-    setNewDocumentId(null);
-    if (created === null) return;
-    toasts.show(t('Document {{title}} created.', { title: quoted(t, created.title) }), 'success');
-    void navigate(documentPath(created.id));
-  };
-
-  // One id per dialog, so that a request sent again from it stays the same creation.
-  const openNewDocument = () => setNewDocumentId(uuids.createUuid());
   const newDocumentButton = (
-    <button type="button" className="btn btn-primary" onClick={openNewDocument}>
+    <button type="button" className="btn btn-primary" onClick={onNewDocument}>
       <Icon name="plus" />
       {t('New document')}
     </button>
@@ -117,7 +69,7 @@ export const LibraryScreen: FC<LibraryScreenProps> = ({ catalog, engineStatus, t
               aria-label={t('Search the library')}
               autoComplete="off"
               value={query}
-              onChange={(event) => setQuery(event.target.value)}
+              onChange={(event) => onQueryChange(event.target.value)}
             />
           </div>
           {newDocumentButton}
@@ -138,7 +90,7 @@ export const LibraryScreen: FC<LibraryScreenProps> = ({ catalog, engineStatus, t
               </Link>
             </>
           }
-          onRetry={() => reload.current()}
+          onRetry={onRetry}
         />
       </div>
       <p className="library-footer" hidden={libraryDirectory === ''}>
@@ -156,8 +108,8 @@ export const LibraryScreen: FC<LibraryScreenProps> = ({ catalog, engineStatus, t
           key={newDocumentId}
           heading={t('New document')}
           submitLabel={t('Create document')}
-          onSubmit={(fields) => catalog.createDocument(newDocumentId, fields)}
-          onClosed={documentCreated}
+          onSubmit={(fields) => onCreateDocument(newDocumentId, fields)}
+          onClosed={onNewDocumentClosed}
         />
       )}
     </section>

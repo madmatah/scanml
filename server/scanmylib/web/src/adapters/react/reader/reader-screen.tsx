@@ -1,5 +1,5 @@
 import type { TFunction } from 'i18next';
-import { Fragment, type ReactNode, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { type FC, Fragment, type ReactNode, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useLocation, useParams } from 'react-router';
 import { isNotFound } from '../../../application/document-loader.ts';
@@ -32,7 +32,7 @@ export interface ReaderScreenProps {
 }
 
 // Each document has a reader of its own, which starts afresh.
-export const ReaderScreen = (props: ReaderScreenProps) => {
+export const ReaderScreen: FC<ReaderScreenProps> = (props) => {
   const documentId = idOfAddress(useParams().documentId);
   if (documentId === null) return null;
   return <ReaderView key={documentId} documentId={documentId} {...props} />;
@@ -42,7 +42,7 @@ interface ReaderViewProps extends ReaderScreenProps {
   readonly documentId: string;
 }
 
-const ReaderView = ({ documentId, documents, toasts, typesetFormulas }: ReaderViewProps) => {
+const ReaderView: FC<ReaderViewProps> = ({ documentId, documents, toasts, typesetFormulas }) => {
   const { t } = useTranslation();
   const [load, setLoad] = useState<ReaderLoad>({ phase: 'loading' });
   const loader = useRef<ReaderLoader | null>(null);
@@ -110,7 +110,7 @@ const ReaderView = ({ documentId, documents, toasts, typesetFormulas }: ReaderVi
   );
 };
 
-const BackToDocument = ({ documentId }: { readonly documentId: string }) => {
+const BackToDocument: FC<{ readonly documentId: string }> = ({ documentId }) => {
   const { t } = useTranslation();
   return (
     <Link className="btn" to={documentPath(documentId)}>
@@ -120,7 +120,7 @@ const BackToDocument = ({ documentId }: { readonly documentId: string }) => {
   );
 };
 
-const ReloadButton = ({ onReload }: { readonly onReload: () => void }) => {
+const ReloadButton: FC<{ readonly onReload: () => void }> = ({ onReload }) => {
   const { t } = useTranslation();
   return (
     <button type="button" className="btn btn-small" onClick={onReload}>
@@ -153,14 +153,14 @@ interface ReaderDocumentProps {
   readonly onReload: () => void;
 }
 
-const ReaderDocument = ({
+const ReaderDocument: FC<ReaderDocumentProps> = ({
   document: shownDocument,
   sanitizedHtml,
   returnsToPageRead,
   markdownUrl,
   typesetFormulas,
   onReload,
-}: ReaderDocumentProps) => {
+}) => {
   const { t } = useTranslation();
   const titleId = useId();
   const parts = useMemo(() => readingPartsOf(t, sanitizedHtml), [t, sanitizedHtml]);
@@ -280,7 +280,7 @@ const missingPagesSwatch = (): HTMLElement => {
 
 // The screen's element is rendered here, with the "Page" bar and the text, so that all three exist when the text is
 // placed and the tracker starts.
-const ReadingText = ({
+const ReadingText: FC<ReadingTextProps> = ({
   children,
   parts,
   pageCount,
@@ -289,7 +289,7 @@ const ReadingText = ({
   returnsToPageRead,
   titleId,
   typesetFormulas,
-}: ReadingTextProps) => {
+}) => {
   const { t } = useTranslation();
   const { pathname, search } = useLocation();
   const selectId = useId();
@@ -397,7 +397,7 @@ const optionKey = (entry: GroupedOutlineEntry<LabeledPage>): string => {
   return entry.type === 'page' ? `page-${entry.index}` : `gap-${entry.label}`;
 };
 
-const OutlineOption = ({ entry }: { readonly entry: GroupedOutlineEntry<LabeledPage> }) => {
+const OutlineOption: FC<{ readonly entry: GroupedOutlineEntry<LabeledPage> }> = ({ entry }) => {
   const { t } = useTranslation();
   if (entry.type === 'gap') return <option disabled>{outlineEntryLabel(t, entry)}</option>;
   return <option value={String(entry.index)}>{outlineEntryLabel(t, entry)}</option>;

@@ -1,3 +1,4 @@
+import type { FC } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 
@@ -17,7 +18,7 @@ export interface PageGridProps {
   readonly pages: readonly PageSummary[];
 }
 
-export const PageGrid = ({ pages }: PageGridProps) => {
+export const PageGrid: FC<PageGridProps> = ({ pages }) => {
   const { t } = useTranslation();
   const groups = groupPages(pages);
   const situation = { hasPlacedPages: hasPlacedPages(groups), hasPagesPlacedByHand: hasPagesPlacedByHand(pages) };
@@ -49,7 +50,7 @@ interface PageCardProps {
   readonly showsUnplaced: boolean;
 }
 
-const PageCard = ({ page, showsUnplaced }: PageCardProps) => {
+const PageCard: FC<PageCardProps> = ({ page, showsUnplaced }) => {
   const { t } = useTranslation();
   const status = pageStatusLabel(t, page.status);
   const source = numberSourceLabel(t, page.numberSource);

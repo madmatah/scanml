@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { FC, ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Icon } from './icon.tsx';
@@ -10,7 +10,7 @@ export interface ErrorStateProps {
   readonly actions?: ReactNode;
 }
 
-export const ErrorState = ({ title, message, onRetry, actions }: ErrorStateProps) => {
+export const ErrorState: FC<ErrorStateProps> = ({ title, message, onRetry, actions }) => {
   const { t } = useTranslation();
   return (
     <div className="state state-error" role="alert">

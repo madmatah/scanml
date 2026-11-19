@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { type FC, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { Clipboard } from '../../../application/clipboard.ts';
@@ -17,7 +17,7 @@ export interface TextPaneProps {
   readonly toasts: Toasts;
 }
 
-export const TextPane = ({ page, sanitizedHtml, typesetFormulas, clipboard, toasts }: TextPaneProps) => {
+export const TextPane: FC<TextPaneProps> = ({ page, sanitizedHtml, typesetFormulas, clipboard, toasts }) => {
   const { t } = useTranslation();
   const [showsMarkdown, setShowsMarkdown] = useState(false);
   const hasMarkdown = page.markdown.trim() !== '';
@@ -75,7 +75,7 @@ interface PageTextProps {
   readonly typesetFormulas: FormulaTypesetter;
 }
 
-const PageText = ({ page, sanitizedHtml, showsMarkdown, typesetFormulas }: PageTextProps) => {
+const PageText: FC<PageTextProps> = ({ page, sanitizedHtml, showsMarkdown, typesetFormulas }) => {
   const { t } = useTranslation();
   const hasMarkdown = page.markdown.trim() !== '';
   if (isBeingRead(page.status)) {
@@ -113,7 +113,7 @@ interface RecognizedTextProps {
   readonly typesetFormulas: FormulaTypesetter;
 }
 
-const RecognizedText = ({ sanitizedHtml, version, typesetFormulas }: RecognizedTextProps) => {
+const RecognizedText: FC<RecognizedTextProps> = ({ sanitizedHtml, version, typesetFormulas }) => {
   const { t } = useTranslation();
   // The api writes its markers in English; the illustrations get the version of the reading before any of them loads.
   const prepare = useCallback(

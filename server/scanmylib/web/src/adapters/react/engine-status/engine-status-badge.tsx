@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { type FC, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { EngineStatus } from '../../../application/engine-status.ts';
@@ -12,7 +12,7 @@ export interface EngineStatusBadgeProps {
   readonly formatting: NumberFormatting;
 }
 
-export const EngineStatusBadge = ({ engineStatus, formatting }: EngineStatusBadgeProps) => {
+export const EngineStatusBadge: FC<EngineStatusBadgeProps> = ({ engineStatus, formatting }) => {
   const { t } = useTranslation();
   const state = useSyncExternalStore(engineStatus.subscribe, engineStatus.getSnapshot);
   const [isOpen, setOpen] = useState(false);

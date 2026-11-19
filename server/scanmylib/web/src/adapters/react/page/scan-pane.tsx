@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { type FC, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { PageDetails } from '../../../domain/page-details.ts';
@@ -8,7 +8,7 @@ import { layScan, scanHeightLimitPixels } from './scan-layout.ts';
 
 const APP_HEADER_ID = 'app-header';
 
-export const ScanPane = ({ page }: { readonly page: PageDetails }) => {
+export const ScanPane: FC<{ readonly page: PageDetails }> = ({ page }) => {
   const { t } = useTranslation();
   const [isFullWidth, setFullWidth] = useState(false);
   const viewport = useRef<HTMLDivElement>(null);

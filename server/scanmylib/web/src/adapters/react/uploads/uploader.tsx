@@ -1,4 +1,4 @@
-import { useMemo, useRef, useSyncExternalStore } from 'react';
+import { type FC, useMemo, useRef, useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -32,7 +32,7 @@ const takeFiles = (input: HTMLInputElement): File[] => {
   return files;
 };
 
-export const Uploader = ({ documentId, uploads, uuids, formatting }: UploaderProps) => {
+export const Uploader: FC<UploaderProps> = ({ documentId, uploads, uuids, formatting }) => {
   const { t } = useTranslation();
   const filesInput = useRef<HTMLInputElement>(null);
   const cameraInput = useRef<HTMLInputElement>(null);
@@ -99,7 +99,7 @@ interface UploadPanelProps {
   readonly formatting: NumberFormatting;
 }
 
-const UploadPanel = ({ documentId, items, uploads, formatting }: UploadPanelProps) => {
+const UploadPanel: FC<UploadPanelProps> = ({ documentId, items, uploads, formatting }) => {
   const { t } = useTranslation();
   if (items.length === 0) return <div className="upload-panel" hidden />;
   const summary = summarizeUploads(items);

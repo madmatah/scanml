@@ -1,3 +1,5 @@
+import type { FC } from 'react';
+
 // Line icons, 24 pixels square, stroked in the color of their text (.icon in app.css). They are decorative: the text
 // beside them, or the label of their control, carries the meaning.
 const ICON_PATHS = {
@@ -34,7 +36,7 @@ const ICON_PATHS = {
 
 export type IconName = keyof typeof ICON_PATHS;
 
-export const Icon = ({ name }: { readonly name: IconName }) => {
+export const Icon: FC<{ readonly name: IconName }> = ({ name }) => {
   return (
     <svg className="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
       <path d={ICON_PATHS[name]} />

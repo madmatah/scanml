@@ -1,10 +1,10 @@
-import { useSyncExternalStore } from 'react';
+import { type FC, useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Icon } from './icon.tsx';
 import type { Toasts } from './toasts.ts';
 
-export const ToastRegion = ({ toasts }: { readonly toasts: Toasts }) => {
+export const ToastRegion: FC<{ readonly toasts: Toasts }> = ({ toasts }) => {
   const { t } = useTranslation();
   const shown = useSyncExternalStore(toasts.subscribe, toasts.getSnapshot);
   return (

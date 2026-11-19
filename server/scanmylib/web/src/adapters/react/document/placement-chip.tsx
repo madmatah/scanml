@@ -1,4 +1,5 @@
 import type { TFunction } from 'i18next';
+import type { FC } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { type DescribedLabel, pagePlacementLabel } from '../../i18next/page-labels.ts';
@@ -16,7 +17,7 @@ export const shownPlacement = (t: TFunction, page: PlacedPage, showsUnplaced: bo
   return page.placement === 'unplaced' && !showsUnplaced ? null : pagePlacementLabel(t, page.placement);
 };
 
-export const PlacementChip = ({ page, showsUnplaced }: PlacementChipProps) => {
+export const PlacementChip: FC<PlacementChipProps> = ({ page, showsUnplaced }) => {
   const { t } = useTranslation();
   const placement = shownPlacement(t, page, showsUnplaced);
   if (placement === null) return null;

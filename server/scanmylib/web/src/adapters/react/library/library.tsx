@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { type FC, type ReactNode, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router';
 
@@ -33,7 +33,7 @@ export interface LibraryProps {
   readonly dates: DateFormatting;
 }
 
-export const Library = ({ catalog, engineStatus, toasts, uuids, dates }: LibraryProps) => {
+export const Library: FC<LibraryProps> = ({ catalog, engineStatus, toasts, uuids, dates }) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const libraryDirectory = useSyncExternalStore(
@@ -190,7 +190,7 @@ interface LibraryContentProps {
   readonly onRetry: () => void;
 }
 
-const LibraryContent = ({ load, query, dates, nowMilliseconds, emptyActions, onRetry }: LibraryContentProps) => {
+const LibraryContent: FC<LibraryContentProps> = ({ load, query, dates, nowMilliseconds, emptyActions, onRetry }) => {
   const { t } = useTranslation();
   switch (load.phase) {
     case 'loading':

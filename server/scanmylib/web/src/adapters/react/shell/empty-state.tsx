@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { FC, ReactNode } from 'react';
 
 import { Icon, type IconName } from './icon.tsx';
 
@@ -9,7 +9,7 @@ export interface EmptyStateProps {
   readonly actions?: ReactNode;
 }
 
-export const EmptyState = ({ iconName, title, message, actions }: EmptyStateProps) => {
+export const EmptyState: FC<EmptyStateProps> = ({ iconName, title, message, actions }) => {
   return (
     <div className="state state-empty">
       {iconName !== undefined && (

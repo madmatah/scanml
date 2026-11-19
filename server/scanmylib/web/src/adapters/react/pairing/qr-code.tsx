@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 const QR_CODE_PIXELS = 220;
@@ -9,7 +9,7 @@ export interface QrCodeProps {
 }
 
 // In a white frame, since a QR code needs a light quiet zone around it, in the dark theme too.
-export const QrCode = ({ url, description }: QrCodeProps) => {
+export const QrCode: FC<QrCodeProps> = ({ url, description }) => {
   const { t } = useTranslation();
   const [isMissing, setMissing] = useState(false);
   return (

@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { type FC, type FormEvent, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
 import type { Session } from '../../../application/session.ts';
@@ -12,7 +12,7 @@ const BRAND_MARK_PIXELS = 48;
 const TOKEN_FILE = 'state/token';
 const SIGN_IN_LINK_FORM = 'http://…/#token=…';
 
-export const Login = ({ session }: { readonly session: Session }) => {
+export const Login: FC<{ readonly session: Session }> = ({ session }) => {
   const { t } = useTranslation();
   const state = useSyncExternalStore(session.subscribe, session.getSnapshot);
   const [token, setToken] = useState('');

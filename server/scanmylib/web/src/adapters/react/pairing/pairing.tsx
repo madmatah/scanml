@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { type FC, useEffect, useRef, useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
 import type { Clipboard } from '../../../application/clipboard.ts';
@@ -28,7 +28,7 @@ export interface PairingProps {
   readonly toasts: Toasts;
 }
 
-export const Pairing = ({ source, clipboard, toasts }: PairingProps) => {
+export const Pairing: FC<PairingProps> = ({ source, clipboard, toasts }) => {
   const { t } = useTranslation();
   const [load, setLoad] = useState<PairingLoad>({ phase: 'loading' });
   const reload = useRef<() => void>(() => {});
@@ -82,7 +82,7 @@ interface InstallCardProps {
   readonly source: PairingSource;
 }
 
-const InstallCard = ({ pairing, source }: InstallCardProps) => {
+const InstallCard: FC<InstallCardProps> = ({ pairing, source }) => {
   const { t } = useTranslation();
   return (
     <section className="card pairing-step" aria-labelledby="install-title">
@@ -160,7 +160,7 @@ interface PairCardProps {
 }
 
 // The labels quoted here are those of the Android app's pairing screen.
-const PairCard = ({ pairing, source, clipboard, toasts }: PairCardProps) => {
+const PairCard: FC<PairCardProps> = ({ pairing, source, clipboard, toasts }) => {
   const { t } = useTranslation();
   return (
     <section className="card pairing-step" aria-labelledby="pair-title">

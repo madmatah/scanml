@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { type FC, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Outlet, useLocation, useMatches, useNavigate } from 'react-router';
 
@@ -46,7 +46,7 @@ const useRouteName = (): RouteName => {
   return match === undefined ? 'unknown' : routeNameOf(match.id, match.params);
 };
 
-export const Shell = ({ services }: { readonly services: ShellServices }) => {
+export const Shell: FC<{ readonly services: ShellServices }> = ({ services }) => {
   const { session, toasts, engineStatus, formatting, uploads } = services;
   const { t } = useTranslation();
   const state = useSyncExternalStore(session.subscribe, session.getSnapshot);

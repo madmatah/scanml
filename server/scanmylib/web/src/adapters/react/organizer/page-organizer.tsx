@@ -1,4 +1,14 @@
-import { memo, useCallback, useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
+import {
+  type FC,
+  memo,
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 import { flushSync } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { createOrganizerStore, type OrganizerStore, organizerToolbar } from '../../../application/organizer-store.ts';
@@ -86,7 +96,7 @@ const highlight = (cards: CardNodes, moved: readonly PageId[]): void => {
   }
 };
 
-export const PageOrganizer = ({ document, save, reset, reload, toasts, onDone }: PageOrganizerProps) => {
+export const PageOrganizer: FC<PageOrganizerProps> = ({ document, save, reset, reload, toasts, onDone }) => {
   const { t } = useTranslation();
   const titleId = useId();
   const [store] = useState<OrganizerStore>(() =>
@@ -307,7 +317,7 @@ export const PageOrganizer = ({ document, save, reset, reload, toasts, onDone }:
       const page = pages.get(pageId);
       if (page === undefined) return null;
       return (
-        <OrganizerCard
+        <MemoizedOrganizerCard
           key={pageId}
           page={page}
           index={firstIndex + offset}
@@ -472,7 +482,7 @@ interface OrganizerCardProps {
   readonly cards: CardNodes;
 }
 
-const OrganizerCard = memo(function OrganizerCard({
+const OrganizerCard: FC<OrganizerCardProps> = ({
   page,
   index,
   total,
@@ -481,7 +491,7 @@ const OrganizerCard = memo(function OrganizerCard({
   isResetting,
   showsUnplaced,
   cards,
-}: OrganizerCardProps) {
+}) => {
   const { t } = useTranslation();
   const name = pageName(t, page, index);
   const pageId = page.id;
@@ -554,4 +564,6 @@ const OrganizerCard = memo(function OrganizerCard({
       </div>
     </li>
   );
-});
+};
+
+const MemoizedOrganizerCard = memo(OrganizerCard);

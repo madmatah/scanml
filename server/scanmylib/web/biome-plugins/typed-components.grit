@@ -1,0 +1,7 @@
+language js
+
+JsVariableDeclarator(id=$name, variable_annotation=., initializer=$init) where {
+  $name <: r"^[A-Z][a-z0-9].*",
+  $init <: JsInitializerClause(expression=JsArrowFunctionExpression(type_parameters=.)),
+  register_diagnostic(span=$name, message="Type this component as FC<Props>.")
+}

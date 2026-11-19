@@ -2,13 +2,7 @@ import assert from 'node:assert/strict';
 import { beforeEach, describe, it } from 'node:test';
 import { MAX_UPLOAD_BYTES } from '../domain/photo-upload.ts';
 import { ApiError, NetworkError } from './api-errors.ts';
-import {
-  createCountingUuidSource,
-  createFakePageUploader,
-  createFixedClock,
-  type FakePageUploader,
-  photo,
-} from './upload-queue.test-support.ts';
+import { createFakePageUploader, createFixedClock, type FakePageUploader, photo } from './upload-queue.test-support.ts';
 import {
   createUploadQueue,
   inFileNameOrder,
@@ -19,6 +13,7 @@ import {
   type UploadQueue,
   type UploadSummary,
 } from './upload-queue.ts';
+import { createCountingUuidSource } from './uuid-source.test-support.ts';
 
 interface Arrangement {
   readonly uploader: FakePageUploader;

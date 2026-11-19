@@ -11,13 +11,16 @@ import {
 } from 'react';
 import { flushSync } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { createOrganizerStore, type OrganizerStore, organizerToolbar } from '../../../application/organizer-store.ts';
+import {
+  createOrganizerStore,
+  type OrganizerPlacement,
+  type OrganizerStore,
+  organizerToolbar,
+} from '../../../application/organizer-store.ts';
 import type { DocumentWithPages, PageSummary } from '../../../domain/document-details.ts';
 import {
   inOrder,
-  moveByOne,
   type PageId,
-  placeSelection,
   type ReadingOrder,
   readingOrderGroups,
   sameOrder,
@@ -136,16 +139,21 @@ export const PageOrganizer: FC<PageOrganizerProps> = ({ document, save, reset, r
     }, ANNOUNCE_DELAY_MILLISECONDS);
   }, []);
 
-  // A move shows at once, so that its cards can be highlighted and it can be told.
+  // A move shows at once with its marks, so that its cards, drawn in their new order, can be highlighted and it can be
+  // told.
   const applyMove = useCallback(
-    (order: ReadingOrder, movedPages: readonly PageId[]) => {
-      flushSync(() => {
-        store.change(order);
-        setMovedPageIds((previous) => new Set([...previous, ...movedPages]));
+    (move: () => OrganizerPlacement): OrganizerPlacement => {
+      const outcome = flushSync(() => {
+        const done = move();
+        if (done.kind === 'moved') setMovedPageIds((previous) => new Set([...previous, ...done.moved]));
+        return done;
       });
-      highlight(cards.current, movedPages);
-      const shown = store.getSnapshot();
-      announce(moveText(t, shown.pages, shown.order, movedPages));
+      if (outcome.kind === 'moved') {
+        highlight(cards.current, outcome.moved);
+        const shown = store.getSnapshot();
+        announce(moveText(t, shown.pages, shown.order, outcome.moved));
+      }
+      return outcome;
     },
     [store, t, announce],
   );
@@ -186,7 +194,12 @@ export const PageOrganizer: FC<PageOrganizerProps> = ({ document, save, reset, r
     const endGesture = (outcome: GestureOutcome): void => {
       switch (outcome.kind) {
         case 'drop':
-          if (!sameOrder(outcome.order, store.getSnapshot().order)) applyMove(outcome.order, outcome.moving);
+          if (!sameOrder(outcome.order, store.getSnapshot().order)) {
+            applyMove(() => {
+              store.change(outcome.order);
+              return { kind: 'moved', moved: outcome.moving };
+            });
+          }
           break;
         case 'tap':
           store.select(outcome.pageId, { isToggle: false, isRange: false });
@@ -215,10 +228,7 @@ export const PageOrganizer: FC<PageOrganizerProps> = ({ document, save, reset, r
     );
 
     const moveOne = (pageId: PageId, step: typeof BEFORE | typeof AFTER, button: HTMLElement): void => {
-      const { order } = store.getSnapshot();
-      const next = moveByOne(order, pageId, step);
-      if (sameOrder(next, order)) return;
-      applyMove(next, [pageId]);
+      if (applyMove(() => store.moveOne(pageId, step)).kind !== 'moved') return;
       // The button moved with its card and kept the focus: it stays in view.
       button.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     };
@@ -287,7 +297,7 @@ export const PageOrganizer: FC<PageOrganizerProps> = ({ document, save, reset, r
   const moveClosed = (moving: readonly PageId[], target: MoveTarget | null): void => {
     setOpenDialog(null);
     if (target === null) return;
-    const placement = placeSelection(store.getSnapshot().order, moving, target.targetId, target.side);
+    const placement = applyMove(() => store.place(moving, target.targetId, target.side));
     switch (placement.kind) {
       case 'conflict':
         toasts.show(conflictText(t), 'error');
@@ -296,7 +306,6 @@ export const PageOrganizer: FC<PageOrganizerProps> = ({ document, save, reset, r
         announce(t('The pages are already at this place.'));
         return;
       case 'moved': {
-        applyMove(placement.order, placement.moved);
         const [first] = placement.moved;
         if (first !== undefined) cards.current.get(first)?.scrollIntoView({ block: 'nearest' });
         return;

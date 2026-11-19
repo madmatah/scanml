@@ -1,5 +1,13 @@
 import { type DocumentWithPages, hasPagesPositionedByHand, type PageSummary } from '../domain/document-details.ts';
-import { type PageId, type ReadingOrder, spanOf } from '../domain/reading-order.ts';
+import {
+  moveByOne,
+  type PageId,
+  placeSelection,
+  type ReadingOrder,
+  type Side,
+  sameOrder,
+  spanOf,
+} from '../domain/reading-order.ts';
 import {
   keepShownPages,
   NO_SELECTION,
@@ -15,6 +23,12 @@ export type OrganizerEvent =
   | { readonly kind: 'save-failed'; readonly failure: unknown }
   | { readonly kind: 'reset-done' }
   | { readonly kind: 'reset-failed'; readonly failure: unknown };
+
+export type OrganizerMove =
+  | { readonly kind: 'moved'; readonly moved: readonly PageId[] }
+  | { readonly kind: 'unchanged' };
+
+export type OrganizerPlacement = OrganizerMove | { readonly kind: 'conflict' };
 
 export interface OrganizerPorts {
   readonly save: (order: ReadingOrder) => Promise<DocumentWithPages>;
@@ -51,6 +65,8 @@ export interface OrganizerStore {
   beginGesture(): void;
   endGesture(): void;
   change(order: ReadingOrder): void;
+  moveOne(pageId: PageId, step: -1 | 1): OrganizerMove;
+  place(moving: readonly PageId[], targetId: PageId, side: Side): OrganizerPlacement;
   select(pageId: PageId, keys: SelectionKeys): void;
   clearSelection(): void;
   selectSpan(): void;
@@ -153,6 +169,14 @@ export const createOrganizerStore = (document: DocumentWithPages, ports: Organiz
     return isSaving || isDirty ? new Promise((resolve) => savedWaiters.push(resolve)) : Promise.resolve();
   };
 
+  const change = (next: ReadingOrder): void => {
+    order = next;
+    isDirty = true;
+    notify();
+    // flush tells its failures through report, so its promise never rejects.
+    void flush();
+  };
+
   const replaceSelection = (next: Selection): void => {
     selection = next;
     notify();
@@ -179,12 +203,18 @@ export const createOrganizerStore = (document: DocumentWithPages, ports: Organiz
       isGestureActive = false;
       showLatestWhenIdle();
     },
-    change(next) {
-      order = next;
-      isDirty = true;
-      notify();
-      // flush tells its failures through report, so its promise never rejects.
-      void flush();
+    change,
+    moveOne(pageId, step) {
+      const next = moveByOne(order, pageId, step);
+      if (sameOrder(next, order)) return { kind: 'unchanged' };
+      change(next);
+      return { kind: 'moved', moved: [pageId] };
+    },
+    place(moving, targetId, side) {
+      const placement = placeSelection(order, moving, targetId, side);
+      if (placement.kind !== 'moved') return placement;
+      change(placement.order);
+      return { kind: 'moved', moved: placement.moved };
     },
     select: (pageId, keys) => replaceSelection(selectPage(selection, order, pageId, keys)),
     clearSelection: () => replaceSelection(NO_SELECTION),

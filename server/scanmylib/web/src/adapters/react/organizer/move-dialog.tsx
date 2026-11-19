@@ -1,16 +1,11 @@
-import { type FC, useId, useRef, useState } from 'react';
+import { type FC, useId } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
-import type { PageId, Side } from '../../../domain/reading-order.ts';
-import { useModal } from '../dialogs/use-modal.ts';
+import type { Side } from '../../../domain/reading-order.ts';
 import { Icon } from '../shell/icon.tsx';
 import { type MoveChoice, moveSummaryText, selectedPagesText } from './organizer-text.ts';
-
-export interface MoveTarget {
-  readonly targetId: PageId;
-  readonly side: Side;
-}
+import { MOVE_RETURN_VALUE, type MoveTarget, useMoveDialog } from './use-move-dialog.ts';
 
 export interface MoveDialogProps {
   readonly count: number;
@@ -18,29 +13,18 @@ export interface MoveDialogProps {
   readonly onClosed: (target: MoveTarget | null) => void;
 }
 
-const MOVE = 'move';
 const SIDES: readonly Side[] = ['before', 'after'];
 
 export const MoveDialog: FC<MoveDialogProps> = ({ count, choices, onClosed }) => {
   const { t } = useTranslation();
   const ids = { title: useId(), target: useId(), summary: useId() };
-  const dialog = useRef<HTMLDialogElement>(null);
-  const targetSelect = useRef<HTMLSelectElement>(null);
-  const [side, setSide] = useState<Side>('before');
-  const [targetId, setTargetId] = useState<PageId>(choices[0]?.pageId ?? '');
-  const returnFocus = useModal(dialog, targetSelect);
-  const page = choices.find((choice) => choice.pageId === targetId)?.name ?? '';
+  const { dialog, targetSelect, side, targetId, targetName, onSideChange, onTargetChange, onClose } = useMoveDialog(
+    choices,
+    onClosed,
+  );
 
   return createPortal(
-    <dialog
-      ref={dialog}
-      className="dialog"
-      aria-labelledby={ids.title}
-      onClose={() => {
-        returnFocus();
-        onClosed(dialog.current?.returnValue === MOVE ? { targetId, side } : null);
-      }}
-    >
+    <dialog ref={dialog} className="dialog" aria-labelledby={ids.title} onClose={onClose}>
       <form method="dialog" className="dialog-body">
         <h2 id={ids.title} className="dialog-title">
           {t('Move selection')}
@@ -56,7 +40,7 @@ export const MoveDialog: FC<MoveDialogProps> = ({ count, choices, onClosed }) =>
                   name="side"
                   value={offeredSide}
                   checked={side === offeredSide}
-                  onChange={() => setSide(offeredSide)}
+                  onChange={() => onSideChange(offeredSide)}
                 />
                 <span>{offeredSide === 'after' ? t('after') : t('before')}</span>
               </label>
@@ -72,7 +56,7 @@ export const MoveDialog: FC<MoveDialogProps> = ({ count, choices, onClosed }) =>
             className="input"
             aria-describedby={ids.summary}
             value={targetId}
-            onChange={(event) => setTargetId(event.target.value)}
+            onChange={(event) => onTargetChange(event.target.value)}
           >
             {choices.map((choice) => (
               <option key={choice.pageId} value={choice.pageId}>
@@ -82,13 +66,13 @@ export const MoveDialog: FC<MoveDialogProps> = ({ count, choices, onClosed }) =>
           </select>
         </div>
         <p id={ids.summary} className="hint">
-          {moveSummaryText(t, count, side, page)}
+          {moveSummaryText(t, count, side, targetName)}
         </p>
         <div className="dialog-actions">
           <button type="submit" value="cancel" className="btn">
             {t('Cancel')}
           </button>
-          <button type="submit" value={MOVE} className="btn btn-primary">
+          <button type="submit" value={MOVE_RETURN_VALUE} className="btn btn-primary">
             <Icon name="move" />
             {t('Move')}
           </button>

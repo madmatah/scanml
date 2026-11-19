@@ -1,6 +1,7 @@
+import type { FC } from 'react';
 import { BRAND_MARK_HREF, BRAND_MARK_VIEW_BOX } from './brand-mark-drawing.ts';
 
-export const BrandMark = ({ sizePixels }: { readonly sizePixels: number }) => {
+export const BrandMark: FC<{ readonly sizePixels: number }> = ({ sizePixels }) => {
   return (
     <svg
       className="brand-mark"

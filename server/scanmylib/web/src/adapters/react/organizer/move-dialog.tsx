@@ -1,4 +1,4 @@
-import { useId, useRef, useState } from 'react';
+import { type FC, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
@@ -21,7 +21,7 @@ export interface MoveDialogProps {
 const MOVE = 'move';
 const SIDES: readonly Side[] = ['before', 'after'];
 
-export const MoveDialog = ({ count, choices, onClosed }: MoveDialogProps) => {
+export const MoveDialog: FC<MoveDialogProps> = ({ count, choices, onClosed }) => {
   const { t } = useTranslation();
   const ids = { title: useId(), target: useId(), summary: useId() };
   const dialog = useRef<HTMLDialogElement>(null);

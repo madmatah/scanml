@@ -1,4 +1,4 @@
-import { useId, useState } from 'react';
+import { type FC, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { Clipboard } from '../../../application/clipboard.ts';
@@ -14,7 +14,7 @@ export interface CopyFieldProps {
   readonly toasts: Toasts;
 }
 
-export const CopyField = ({ label, text, isSecret, copiedMessage, clipboard, toasts }: CopyFieldProps) => {
+export const CopyField: FC<CopyFieldProps> = ({ label, text, isSecret, copiedMessage, clipboard, toasts }) => {
   const { t } = useTranslation();
   const id = useId();
   const [isShown, setShown] = useState(false);

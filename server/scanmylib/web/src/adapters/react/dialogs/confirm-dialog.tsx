@@ -1,4 +1,4 @@
-import { useId, useRef } from 'react';
+import { type FC, useId, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
@@ -14,7 +14,7 @@ export interface ConfirmDialogProps {
 
 const CONFIRM = 'confirm';
 
-export const ConfirmDialog = ({ title, message, confirmLabel, isDanger = false, onClosed }: ConfirmDialogProps) => {
+export const ConfirmDialog: FC<ConfirmDialogProps> = ({ title, message, confirmLabel, isDanger = false, onClosed }) => {
   const { t } = useTranslation();
   const titleId = useId();
   const dialog = useRef<HTMLDialogElement>(null);

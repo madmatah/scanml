@@ -1,11 +1,11 @@
-import { useSyncExternalStore } from 'react';
+import { type FC, useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { EngineStatus } from '../../../application/engine-status.ts';
 import { Icon } from '../shell/icon.tsx';
 import { engineBanner } from './engine-status-text.ts';
 
-export const EngineBanners = ({ engineStatus }: { readonly engineStatus: EngineStatus }) => {
+export const EngineBanners: FC<{ readonly engineStatus: EngineStatus }> = ({ engineStatus }) => {
   const { t } = useTranslation();
   const state = useSyncExternalStore(engineStatus.subscribe, engineStatus.getSnapshot);
   const banner = engineBanner(t, state);

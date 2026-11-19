@@ -1,4 +1,4 @@
-import { type FormEvent, type ReactNode, useEffect, useId, useRef, useState } from 'react';
+import { type FC, type FormEvent, type ReactNode, useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router';
 
@@ -46,7 +46,7 @@ export interface PageScreenProps {
 }
 
 // Each page has a screen of its own, so that going to the previous or the next page starts the next one afresh.
-export const PageScreen = (props: PageScreenProps) => {
+export const PageScreen: FC<PageScreenProps> = (props) => {
   const pageId = idOfAddress(useParams().pageId);
   if (pageId === null) return null;
   return <PageView key={pageId} pageId={pageId} {...props} />;
@@ -66,7 +66,7 @@ const isTypingTarget = (target: EventTarget | null): boolean => {
   );
 };
 
-const PageView = ({
+const PageView: FC<PageViewProps> = ({
   pageId,
   pages,
   documents,
@@ -76,7 +76,7 @@ const PageView = ({
   formatting,
   dates,
   typesetFormulas,
-}: PageViewProps) => {
+}) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [load, setLoad] = useState<PageLoad>({ phase: 'loading' });
@@ -269,7 +269,7 @@ interface PageHeaderProps {
   readonly neighbors: PageNeighbors;
 }
 
-const PageHeader = ({ page, documentPages, neighbors }: PageHeaderProps) => {
+const PageHeader: FC<PageHeaderProps> = ({ page, documentPages, neighbors }) => {
   const { t } = useTranslation();
   const source = numberSourceLabel(t, page.numberSource);
   const status = pageStatusLabel(t, page.status);
@@ -317,7 +317,7 @@ interface NeighborLinkProps {
   readonly children: ReactNode;
 }
 
-const NeighborLink = ({ neighbor, rel, children }: NeighborLinkProps) => {
+const NeighborLink: FC<NeighborLinkProps> = ({ neighbor, rel, children }) => {
   const { t } = useTranslation();
   if (neighbor === null) {
     return (
@@ -339,7 +339,7 @@ const NeighborLink = ({ neighbor, rel, children }: NeighborLinkProps) => {
   );
 };
 
-const PageNotices = ({ page }: { readonly page: PageDetails }) => {
+const PageNotices: FC<{ readonly page: PageDetails }> = ({ page }) => {
   const { t } = useTranslation();
   const hasError = page.status === 'error';
   const isDuplicate = page.duplicateOf !== null && page.duplicateOf !== '';
@@ -389,7 +389,7 @@ interface PageToolbarProps {
   readonly onDelete: () => void;
 }
 
-const PageToolbar = ({
+const PageToolbar: FC<PageToolbarProps> = ({
   page,
   isBusy,
   onSaveNumber,
@@ -399,7 +399,7 @@ const PageToolbar = ({
   onExclude,
   onReadAgain,
   onDelete,
-}: PageToolbarProps) => {
+}) => {
   const { t } = useTranslation();
   const numberId = useId();
   const numberHelpId = useId();
@@ -507,7 +507,7 @@ interface ActionButtonProps {
   readonly children: ReactNode;
 }
 
-const ActionButton = ({ className, isUnavailable, onActivate, children }: ActionButtonProps) => {
+const ActionButton: FC<ActionButtonProps> = ({ className, isUnavailable, onActivate, children }) => {
   return (
     <button
       type="button"
@@ -529,7 +529,7 @@ interface IconButtonProps {
   readonly onActivate: () => void;
 }
 
-const IconButton = ({ iconName, label, isUnavailable, onActivate }: IconButtonProps) => {
+const IconButton: FC<IconButtonProps> = ({ iconName, label, isUnavailable, onActivate }) => {
   return (
     <button
       type="button"

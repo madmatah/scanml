@@ -1,3 +1,4 @@
+import type { FC } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 
@@ -22,7 +23,7 @@ export interface DocumentCardProps {
   readonly nowMilliseconds: number;
 }
 
-export const DocumentCard = ({ document, dates, nowMilliseconds }: DocumentCardProps) => {
+export const DocumentCard: FC<DocumentCardProps> = ({ document, dates, nowMilliseconds }) => {
   const { t } = useTranslation();
   const { coverThumbnailUrl } = document;
   return (

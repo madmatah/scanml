@@ -33,6 +33,14 @@ From the TypeScript handbook and React's "Rules of React" (react.dev).
   callback that needs an object's method wraps it (`() => view.render()`). Neither the compiler nor the linter catches
   an unbound method.
 - **Function components and hooks only,** never a class component.
+- **A component is typed `FC<Props>`,** `export const PageGrid: FC<PageGridProps> = ({ pages }) => { … };`, with
+  `import type { FC } from 'react';`, or `FC` alone when it takes no props: the type says at its name that it is a
+  component, and checks what it returns. `FC` adds no `children`: a component that takes them declares them in its
+  props. A generic component is the exception, typed by its parameters, such as
+  `export const DocumentDialog = <Saved,>({ … }: DocumentDialogProps<Saved>) => { … };`: a variable's type cannot
+  introduce a type parameter, and `FC<DocumentDialogProps<unknown>>` would refuse its callers' typed callbacks. Biome's
+  plugin `biome-plugins/typed-components.grit` refuses, in a `.tsx` file, a `PascalCase` constant set to an arrow
+  function that is neither typed nor generic.
 - **Rendering is pure.** A component computes its JSX from its props and its state, with no side effect. An effect
   (`useEffect`) only synchronizes with a system outside React, never computes derived state.
 - **The rules of hooks:** a hook is called at the top level of a component or of another hook, never in a condition or a

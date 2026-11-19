@@ -1,4 +1,4 @@
-import { type ReactNode, type RefObject, useEffect, useId, useRef, useState } from 'react';
+import { type FC, type ReactNode, type RefObject, useEffect, useId, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router';
@@ -53,7 +53,7 @@ type OpenDialog = 'edit' | 'delete' | null;
 const MARKDOWN_FILE_NAME = 'document.md';
 
 // Each document has a screen of its own, so that going from one to another starts the next one afresh.
-export const DocumentScreen = (props: DocumentScreenProps) => {
+export const DocumentScreen: FC<DocumentScreenProps> = (props) => {
   const documentId = idOfAddress(useParams().documentId);
   if (documentId === null) return null;
   return <DocumentView key={documentId} documentId={documentId} {...props} />;
@@ -63,7 +63,7 @@ interface DocumentViewProps extends DocumentScreenProps {
   readonly documentId: string;
 }
 
-const DocumentView = ({
+const DocumentView: FC<DocumentViewProps> = ({
   documentId,
   store,
   engineStatus,
@@ -73,7 +73,7 @@ const DocumentView = ({
   formatting,
   uploads,
   uuids,
-}: DocumentViewProps) => {
+}) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [load, setLoad] = useState<DocumentLoad>({ phase: 'loading' });
@@ -291,7 +291,7 @@ interface DocumentOverviewProps {
   readonly uuids: UuidSource;
 }
 
-const DocumentOverview = ({
+const DocumentOverview: FC<DocumentOverviewProps> = ({
   document,
   store,
   toasts,
@@ -299,7 +299,7 @@ const DocumentOverview = ({
   formatting,
   uploads,
   uuids,
-}: DocumentOverviewProps) => {
+}) => {
   const { t } = useTranslation();
   const withScansId = useId();
   const [includesScans, setIncludesScans] = useState(false);
@@ -392,7 +392,7 @@ interface PagesSectionProps {
   readonly organizer: ReactNode;
 }
 
-const PagesSection = ({ document, organizeButton, onOrganize, organizer }: PagesSectionProps) => {
+const PagesSection: FC<PagesSectionProps> = ({ document, organizeButton, onOrganize, organizer }) => {
   const { t } = useTranslation();
   const { pages } = document;
   return (
@@ -417,7 +417,7 @@ const PagesSection = ({ document, organizeButton, onOrganize, organizer }: Pages
   );
 };
 
-const PageGroups = ({ pages }: { readonly pages: DocumentWithPages['pages'] }) => {
+const PageGroups: FC<{ readonly pages: DocumentWithPages['pages'] }> = ({ pages }) => {
   const { t } = useTranslation();
   if (pages.length > 0) return <PageGrid pages={pages} />;
   return (

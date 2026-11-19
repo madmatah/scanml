@@ -1,3 +1,4 @@
+import type { FC } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
 import { formatPageRanges, type PageCoverage } from '../../../domain/document-summary.ts';
@@ -13,7 +14,7 @@ export interface CoverageProps {
   readonly formatting: NumberFormatting;
 }
 
-export const Coverage = ({ coverage, formatting }: CoverageProps) => {
+export const Coverage: FC<CoverageProps> = ({ coverage, formatting }) => {
   const { t } = useTranslation();
   const { lowestNumber, highestNumber, ranges, gaps, unnumberedCount } = coverage;
   const unnumberedNote = unnumberedCount > 0 && (

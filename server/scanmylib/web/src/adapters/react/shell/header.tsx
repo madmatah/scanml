@@ -1,4 +1,4 @@
-import type { MouseEvent, ReactNode } from 'react';
+import type { FC, MouseEvent, ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useLocation } from 'react-router';
 
@@ -26,7 +26,7 @@ interface HeaderLinkProps {
   readonly children: ReactNode;
 }
 
-const HeaderLink = ({ to, className, isCurrent = false, children }: HeaderLinkProps) => {
+const HeaderLink: FC<HeaderLinkProps> = ({ to, className, isCurrent = false, children }) => {
   const location = useLocation();
   // A link to the address already shown changes nothing, as a link to the same fragment does: the router would
   // otherwise enter it again, and the shell move the focus and the scroll as for a new screen.
@@ -40,7 +40,7 @@ const HeaderLink = ({ to, className, isCurrent = false, children }: HeaderLinkPr
   );
 };
 
-export const Header = ({ isSignedIn, section, engineStatus, formatting, onSignOut }: HeaderProps) => {
+export const Header: FC<HeaderProps> = ({ isSignedIn, section, engineStatus, formatting, onSignOut }) => {
   const { t } = useTranslation();
   return (
     <header className="app-header" id="app-header" hidden={!isSignedIn}>

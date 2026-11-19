@@ -1,31 +1,30 @@
-import { type FC, useCallback, useState } from 'react';
+import type { FC } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { Clipboard } from '../../../application/clipboard.ts';
 import { isBeingRead, type PageDetails } from '../../../domain/page-details.ts';
-import { localizeMarkers } from '../sanitized-html/page-markers.ts';
-import { type FormulaTypesetter, useSanitizedHtml } from '../sanitized-html/use-sanitized-html.ts';
+import type { FormulaTypesetter } from '../sanitized-html/use-sanitized-html.ts';
 import { Icon } from '../shell/icon.tsx';
-import type { Toasts } from '../shell/toasts.ts';
-import { versionedUrl } from '../shell/versioned-url.ts';
+import { usePageText } from './use-page-text.ts';
 
 export interface TextPaneProps {
   readonly page: PageDetails;
   readonly sanitizedHtml: string;
   readonly typesetFormulas: FormulaTypesetter;
-  readonly clipboard: Clipboard;
-  readonly toasts: Toasts;
+  readonly showsMarkdown: boolean;
+  readonly onToggleMarkdown: () => void;
+  readonly onCopyMarkdown: (markdown: string) => void;
 }
 
-export const TextPane: FC<TextPaneProps> = ({ page, sanitizedHtml, typesetFormulas, clipboard, toasts }) => {
+export const TextPane: FC<TextPaneProps> = ({
+  page,
+  sanitizedHtml,
+  typesetFormulas,
+  showsMarkdown,
+  onToggleMarkdown,
+  onCopyMarkdown,
+}) => {
   const { t } = useTranslation();
-  const [showsMarkdown, setShowsMarkdown] = useState(false);
   const hasMarkdown = page.markdown.trim() !== '';
-
-  const copyMarkdown = async (): Promise<void> => {
-    if (await clipboard.copyText(page.markdown)) toasts.show(t('Markdown copied.'), 'success');
-    else toasts.show(t('Could not copy.'), 'error');
-  };
 
   return (
     <section className="pane text-pane" aria-labelledby="text-title">
@@ -34,12 +33,7 @@ export const TextPane: FC<TextPaneProps> = ({ page, sanitizedHtml, typesetFormul
           {t('Recognized text')}
         </h2>
         <div className="pane-tools">
-          <button
-            type="button"
-            className="btn btn-small"
-            aria-pressed={showsMarkdown}
-            onClick={() => setShowsMarkdown(!showsMarkdown)}
-          >
+          <button type="button" className="btn btn-small" aria-pressed={showsMarkdown} onClick={onToggleMarkdown}>
             {t('Raw Markdown')}
           </button>
           <button
@@ -47,8 +41,7 @@ export const TextPane: FC<TextPaneProps> = ({ page, sanitizedHtml, typesetFormul
             className="btn btn-small btn-ghost"
             aria-disabled={hasMarkdown ? undefined : 'true'}
             onClick={() => {
-              // copyMarkdown tells its outcome in a toast, and the clipboard's copy never rejects.
-              if (hasMarkdown) void copyMarkdown();
+              if (hasMarkdown) onCopyMarkdown(page.markdown);
             }}
           >
             <Icon name="copy" />
@@ -114,18 +107,6 @@ interface RecognizedTextProps {
 }
 
 const RecognizedText: FC<RecognizedTextProps> = ({ sanitizedHtml, version, typesetFormulas }) => {
-  const { t } = useTranslation();
-  // The api writes its markers in English; the illustrations get the version of the reading before any of them loads.
-  const prepare = useCallback(
-    (content: DocumentFragment) => {
-      localizeMarkers(t, content);
-      for (const illustration of content.querySelectorAll('img[src]')) {
-        const address = illustration.getAttribute('src');
-        if (address !== null) illustration.setAttribute('src', versionedUrl(address, version));
-      }
-    },
-    [t, version],
-  );
-  const container = useSanitizedHtml(sanitizedHtml, prepare, typesetFormulas);
+  const container = usePageText(sanitizedHtml, version, typesetFormulas);
   return <div ref={container} className="ocr-render" />;
 };

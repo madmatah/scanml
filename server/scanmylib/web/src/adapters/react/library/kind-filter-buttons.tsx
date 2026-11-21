@@ -12,12 +12,12 @@ export interface KindFilterButtonsProps {
 export const KindFilterButtons: FC<KindFilterButtonsProps> = ({ kindFilter, onKindFilterChange }) => {
   const { t } = useTranslation();
   return (
-    <fieldset className="segmented" aria-label={t('Kind of document')}>
+    <fieldset className="toggle-group" aria-label={t('Kind of document')}>
       {KIND_FILTERS.map((filter) => (
         <button
           key={filter}
           type="button"
-          className="segmented-button"
+          className="toggle-button"
           aria-pressed={filter === kindFilter}
           onClick={() => onKindFilterChange(filter)}
         >

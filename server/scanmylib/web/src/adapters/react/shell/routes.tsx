@@ -24,6 +24,7 @@ export const createRoutes = (services: ShellServices): RouteObject[] => {
               toasts={services.toasts}
               uuids={services.uuids}
               dates={services.dates}
+              formatting={services.formatting}
             />
           ),
         },

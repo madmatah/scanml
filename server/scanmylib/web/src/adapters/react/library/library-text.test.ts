@@ -5,9 +5,20 @@ import { before, beforeEach, describe, it } from 'node:test';
 import type { TFunction } from 'i18next';
 import frenchCatalog from '../../../../locales/fr.json' with { type: 'json' };
 import { type DocumentChanges, sampleDocument } from '../../../domain/document-summary.test-support.ts';
+import { createNumberFormatting } from '../../../domain/formatting.ts';
 import { CATALOGS } from '../../i18next/catalogs.ts';
 import { createLocalizationFor } from '../../i18next/localization.test-support.ts';
-import { coverageText, librarySummaryText, progressText, type StatusChip, statusChips } from './library-text.ts';
+import {
+  bylineText,
+  coverageSummaryText,
+  librarySummaryText,
+  type StatusChip,
+  statusChips,
+  type TextStatus,
+  textStatus,
+} from './library-text.ts';
+
+const ENGLISH_NUMBERS = createNumberFormatting('en-US');
 
 describe('The library text', () => {
   let englishT: TFunction;
@@ -62,7 +73,37 @@ describe('The library text', () => {
     });
   });
 
-  describe('The coverageText() function', () => {
+  describe('The bylineText() function', () => {
+    const situations: { situation: string; changes: DocumentChanges; rule: string; expected: string }[] = [
+      {
+        situation: 'When the document has an author',
+        changes: { author: 'Jane Doe' },
+        rule: 'should name the author',
+        expected: 'Jane Doe',
+      },
+      {
+        situation: 'When the document has no author',
+        changes: { author: '' },
+        rule: 'should say so, so that the line keeps its place and the cards line up',
+        expected: 'No author',
+      },
+    ];
+
+    for (const { situation, changes, rule, expected } of situations) {
+      describe(situation, () => {
+        let byline: string;
+        beforeEach(() => {
+          byline = bylineText(englishT, sampleDocument(changes));
+        });
+
+        it(rule, () => {
+          assert.equal(byline, expected);
+        });
+      });
+    }
+  });
+
+  describe('The coverageSummaryText() function', () => {
     const situations: {
       situation: string;
       changes: DocumentChanges;
@@ -70,32 +111,70 @@ describe('The library text', () => {
       expected: string;
     }[] = [
       {
-        situation: 'When the numbered pages leave a gap',
+        situation: 'When the numbered pages leave gaps',
         changes: { coverage: {} },
-        rule: 'should give the pages covered, then those not scanned yet',
-        expected: 'Pages 11–15, 18–21 · not scanned yet: 16–17',
+        rule: 'should count the pages scanned between the lowest and the highest, with their share, in one line',
+        expected: '9 of pages 11–21 scanned (82%)',
+      },
+      {
+        situation: 'When a single page is missing from a long span',
+        changes: {
+          coverage: {
+            ranges: [
+              [1, 150],
+              [152, 300],
+            ],
+            label: '1–150, 152–300',
+            gaps: [[151, 151]],
+            lowestNumber: 1,
+            highestNumber: 300,
+          },
+        },
+        rule: 'should keep the share below 100%, which only a span with no gap reads',
+        expected: '299 of pages 1–300 scanned (99%)',
+      },
+      {
+        situation: 'When only the first and the last page of a long span are scanned',
+        changes: {
+          coverage: {
+            ranges: [
+              [1, 1],
+              [500, 500],
+            ],
+            label: '1, 500',
+            gaps: [[2, 499]],
+            lowestNumber: 1,
+            highestNumber: 500,
+          },
+        },
+        rule: 'should keep the share above 0%, since pages are scanned',
+        expected: '2 of pages 1–500 scanned (1%)',
       },
       {
         situation: 'When the numbered pages leave no gap',
-        changes: { coverage: { ranges: [[1, 6]], label: '1–6', gaps: [], lowestNumber: 1 } },
-        rule: 'should give the pages covered alone',
-        expected: 'Pages 1–6',
+        changes: { coverage: { ranges: [[6, 44]], label: '6–44', gaps: [], lowestNumber: 6, highestNumber: 44 } },
+        rule: 'should say that every page between the lowest and the highest is scanned',
+        expected: 'Pages 6–44, all scanned',
       },
       {
-        situation: 'When the api gives no label for the pages covered',
-        changes: { coverage: { ranges: [[1, 6]], label: '', gaps: [], lowestNumber: 1 } },
-        rule: 'should write the ranges of the pages covered',
-        expected: 'Pages 1–6',
+        situation: 'When one numbered page is scanned',
+        changes: { coverage: { ranges: [[12, 12]], label: '12', gaps: [], lowestNumber: 12, highestNumber: 12 } },
+        rule: 'should name the page alone',
+        expected: 'Page 12',
       },
       {
         situation: 'When no page is numbered',
-        changes: { coverage: { ranges: [], label: '', gaps: [], lowestNumber: null, unnumberedCount: 2 } },
+        changes: {
+          coverage: { ranges: [], label: '', gaps: [], lowestNumber: null, highestNumber: null, unnumberedCount: 2 },
+        },
         rule: 'should count the unnumbered pages',
         expected: '2 unnumbered pages',
       },
       {
         situation: 'When the document has no page',
-        changes: { coverage: { ranges: [], label: '', gaps: [], lowestNumber: null, unnumberedCount: 0 } },
+        changes: {
+          coverage: { ranges: [], label: '', gaps: [], lowestNumber: null, highestNumber: null, unnumberedCount: 0 },
+        },
         rule: 'should say that no page is numbered',
         expected: 'No numbered page',
       },
@@ -103,40 +182,64 @@ describe('The library text', () => {
 
     for (const { situation, changes, rule, expected } of situations) {
       describe(situation, () => {
-        let text: string;
+        let summary: string;
         beforeEach(() => {
-          text = coverageText(englishT, sampleDocument(changes).coverage);
+          summary = coverageSummaryText(englishT, ENGLISH_NUMBERS, sampleDocument(changes).coverage);
         });
 
         it(rule, () => {
-          assert.equal(text, expected);
+          assert.equal(summary, expected);
         });
       });
     }
   });
 
-  describe('The progressText() function', () => {
-    describe('When some pages have their text', () => {
-      let text: string;
-      beforeEach(() => {
-        text = progressText(englishT, sampleDocument({ stats: { pageCount: 11, doneCount: 6 } }).stats);
-      });
+  describe('The textStatus() function', () => {
+    const situations: { situation: string; changes: DocumentChanges; rule: string; expected: TextStatus }[] = [
+      {
+        situation: 'When every page has its text',
+        changes: { stats: { pageCount: 11, doneCount: 11 } },
+        rule: 'should say that the text is ready, in the tone of a page done',
+        expected: { text: 'Text ready', tone: 'ok' },
+      },
+      {
+        situation: 'When some pages have their text',
+        changes: { stats: { pageCount: 30, doneCount: 12 } },
+        rule: 'should count the pages whose text is ready, without saying they are being read, which a stopped engine would belie',
+        expected: { text: 'Text ready for 12 of 30 pages', tone: 'info' },
+      },
+      {
+        situation: 'When pages in the thousands have their text',
+        changes: { stats: { pageCount: 1200, doneCount: 1050 } },
+        rule: 'should format both counts alike',
+        expected: { text: 'Text ready for 1,050 of 1,200 pages', tone: 'info' },
+      },
+      {
+        situation: 'When the one page of a document waits for its text',
+        changes: { stats: { pageCount: 1, doneCount: 0 } },
+        rule: 'should take the singular',
+        expected: { text: 'Text ready for 0 of 1 page', tone: 'info' },
+      },
+      {
+        situation: 'When the document has no page',
+        changes: { stats: { pageCount: 0, doneCount: 0 } },
+        rule: 'should say that it has no page yet, rather than that its text is ready',
+        expected: { text: 'No pages yet', tone: 'neutral' },
+      },
+    ];
 
-      it('should count the pages whose text is ready out of all of them', () => {
-        assert.equal(text, '6 / 11 pages: text ready');
-      });
-    });
+    for (const { situation, changes, rule, expected } of situations) {
+      describe(situation, () => {
+        let status: TextStatus;
+        beforeEach(() => {
+          status = textStatus(englishT, sampleDocument(changes).stats);
+        });
 
-    describe('When the document has one page', () => {
-      let text: string;
-      beforeEach(() => {
-        text = progressText(englishT, sampleDocument({ stats: { pageCount: 1, doneCount: 1 } }).stats);
+        it(rule, () => {
+          assert.deepEqual(status, expected);
+        });
       });
-
-      it('should take the singular', () => {
-        assert.equal(text, '1 / 1 page: text ready');
-      });
-    });
+    }
   });
 
   describe('The librarySummaryText() function', () => {

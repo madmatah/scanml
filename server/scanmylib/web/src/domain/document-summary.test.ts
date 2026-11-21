@@ -4,7 +4,6 @@ import { sampleDocument } from './document-summary.test-support.ts';
 import {
   countPages,
   type DocumentKind,
-  doneRatio,
   formatPageRanges,
   NEW_DOCUMENT_KIND,
   unwarpsByDefault,
@@ -21,32 +20,6 @@ describe('The document summary', () => {
 
       it('should add up the pages of every document', () => {
         assert.equal(pageCount, 17);
-      });
-    });
-  });
-
-  describe('The doneRatio() function', () => {
-    describe('When some pages have their text', () => {
-      const { stats } = sampleDocument({ stats: { pageCount: 4, doneCount: 1 } });
-      let ratio: number;
-      beforeEach(() => {
-        ratio = doneRatio(stats);
-      });
-
-      it('should be the share of the pages whose text is ready', () => {
-        assert.equal(ratio, 0.25);
-      });
-    });
-
-    describe('When the document has no page', () => {
-      const { stats } = sampleDocument({ stats: { pageCount: 0, doneCount: 0 } });
-      let ratio: number;
-      beforeEach(() => {
-        ratio = doneRatio(stats);
-      });
-
-      it('should be zero, so that an empty document shows an empty meter', () => {
-        assert.equal(ratio, 0);
       });
     });
   });

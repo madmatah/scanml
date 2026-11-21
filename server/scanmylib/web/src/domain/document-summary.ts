@@ -48,10 +48,6 @@ export const countPages = (documents: readonly DocumentSummary[]): number => {
   return documents.reduce((total, document) => total + document.stats.pageCount, 0);
 };
 
-export const doneRatio = (stats: DocumentStats): number => {
-  return stats.pageCount === 0 ? 0 : stats.doneCount / stats.pageCount;
-};
-
 export const formatPageRange = ([start, end]: PageRange): string => {
   return start === end ? String(start) : `${start}–${end}`;
 };

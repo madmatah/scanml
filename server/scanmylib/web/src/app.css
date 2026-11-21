@@ -1052,7 +1052,7 @@ textarea.input {
 
 .doc-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 21rem), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr));
   gap: var(--space-4);
   padding: 0;
   list-style: none;
@@ -1060,7 +1060,7 @@ textarea.input {
 
 .doc-card-link {
   display: grid;
-  grid-template-columns: 5.75rem minmax(0, 1fr);
+  grid-template-columns: 6rem minmax(0, 1fr);
   gap: var(--space-4);
   height: 100%;
   padding: var(--space-4);
@@ -1092,10 +1092,11 @@ textarea.input {
   background: var(--surface-sunken);
 }
 
+/* Covers come in any shape: each is drawn whole, uncropped, in a frame of the same size. */
 .doc-cover img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
 }
 
 .doc-cover-placeholder {
@@ -1103,21 +1104,33 @@ textarea.input {
   font-size: 1.8rem;
 }
 
+/* Every line of a card keeps one height, so that the cards of the grid line up whatever their title or state. */
 .doc-card-body {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   align-content: start;
-  gap: 0.4rem;
+  gap: var(--space-2);
   min-width: 0;
 }
 
-.doc-card-title {
-  display: -webkit-box;
+.doc-card-heading {
+  display: grid;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.doc-card-title,
+.doc-card-author,
+.doc-card-coverage-text,
+.doc-card-status,
+.doc-card-updated {
   overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.doc-card-title {
   font-size: 1.05rem;
-  overflow-wrap: anywhere;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
 }
 
 .doc-card-author {
@@ -1125,37 +1138,80 @@ textarea.input {
   font-size: 0.92rem;
 }
 
-.doc-card-progress {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  font-size: 0.86rem;
+.doc-card-coverage {
+  display: grid;
+  gap: 0.3rem;
 }
 
-.meter {
-  flex: 0 0 4.5rem;
-  height: 0.4rem;
+.doc-card-coverage-bar {
+  display: flex;
+  gap: 1px;
+  height: 0.5rem;
   overflow: hidden;
   border-radius: 999px;
   background: var(--surface-sunken);
 }
 
-.meter-fill {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: var(--accent);
+.doc-card-coverage-bar .coverage-segment {
+  min-width: 2px;
 }
 
-.doc-card-coverage {
-  font-size: 0.86rem;
+.doc-card-coverage-bar .is-missing {
+  background: repeating-linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--missing) 75%, transparent) 0 3px,
+    color-mix(in srgb, var(--missing) 30%, transparent) 3px 6px
+  );
+}
+
+.doc-card-coverage-text {
   color: var(--text-muted);
-  overflow-wrap: anywhere;
+  font-size: 0.86rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.doc-card-status {
+  color: var(--text-muted);
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.doc-card-status::before {
+  content: "";
+  display: inline-block;
+  width: 0.45rem;
+  height: 0.45rem;
+  margin-right: var(--space-2);
+  border-radius: 50%;
+  background: currentColor;
+  vertical-align: 0.08em;
+}
+
+.doc-card-status.is-info {
+  color: var(--info);
+}
+
+.doc-card-status.is-ok {
+  color: var(--ok);
+}
+
+.doc-card-footer {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.doc-card-footer .chips {
+  flex: 0 1 auto;
+  min-width: 0;
 }
 
 .doc-card-updated {
+  flex: 1 1 0;
+  min-width: 4rem;
   color: var(--text-muted);
   font-size: 0.8rem;
+  text-align: right;
 }
 
 .library-footer {

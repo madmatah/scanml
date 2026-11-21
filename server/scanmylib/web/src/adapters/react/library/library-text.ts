@@ -4,10 +4,12 @@ import {
   countPages,
   type DocumentStats,
   type DocumentSummary,
-  formatPageRanges,
   type PageCoverage,
 } from '../../../domain/document-summary.ts';
+import type { NumberFormatting } from '../../../domain/formatting.ts';
 import { documentKindLabel } from '../../i18next/document-labels.ts';
+import { formatPartialPercent } from '../../i18next/formatted-text.ts';
+import { pageCount, scannedPageCount } from '../document/coverage-layout.ts';
 
 export type ChipTone = 'neutral' | 'info' | 'warn' | 'danger';
 
@@ -15,6 +17,13 @@ export interface StatusChip {
   readonly name: string;
   readonly text: string;
   readonly tone: ChipTone;
+}
+
+export type TextStatusTone = 'neutral' | 'info' | 'ok';
+
+export interface TextStatus {
+  readonly text: string;
+  readonly tone: TextStatusTone;
 }
 
 export const statusChips = (t: TFunction, document: DocumentSummary): StatusChip[] => {
@@ -53,30 +62,43 @@ export const statusChips = (t: TFunction, document: DocumentSummary): StatusChip
   return chips;
 };
 
-export const coverageText = (t: TFunction, coverage: PageCoverage): string => {
-  if (coverage.lowestNumber === null) {
-    if (coverage.unnumberedCount === 0) return t('No numbered page');
+export const bylineText = (t: TFunction, document: DocumentSummary): string => {
+  return document.author === '' ? t('No author') : document.author;
+};
+
+export const coverageSummaryText = (t: TFunction, formatting: NumberFormatting, coverage: PageCoverage): string => {
+  const { lowestNumber, highestNumber, ranges, gaps, unnumberedCount } = coverage;
+  if (lowestNumber === null || highestNumber === null) {
+    if (unnumberedCount === 0) return t('No numbered page');
     return t('{{count, number}} unnumbered page', {
-      count: coverage.unnumberedCount,
+      count: unnumberedCount,
       defaultValue_one: '{{count, number}} unnumbered page',
       defaultValue_other: '{{count, number}} unnumbered pages',
     });
   }
-  const label = coverage.label === '' ? formatPageRanges(coverage.ranges) : coverage.label;
-  const parts = [t('Pages {{label}}', { label })];
-  if (coverage.gaps.length > 0) {
-    parts.push(t('not scanned yet: {{ranges}}', { ranges: formatPageRanges(coverage.gaps) }));
+  if (gaps.length === 0) {
+    if (lowestNumber === highestNumber) return t('Page {{page}}', { page: lowestNumber });
+    return t('Pages {{lowest}}–{{highest}}, all scanned', { lowest: lowestNumber, highest: highestNumber });
   }
-  return parts.join(' · ');
+  const scanned = scannedPageCount(ranges);
+  return t('{{scanned}} of pages {{lowest}}–{{highest}} scanned ({{percent}})', {
+    scanned: formatting.formatNumber(scanned),
+    lowest: lowestNumber,
+    highest: highestNumber,
+    percent: formatPartialPercent(t, formatting, scanned / pageCount([lowestNumber, highestNumber])),
+  });
 };
 
-export const progressText = (t: TFunction, stats: DocumentStats): string => {
-  const pages = t('{{count, number}} page: text ready', {
+export const textStatus = (t: TFunction, stats: DocumentStats): TextStatus => {
+  if (stats.pageCount === 0) return { text: t('No pages yet'), tone: 'neutral' };
+  if (stats.doneCount === stats.pageCount) return { text: t('Text ready', { context: 'document' }), tone: 'ok' };
+  const text = t('Text ready for {{done, number}} of {{count, number}} pages', {
     count: stats.pageCount,
-    defaultValue_one: '{{count, number}} page: text ready',
-    defaultValue_other: '{{count, number}} pages: text ready',
+    done: stats.doneCount,
+    defaultValue_one: 'Text ready for {{done, number}} of {{count, number}} page',
+    defaultValue_other: 'Text ready for {{done, number}} of {{count, number}} pages',
   });
-  return `${stats.doneCount} / ${pages}`;
+  return { text, tone: 'info' };
 };
 
 export const librarySummaryText = (t: TFunction, documents: readonly DocumentSummary[]): string => {
@@ -86,10 +108,10 @@ export const librarySummaryText = (t: TFunction, documents: readonly DocumentSum
     defaultValue_one: '{{count, number}} document',
     defaultValue_other: '{{count, number}} documents',
   });
-  const pageCount = t('{{count, number}} page', {
+  const pageTotal = t('{{count, number}} page', {
     count: countPages(documents),
     defaultValue_one: '{{count, number}} page',
     defaultValue_other: '{{count, number}} pages',
   });
-  return `${documentCount} · ${pageCount}`;
+  return `${documentCount} · ${pageTotal}`;
 };

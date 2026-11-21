@@ -7,6 +7,7 @@ import frenchCatalog from '../../../../locales/fr.json' with { type: 'json' };
 import type { EmptySearchReason, KindFilter } from '../../../domain/document-search.ts';
 import { type DocumentChanges, sampleDocument } from '../../../domain/document-summary.test-support.ts';
 import { createNumberFormatting } from '../../../domain/formatting.ts';
+import type { LibraryView } from '../../../domain/library-view.ts';
 import { CATALOGS } from '../../i18next/catalogs.ts';
 import { createLocalizationFor } from '../../i18next/localization.test-support.ts';
 import {
@@ -15,7 +16,9 @@ import {
   emptySearchText,
   kindFilterLabel,
   librarySummaryText,
+  libraryViewLabel,
   type StatusChip,
+  shortTextStatus,
   statusChips,
   type TextStatus,
   textStatus,
@@ -240,6 +243,62 @@ describe('The library text', () => {
 
         it(rule, () => {
           assert.deepEqual(status, expected);
+        });
+      });
+    }
+  });
+
+  describe('The shortTextStatus() function', () => {
+    const situations: { situation: string; changes: DocumentChanges; rule: string; expected: TextStatus }[] = [
+      {
+        situation: 'When some pages have their text',
+        changes: { stats: { pageCount: 1200, doneCount: 1050 } },
+        rule: 'should count them out of all in a few words, for a row as narrow as a phone',
+        expected: { text: '1,050 / 1,200 ready', tone: 'info' },
+      },
+      {
+        situation: 'When every page has its text',
+        changes: { stats: { pageCount: 11, doneCount: 11 } },
+        rule: 'should say that the text is ready, as the long form does',
+        expected: { text: 'Text ready', tone: 'ok' },
+      },
+      {
+        situation: 'When the document has no page',
+        changes: { stats: { pageCount: 0, doneCount: 0 } },
+        rule: 'should say that it has no page yet, as the long form does',
+        expected: { text: 'No pages yet', tone: 'neutral' },
+      },
+    ];
+
+    for (const { situation, changes, rule, expected } of situations) {
+      describe(situation, () => {
+        let status: TextStatus;
+        beforeEach(() => {
+          status = shortTextStatus(englishT, sampleDocument(changes).stats);
+        });
+
+        it(rule, () => {
+          assert.deepEqual(status, expected);
+        });
+      });
+    }
+  });
+
+  describe('The libraryViewLabel() function', () => {
+    const situations: { situation: string; view: LibraryView; rule: string; expected: string }[] = [
+      { situation: 'When the view is the cards', view: 'cards', rule: 'should read Cards', expected: 'Cards' },
+      { situation: 'When the view is the list', view: 'list', rule: 'should read List', expected: 'List' },
+    ];
+
+    for (const { situation, view, rule, expected } of situations) {
+      describe(situation, () => {
+        let label: string;
+        beforeEach(() => {
+          label = libraryViewLabel(englishT, view);
+        });
+
+        it(rule, () => {
+          assert.equal(label, expected);
         });
       });
     }

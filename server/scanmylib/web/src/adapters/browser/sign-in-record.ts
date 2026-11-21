@@ -1,10 +1,5 @@
 import type { SignInRecord } from '../../application/session.ts';
-
-export interface KeyValueStorage {
-  getItem(key: string): string | null;
-  setItem(key: string, value: string): void;
-  removeItem(key: string): void;
-}
+import type { KeyValueStorage } from './key-value-storage.ts';
 
 // Names outside the program: every browser signed in before keeps them, and a new one would show it the login.
 const SIGNED_IN_KEY = 'scanmylib.signed-in';

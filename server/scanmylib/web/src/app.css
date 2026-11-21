@@ -1045,6 +1045,19 @@ textarea.input {
   box-shadow: var(--shadow-sm);
 }
 
+.library-toolbar-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-left: auto;
+}
+
+.view-switch {
+  margin-left: auto;
+}
+
 .search-field {
   position: relative;
   display: flex;
@@ -1085,6 +1098,13 @@ textarea.input {
   background: var(--surface);
   color: var(--text);
   box-shadow: var(--shadow-sm);
+}
+
+.toggle-icon-button {
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  padding: 0;
 }
 
 .toggle-button:focus-visible {
@@ -1223,13 +1243,15 @@ textarea.input {
   font-variant-numeric: tabular-nums;
 }
 
-.doc-card-status {
+.doc-card-status,
+.doc-row-status {
   color: var(--text-muted);
   font-size: 0.86rem;
   font-weight: 600;
 }
 
-.doc-card-status::before {
+.doc-card-status::before,
+.doc-row-status::before {
   content: "";
   display: inline-block;
   width: 0.45rem;
@@ -1240,11 +1262,13 @@ textarea.input {
   vertical-align: 0.08em;
 }
 
-.doc-card-status.is-info {
+.doc-card-status.is-info,
+.doc-row-status.is-info {
   color: var(--info);
 }
 
-.doc-card-status.is-ok {
+.doc-card-status.is-ok,
+.doc-row-status.is-ok {
   color: var(--ok);
 }
 
@@ -1265,6 +1289,194 @@ textarea.input {
   color: var(--text-muted);
   font-size: 0.8rem;
   text-align: right;
+}
+
+.doc-list {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.doc-list-header,
+.doc-row-link {
+  display: grid;
+  grid-template-columns: 2.6rem minmax(12rem, 1fr) minmax(10rem, 16rem) minmax(12rem, 15rem) minmax(7rem, 9rem);
+  column-gap: var(--space-4);
+  align-items: center;
+  padding: var(--space-3) var(--space-4);
+}
+
+.doc-list-header {
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.doc-list-header-document {
+  grid-column: 1 / 3;
+}
+
+.doc-list-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.doc-row + .doc-row {
+  border-top: 1px solid var(--border);
+}
+
+.doc-row-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.doc-row-link:hover {
+  background: color-mix(in srgb, var(--surface-sunken) 60%, transparent);
+  color: inherit;
+}
+
+.doc-row-cover {
+  display: grid;
+  place-items: center;
+  width: 2.6rem;
+  height: 3.5rem;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface-sunken);
+}
+
+.doc-row-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.doc-row-cover .doc-cover-placeholder {
+  font-size: 1.1rem;
+}
+
+.doc-row-heading,
+.doc-row-coverage,
+.doc-row-text {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.doc-row-title,
+.doc-row-author,
+.doc-row-coverage-text,
+.doc-row-status,
+.doc-row-updated {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.doc-row-title {
+  font-weight: 650;
+}
+
+.doc-row-author,
+.doc-row-coverage-text,
+.doc-row-updated {
+  color: var(--text-muted);
+  font-size: 0.86rem;
+}
+
+.doc-row-coverage-text {
+  font-variant-numeric: tabular-nums;
+}
+
+.doc-row-status-short {
+  display: none;
+}
+
+@media (max-width: 48rem) {
+  .library-toolbar-controls {
+    flex: 1 1 100%;
+  }
+}
+
+/* At a phone's width the columns would not fit, and below 60rem they would leave the title too little room. */
+@media (max-width: 60rem) {
+  .doc-list-header {
+    display: none;
+  }
+
+  .doc-row-link {
+    grid-template-columns: 2.6rem auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "cover title title updated"
+      "cover author author author"
+      "cover bar bar bar"
+      "cover status summary summary";
+    column-gap: var(--space-2);
+    row-gap: 0.2rem;
+    align-items: center;
+  }
+
+  .doc-row-heading,
+  .doc-row-coverage,
+  .doc-row-text {
+    display: contents;
+  }
+
+  .doc-row-cover {
+    grid-area: cover;
+    align-self: start;
+    margin-right: var(--space-2);
+  }
+
+  .doc-row-title {
+    grid-area: title;
+  }
+
+  .doc-row-updated {
+    grid-area: updated;
+    font-size: 0.78rem;
+  }
+
+  .doc-row-author {
+    grid-area: author;
+  }
+
+  .doc-row-coverage .library-coverage-bar {
+    grid-area: bar;
+    height: 0.4rem;
+    margin-block: 0.15rem;
+  }
+
+  .doc-row-status {
+    grid-area: status;
+    font-size: 0.8rem;
+  }
+
+  .doc-row-status-long,
+  .doc-row-text .chips {
+    display: none;
+  }
+
+  .doc-row-status-short {
+    display: inline;
+  }
+
+  .doc-row-coverage-text {
+    grid-area: summary;
+    font-size: 0.8rem;
+  }
+
+  .doc-row-coverage-text::before {
+    content: "· ";
+  }
 }
 
 .library-footer {

@@ -8,6 +8,7 @@ import {
   type PageCoverage,
 } from '../../../domain/document-summary.ts';
 import type { NumberFormatting } from '../../../domain/formatting.ts';
+import type { LibraryView } from '../../../domain/library-view.ts';
 import { documentKindLabel } from '../../i18next/document-labels.ts';
 import { formatPartialPercent, quoted } from '../../i18next/formatted-text.ts';
 import { pageCount, scannedPageCount } from '../document/coverage-layout.ts';
@@ -100,6 +101,21 @@ export const textStatus = (t: TFunction, stats: DocumentStats): TextStatus => {
     defaultValue_other: 'Text ready for {{done, number}} of {{count, number}} pages',
   });
   return { text, tone: 'info' };
+};
+
+export const shortTextStatus = (t: TFunction, stats: DocumentStats): TextStatus => {
+  if (stats.pageCount === 0 || stats.doneCount === stats.pageCount) return textStatus(t, stats);
+  const text = t('{{done, number}} / {{total, number}} ready', { done: stats.doneCount, total: stats.pageCount });
+  return { text, tone: 'info' };
+};
+
+export const libraryViewLabel = (t: TFunction, view: LibraryView): string => {
+  switch (view) {
+    case 'cards':
+      return t('Cards');
+    case 'list':
+      return t('List');
+  }
 };
 
 export const kindFilterLabel = (t: TFunction, filter: KindFilter): string => {

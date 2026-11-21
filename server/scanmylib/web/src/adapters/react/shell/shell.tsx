@@ -6,6 +6,7 @@ import type { Clipboard } from '../../../application/clipboard.ts';
 import type { DocumentCatalog } from '../../../application/document-catalog.ts';
 import type { DocumentStore } from '../../../application/document-store.ts';
 import type { EngineStatus } from '../../../application/engine-status.ts';
+import type { LibraryViewPreference } from '../../../application/library-view-preference.ts';
 import type { PageStore } from '../../../application/page-store.ts';
 import type { PairingSource } from '../../../application/pairing-source.ts';
 import type { Scheduler } from '../../../application/scheduler.ts';
@@ -29,6 +30,7 @@ export interface ShellServices {
   readonly formatting: NumberFormatting;
   readonly dates: DateFormatting;
   readonly catalog: DocumentCatalog;
+  readonly libraryView: LibraryViewPreference;
   readonly documents: DocumentStore;
   readonly pages: PageStore;
   readonly scheduler: Scheduler;

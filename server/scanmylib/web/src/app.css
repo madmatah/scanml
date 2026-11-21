@@ -1196,7 +1196,7 @@ textarea.input {
   gap: 0.3rem;
 }
 
-.doc-card-coverage-bar {
+.library-coverage-bar {
   display: flex;
   gap: 1px;
   height: 0.5rem;
@@ -1205,11 +1205,11 @@ textarea.input {
   background: var(--surface-sunken);
 }
 
-.doc-card-coverage-bar .coverage-segment {
+.library-coverage-bar .coverage-segment {
   min-width: 2px;
 }
 
-.doc-card-coverage-bar .is-missing {
+.library-coverage-bar .is-missing {
   background: repeating-linear-gradient(
     135deg,
     color-mix(in srgb, var(--missing) 75%, transparent) 0 3px,

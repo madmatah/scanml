@@ -5,10 +5,9 @@ import { Link } from 'react-router';
 import type { DocumentSummary } from '../../../domain/document-summary.ts';
 import type { DateFormatting, NumberFormatting } from '../../../domain/formatting.ts';
 import { formatRelativeTime } from '../../i18next/formatted-text.ts';
-import { coverageSegments, pageCount } from '../document/coverage-layout.ts';
-import { Icon } from '../shell/icon.tsx';
 import { documentPath } from '../shell/navigation.ts';
-import { versionedUrl } from '../shell/versioned-url.ts';
+import { CoverageBar } from './coverage-bar.tsx';
+import { DocumentCover } from './document-cover.tsx';
 import {
   bylineText,
   type ChipTone,
@@ -18,7 +17,7 @@ import {
   textStatus,
 } from './library-text.ts';
 
-const CHIP_CLASSES: Readonly<Record<ChipTone, string>> = {
+export const CHIP_CLASSES: Readonly<Record<ChipTone, string>> = {
   neutral: 'chip',
   info: 'chip chip-info',
   warn: 'chip chip-warn',
@@ -40,7 +39,7 @@ export interface DocumentCardProps {
 
 export const DocumentCard: FC<DocumentCardProps> = ({ document, dates, formatting, nowMilliseconds }) => {
   const { t } = useTranslation();
-  const { coverThumbnailUrl, coverage } = document;
+  const { coverage } = document;
   const status = textStatus(t, document.stats);
   const updated = t('Updated {{time}}', {
     time: formatRelativeTime(t, dates, document.updatedAt, nowMilliseconds),
@@ -48,16 +47,7 @@ export const DocumentCard: FC<DocumentCardProps> = ({ document, dates, formattin
   return (
     <li className="doc-card">
       <Link className="doc-card-link" to={documentPath(document.id)}>
-        <div className="doc-cover">
-          {coverThumbnailUrl === null ? (
-            <span className="doc-cover-placeholder" aria-hidden="true">
-              <Icon name="book" />
-            </span>
-          ) : (
-            // The cover may change or be rotated: its thumbnail follows the document's version.
-            <img src={versionedUrl(coverThumbnailUrl, document.updatedAt)} alt="" loading="lazy" decoding="async" />
-          )}
-        </div>
+        <DocumentCover document={document} className="doc-cover" />
         <div className="doc-card-body">
           <div className="doc-card-heading">
             <h2 className="doc-card-title" title={document.title}>
@@ -66,15 +56,7 @@ export const DocumentCard: FC<DocumentCardProps> = ({ document, dates, formattin
             <p className="doc-card-author">{bylineText(t, document)}</p>
           </div>
           <div className="doc-card-coverage">
-            <span className="doc-card-coverage-bar" aria-hidden="true">
-              {coverageSegments(coverage.ranges, coverage.gaps).map(({ range, isMissing }) => (
-                <span
-                  key={range[0]}
-                  className={isMissing ? 'coverage-segment is-missing' : 'coverage-segment is-scanned'}
-                  style={{ flexGrow: String(pageCount(range)) }}
-                />
-              ))}
-            </span>
+            <CoverageBar coverage={coverage} />
             <p className="doc-card-coverage-text">{coverageSummaryText(t, formatting, coverage)}</p>
           </div>
           <p className={STATUS_CLASSES[status.tone]}>{status.text}</p>

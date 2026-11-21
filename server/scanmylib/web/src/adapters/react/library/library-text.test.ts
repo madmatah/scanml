@@ -4,6 +4,7 @@ import { before, beforeEach, describe, it } from 'node:test';
 
 import type { TFunction } from 'i18next';
 import frenchCatalog from '../../../../locales/fr.json' with { type: 'json' };
+import type { EmptySearchReason, KindFilter } from '../../../domain/document-search.ts';
 import { type DocumentChanges, sampleDocument } from '../../../domain/document-summary.test-support.ts';
 import { createNumberFormatting } from '../../../domain/formatting.ts';
 import { CATALOGS } from '../../i18next/catalogs.ts';
@@ -11,6 +12,8 @@ import { createLocalizationFor } from '../../i18next/localization.test-support.t
 import {
   bylineText,
   coverageSummaryText,
+  emptySearchText,
+  kindFilterLabel,
   librarySummaryText,
   type StatusChip,
   statusChips,
@@ -237,6 +240,64 @@ describe('The library text', () => {
 
         it(rule, () => {
           assert.deepEqual(status, expected);
+        });
+      });
+    }
+  });
+
+  describe('The kindFilterLabel() function', () => {
+    const situations: { situation: string; filter: KindFilter; rule: string; expected: string }[] = [
+      { situation: 'When every kind is shown', filter: 'all', rule: 'should read All', expected: 'All' },
+      { situation: 'When the books are shown', filter: 'book', rule: 'should read Books', expected: 'Books' },
+      { situation: 'When the other kinds are shown', filter: 'other', rule: 'should read Other', expected: 'Other' },
+    ];
+
+    for (const { situation, filter, rule, expected } of situations) {
+      describe(situation, () => {
+        let label: string;
+        beforeEach(() => {
+          label = kindFilterLabel(englishT, filter);
+        });
+
+        it(rule, () => {
+          assert.equal(label, expected);
+        });
+      });
+    }
+  });
+
+  describe('The emptySearchText() function', () => {
+    const query = '  atlas ';
+    const situations: { situation: string; reason: EmptySearchReason; rule: string; expected: string }[] = [
+      {
+        situation: 'When no document is of the kind chosen',
+        reason: 'no-document-of-kind',
+        rule: 'should say so',
+        expected: 'No document of this kind.',
+      },
+      {
+        situation: 'When no document matches the query',
+        reason: 'no-document-matches',
+        rule: 'should quote the query, without its spaces',
+        expected: 'No document matches “atlas”.',
+      },
+      {
+        situation: 'When only documents of another kind match the query',
+        reason: 'no-document-of-kind-matches',
+        rule: 'should say that none of this kind matches, quoting the query',
+        expected: 'No document of this kind matches “atlas”.',
+      },
+    ];
+
+    for (const { situation, reason, rule, expected } of situations) {
+      describe(situation, () => {
+        let text: string;
+        beforeEach(() => {
+          text = emptySearchText(englishT, reason, query);
+        });
+
+        it(rule, () => {
+          assert.equal(text, expected);
         });
       });
     }

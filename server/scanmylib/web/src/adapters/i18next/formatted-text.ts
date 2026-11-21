@@ -5,6 +5,7 @@ import {
   type DateFormatting,
   elapsedTime,
   type NumberFormatting,
+  partialWholePercent,
   wholePercent,
 } from '../../domain/formatting.ts';
 
@@ -30,6 +31,10 @@ export const formatSeconds = (t: TFunction, formatting: NumberFormatting, second
 
 export const formatPercent = (t: TFunction, formatting: NumberFormatting, ratio: number): string => {
   return t('{{percent}}%', { percent: formatting.formatNumber(wholePercent(ratio)) });
+};
+
+export const formatPartialPercent = (t: TFunction, formatting: NumberFormatting, ratio: number): string => {
+  return t('{{percent}}%', { percent: formatting.formatNumber(partialWholePercent(ratio)) });
 };
 
 export const quoted = (t: TFunction, text: string): string => {

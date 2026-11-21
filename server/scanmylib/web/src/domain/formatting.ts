@@ -47,6 +47,10 @@ export const wholePercent = (ratio: number): number => {
   return Math.round(ratio * 100);
 };
 
+export const partialWholePercent = (ratio: number): number => {
+  return Math.min(99, Math.max(1, wholePercent(ratio)));
+};
+
 export type RelativeTimeUnit = 'second' | 'minute' | 'hour' | 'day';
 
 export type ElapsedTime =

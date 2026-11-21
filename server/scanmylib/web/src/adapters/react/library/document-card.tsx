@@ -2,13 +2,21 @@ import type { FC } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 
-import { type DocumentSummary, doneRatio } from '../../../domain/document-summary.ts';
-import { type DateFormatting, wholePercent } from '../../../domain/formatting.ts';
+import type { DocumentSummary } from '../../../domain/document-summary.ts';
+import type { DateFormatting, NumberFormatting } from '../../../domain/formatting.ts';
 import { formatRelativeTime } from '../../i18next/formatted-text.ts';
+import { coverageSegments, pageCount } from '../document/coverage-layout.ts';
 import { Icon } from '../shell/icon.tsx';
 import { documentPath } from '../shell/navigation.ts';
 import { versionedUrl } from '../shell/versioned-url.ts';
-import { type ChipTone, coverageText, progressText, statusChips } from './library-text.ts';
+import {
+  bylineText,
+  type ChipTone,
+  coverageSummaryText,
+  statusChips,
+  type TextStatusTone,
+  textStatus,
+} from './library-text.ts';
 
 const CHIP_CLASSES: Readonly<Record<ChipTone, string>> = {
   neutral: 'chip',
@@ -17,15 +25,26 @@ const CHIP_CLASSES: Readonly<Record<ChipTone, string>> = {
   danger: 'chip chip-danger',
 };
 
+const STATUS_CLASSES: Readonly<Record<TextStatusTone, string>> = {
+  neutral: 'doc-card-status',
+  info: 'doc-card-status is-info',
+  ok: 'doc-card-status is-ok',
+};
+
 export interface DocumentCardProps {
   readonly document: DocumentSummary;
   readonly dates: DateFormatting;
+  readonly formatting: NumberFormatting;
   readonly nowMilliseconds: number;
 }
 
-export const DocumentCard: FC<DocumentCardProps> = ({ document, dates, nowMilliseconds }) => {
+export const DocumentCard: FC<DocumentCardProps> = ({ document, dates, formatting, nowMilliseconds }) => {
   const { t } = useTranslation();
-  const { coverThumbnailUrl } = document;
+  const { coverThumbnailUrl, coverage } = document;
+  const status = textStatus(t, document.stats);
+  const updated = t('Updated {{time}}', {
+    time: formatRelativeTime(t, dates, document.updatedAt, nowMilliseconds),
+  });
   return (
     <li className="doc-card">
       <Link className="doc-card-link" to={documentPath(document.id)}>
@@ -40,26 +59,38 @@ export const DocumentCard: FC<DocumentCardProps> = ({ document, dates, nowMillis
           )}
         </div>
         <div className="doc-card-body">
-          <h2 className="doc-card-title">{document.title}</h2>
-          {document.author !== '' && <p className="doc-card-author">{document.author}</p>}
-          <p className="doc-card-progress">
-            <span className="meter" aria-hidden="true">
-              <span className="meter-fill" style={{ width: `${wholePercent(doneRatio(document.stats))}%` }} />
+          <div className="doc-card-heading">
+            <h2 className="doc-card-title" title={document.title}>
+              {document.title}
+            </h2>
+            <p className="doc-card-author">{bylineText(t, document)}</p>
+          </div>
+          <div className="doc-card-coverage">
+            <span className="doc-card-coverage-bar" aria-hidden="true">
+              {coverageSegments(coverage.ranges, coverage.gaps).map(({ range, isMissing }) => (
+                <span
+                  key={range[0]}
+                  className={isMissing ? 'coverage-segment is-missing' : 'coverage-segment is-scanned'}
+                  style={{ flexGrow: String(pageCount(range)) }}
+                />
+              ))}
             </span>
-            <span>{progressText(t, document.stats)}</span>
-          </p>
-          <p className="doc-card-coverage">{coverageText(t, document.coverage)}</p>
-          {/* biome-ignore lint/a11y/noRedundantRoles: Safari drops the role of a list drawn without its markers. */}
-          <ul className="chips" role="list">
-            {statusChips(t, document).map(({ name, text, tone }) => (
-              <li key={name} className={CHIP_CLASSES[tone]}>
-                {text}
-              </li>
-            ))}
-          </ul>
-          <p className="doc-card-updated">
-            {t('Updated {{time}}', { time: formatRelativeTime(t, dates, document.updatedAt, nowMilliseconds) })}
-          </p>
+            <p className="doc-card-coverage-text">{coverageSummaryText(t, formatting, coverage)}</p>
+          </div>
+          <p className={STATUS_CLASSES[status.tone]}>{status.text}</p>
+          <div className="doc-card-footer">
+            {/* biome-ignore lint/a11y/noRedundantRoles: Safari drops the role of a list drawn without its markers. */}
+            <ul className="chips" role="list">
+              {statusChips(t, document).map(({ name, text, tone }) => (
+                <li key={name} className={CHIP_CLASSES[tone]}>
+                  {text}
+                </li>
+              ))}
+            </ul>
+            <p className="doc-card-updated" title={updated}>
+              {updated}
+            </p>
+          </div>
         </div>
       </Link>
     </li>

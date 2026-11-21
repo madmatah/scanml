@@ -1,7 +1,14 @@
 import assert from 'node:assert/strict';
 import { beforeEach, describe, it } from 'node:test';
 
-import { createNumberFormatting, type ElapsedTime, elapsedTime, type LocalDate, localIsoString } from './formatting.ts';
+import {
+  createNumberFormatting,
+  type ElapsedTime,
+  elapsedTime,
+  type LocalDate,
+  localIsoString,
+  partialWholePercent,
+} from './formatting.ts';
 
 const ENGLISH_LOCALE = 'en-US';
 const FRENCH_LOCALE = 'fr-FR';
@@ -32,6 +39,42 @@ describe('The formatting', () => {
         assert.equal(text, frenchIntegers.format(number));
       });
     });
+  });
+
+  describe('The partialWholePercent() function', () => {
+    const situations: { situation: string; ratio: number; rule: string; expected: number }[] = [
+      {
+        situation: 'When the part is almost the whole',
+        ratio: 299 / 300,
+        rule: 'should read 99, since only the whole reads 100',
+        expected: 99,
+      },
+      {
+        situation: 'When the part is almost nothing',
+        ratio: 2 / 500,
+        rule: 'should read 1, since only nothing reads 0',
+        expected: 1,
+      },
+      {
+        situation: 'When the part is well inside the whole',
+        ratio: 9 / 11,
+        rule: 'should round to the nearest whole percent',
+        expected: 82,
+      },
+    ];
+
+    for (const { situation, ratio, rule, expected } of situations) {
+      describe(situation, () => {
+        let percent: number;
+        beforeEach(() => {
+          percent = partialWholePercent(ratio);
+        });
+
+        it(rule, () => {
+          assert.equal(percent, expected);
+        });
+      });
+    }
   });
 
   describe('The elapsedTime() function', () => {

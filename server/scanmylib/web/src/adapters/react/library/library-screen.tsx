@@ -7,7 +7,7 @@ import type { EngineStatus } from '../../../application/engine-status.ts';
 import type { LibraryLoad } from '../../../application/library-loader.ts';
 import type { UuidSource } from '../../../application/uuid-source.ts';
 import { documentsMatching } from '../../../domain/document-search.ts';
-import type { DateFormatting } from '../../../domain/formatting.ts';
+import type { DateFormatting, NumberFormatting } from '../../../domain/formatting.ts';
 import { quoted } from '../../i18next/formatted-text.ts';
 import { DocumentDialog } from '../dialogs/document-dialog.tsx';
 import { EmptyState } from '../shell/empty-state.tsx';
@@ -27,9 +27,10 @@ export interface LibraryScreenProps {
   readonly toasts: Toasts;
   readonly uuids: UuidSource;
   readonly dates: DateFormatting;
+  readonly formatting: NumberFormatting;
 }
 
-export const LibraryScreen: FC<LibraryScreenProps> = ({ catalog, engineStatus, toasts, uuids, dates }) => {
+export const LibraryScreen: FC<LibraryScreenProps> = ({ catalog, engineStatus, toasts, uuids, dates, formatting }) => {
   const { t } = useTranslation();
   const {
     load,
@@ -80,6 +81,7 @@ export const LibraryScreen: FC<LibraryScreenProps> = ({ catalog, engineStatus, t
           load={load}
           query={query}
           dates={dates}
+          formatting={formatting}
           nowMilliseconds={nowMilliseconds}
           emptyActions={
             <>
@@ -120,12 +122,21 @@ interface LibraryContentProps {
   readonly load: LibraryLoad;
   readonly query: string;
   readonly dates: DateFormatting;
+  readonly formatting: NumberFormatting;
   readonly nowMilliseconds: number;
   readonly emptyActions: ReactNode;
   readonly onRetry: () => void;
 }
 
-const LibraryContent: FC<LibraryContentProps> = ({ load, query, dates, nowMilliseconds, emptyActions, onRetry }) => {
+const LibraryContent: FC<LibraryContentProps> = ({
+  load,
+  query,
+  dates,
+  formatting,
+  nowMilliseconds,
+  emptyActions,
+  onRetry,
+}) => {
   const { t } = useTranslation();
   switch (load.phase) {
     case 'loading':
@@ -155,7 +166,13 @@ const LibraryContent: FC<LibraryContentProps> = ({ load, query, dates, nowMillis
     // biome-ignore lint/a11y/noRedundantRoles: Safari drops the role of a list drawn without its markers.
     <ul className="doc-grid" role="list">
       {shownDocuments.map((document) => (
-        <DocumentCard key={document.id} document={document} dates={dates} nowMilliseconds={nowMilliseconds} />
+        <DocumentCard
+          key={document.id}
+          document={document}
+          dates={dates}
+          formatting={formatting}
+          nowMilliseconds={nowMilliseconds}
+        />
       ))}
     </ul>
   );

@@ -7,7 +7,7 @@ import type { EngineStatus } from '../../../application/engine-status.ts';
 import { createLibraryLoader, type LibraryLoad } from '../../../application/library-loader.ts';
 import { watchQueueMoves } from '../../../application/queue-moves.ts';
 import type { UuidSource } from '../../../application/uuid-source.ts';
-import { showsSearch } from '../../../domain/document-search.ts';
+import { type KindFilter, kindFilterInEffect, showsKindFilter, showsSearch } from '../../../domain/document-search.ts';
 import type { DocumentSummary } from '../../../domain/document-summary.ts';
 import { quoted } from '../../i18next/formatted-text.ts';
 import { errorMessage } from '../shell/error-message.ts';
@@ -21,8 +21,11 @@ export interface LibraryScreenState {
   readonly libraryDirectory: string;
   readonly query: string;
   readonly isSearchShown: boolean;
+  readonly kindFilter: KindFilter;
+  readonly isKindFilterShown: boolean;
   readonly newDocumentId: string | null;
   readonly onQueryChange: (query: string) => void;
+  readonly onKindFilterChange: (kindFilter: KindFilter) => void;
   readonly onRetry: () => void;
   readonly onNewDocument: () => void;
   readonly onCreateDocument: (id: string, fields: DocumentFields) => Promise<DocumentSummary>;
@@ -47,6 +50,7 @@ export const useLibraryScreen = (
   const [load, setLoad] = useState<LibraryLoad>({ phase: 'loading' });
   const [nowMilliseconds, setNow] = useState(() => Date.now());
   const [query, setQuery] = useState('');
+  const [kindFilter, setKindFilter] = useState<KindFilter>('all');
   const [newDocumentId, setNewDocumentId] = useState<string | null>(null);
   const reload = useRef<() => void>(() => {});
   useDocumentTitle(t('Library'));
@@ -86,6 +90,9 @@ export const useLibraryScreen = (
   const isSearchShown = load.phase === 'loaded' && showsSearch(load.documents);
   // A search left typed while the field hides would keep filtering the list out of sight.
   if (!isSearchShown && query !== '') setQuery('');
+  const isKindFilterShown = load.phase === 'loaded' && showsKindFilter(load.documents);
+  const filterInEffect = kindFilterInEffect(load.phase === 'loaded' ? load.documents : [], kindFilter);
+  if (filterInEffect !== kindFilter) setKindFilter(filterInEffect);
 
   const newDocumentClosed = (created: DocumentSummary | null): void => {
     setNewDocumentId(null);
@@ -100,8 +107,11 @@ export const useLibraryScreen = (
     libraryDirectory,
     query,
     isSearchShown,
+    kindFilter,
+    isKindFilterShown,
     newDocumentId,
     onQueryChange: setQuery,
+    onKindFilterChange: setKindFilter,
     onRetry: () => reload.current(),
     // One id per dialog, so that a request sent again from it stays the same creation.
     onNewDocument: () => setNewDocumentId(uuids.createUuid()),

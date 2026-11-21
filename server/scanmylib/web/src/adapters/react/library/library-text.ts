@@ -1,5 +1,6 @@
 import type { TFunction } from 'i18next';
 
+import type { EmptySearchReason, KindFilter } from '../../../domain/document-search.ts';
 import {
   countPages,
   type DocumentStats,
@@ -8,7 +9,7 @@ import {
 } from '../../../domain/document-summary.ts';
 import type { NumberFormatting } from '../../../domain/formatting.ts';
 import { documentKindLabel } from '../../i18next/document-labels.ts';
-import { formatPartialPercent } from '../../i18next/formatted-text.ts';
+import { formatPartialPercent, quoted } from '../../i18next/formatted-text.ts';
 import { pageCount, scannedPageCount } from '../document/coverage-layout.ts';
 
 export type ChipTone = 'neutral' | 'info' | 'warn' | 'danger';
@@ -99,6 +100,28 @@ export const textStatus = (t: TFunction, stats: DocumentStats): TextStatus => {
     defaultValue_other: 'Text ready for {{done, number}} of {{count, number}} pages',
   });
   return { text, tone: 'info' };
+};
+
+export const kindFilterLabel = (t: TFunction, filter: KindFilter): string => {
+  switch (filter) {
+    case 'all':
+      return t('All', { context: 'kinds' });
+    case 'book':
+      return t('Books');
+    case 'other':
+      return t('Other', { context: 'kinds' });
+  }
+};
+
+export const emptySearchText = (t: TFunction, reason: EmptySearchReason, query: string): string => {
+  switch (reason) {
+    case 'no-document-of-kind':
+      return t('No document of this kind.');
+    case 'no-document-matches':
+      return t('No document matches {{query}}.', { query: quoted(t, query.trim()) });
+    case 'no-document-of-kind-matches':
+      return t('No document of this kind matches {{query}}.', { query: quoted(t, query.trim()) });
+  }
 };
 
 export const librarySummaryText = (t: TFunction, documents: readonly DocumentSummary[]): string => {

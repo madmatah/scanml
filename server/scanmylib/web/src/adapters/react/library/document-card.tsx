@@ -8,21 +8,8 @@ import { formatRelativeTime } from '../../i18next/formatted-text.ts';
 import { documentPath } from '../shell/navigation.ts';
 import { CoverageBar } from './coverage-bar.tsx';
 import { DocumentCover } from './document-cover.tsx';
-import {
-  bylineText,
-  type ChipTone,
-  coverageSummaryText,
-  statusChips,
-  type TextStatusTone,
-  textStatus,
-} from './library-text.ts';
-
-export const CHIP_CLASSES: Readonly<Record<ChipTone, string>> = {
-  neutral: 'chip',
-  info: 'chip chip-info',
-  warn: 'chip chip-warn',
-  danger: 'chip chip-danger',
-};
+import { bylineText, coverageSummaryText, type TextStatusTone, textStatus } from './library-text.ts';
+import { StatusChips } from './status-chips.tsx';
 
 const STATUS_CLASSES: Readonly<Record<TextStatusTone, string>> = {
   neutral: 'doc-card-status',
@@ -61,14 +48,7 @@ export const DocumentCard: FC<DocumentCardProps> = ({ document, dates, formattin
           </div>
           <p className={STATUS_CLASSES[status.tone]}>{status.text}</p>
           <div className="doc-card-footer">
-            {/* biome-ignore lint/a11y/noRedundantRoles: Safari drops the role of a list drawn without its markers. */}
-            <ul className="chips" role="list">
-              {statusChips(t, document).map(({ name, text, tone }) => (
-                <li key={name} className={CHIP_CLASSES[tone]}>
-                  {text}
-                </li>
-              ))}
-            </ul>
+            <StatusChips document={document} />
             <p className="doc-card-updated" title={updated}>
               {updated}
             </p>

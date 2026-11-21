@@ -20,6 +20,7 @@ export const createRoutes = (services: ShellServices): RouteObject[] => {
           element: (
             <LibraryScreen
               catalog={services.catalog}
+              libraryView={services.libraryView}
               engineStatus={services.engineStatus}
               toasts={services.toasts}
               uuids={services.uuids}

@@ -8,6 +8,7 @@ import { createHashRouter } from 'react-router';
 import { RouterProvider } from 'react-router/dom';
 
 import { takeSignInToken, watchSignInLinks } from './adapters/browser/address-bar.ts';
+import { createLibraryViewPreference } from './adapters/browser/library-view-preference.ts';
 import { createPageVisibility } from './adapters/browser/page-visibility.ts';
 import { createRandomUuidSource } from './adapters/browser/random-uuid-source.ts';
 import { createSignInRecord } from './adapters/browser/sign-in-record.ts';
@@ -84,6 +85,7 @@ createRoot(findElement('#app')).render(
           formatting: localization.formatting,
           dates: localization.dates,
           catalog: apiClient,
+          libraryView: createLibraryViewPreference(() => window.localStorage),
           documents: apiClient,
           pages: apiClient,
           scheduler,

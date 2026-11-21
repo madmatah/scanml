@@ -5,10 +5,12 @@ import { useNavigate } from 'react-router';
 import type { DocumentCatalog, DocumentFields } from '../../../application/document-catalog.ts';
 import type { EngineStatus } from '../../../application/engine-status.ts';
 import { createLibraryLoader, type LibraryLoad } from '../../../application/library-loader.ts';
+import type { LibraryViewPreference } from '../../../application/library-view-preference.ts';
 import { watchQueueMoves } from '../../../application/queue-moves.ts';
 import type { UuidSource } from '../../../application/uuid-source.ts';
 import { type KindFilter, kindFilterInEffect, showsKindFilter, showsSearch } from '../../../domain/document-search.ts';
 import type { DocumentSummary } from '../../../domain/document-summary.ts';
+import { DEFAULT_LIBRARY_VIEW, type LibraryView, libraryViewInEffect } from '../../../domain/library-view.ts';
 import { quoted } from '../../i18next/formatted-text.ts';
 import { errorMessage } from '../shell/error-message.ts';
 import { documentPath } from '../shell/navigation.ts';
@@ -23,9 +25,11 @@ export interface LibraryScreenState {
   readonly isSearchShown: boolean;
   readonly kindFilter: KindFilter;
   readonly isKindFilterShown: boolean;
+  readonly view: LibraryView;
   readonly newDocumentId: string | null;
   readonly onQueryChange: (query: string) => void;
   readonly onKindFilterChange: (kindFilter: KindFilter) => void;
+  readonly onViewChange: (view: LibraryView) => void;
   readonly onRetry: () => void;
   readonly onNewDocument: () => void;
   readonly onCreateDocument: (id: string, fields: DocumentFields) => Promise<DocumentSummary>;
@@ -37,6 +41,7 @@ const RELATIVE_DATES_REFRESH_MILLISECONDS = 60_000;
 
 export const useLibraryScreen = (
   catalog: DocumentCatalog,
+  libraryView: LibraryViewPreference,
   engineStatus: Pick<EngineStatus, 'subscribe' | 'getSnapshot'>,
   toasts: Toasts,
   uuids: UuidSource,
@@ -51,6 +56,7 @@ export const useLibraryScreen = (
   const [nowMilliseconds, setNow] = useState(() => Date.now());
   const [query, setQuery] = useState('');
   const [kindFilter, setKindFilter] = useState<KindFilter>('all');
+  const [chosenView, setChosenView] = useState<LibraryView>(() => libraryView.readSaved() ?? DEFAULT_LIBRARY_VIEW);
   const [newDocumentId, setNewDocumentId] = useState<string | null>(null);
   const reload = useRef<() => void>(() => {});
   useDocumentTitle(t('Library'));
@@ -93,6 +99,12 @@ export const useLibraryScreen = (
   const isKindFilterShown = load.phase === 'loaded' && showsKindFilter(load.documents);
   const filterInEffect = kindFilterInEffect(load.phase === 'loaded' ? load.documents : [], kindFilter);
   if (filterInEffect !== kindFilter) setKindFilter(filterInEffect);
+  const view = libraryViewInEffect(load.phase === 'loaded' ? load.documents : [], chosenView);
+
+  const changeView = (next: LibraryView): void => {
+    setChosenView(next);
+    libraryView.save(next);
+  };
 
   const newDocumentClosed = (created: DocumentSummary | null): void => {
     setNewDocumentId(null);
@@ -109,9 +121,11 @@ export const useLibraryScreen = (
     isSearchShown,
     kindFilter,
     isKindFilterShown,
+    view,
     newDocumentId,
     onQueryChange: setQuery,
     onKindFilterChange: setKindFilter,
+    onViewChange: changeView,
     onRetry: () => reload.current(),
     // One id per dialog, so that a request sent again from it stays the same creation.
     onNewDocument: () => setNewDocumentId(uuids.createUuid()),

@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { beforeEach, describe, it } from 'node:test';
 
-import { createSignInRecord, type KeyValueStorage } from './sign-in-record.ts';
+import type { KeyValueStorage } from './key-value-storage.ts';
+import { createSignInRecord } from './sign-in-record.ts';
 
 // The key and the value that browsers signed in to earlier releases hold: another one would sign them out.
 const SIGNED_IN_KEY = 'scanmylib.signed-in';
